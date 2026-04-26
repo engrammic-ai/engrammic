@@ -26,6 +26,8 @@ dependencies = [
     "structlog>=24.1",
     # Redis
     "redis>=5.0",
+    # Config
+    "pyyaml>=6.0",
 ]
 
 [dependency-groups]
