@@ -13,6 +13,8 @@ dependencies = [
     "uvicorn[standard]>=0.29",
     "pydantic>=2.7",
     "pydantic-settings>=2.2",
+    # MCP
+    "fastmcp>=2.0",
     # Graph + Vector
     "neo4j>=5.19",  # Memgraph driver
     "qdrant-client>=1.9",
