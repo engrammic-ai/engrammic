@@ -19,24 +19,32 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # Virtual environments
 .venv/
 venv/
 ENV/
+env.bak/
+venv.bak/
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+*~
 
 # Testing
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 .mypy_cache/
 .ruff_cache/
+.hypothesis/
+coverage.xml
+*.cover
 
 # OS
 .DS_Store
@@ -44,14 +52,49 @@ Thumbs.db
 
 # Environment
 .env
+.envrc
 .env.local
 .env.*.local
+*.local
+
+# UV
+.uv/
 
 # Dagster
 .dagster/
 storage/
 
-# Secrets
+# Secrets - IMPORTANT
+secrets/
+.secrets/
 *.pem
 *.key
+*.p12
 credentials.json
+service-account*.json
+*-sa.json
+*-credentials.json
+
+# Google Cloud
+gcloud/
+application_default_credentials.json
+
+# Docker volumes and data
+docker-data/
+memgraph-data/
+qdrant-data/
+redis-data/
+postgres-data/
+
+# Terraform (if used)
+.terraform/
+*.tfstate*
+terraform.tfvars
+.terraform.lock.hcl
+
+# Claude Code
+.claude/
+
+# Logs
+*.log
+logs/
