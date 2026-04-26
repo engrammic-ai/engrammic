@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     service_name: str = "context-service"
     environment: str = "development"
     debug: bool = False
+    host: str = "0.0.0.0"
+    port: int = 8000
+    reload: bool = False
 
     # Graph (Memgraph)
     memgraph_uri: str = "bolt://localhost:7687"
@@ -38,6 +41,13 @@ class Settings(BaseSettings):
     jina_api_key: str = ""
     vertex_project_id: str = ""
     vertex_location: str = "us-central1"
+
+    # LLM Providers
+    google_application_credentials: str = ""
+    gemini_api_key: str = ""
+    anthropic_api_key: str = ""
+    openai_api_key: str = ""
+    default_llm_model: str = "gemini-2.0-flash"
 
     # Observability
     otel_endpoint: str = ""

@@ -1,6 +1,5 @@
-"""FastAPI admin/dashboard routes.
+"""FastAPI application and routes."""
 
-Port from contextr: app/api/
-"""
+from context_service.api.app import create_app
 
-# TODO: Port admin routes, health checks
+__all__ = ["create_app"]

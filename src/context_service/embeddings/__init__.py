@@ -1,6 +1,16 @@
-"""Embedding integrations.
+"""Embedding integrations."""
 
-Port from contextr: app/embeddings/jina.py, app/embeddings/vertex.py, app/embeddings/splade.py
-"""
+from context_service.embeddings.base import EmbeddingService
+from context_service.embeddings.jina import JinaEmbeddingError, JinaEmbeddingService
+from context_service.embeddings.vertex import (
+    VertexAIEmbeddingError,
+    VertexAIEmbeddingService,
+)
 
-# TODO: Port Jina, Vertex, SPLADE clients
+__all__ = [
+    "EmbeddingService",
+    "JinaEmbeddingError",
+    "JinaEmbeddingService",
+    "VertexAIEmbeddingError",
+    "VertexAIEmbeddingService",
+]

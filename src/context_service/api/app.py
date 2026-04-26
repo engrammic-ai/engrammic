@@ -1,0 +1,103 @@
+"""FastAPI application factory with lifespan management."""
+
+import time
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+
+from context_service import __version__
+from context_service.api.routes import health
+from context_service.config.logging import configure_logging, get_logger
+from context_service.config.settings import get_settings
+from context_service.stores import (
+    MemgraphClient,
+    QdrantClient,
+    RedisClient,
+    create_memgraph_driver,
+    create_redis_pool,
+)
+
+logger = get_logger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Manage application lifespan."""
+    settings = get_settings()
+
+    app.state.start_time = time.monotonic()
+
+    logger.info("creating_database_connections")
+
+    try:
+        memgraph_driver = await create_memgraph_driver(settings)
+        memgraph_client = MemgraphClient(memgraph_driver)
+        logger.info("memgraph_connected")
+
+        redis_pool = await create_redis_pool(settings)
+        redis_client = RedisClient(redis_pool)
+        logger.info("redis_connected")
+
+        qdrant_client = QdrantClient.from_settings(settings)
+        await qdrant_client.ensure_collection()
+        logger.info("qdrant_connected")
+
+        app.state.memgraph = memgraph_client
+        app.state.redis = redis_client
+        app.state.qdrant = qdrant_client
+
+    except Exception as e:
+        logger.error("database_connection_failed", error=str(e))
+        raise
+
+    yield
+
+    logger.info("closing_database_connections")
+
+    if hasattr(app.state, "memgraph"):
+        await app.state.memgraph.close()
+        logger.info("memgraph_closed")
+
+    if hasattr(app.state, "redis"):
+        await app.state.redis.close()
+        logger.info("redis_closed")
+
+    if hasattr(app.state, "qdrant"):
+        await app.state.qdrant.close()
+        logger.info("qdrant_closed")
+
+
+def create_app() -> FastAPI:
+    """Create and configure the FastAPI application."""
+    settings = get_settings()
+
+    log_level = "DEBUG" if settings.debug else settings.log_level
+    json_format = settings.environment != "development"
+    configure_logging(log_level=log_level, json_format=json_format)
+
+    app = FastAPI(
+        title="Context Service",
+        description="Delta Prime context infrastructure service.",
+        version=__version__,
+        docs_url="/docs",
+        redoc_url="/redoc",
+        openapi_url="/openapi.json",
+        lifespan=lifespan,
+        openapi_tags=[
+            {"name": "health", "description": "Health checks and status"},
+        ],
+    )
+
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        logger.error("unhandled_exception", error=str(exc), path=request.url.path)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error"},
+        )
+
+    app.include_router(health.router)
+
+    return app
