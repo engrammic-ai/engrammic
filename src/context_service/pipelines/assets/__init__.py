@@ -1,3 +1,5 @@
 """Dagster assets for context-service."""
 
-all_assets: list = []
+from typing import Any
+
+all_assets: list[Any] = []

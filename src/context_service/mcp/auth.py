@@ -23,9 +23,7 @@ logger = structlog.get_logger(__name__)
 DEV_ORG_ID = "dev-org"
 ALL_PERMISSIONS = ["read", "write", "admin"]
 
-_mcp_auth_context: ContextVar[MCPAuthContext | None] = ContextVar(
-    "mcp_auth_context", default=None
-)
+_mcp_auth_context: ContextVar[MCPAuthContext | None] = ContextVar("mcp_auth_context", default=None)
 
 
 @dataclass
@@ -49,9 +47,7 @@ def get_mcp_auth() -> MCPAuthContext:
     """
     ctx = _mcp_auth_context.get()
     if ctx is None:
-        raise RuntimeError(
-            "MCP auth context not set. Ensure MCPAuthMiddleware is configured."
-        )
+        raise RuntimeError("MCP auth context not set. Ensure MCPAuthMiddleware is configured.")
     return ctx
 
 

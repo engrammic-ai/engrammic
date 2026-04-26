@@ -23,7 +23,7 @@ class RedisOperationError(Exception):
     """Raised when a Redis operation fails."""
 
 
-async def create_redis_pool(settings: Settings | None = None) -> Redis[bytes]:
+async def create_redis_pool(settings: Settings | None = None) -> Redis[bytes]:  # type: ignore[type-arg]
     """Create an async Redis connection pool.
 
     Args:
@@ -47,7 +47,7 @@ async def create_redis_pool(settings: Settings | None = None) -> Redis[bytes]:
 class RedisClient:
     """High-level Redis client for session and cache operations."""
 
-    def __init__(self, redis: Redis[bytes]) -> None:
+    def __init__(self, redis: Redis[bytes]) -> None:  # type: ignore[type-arg]
         """Initialize the client with a Redis connection.
 
         Args:
@@ -72,7 +72,7 @@ class RedisClient:
             True if healthy, False otherwise.
         """
         try:
-            result = await self._redis.ping()
+            result = await self._redis.ping()  # type: ignore[misc]
             return bool(result)
         except RedisConnectionError:
             logger.warning("redis_health_check_failed", reason="connection_error")
@@ -124,10 +124,11 @@ class RedisClient:
         """
         key = self._session_key(silo_id, session_id)
         try:
-            data = await self._redis.get(key)
+            data: bytes | None = await self._redis.get(key)
             if data is None:
                 return None
-            return json.loads(data.decode())
+            parsed: dict[str, Any] = json.loads(data.decode())
+            return parsed
         except JSONDecodeError as e:
             logger.error("redis_session_corrupted", session_id=session_id, error=str(e))
             return None
@@ -177,10 +178,15 @@ class RedisClient:
         """
         key = self._session_nodes_key(silo_id, session_id)
         try:
-            result = await self._redis.sadd(key, node_id.encode())
+            result = await self._redis.sadd(key, node_id.encode())  # type: ignore[misc]
             return bool(result)
         except (RedisConnectionError, RedisError) as e:
-            logger.error("redis_add_session_node_failed", session_id=session_id, node_id=node_id, error=str(e))
+            logger.error(
+                "redis_add_session_node_failed",
+                session_id=session_id,
+                node_id=node_id,
+                error=str(e),
+            )
             raise RedisOperationError(f"Failed to add session node: {e}") from e
 
     async def get_session_nodes(self, silo_id: str, session_id: str) -> list[str]:
@@ -198,7 +204,7 @@ class RedisClient:
         """
         key = self._session_nodes_key(silo_id, session_id)
         try:
-            members = await self._redis.smembers(key)
+            members = await self._redis.smembers(key)  # type: ignore[misc]
             return [m.decode() for m in members]
         except (RedisConnectionError, RedisError) as e:
             logger.error("redis_get_session_nodes_failed", session_id=session_id, error=str(e))
@@ -220,10 +226,15 @@ class RedisClient:
         """
         key = self._session_nodes_key(silo_id, session_id)
         try:
-            result = await self._redis.srem(key, node_id.encode())
+            result = await self._redis.srem(key, node_id.encode())  # type: ignore[misc]
             return bool(result)
         except (RedisConnectionError, RedisError) as e:
-            logger.error("redis_remove_session_node_failed", session_id=session_id, node_id=node_id, error=str(e))
+            logger.error(
+                "redis_remove_session_node_failed",
+                session_id=session_id,
+                node_id=node_id,
+                error=str(e),
+            )
             raise RedisOperationError(f"Failed to remove session node: {e}") from e
 
     # Generic cache operations
@@ -269,7 +280,8 @@ class RedisClient:
             RedisOperationError: If the operation fails.
         """
         try:
-            return await self._redis.get(key)
+            result: bytes | None = await self._redis.get(key)
+            return result
         except (RedisConnectionError, RedisError) as e:
             logger.error("redis_get_failed", key=key, error=str(e))
             raise RedisOperationError(f"Failed to get cache value: {e}") from e
@@ -287,7 +299,8 @@ class RedisClient:
             RedisOperationError: If the operation fails.
         """
         try:
-            return await self._redis.mget(keys)
+            result: list[bytes | None] = await self._redis.mget(keys)
+            return result
         except (RedisConnectionError, RedisError) as e:
             logger.error("redis_mget_failed", key_count=len(keys), error=str(e))
             raise RedisOperationError(f"Failed to mget cache values: {e}") from e

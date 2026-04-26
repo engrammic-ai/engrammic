@@ -115,7 +115,7 @@ class ContextService:
 
         if content and len(content) >= MIN_CONTENT_FOR_EMBEDDING and self._embedding:
             try:
-                vector = await self._embedding.embed(content)
+                vector = await self._embedding.embed_single(content)
                 await self._qdrant.upsert(
                     node_id=str(node.id),
                     vector=vector,
@@ -129,9 +129,7 @@ class ContextService:
             cache_key = f"idempotency:{silo_id}:{idempotency_key}"
             await self._cache.set(cache_key, str(node.id).encode(), ttl_seconds=86400)
 
-        logger.info(
-            "context_stored", node_id=str(node.id), type=node_type, silo_id=str(silo_id)
-        )
+        logger.info("context_stored", node_id=str(node.id), type=node_type, silo_id=str(silo_id))
         return node
 
     async def get(self, node_id: uuid.UUID, silo_id: uuid.UUID) -> Node | None:
@@ -228,7 +226,7 @@ class ContextService:
                 query=query,
             )
 
-        query_vector = await self._embedding.embed(query)
+        query_vector = await self._embedding.embed_query(query)
 
         search_results = await self._qdrant.search(
             vector=query_vector,

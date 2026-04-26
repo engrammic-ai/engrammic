@@ -617,7 +617,7 @@ class ExtractionService:
             job.entity_count = entities_created
             job.relationship_count = relationships_created
             job.claim_node_ids = claim_node_ids
-            job.cost_usd = float(usage.cost_usd)
+            job.cost_usd = 0.0
             job.completed_at = now
             await self._update_node_extraction_status(silo_id, job.node_id, "done")
         except Exception as e:

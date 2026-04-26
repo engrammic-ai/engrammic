@@ -51,7 +51,7 @@ class ServiceFactory:
         from context_service.stores.memgraph import create_memgraph_driver
 
         settings = get_settings()
-        driver = await create_memgraph_driver(settings)
+        driver = await create_memgraph_driver(settings)  # type: ignore[arg-type]
         client = MC(driver)
         logger.info("ServiceFactory: Memgraph client created")
         return client
@@ -62,7 +62,7 @@ class ServiceFactory:
         from context_service.stores.redis import create_redis_pool
 
         settings = get_settings()
-        pool = await create_redis_pool(settings)
+        pool = await create_redis_pool(settings)  # type: ignore[arg-type]
         client = RC(pool)
         logger.info("ServiceFactory: Redis client created")
         return client
@@ -118,7 +118,7 @@ class ServiceFactory:
         if uri.startswith("vertex:"):
             from context_service.llm.vertex_gemini import VertexGeminiProvider
 
-            model = uri[len("vertex:"):]
+            model = uri[len("vertex:") :]
             return VertexGeminiProvider(
                 project=settings.vertex_project or "",
                 location=settings.vertex_location,
@@ -128,19 +128,19 @@ class ServiceFactory:
         if uri.startswith("anthropic:"):
             from context_service.llm.anthropic import AnthropicProvider
 
-            model = uri[len("anthropic:"):]
+            model = uri[len("anthropic:") :]
             api_key = settings.llm_api_key.get_secret_value() if settings.llm_api_key else ""
             return AnthropicProvider(api_key=api_key, model=model)
         if uri.startswith("gemini:"):
             from context_service.llm.gemini import GeminiProvider
 
-            model = uri[len("gemini:"):]
+            model = uri[len("gemini:") :]
             api_key = settings.llm_api_key.get_secret_value() if settings.llm_api_key else ""
             return GeminiProvider(api_key=api_key, model=model)
         # Default: openai-compatible
         from context_service.llm.openai import OpenAIProvider
 
-        model = uri[len("openai:"):] if uri.startswith("openai:") else uri
+        model = uri[len("openai:") :] if uri.startswith("openai:") else uri
         api_key = settings.llm_api_key.get_secret_value() if settings.llm_api_key else ""
         return OpenAIProvider(api_key=api_key, model=model)
 
@@ -153,11 +153,11 @@ class ServiceFactory:
         if settings.embedding_provider == "vertex" and settings.vertex_project:
             from context_service.embeddings.vertex import VertexAIEmbeddingService
 
-            return VertexAIEmbeddingService.from_settings(settings, embedding_cache)
+            return VertexAIEmbeddingService.from_settings(settings, embedding_cache)  # type: ignore[arg-type]
         if settings.jina_api_key:
             from context_service.embeddings.jina import JinaEmbeddingService
 
-            return JinaEmbeddingService.from_settings(settings, embedding_cache)
+            return JinaEmbeddingService.from_settings(settings, embedding_cache)  # type: ignore[arg-type]
         return None
 
     # =========================================================================

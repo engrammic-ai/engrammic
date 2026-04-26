@@ -37,7 +37,7 @@ def register(mcp: FastMCP) -> None:
         from context_service.mcp.server import get_context_service
 
         auth = get_mcp_auth()
-        service = get_context_service()
+        get_context_service()
 
         if isinstance(node_ids, str):
             node_ids = [node_ids]

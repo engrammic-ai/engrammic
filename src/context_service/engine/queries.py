@@ -28,15 +28,22 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from datetime import datetime
 
+from primitives.schema.labels import IntelligenceLabel, KnowledgeLabel
+
 from context_service.db.schema import (
     EDGE_DERIVED_FROM,
     EDGE_EXTRACTED_FROM,
     EDGE_MENTIONS,
     EDGE_REFERENCES,
+    LABEL_CLAIM,
     LABEL_DOCUMENT,
     LABEL_ENTITY,
+    LABEL_PASSAGE,
     content_union_predicate,
 )
+
+_LABEL_REASONING_CHAIN = IntelligenceLabel.REASONING_CHAIN  # "ReasoningChain"
+_LABEL_COMMITMENT = KnowledgeLabel.COMMITMENT                # "Commitment"
 
 # --- Node Queries ---
 # NOTE: CREATE_NODE / UPSERT_NODE_SINGLE_RTT / BATCH_UPSERT_NODES are ingest-time
@@ -760,8 +767,8 @@ RETURN n
 # constants embed the literal names intentionally — they are the single source
 # for call sites that import from here.
 
-UPSERT_DOCUMENT_AND_PASSAGES = """
-MERGE (d:Document {id: $doc_id, silo_id: $silo_id})
+UPSERT_DOCUMENT_AND_PASSAGES = f"""
+MERGE (d:{LABEL_DOCUMENT} {{id: $doc_id, silo_id: $silo_id}})
 SET d.committed = false,
     d.current_version = $next_version,
     d.created_at = timestamp(),
@@ -769,26 +776,26 @@ SET d.committed = false,
     d += $doc_props
 WITH d
 UNWIND $passages AS p
-  MERGE (ps:Passage {id: p.id, silo_id: $silo_id})
+  MERGE (ps:{LABEL_PASSAGE} {{id: p.id, silo_id: $silo_id}})
   SET ps.committed = false,
       ps.created_at = timestamp(),
       ps.updated_at = timestamp(),
       ps += p.props
-  MERGE (d)<-[:DERIVED_FROM]-(ps)
+  MERGE (d)<-[:{EDGE_DERIVED_FROM}]-(ps)
 RETURN count(ps) AS passage_count
 """
 
-FLIP_DOCUMENT_COMMITTED_VERSION_GATED = """
-MATCH (d:Document {id: $doc_id, silo_id: $silo_id, current_version: $claim_version})
+FLIP_DOCUMENT_COMMITTED_VERSION_GATED = f"""
+MATCH (d:{LABEL_DOCUMENT} {{id: $doc_id, silo_id: $silo_id, current_version: $claim_version}})
 SET d.committed = true
 WITH d
-MATCH (d)<-[:DERIVED_FROM]-(ps:Passage)
+MATCH (d)<-[:{EDGE_DERIVED_FROM}]-(ps:{LABEL_PASSAGE})
 SET ps.committed = true
 RETURN count(ps) AS flipped_passages
 """
 
-RECLASSIFY_DOCUMENT = """
-MATCH (d:Document {id: $doc_id, silo_id: $silo_id})
+RECLASSIFY_DOCUMENT = f"""
+MATCH (d:{LABEL_DOCUMENT} {{id: $doc_id, silo_id: $silo_id}})
 SET d.content_class = coalesce($content_class, d.content_class),
     d.ingest_class = coalesce($ingest_class, d.ingest_class),
     d.reclassified_at = timestamp()
@@ -807,9 +814,9 @@ RETURN d.id AS doc_id,
 # write so retrieval sees fewer results before vectors drop; the route
 # handler sequences (flip -> qdrant.delete_by_document -> this) per the
 # 4.4.5 plan's race-prevention discipline.
-TOMBSTONE_DOCUMENT = """
-MATCH (d:Document {id: $doc_id, silo_id: $silo_id})
-OPTIONAL MATCH (d)<-[:DERIVED_FROM]-(ps:Passage)
+TOMBSTONE_DOCUMENT = f"""
+MATCH (d:{LABEL_DOCUMENT} {{id: $doc_id, silo_id: $silo_id}})
+OPTIONAL MATCH (d)<-[:{EDGE_DERIVED_FROM}]-(ps:{LABEL_PASSAGE})
 OPTIONAL MATCH (ps)<-[:HAS_CLAIM|SUPPORTS]-(f:Finding)
 WITH d, collect(DISTINCT ps) AS passages, collect(DISTINCT f) AS findings
 WITH d, passages, findings,
@@ -821,19 +828,19 @@ DETACH DELETE d
 RETURN 1 AS deleted_docs, deleted_passages, deleted_findings
 """
 
-SWEEP_ORPHAN_DOCUMENTS = """
-MATCH (d:Document)
+SWEEP_ORPHAN_DOCUMENTS = f"""
+MATCH (d:{LABEL_DOCUMENT})
 WHERE d.committed = false AND d.created_at < timestamp() - $age_ms
 WITH d
-MATCH (d)<-[:DERIVED_FROM]-(ps:Passage)
+MATCH (d)<-[:{EDGE_DERIVED_FROM}]-(ps:{LABEL_PASSAGE})
 DETACH DELETE d, ps
 RETURN count(d) AS deleted_docs
 """
 
 # --- Inference storage queries (phase-8, spec R16) ---
 
-UPSERT_REASONING_CHAIN = """
-MERGE (c:ReasoningChain {id: $chain_id})
+UPSERT_REASONING_CHAIN = f"""
+MERGE (c:{_LABEL_REASONING_CHAIN} {{id: $chain_id}})
 ON CREATE SET
     c.silo_id = $silo_id,
     c.tier = $tier,
@@ -855,15 +862,15 @@ ON MATCH SET
 RETURN c.id AS id, c.committed AS committed
 """
 
-FLIP_CHAIN_COMMITTED = """
-MATCH (c:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+FLIP_CHAIN_COMMITTED = f"""
+MATCH (c:{_LABEL_REASONING_CHAIN} {{id: $chain_id, silo_id: $silo_id}})
 WHERE c.committed = false
 SET c.committed = true
 RETURN count(c) AS flipped
 """
 
-UPSERT_COMMITMENT = """
-MERGE (c:Claim:Commitment {id: $commitment_id})
+UPSERT_COMMITMENT = f"""
+MERGE (c:{LABEL_CLAIM}:{_LABEL_COMMITMENT} {{id: $commitment_id}})
 ON CREATE SET
     c.silo_id = $silo_id,
     c.subject = $subject,
@@ -887,31 +894,31 @@ ON MATCH SET
 RETURN c.id AS id, c.committed AS committed
 """
 
-FLIP_COMMITMENT_COMMITTED = """
-MATCH (c:Claim:Commitment {id: $commitment_id, silo_id: $silo_id})
+FLIP_COMMITMENT_COMMITTED = f"""
+MATCH (c:{LABEL_CLAIM}:{_LABEL_COMMITMENT} {{id: $commitment_id, silo_id: $silo_id}})
 WHERE c.committed = false
 SET c.committed = true
 RETURN count(c) AS flipped
 """
 
-CREATE_CRYSTALLIZED_INTO_EDGE = """
-MATCH (chain:ReasoningChain {id: $chain_id})
-MATCH (target {id: $target_id})
-WHERE target:Claim OR target:Finding OR target:Commitment
+CREATE_CRYSTALLIZED_INTO_EDGE = f"""
+MATCH (chain:{_LABEL_REASONING_CHAIN} {{id: $chain_id}})
+MATCH (target {{id: $target_id}})
+WHERE target:{LABEL_CLAIM} OR target:Finding OR target:{_LABEL_COMMITMENT}
 MERGE (chain)-[:CRYSTALLIZED_INTO]->(target)
 """
 
-CREATE_DERIVED_FROM_EVIDENCE_EDGE = """
-MATCH (chain:ReasoningChain {id: $chain_id})
-MATCH (evidence {id: $evidence_id})
-WHERE evidence:Document OR evidence:Passage OR evidence:Claim OR evidence:Finding
-      OR evidence:Commitment OR evidence:ReasoningChain
+CREATE_DERIVED_FROM_EVIDENCE_EDGE = f"""
+MATCH (chain:{_LABEL_REASONING_CHAIN} {{id: $chain_id}})
+MATCH (evidence {{id: $evidence_id}})
+WHERE evidence:{LABEL_DOCUMENT} OR evidence:{LABEL_PASSAGE} OR evidence:{LABEL_CLAIM}
+      OR evidence:Finding OR evidence:{_LABEL_COMMITMENT} OR evidence:{_LABEL_REASONING_CHAIN}
 MERGE (chain)-[r:DERIVED_FROM_EVIDENCE]->(evidence)
 SET r.rank = $rank, r.relevance_score = $relevance_score
 """
 
-CHECK_CHAIN_DEPTH = """
-MATCH path = (c:ReasoningChain {id: $chain_id})-[:DERIVED_FROM_EVIDENCE*1..4]->(target:ReasoningChain)
+CHECK_CHAIN_DEPTH = f"""
+MATCH path = (c:{_LABEL_REASONING_CHAIN} {{id: $chain_id}})-[:DERIVED_FROM_EVIDENCE*1..4]->(target:{_LABEL_REASONING_CHAIN})
 WITH length(path) AS depth
 WHERE depth > 3
 RETURN depth
@@ -920,30 +927,30 @@ LIMIT 1
 
 # Fetch all passage IDs under a document before tombstone deletes them.
 # Must run before TOMBSTONE_DOCUMENT so the cascade can walk DERIVED_FROM_EVIDENCE.
-GET_DOCUMENT_PASSAGE_IDS = """
-MATCH (d:Document {id: $doc_id, silo_id: $silo_id})<-[:DERIVED_FROM]-(ps:Passage)
+GET_DOCUMENT_PASSAGE_IDS = f"""
+MATCH (d:{LABEL_DOCUMENT} {{id: $doc_id, silo_id: $silo_id}})<-[:{EDGE_DERIVED_FROM}]-(ps:{LABEL_PASSAGE})
 RETURN ps.id AS passage_id
 """
 
 # --- Erasure cascade queries (phase-8, P-G) ---
 
-FIND_CHAINS_CITING_NODE = """
-MATCH (chain:ReasoningChain)-[r:DERIVED_FROM_EVIDENCE]->(erased {id: $erased_node_id})
+FIND_CHAINS_CITING_NODE = f"""
+MATCH (chain:{_LABEL_REASONING_CHAIN})-[r:DERIVED_FROM_EVIDENCE]->(erased {{id: $erased_node_id}})
 WHERE chain.silo_id = $silo_id
 RETURN chain.id AS chain_id, chain.tier AS tier, r.rank AS rank,
        chain.steps AS steps
 """
 
-FIND_CHAINS_CITING_NODE_RECURSIVE = """
-MATCH path = (chain:ReasoningChain)-[:DERIVED_FROM_EVIDENCE*1..5]->(erased {id: $erased_node_id})
+FIND_CHAINS_CITING_NODE_RECURSIVE = f"""
+MATCH path = (chain:{_LABEL_REASONING_CHAIN})-[:DERIVED_FROM_EVIDENCE*1..5]->(erased {{id: $erased_node_id}})
 WHERE chain.silo_id = $silo_id
 RETURN DISTINCT chain.id AS chain_id, chain.tier AS tier,
        length(path) AS distance
 ORDER BY distance ASC
 """
 
-REDACT_HOT_CHAIN_STEP = """
-MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+REDACT_HOT_CHAIN_STEP = f"""
+MATCH (chain:{_LABEL_REASONING_CHAIN} {{id: $chain_id, silo_id: $silo_id}})
 WHERE chain.tier = 'hot'
 SET chain.steps = $redacted_steps,
     chain.redacted_at = datetime(),
@@ -951,8 +958,8 @@ SET chain.steps = $redacted_steps,
 RETURN chain.id AS id
 """
 
-RETRACT_CHAIN = """
-MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+RETRACT_CHAIN = f"""
+MATCH (chain:{_LABEL_REASONING_CHAIN} {{id: $chain_id, silo_id: $silo_id}})
 SET chain.status = 'retracted',
     chain.valid_to = datetime(),
     chain.retraction_reason = 'erasure_cascade',
@@ -1045,8 +1052,8 @@ LIMIT $limit
 # Compaction queries (P-D)
 # ---------------------------------------------------------------------------
 
-FIND_COLD_CANDIDATE_CHAINS = """
-MATCH (c:ReasoningChain {silo_id: $silo_id})
+FIND_COLD_CANDIDATE_CHAINS = f"""
+MATCH (c:{_LABEL_REASONING_CHAIN} {{silo_id: $silo_id}})
 WHERE c.tier = 'hot'
   AND (c.last_accessed_at < $threshold_datetime
        OR (c.last_accessed_at IS NULL AND c.created_at < $threshold_datetime))
@@ -1055,16 +1062,16 @@ ORDER BY c.access_count ASC, c.created_at ASC
 LIMIT $limit
 """
 
-CHECK_CHAIN_AUDIT_LINKED = """
-MATCH (c:ReasoningChain {id: $chain_id})
+CHECK_CHAIN_AUDIT_LINKED = f"""
+MATCH (c:{_LABEL_REASONING_CHAIN} {{id: $chain_id}})
 WHERE EXISTS((c)<-[:PROMOTED_FROM]-(:Finding))
-   OR EXISTS((c)<-[:DERIVED_FROM_EVIDENCE]-(:ReasoningChain))
+   OR EXISTS((c)<-[:DERIVED_FROM_EVIDENCE]-(:{_LABEL_REASONING_CHAIN}))
    OR EXISTS((c)-[:CRYSTALLIZED_INTO]->(:Finding))
 RETURN true AS linked
 """
 
-COMPACT_CHAIN = """
-MATCH (c:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+COMPACT_CHAIN = f"""
+MATCH (c:{_LABEL_REASONING_CHAIN} {{id: $chain_id, silo_id: $silo_id}})
 SET c.tier = 'cold',
     c.compact_summary = $compact_summary,
     c.compacted_at = datetime(),
@@ -1073,8 +1080,8 @@ SET c.tier = 'cold',
 RETURN c.id AS id
 """
 
-SHED_CHAIN = """
-MATCH (c:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+SHED_CHAIN = f"""
+MATCH (c:{_LABEL_REASONING_CHAIN} {{id: $chain_id, silo_id: $silo_id}})
 SET c.status = 'retracted',
     c.valid_to = datetime(),
     c.retraction_reason = 'shed_on_zero_access',
@@ -1087,9 +1094,9 @@ RETURN c.id AS id
 # Consensus promotion queries (P-F)
 # ---------------------------------------------------------------------------
 
-CREATE_FINDING_FROM_COMMITMENT = """
-MATCH (c:Claim:Commitment {id: $commitment_id, silo_id: $silo_id})
-CREATE (f:Finding {
+CREATE_FINDING_FROM_COMMITMENT = f"""
+MATCH (c:{LABEL_CLAIM}:{_LABEL_COMMITMENT} {{id: $commitment_id, silo_id: $silo_id}})
+CREATE (f:Finding {{
     id: $finding_id,
     silo_id: $silo_id,
     subject: c.subject,
@@ -1100,14 +1107,14 @@ CREATE (f:Finding {
     created_at: datetime(),
     confidence_tier: 'high',
     distinct_agent_count: c.distinct_agent_count
-})
+}})
 CREATE (c)-[:PROMOTED_TO]->(f)
 RETURN f.id AS id
 """
 
-CREATE_PROMOTED_FROM_EDGE = """
-MATCH (f:Finding {id: $finding_id})
-MATCH (c:ReasoningChain {id: $chain_id})
+CREATE_PROMOTED_FROM_EDGE = f"""
+MATCH (f:Finding {{id: $finding_id}})
+MATCH (c:{_LABEL_REASONING_CHAIN} {{id: $chain_id}})
 CREATE (f)-[:PROMOTED_FROM]->(c)
 SET c.status = 'superseded'
 """

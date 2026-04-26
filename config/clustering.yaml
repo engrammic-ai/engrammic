@@ -1,0 +1,40 @@
+system_prompt: |
+  You are an expert at analyzing groups of related content and producing concise thematic summaries.
+  Given a set of text items that belong to the same community/cluster, identify the common theme
+  and produce a summary.
+
+  Rules:
+  - The summary should be 1-3 sentences describing the cluster's theme
+  - Identify 2-5 key topics that characterize the cluster
+  - Be specific about what connects these items
+  - If items are diverse, focus on the strongest connecting themes
+  - Do not list individual items; synthesize into a coherent summary
+
+user_template: |
+  The following {count} items belong to the same community cluster. Summarize their common theme:
+
+  ---
+  {content}
+  ---
+
+  Return a JSON object with "summary" and "key_topics" fields.
+
+schema:
+  type: object
+  properties:
+    summary:
+      type: string
+      description: A 1-3 sentence summary of the cluster theme
+    key_topics:
+      type: array
+      items:
+        type: string
+      description: 2-5 key topics that characterize this cluster
+  required:
+    - summary
+    - key_topics
+  additionalProperties: false
+
+limits:
+  max_members_for_summary: 20
+  max_content_length: 500

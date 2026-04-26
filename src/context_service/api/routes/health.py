@@ -1,6 +1,7 @@
 """Health check endpoints."""
 
 import time
+from collections.abc import Awaitable
 from typing import Literal
 
 from fastapi import APIRouter, Query, Request
@@ -40,7 +41,7 @@ class HealthResponse(BaseModel):
     uptime_seconds: float | None = None
 
 
-async def _timed_check(coro) -> tuple[bool, float]:
+async def _timed_check(coro: Awaitable[bool]) -> tuple[bool, float]:
     """Run a health check and return (result, latency_ms)."""
     start = time.monotonic()
     result = await coro
@@ -75,12 +76,8 @@ async def health_check(
         memgraph_healthy, memgraph_ms = await _timed_check(
             request.app.state.memgraph.health_check()
         )
-        redis_healthy, redis_ms = await _timed_check(
-            request.app.state.redis.health_check()
-        )
-        qdrant_healthy, qdrant_ms = await _timed_check(
-            request.app.state.qdrant.health_check()
-        )
+        redis_healthy, redis_ms = await _timed_check(request.app.state.redis.health_check())
+        qdrant_healthy, qdrant_ms = await _timed_check(request.app.state.qdrant.health_check())
     else:
         memgraph_healthy = await request.app.state.memgraph.health_check()
         redis_healthy = await request.app.state.redis.health_check()

@@ -9,17 +9,20 @@ from context_service.stores import MemgraphClient, QdrantClient, RedisClient
 
 def get_memgraph(request: Request) -> MemgraphClient:
     """Get Memgraph client from app state."""
-    return request.app.state.memgraph
+    client: MemgraphClient = request.app.state.memgraph
+    return client
 
 
 def get_qdrant(request: Request) -> QdrantClient:
     """Get Qdrant client from app state."""
-    return request.app.state.qdrant
+    client: QdrantClient = request.app.state.qdrant
+    return client
 
 
 def get_redis(request: Request) -> RedisClient:
     """Get Redis client from app state."""
-    return request.app.state.redis
+    client: RedisClient = request.app.state.redis
+    return client
 
 
 MemgraphDep = Annotated[MemgraphClient, Depends(get_memgraph)]

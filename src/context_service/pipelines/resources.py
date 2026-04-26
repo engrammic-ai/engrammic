@@ -7,6 +7,7 @@ call the existing async functions via asyncio.run() or await.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 from typing import TYPE_CHECKING
 
@@ -21,7 +22,7 @@ if TYPE_CHECKING:
     from redis.asyncio import Redis
 
 
-class MemgraphResource(dg.ConfigurableResource):
+class MemgraphResource(dg.ConfigurableResource):  # type: ignore[type-arg]
     """Wraps context_service.stores.memgraph.create_memgraph_driver.
 
     Asset bodies call `await resource.driver()` inside an async context, or
@@ -42,17 +43,15 @@ class MemgraphResource(dg.ConfigurableResource):
             self._driver = await create_memgraph_driver(settings)
         return self._driver
 
-    def teardown_after_execution(self, context: dg.InitResourceContext) -> None:
+    def teardown_after_execution(self, _context: dg.InitResourceContext) -> None:
         if self._driver is not None:
             driver = self._driver
             self._driver = None
-            try:
+            with contextlib.suppress(RuntimeError):
                 asyncio.run(driver.close())
-            except RuntimeError:
-                pass
 
 
-class RedisResource(dg.ConfigurableResource):
+class RedisResource(dg.ConfigurableResource):  # type: ignore[type-arg]
     """Wraps context_service.stores.redis.create_redis_pool."""
 
     url: str
@@ -67,17 +66,15 @@ class RedisResource(dg.ConfigurableResource):
             self._client = await create_redis_pool(settings)
         return self._client
 
-    def teardown_after_execution(self, context: dg.InitResourceContext) -> None:
+    def teardown_after_execution(self, _context: dg.InitResourceContext) -> None:
         if self._client is not None:
             client = self._client
             self._client = None
-            try:
+            with contextlib.suppress(RuntimeError):
                 asyncio.run(client.aclose())
-            except RuntimeError:
-                pass
 
 
-class QdrantResource(dg.ConfigurableResource):
+class QdrantResource(dg.ConfigurableResource):  # type: ignore[type-arg]
     """Holds Qdrant config. Asset bodies build AsyncQdrantClient on demand."""
 
     url: str
@@ -95,17 +92,15 @@ class QdrantResource(dg.ConfigurableResource):
             )
         return self._client
 
-    def teardown_after_execution(self, context: dg.InitResourceContext) -> None:
+    def teardown_after_execution(self, _context: dg.InitResourceContext) -> None:
         if self._client is not None:
             client = self._client
             self._client = None
-            try:
+            with contextlib.suppress(RuntimeError):
                 asyncio.run(client.close())
-            except RuntimeError:
-                pass
 
 
-def build_default_resources() -> dict[str, dg.ConfigurableResource]:
+def build_default_resources() -> dict[str, dg.ConfigurableResource]:  # type: ignore[type-arg]
     """Constructs the standard resource dict for Definitions(resources=...).
 
     All values sourced from context_service.config.settings.get_settings().

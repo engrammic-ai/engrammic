@@ -85,6 +85,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from context_service.config.logging import get_logger
+from context_service.db.schema import content_union_predicate
 
 if TYPE_CHECKING:
     from neo4j import AsyncTransaction
@@ -400,11 +401,11 @@ RETURN r.id AS id
 #   finding_id (str)
 #   node_id    (str)
 #   kind       (str)  -- "primary" | "supporting"
-CITES_EDGE_CREATE_NODE = """
-MATCH (f:Finding {id: $finding_id})
-MATCH (n {id: $node_id})
-WHERE n:Document OR n:Passage OR n:Claim
-MERGE (f)-[e:CITES {kind: $kind}]->(n)
+CITES_EDGE_CREATE_NODE = f"""
+MATCH (f:Finding {{id: $finding_id}})
+MATCH (n {{id: $node_id}})
+WHERE {content_union_predicate("n")}
+MERGE (f)-[e:CITES {{kind: $kind}}]->(n)
 RETURN e.kind AS kind
 """
 
@@ -564,11 +565,11 @@ RETURN p.id AS id
 # Params:
 #   silo_id   (str)
 #   level     (int)
-FETCH_CLUSTERS_BY_LEVEL = """
-MATCH (c:Cluster {silo_id: $silo_id})
+FETCH_CLUSTERS_BY_LEVEL = f"""
+MATCH (c:Cluster {{silo_id: $silo_id}})
 WHERE c.level = $level
 MATCH (n)-[:BELONGS_TO]->(c)
-WHERE (n:Document OR n:Passage OR n:Claim) AND n.silo_id = $silo_id
+WHERE {content_union_predicate("n")} AND n.silo_id = $silo_id
 WITH c, count(n) AS member_count
 RETURN c.id AS cluster_id,
        c.level AS level,

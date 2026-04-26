@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic_ai import Agent
 
-from context_service.config.settings import get_settings
+from context_service.core.settings import get_settings
 from context_service.custodian.models import FindingOutput, StitchedSummary
 from context_service.custodian.prompt_loader import load_prompt
 from context_service.custodian.validators import CitationValidator
@@ -31,7 +31,9 @@ if TYPE_CHECKING:
 # ClusterLevel.COARSE = 3 (resolution_parameter=0.001)
 _COARSE_LEVEL = 3
 
-_PROMPTS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "config" / "prompts" / "custodian"
+_PROMPTS_DIR = (
+    Path(__file__).resolve().parent.parent.parent.parent / "config" / "prompts" / "custodian"
+)
 SILO_SYNTHESIS_SYSTEM_PROMPT = load_prompt(_PROMPTS_DIR / "silo_synthesis.yaml")
 
 

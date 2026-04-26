@@ -24,10 +24,10 @@ def register(mcp: FastMCP) -> None:
         query: str,
         silo_ids: list[str] | None = None,
         depth: int = 2,
-        max_nodes: int = 50,
-        max_tokens: int | None = None,
-        type_filter: str | None = None,
-        as_of: str | None = None,
+        max_nodes: int = 50,  # noqa: ARG001
+        max_tokens: int | None = None,  # noqa: ARG001
+        type_filter: str | None = None,  # noqa: ARG001
+        as_of: str | None = None,  # noqa: ARG001
     ) -> dict[str, Any]:
         """Perform semantic search with graph-walk expansion.
 
@@ -47,7 +47,7 @@ def register(mcp: FastMCP) -> None:
         from context_service.mcp.server import get_context_service
 
         auth = get_mcp_auth()
-        service = get_context_service()
+        get_context_service()
 
         # TODO: Implement when ContextService is ported
         raise NotImplementedError(

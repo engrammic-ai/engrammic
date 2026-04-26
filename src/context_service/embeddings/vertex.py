@@ -32,7 +32,7 @@ class VertexAIEmbeddingService:
         region: str = "us-central1",
         model: str = "text-embedding-005",
         dimensions: int = 768,
-        embedding_cache: Any | None = None,
+        _embedding_cache: Any | None = None,
     ) -> None:
         """Initialize the VertexAI embedding service.
 
@@ -41,7 +41,7 @@ class VertexAIEmbeddingService:
             region: GCP region for VertexAI.
             model: VertexAI embedding model name.
             dimensions: Output embedding dimensions.
-            embedding_cache: Ignored (kept for interface compat).
+            _embedding_cache: Ignored (kept for interface compat).
         """
         self._project = project
         self._region = region
@@ -58,13 +58,13 @@ class VertexAIEmbeddingService:
     def from_settings(
         cls,
         settings: Settings,
-        embedding_cache: Any | None = None,
+        _embedding_cache: Any | None = None,
     ) -> VertexAIEmbeddingService:
         """Create a VertexAIEmbeddingService from application settings.
 
         Args:
             settings: Application settings instance.
-            embedding_cache: Ignored (kept for interface compat).
+            _embedding_cache: Ignored (kept for interface compat).
 
         Returns:
             Configured VertexAIEmbeddingService.

@@ -24,8 +24,8 @@ def register(mcp: FastMCP) -> None:
         content: str,
         type: str,
         silo_id: str,
-        properties: dict[str, Any] | None = None,
-        idempotency_key: str | None = None,
+        properties: dict[str, Any] | None = None,  # noqa: ARG001
+        idempotency_key: str | None = None,  # noqa: ARG001
     ) -> dict[str, Any]:
         """Store a new context node.
 
@@ -43,7 +43,7 @@ def register(mcp: FastMCP) -> None:
         from context_service.mcp.server import get_context_service
 
         auth = get_mcp_auth()
-        service = get_context_service()
+        get_context_service()
 
         # TODO: Implement when ContextService is ported
         # For now, this serves as the interface contract

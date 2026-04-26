@@ -151,7 +151,8 @@ class MemgraphClient:
         async def _run_once() -> list[dict[str, Any]]:
             async with self.session() as session:
                 result = await session.run(query, _coerce_params(parameters))
-                return await result.data()
+                data: list[dict[str, Any]] = await result.data()
+                return data
 
         try:
             async for attempt in AsyncRetrying(
@@ -203,13 +204,15 @@ class MemgraphClient:
 
         async def _write_tx(tx: Any, q: str, p: dict[str, Any]) -> list[dict[str, Any]]:
             result = await tx.run(q, p)
-            return await result.data()
+            data: list[dict[str, Any]] = await result.data()
+            return data
 
         try:
             async with self.session() as session:
-                return await session.execute_write(
+                result: list[dict[str, Any]] = await session.execute_write(
                     _write_tx, query, _coerce_params(parameters)
                 )
+                return result
         except ServiceUnavailable as e:
             logger.error("memgraph_service_unavailable", error=str(e))
             raise MemgraphOperationError(f"Database unavailable: {e}") from e

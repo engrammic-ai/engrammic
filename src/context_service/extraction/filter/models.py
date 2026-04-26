@@ -25,11 +25,11 @@ class FilterDecision(BaseModel):
     elapsed_ms: float | None = None
 
     @classmethod
-    def keep(cls, *, rule: RuleFired, reason: str, **kw: object) -> FilterDecision:
+    def keep(cls, *, rule: RuleFired, reason: str, **kw: float | None) -> FilterDecision:
         return cls(action="keep", rule_fired=rule, reason=reason, **kw)
 
     @classmethod
-    def drop(cls, *, rule: RuleFired, reason: str, **kw: object) -> FilterDecision:
+    def drop(cls, *, rule: RuleFired, reason: str, **kw: float | None) -> FilterDecision:
         return cls(action="drop", rule_fired=rule, reason=reason, **kw)
 
 

@@ -7,21 +7,21 @@ the CAG primitives.schema enums. Import from here for all query construction.
 
 from __future__ import annotations
 
-from primitives.schema import CAGEdgeType, KnowledgeLabel, MemoryLabel
+from primitives.schema import CAGEdgeType, KnowledgeLabel, MemoryLabel, RegistryLabel
 
 # --- Content node labels (RAG-era / Memory layer) ---
-LABEL_DOCUMENT = MemoryLabel.DOCUMENT.value   # "Document"
-LABEL_PASSAGE = MemoryLabel.PASSAGE.value     # "Passage"
-LABEL_CLAIM = KnowledgeLabel.CLAIM.value      # "Claim"
-LABEL_ENTITY = "Entity"                        # pivot, not in CAG layers
+LABEL_DOCUMENT = MemoryLabel.DOCUMENT.value  # "Document"
+LABEL_PASSAGE = MemoryLabel.PASSAGE.value  # "Passage"
+LABEL_CLAIM = KnowledgeLabel.CLAIM.value  # "Claim"
+LABEL_ENTITY = RegistryLabel.ENTITY.value  # "Entity" — registry pivot
 
 CORE_CONTENT_LABELS: tuple[str, ...] = (LABEL_DOCUMENT, LABEL_PASSAGE, LABEL_CLAIM)
 
 # --- Edge type constants (O-30) ---
-EDGE_DERIVED_FROM = CAGEdgeType.DERIVED_FROM.value        # "DERIVED_FROM"
-EDGE_EXTRACTED_FROM = CAGEdgeType.EXTRACTED_FROM.value    # "EXTRACTED_FROM"
-EDGE_MENTIONS = CAGEdgeType.MENTIONS.value                # "MENTIONS"
-EDGE_REFERENCES = "REFERENCES"                            # Claim -> Document (not yet in CAGEdgeType)
+EDGE_DERIVED_FROM = CAGEdgeType.DERIVED_FROM.value  # "DERIVED_FROM"
+EDGE_EXTRACTED_FROM = CAGEdgeType.EXTRACTED_FROM.value  # "EXTRACTED_FROM"
+EDGE_MENTIONS = CAGEdgeType.MENTIONS.value  # "MENTIONS"
+EDGE_REFERENCES = "REFERENCES"  # Claim -> Document (not yet in CAGEdgeType)
 
 
 def content_union_predicate(var: str = "n") -> str:

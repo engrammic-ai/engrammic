@@ -200,7 +200,7 @@ class QdrantClient:
             )
         if filter_conditions:
             must_conditions.extend(filter_conditions)
-        query_filter = models.Filter(must=must_conditions) if must_conditions else None
+        query_filter = models.Filter(must=must_conditions) if must_conditions else None  # type: ignore[arg-type]
 
         try:
             response = await client.query_points(

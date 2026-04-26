@@ -18,8 +18,8 @@ def register_silo_create(mcp: FastMCP) -> None:
     )
     async def silo_create(
         name: str,
-        description: str | None = None,
-        dissolvability: float = 0.5,
+        description: str | None = None,  # noqa: ARG001
+        dissolvability: float = 0.5,  # noqa: ARG001
     ) -> dict[str, Any]:
         """Create a new silo.
 
@@ -35,12 +35,11 @@ def register_silo_create(mcp: FastMCP) -> None:
         from context_service.mcp.server import get_silo_service
 
         auth = get_mcp_auth()
-        service = get_silo_service()
+        get_silo_service()
 
         # TODO: Implement when SiloService is ported
         raise NotImplementedError(
-            f"silo_create not yet implemented. "
-            f"org_id={auth.org_id}, name={name}"
+            f"silo_create not yet implemented. org_id={auth.org_id}, name={name}"
         )
 
 
@@ -61,9 +60,7 @@ def register_silo_list(mcp: FastMCP) -> None:
         from context_service.mcp.server import get_silo_service
 
         auth = get_mcp_auth()
-        service = get_silo_service()
+        get_silo_service()
 
         # TODO: Implement when SiloService is ported
-        raise NotImplementedError(
-            f"silo_list not yet implemented. org_id={auth.org_id}"
-        )
+        raise NotImplementedError(f"silo_list not yet implemented. org_id={auth.org_id}")

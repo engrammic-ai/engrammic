@@ -9,7 +9,13 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from context_service.config.logging import get_logger
-from context_service.db.schema import content_union_predicate
+from context_service.db.schema import (
+    LABEL_CLAIM,
+    LABEL_DOCUMENT,
+    LABEL_ENTITY,
+    LABEL_PASSAGE,
+    content_union_predicate,
+)
 from context_service.engine import queries
 from context_service.engine.exceptions import StaleVersionError
 from context_service.engine.models import BinaryEdge, HyperEdge, Node, Participant, Silo, SubGraph
@@ -19,6 +25,13 @@ if TYPE_CHECKING:
     from context_service.stores.memgraph import MemgraphClient
 
 logger = get_logger(__name__)
+
+# Labels that represent addressable content nodes in the graph.
+# "Node" is retained for legacy test fabrications; remove once all tests migrate.
+_CONTENT_LABEL_SET: frozenset[str] = frozenset(
+    {LABEL_DOCUMENT, LABEL_PASSAGE, LABEL_CLAIM, LABEL_ENTITY}
+)
+_PATH_LABEL_SET: frozenset[str] = _CONTENT_LABEL_SET | {"Node"}
 
 
 def _parse_dt(value: Any) -> datetime:
@@ -67,11 +80,7 @@ class MemgraphStore:
             or []
         )
         label = next(
-            (
-                lbl.lower()
-                for lbl in raw_labels
-                if lbl in ("Document", "Passage", "Claim", "Entity")
-            ),
+            (lbl.lower() for lbl in raw_labels if lbl in _CONTENT_LABEL_SET),
             None,
         )
 
@@ -759,7 +768,7 @@ class MemgraphStore:
         if not result:
             return None
         path_nodes = result[0].get("path_nodes", [])
-        content_labels = {"Document", "Passage", "Claim", "Entity", "Node"}
+        content_labels = _PATH_LABEL_SET
         out: list[Node] = []
         for n in path_nodes:
             labels = n.get("labels", n.get("_labels", []))

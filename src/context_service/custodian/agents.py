@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic_ai import Agent
 from pydantic_ai.usage import UsageLimits
@@ -31,7 +31,9 @@ if TYPE_CHECKING:
     from context_service.custodian.validators import CitationValidator
     from context_service.stores.memgraph import MemgraphClient
 
-_PROMPTS_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent / "config" / "prompts" / "custodian"
+_PROMPTS_DIR = (
+    Path(__file__).resolve().parent.parent.parent.parent.parent / "config" / "prompts" / "custodian"
+)
 FAST_PASS_SYSTEM_PROMPT = load_prompt(_PROMPTS_DIR / "fast_pass.yaml")
 PLAN_SYSTEM_PROMPT = load_prompt(_PROMPTS_DIR / "plan.yaml")
 DEEP_PASS_SYSTEM_PROMPT = load_prompt(_PROMPTS_DIR / "deep_pass.yaml")
@@ -59,7 +61,7 @@ class VisitDeps:
     silo_id: str
     cluster_id: str
     pass_id: str
-    scope: str  # "cluster" or "silo"
+    scope: Literal["cluster", "silo"]
     seen_node_ids: set[str] = field(default_factory=set)
     claims_buffer: list[Claim] = field(default_factory=list)
     proposed_edges_buffer: list[ProposedEdge] = field(default_factory=list)

@@ -16,8 +16,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from context_service.db.schema import content_union_predicate
+
 if TYPE_CHECKING:
     from context_service.stores.memgraph import MemgraphClient
+
+_cup = content_union_predicate
 
 
 # ---------------------------------------------------------------------------
@@ -27,9 +31,9 @@ if TYPE_CHECKING:
 
 # Return core-content members of a cluster, silo-scoped, paginated.
 # committed=true filter per O-75; Custodian visits only committed nodes.
-FETCH_CLUSTER_MEMBERS = """
-MATCH (n)-[:BELONGS_TO]->(c:Cluster {id: $cluster_id, silo_id: $silo_id})
-WHERE (n:Document OR n:Passage OR n:Claim)
+FETCH_CLUSTER_MEMBERS = f"""
+MATCH (n)-[:BELONGS_TO]->(c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
+WHERE {_cup("n")}
   AND n.silo_id = $silo_id
   AND n.committed = true
 RETURN n.id AS node_id,
@@ -43,9 +47,9 @@ LIMIT $limit
 
 
 # Count committed core-content members of a cluster (for has_more / total).
-COUNT_CLUSTER_MEMBERS = """
-MATCH (n)-[:BELONGS_TO]->(c:Cluster {id: $cluster_id, silo_id: $silo_id})
-WHERE (n:Document OR n:Passage OR n:Claim)
+COUNT_CLUSTER_MEMBERS = f"""
+MATCH (n)-[:BELONGS_TO]->(c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
+WHERE {_cup("n")}
   AND n.silo_id = $silo_id
   AND n.committed = true
 RETURN count(n) AS total
@@ -55,9 +59,9 @@ RETURN count(n) AS total
 # Single content-node lookup, silo-scoped. No committed=true filter here:
 # this is called from the Custodian audit write-path which may visit nodes
 # that are still mid-ingest (committed=false is a valid Custodian target).
-FETCH_NODE_BY_ID = """
-MATCH (n {id: $node_id, silo_id: $silo_id})
-WHERE n:Document OR n:Passage OR n:Claim
+FETCH_NODE_BY_ID = f"""
+MATCH (n {{id: $node_id, silo_id: $silo_id}})
+WHERE {_cup("n")}
 RETURN n.id AS node_id,
        n.content AS content,
        n.silo_id AS silo_id,
@@ -75,9 +79,9 @@ LIMIT 1
 # collect() interactions with variable-length path list variables that drop
 # rows in Memgraph. committed=true on seed per O-75; neighbourhood is
 # retrieval-facing.
-FETCH_NEIGHBORHOOD_SEED = """
-MATCH (start {id: $node_id, silo_id: $silo_id})
-WHERE (start:Document OR start:Passage OR start:Claim)
+FETCH_NEIGHBORHOOD_SEED = f"""
+MATCH (start {{id: $node_id, silo_id: $silo_id}})
+WHERE {_cup("start")}
   AND start.committed = true
 RETURN start.id AS seed_id,
        start.content AS seed_content,
@@ -88,11 +92,11 @@ LIMIT 1
 
 # Variable-length path template: edge type drives traversal, not node label.
 # committed=true on neighbours per O-75.
-FETCH_NEIGHBORHOOD_NEIGHBOURS_TEMPLATE = """
-MATCH (start {{id: $node_id, silo_id: $silo_id}})
-WHERE start:Document OR start:Passage OR start:Claim
-MATCH (start)-[:EDGE*1..{depth}]-(other)
-WHERE (other:Document OR other:Passage OR other:Claim)
+FETCH_NEIGHBORHOOD_NEIGHBOURS_TEMPLATE = f"""
+MATCH (start {{{{id: $node_id, silo_id: $silo_id}}}})
+WHERE {_cup("start")}
+MATCH (start)-[:EDGE*1..{{depth}}]-(other)
+WHERE {_cup("other")}
   AND other.silo_id = $silo_id
   AND other.id <> start.id
   AND other.committed = true
@@ -111,13 +115,13 @@ FETCH_NEIGHBORHOOD_TEMPLATE = FETCH_NEIGHBORHOOD_NEIGHBOURS_TEMPLATE
 # members. ``$edge_type`` filters on ``e.type`` (the free-form property set by
 # extraction); the relationship label itself is the generic ``:EDGE``.
 # committed=true on both endpoints per O-75 (retrieval-facing query).
-LIST_EDGES_OF_TYPE_IN_CLUSTER = """
-MATCH (a)-[:BELONGS_TO]->(c:Cluster {id: $cluster_id, silo_id: $silo_id})
+LIST_EDGES_OF_TYPE_IN_CLUSTER = f"""
+MATCH (a)-[:BELONGS_TO]->(c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
 MATCH (b)-[:BELONGS_TO]->(c)
 MATCH (a)-[e:EDGE]->(b)
 WHERE e.type = $edge_type
-  AND (a:Document OR a:Passage OR a:Claim)
-  AND (b:Document OR b:Passage OR b:Claim)
+  AND {_cup("a")}
+  AND {_cup("b")}
   AND a.silo_id = $silo_id
   AND b.silo_id = $silo_id
   AND a.committed = true
@@ -152,9 +156,9 @@ ORDER BY f.id
 
 
 # Member node_ids for fingerprint comparison. committed=true per O-75.
-FETCH_CLUSTER_MEMBER_IDS = """
-MATCH (n)-[:BELONGS_TO]->(c:Cluster {id: $cluster_id, silo_id: $silo_id})
-WHERE (n:Document OR n:Passage OR n:Claim)
+FETCH_CLUSTER_MEMBER_IDS = f"""
+MATCH (n)-[:BELONGS_TO]->(c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
+WHERE {_cup("n")}
   AND n.silo_id = $silo_id
   AND n.committed = true
 RETURN n.id AS node_id

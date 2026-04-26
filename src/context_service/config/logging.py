@@ -61,4 +61,5 @@ def configure_logging(log_level: str = "INFO", json_format: bool = True) -> None
 
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:
     """Get a logger instance."""
-    return structlog.get_logger(name)
+    logger: structlog.stdlib.BoundLogger = structlog.get_logger(name)
+    return logger

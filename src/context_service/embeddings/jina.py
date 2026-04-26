@@ -33,7 +33,7 @@ class JinaEmbeddingService:
         model: str = "jina-embeddings-v4",
         dimensions: int = 1024,
         api_url: str = "https://api.jina.ai/v1/embeddings",
-        embedding_cache: Any | None = None,
+        _embedding_cache: Any | None = None,
     ) -> None:
         """Initialize the Jina embedding service.
 
@@ -42,7 +42,7 @@ class JinaEmbeddingService:
             model: Jina embedding model name.
             dimensions: Output embedding dimensions.
             api_url: Jina API endpoint URL.
-            embedding_cache: Ignored (kept for interface compat).
+            _embedding_cache: Ignored (kept for interface compat).
         """
         self._api_key = api_key
         self._model = model
@@ -58,13 +58,13 @@ class JinaEmbeddingService:
     def from_settings(
         cls,
         settings: Settings,
-        embedding_cache: Any | None = None,
+        _embedding_cache: Any | None = None,
     ) -> JinaEmbeddingService:
         """Create a JinaEmbeddingService from application settings.
 
         Args:
             settings: Application settings instance.
-            embedding_cache: Ignored (kept for interface compat).
+            _embedding_cache: Ignored (kept for interface compat).
 
         Returns:
             Configured JinaEmbeddingService.
@@ -181,9 +181,7 @@ class JinaEmbeddingService:
         data = response.json()
         items = data.get("data")
         if not items or not isinstance(items, list):
-            raise JinaEmbeddingError(
-                f"Unexpected response: missing 'data' in {list(data.keys())}"
-            )
+            raise JinaEmbeddingError(f"Unexpected response: missing 'data' in {list(data.keys())}")
 
         embeddings: list[list[float]] = [item["embedding"] for item in items]
         logger.debug("jina_embed_complete", count=len(embeddings))
@@ -243,9 +241,7 @@ class JinaEmbeddingService:
         data = response.json()
         items = data.get("data")
         if not items or not isinstance(items, list):
-            raise JinaEmbeddingError(
-                f"Unexpected response: missing 'data' in {list(data.keys())}"
-            )
+            raise JinaEmbeddingError(f"Unexpected response: missing 'data' in {list(data.keys())}")
 
         embedding: list[float] = items[0]["embedding"]
         logger.debug("jina_embed_query_complete")

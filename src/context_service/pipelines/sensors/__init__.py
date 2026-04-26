@@ -1,3 +1,5 @@
 """Dagster sensors for context-service."""
 
-all_sensors: list = []
+from typing import Any
+
+all_sensors: list[Any] = []

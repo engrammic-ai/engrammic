@@ -9,7 +9,7 @@ from typing import Any
 import yaml
 
 from context_service.config.config_loader import CONFIG_DIR, load_config
-from context_service.config.settings import get_settings
+from context_service.core.settings import get_settings
 
 _DEFAULT_PRESET = "gemini"
 
@@ -24,7 +24,7 @@ def _load_prompts_config() -> dict[str, Any]:
 def _get_extraction_preset() -> dict[str, str]:
     preset = get_settings().prompt_preset
     config = _load_prompts_config()
-    extraction = config.get("extraction", {})
+    extraction: dict[str, dict[str, str]] = config.get("extraction", {})
     if preset in extraction:
         return extraction[preset]
     return extraction[_DEFAULT_PRESET]
