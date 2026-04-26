@@ -1,0 +1,858 @@
+"""Memgraph implementation of HyperGraphStore."""
+
+from __future__ import annotations
+
+import json
+import uuid
+import uuid as uuid_mod
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, Literal
+
+from context_service.config.logging import get_logger
+from context_service.db.schema import content_union_predicate
+from context_service.engine import queries
+from context_service.engine.exceptions import StaleVersionError
+from context_service.engine.models import BinaryEdge, HyperEdge, Node, Participant, Silo, SubGraph
+from context_service.services.models import ScopeContext  # noqa: TC001
+
+if TYPE_CHECKING:
+    from context_service.stores.memgraph import MemgraphClient
+
+logger = get_logger(__name__)
+
+
+def _parse_dt(value: Any) -> datetime:
+    """Parse a datetime from Memgraph -- handles str, native datetime, neo4j DateTime, and epoch-ms int."""
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, (int, float)):
+        # Memgraph timestamp() returns epoch-microseconds (not ms)
+        return datetime.fromtimestamp(value / 1_000_000.0, tz=UTC)
+    if isinstance(value, str):
+        return datetime.fromisoformat(value)
+    # neo4j driver returns neo4j.time.DateTime -- convert via iso_format()
+    if hasattr(value, "iso_format"):
+        return datetime.fromisoformat(value.iso_format())
+    if hasattr(value, "to_native"):
+        native = value.to_native()
+        assert isinstance(native, datetime)
+        return native
+    return datetime.fromisoformat(str(value))
+
+
+class MemgraphStore:
+    """HyperGraphStore implementation backed by Memgraph."""
+
+    def __init__(self, client: MemgraphClient) -> None:
+        self._client = client
+
+    # --- Helpers ---
+
+    @staticmethod
+    def _node_from_record(record: dict[str, Any]) -> Node:
+        n = record["n"]
+        props = n.get("properties", "{}")
+        if isinstance(props, str):
+            props = json.loads(props)
+        supersedes_raw = n.get("supersedes_id")
+        # Prefer record-level _labels (set by queries that do `labels(n) AS _labels`);
+        # neo4j's result.data() flattens Node values to property dicts, so labels
+        # are not available as a nested key on `n`. Fall back to nested keys for
+        # tests that fabricate the shape directly.
+        raw_labels: list[str] = (
+            record.get("_labels")
+            or record.get("labels")
+            or n.get("_labels")
+            or n.get("labels")
+            or []
+        )
+        label = next(
+            (
+                lbl.lower()
+                for lbl in raw_labels
+                if lbl in ("Document", "Passage", "Claim", "Entity")
+            ),
+            None,
+        )
+
+        # Phase-4 Document/Passage nodes are written with a different row
+        # shape than the legacy flat Node schema: they lack `type`,
+        # `content`, `version`, `valid_from`. Coerce on the way out so
+        # downstream retrieval + graph walker + admin routes see a
+        # uniform Node model. See context/plans/fix-retrieval-hydration-debt.md.
+        if label == "document":
+            node_type = "document"
+            content = n.get("content") or n.get("raw_payload")
+            version = int(n.get("current_version") or n.get("version") or 1)
+            # Documents are written via UPSERT_DOCUMENT_AND_PASSAGES with
+            # `d += $doc_props`, i.e. flat top-level keys — NOT a JSON-
+            # encoded `properties` string like legacy :Node. Surface the
+            # non-system keys as a `properties` dict so callers (REST
+            # /context/{id}, bench corpus_doc_id round-trip) get them.
+            _system_doc_keys = {
+                "id",
+                "silo_id",
+                "committed",
+                "current_version",
+                "version",
+                "created_at",
+                "updated_at",
+                "valid_from",
+                "valid_to",
+                "supersedes_id",
+                "content",
+                "type",
+                "_labels",
+                "labels",
+                "uri",
+                "mime",
+                "source_type",
+                "content_hash",
+                "content_class",
+                "ingest_class",
+                "last_reset_at",
+                "raw_payload",
+                "raw_payload_truncated",
+                "properties",
+            }
+            props = {k: v for k, v in n.items() if k not in _system_doc_keys}
+        elif label == "passage":
+            node_type = "passage"
+            content = n.get("content") or n.get("text")
+            version = int(n.get("current_version") or n.get("version") or 1)
+        else:
+            # Legacy :Node rows (and tests that fabricate them) plus
+            # :Claim / :Entity which still use the flat shape.
+            node_type = n["type"]
+            content = n.get("content")
+            version = int(n.get("version", 1))
+
+        return Node(
+            id=uuid.UUID(n["id"]),
+            type=node_type,
+            content=content,
+            properties=props,
+            silo_id=uuid.UUID(n["silo_id"]),
+            source_uri=n.get("source_uri") or n.get("uri"),
+            content_hash=n.get("content_hash"),
+            stale=n.get("stale", False),
+            version=version,
+            created_at=_parse_dt(n["created_at"]),
+            updated_at=_parse_dt(n["updated_at"]),
+            last_accessed_at=_parse_dt(n["last_accessed_at"])
+            if n.get("last_accessed_at")
+            else None,
+            valid_from=_parse_dt(n["valid_from"]) if n.get("valid_from") else datetime.now(UTC),
+            valid_to=_parse_dt(n["valid_to"]) if n.get("valid_to") else None,
+            supersedes_id=uuid.UUID(supersedes_raw) if supersedes_raw else None,
+            label=label,
+            ingest_class=n.get("ingest_class") or "standard",
+            content_class=n.get("content_class") or "default",
+            last_reset_at=_parse_dt(n["last_reset_at"]) if n.get("last_reset_at") else None,
+            reclassified_at=_parse_dt(n["reclassified_at"]) if n.get("reclassified_at") else None,
+        )
+
+    @staticmethod
+    def _silo_from_record(record: dict[str, Any]) -> Silo:
+        s = record["s"]
+        meta = s.get("metadata", "{}")
+        if isinstance(meta, str):
+            meta = json.loads(meta)
+        return Silo(
+            id=uuid.UUID(s["id"]),
+            name=s["name"],
+            description=s.get("description"),
+            org_id=s["org_id"],
+            dissolvability=s.get("dissolvability", 0.5),
+            metadata=meta,
+            created_at=_parse_dt(s["created_at"]),
+            updated_at=_parse_dt(s["updated_at"]),
+        )
+
+    @staticmethod
+    def _binary_edge_from_record(record: dict[str, Any]) -> BinaryEdge:
+        e = record["e"]
+        props = e.get("properties", "{}")
+        if isinstance(props, str):
+            props = json.loads(props)
+        # source_id and target_id come from the matched nodes
+        return BinaryEdge(
+            id=uuid.UUID(e["id"]),
+            type=e["type"],
+            source_id=uuid.UUID(e.get("source_id", e["id"])),
+            target_id=uuid.UUID(record.get("b", {}).get("id", e["id"])),
+            properties=props,
+            created_at=_parse_dt(e["created_at"]),
+        )
+
+    @staticmethod
+    def _hyperedge_from_record(record: dict[str, Any]) -> HyperEdge:
+        he = record["he"]
+        props = he.get("properties", "{}")
+        if isinstance(props, str):
+            props = json.loads(props)
+        participants_raw = record.get("participants", [])
+        participants = [
+            Participant(node_id=uuid.UUID(p["node_id"]), role=p["role"])
+            for p in participants_raw
+            if p.get("node_id") is not None
+        ]
+        return HyperEdge(
+            id=uuid.UUID(he["id"]),
+            type=he["type"],
+            participants=participants if len(participants) >= 3 else [],
+            properties=props,
+            created_at=_parse_dt(he["created_at"]),
+        )
+
+    # --- Node CRUD ---
+
+    @staticmethod
+    def _node_upsert_row(node: Node) -> dict[str, Any]:
+        valid_from = (
+            node.valid_from.isoformat() if node.valid_from else datetime.now(UTC).isoformat()
+        )
+        return {
+            "id": str(node.id),
+            "type": node.type,
+            "content": node.content,
+            "properties": json.dumps(node.properties),
+            "silo_id": str(node.silo_id),
+            "source_uri": node.source_uri,
+            "content_hash": node.content_hash,
+            "stale": node.stale,
+            "extraction_status": node.extraction_status,
+            "expected_version": node.version,
+            "valid_from": valid_from,
+            "new_id": str(uuid_mod.uuid4()),
+            "ingest_class": node.ingest_class,
+            "content_class": node.content_class,
+        }
+
+    async def upsert_node(self, node: Node) -> None:
+        params = self._node_upsert_row(node)
+        result = await self._client.execute_write(queries.UPSERT_NODE_SINGLE_RTT, params)
+        if not result:
+            return
+        action = result[0].get("action")
+        if action == "stale":
+            stored_version = result[0].get("stored_version") or 0
+            raise StaleVersionError(str(node.id), node.version, int(stored_version))
+
+    async def update_extraction_status(self, node_id: str, silo_id: str, status: str) -> None:
+        """Update the extraction_status field on a node."""
+        await self._client.execute_write(
+            queries.UPDATE_EXTRACTION_STATUS,
+            {"id": node_id, "silo_id": silo_id, "extraction_status": status},
+        )
+
+    async def silo_extraction_status(self, silo_id: str) -> dict[str, int]:
+        """Return {status: count} for all nodes in a silo."""
+        rows = await self._client.execute_query(
+            queries.SILO_EXTRACTION_STATUS,
+            {"silo_id": silo_id},
+        )
+        return {r["status"] or "none": r["count"] for r in rows}
+
+    async def get_node(self, node_id: uuid.UUID, silo_id: str) -> Node | None:
+        result = await self._client.execute_query(
+            queries.GET_NODE,
+            {"id": str(node_id), "silo_id": silo_id},
+        )
+        if not result:
+            return None
+        return self._node_from_record(result[0])
+
+    async def get_node_as_of(
+        self, node_id: uuid.UUID, silo_id: str, as_of: datetime
+    ) -> Node | None:
+        as_of_utc = as_of if as_of.tzinfo else as_of.replace(tzinfo=UTC)
+        records = await self._client.execute_query(
+            queries.GET_NODE_AS_OF,
+            {
+                "id": str(node_id),
+                "silo_id": silo_id,
+                "as_of": int(as_of_utc.timestamp() * 1_000_000),
+            },
+        )
+        if not records:
+            return None
+        return self._node_from_record(records[0])
+
+    async def filter_superseded_at(
+        self,
+        node_ids: list[uuid.UUID],
+        silo_id: str,
+        as_of: datetime,
+    ) -> dict[uuid.UUID, uuid.UUID]:
+        """Map each input id to the node that represents its valid version at ``as_of``.
+
+        An input id maps to:
+        - itself if it was valid at ``as_of`` (valid_from <= as_of < valid_to OR valid_to IS NULL)
+        - a different id if it was superseded and the SUPERSEDES chain
+          has a tip that is valid at ``as_of``
+        - absent from the result if no valid version exists at ``as_of``
+
+        Caller is responsible for substituting ids in the result set.
+        """
+        if not node_ids:
+            return {}
+        # Documents written via UPSERT_DOCUMENT_AND_PASSAGES store
+        # created_at via Cypher `timestamp()` which returns epoch
+        # microseconds as an integer; their valid_from is absent. We
+        # coalesce to created_at in the query, so $as_of must be the
+        # same numeric shape — otherwise string/int compare yields
+        # null and every candidate is filtered out.
+        as_of_utc = as_of if as_of.tzinfo else as_of.replace(tzinfo=UTC)
+        records = await self._client.execute_query(
+            queries.FILTER_SUPERSEDED_AT,
+            {
+                "ids": [str(nid) for nid in node_ids],
+                "silo_id": silo_id,
+                "as_of": int(as_of_utc.timestamp() * 1_000_000),
+            },
+        )
+        result: dict[uuid.UUID, uuid.UUID] = {}
+        for rec in records:
+            input_id = uuid.UUID(rec["input_id"])
+            valid_id = uuid.UUID(rec["valid_id"]) if rec.get("valid_id") else None
+            if valid_id is not None:
+                result[input_id] = valid_id
+        return result
+
+    async def create_supersedes_edge(
+        self,
+        from_id: uuid.UUID,
+        to_id: uuid.UUID,
+        silo_id: str,
+        valid_from: datetime,
+        source: str = "custodian",
+    ) -> bool:
+        """Create a cross-node SUPERSEDES edge.
+
+        Links an existing ``from_id`` (the newer, superseding node) to an
+        existing ``to_id`` (the older, superseded node). Sets ``old.valid_to``
+        to ``valid_from`` if not already set. Used by the Custodian semantic
+        supersession pass. ``source`` tags the edge's origin mechanism so
+        downstream attribution can distinguish per-cluster from cross-cluster
+        detections.
+        """
+        result = await self._client.execute_write(
+            queries.CREATE_CROSS_NODE_SUPERSEDES,
+            {
+                "from_id": str(from_id),
+                "to_id": str(to_id),
+                "silo_id": silo_id,
+                "valid_from": valid_from.isoformat(),
+                "source": source,
+            },
+        )
+        return bool(result and result[0].get("created", 0) > 0)
+
+    async def batch_get_nodes(
+        self, node_ids: list[uuid.UUID], silo_id: str
+    ) -> dict[uuid.UUID, Node]:
+        if not node_ids:
+            return {}
+        result = await self._client.execute_query(
+            queries.BATCH_GET_NODES,
+            {"ids": [str(nid) for nid in node_ids], "silo_id": silo_id},
+        )
+        return {uuid.UUID(r["n"]["id"]): self._node_from_record(r) for r in result}
+
+    async def delete_node(self, node_id: uuid.UUID, silo_id: str) -> bool:
+        result = await self._client.execute_write(
+            queries.DELETE_NODE,
+            {"id": str(node_id), "silo_id": silo_id},
+        )
+        return bool(result and result[0].get("deleted", 0) > 0)
+
+    async def find_nodes(
+        self,
+        silo_id: uuid.UUID,
+        *,
+        type: str | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> tuple[list[Node], str | None]:
+        offset = int(cursor) if cursor else 0
+        result = await self._client.execute_query(
+            queries.FIND_NODES,
+            {
+                "silo_id": str(silo_id),
+                "type": type,
+                "offset": offset,
+                "limit": limit + 1,
+            },
+        )
+        nodes = [self._node_from_record(r) for r in result[:limit]]
+        next_cursor = str(offset + limit) if len(result) > limit else None
+        return nodes, next_cursor
+
+    async def count_nodes(self, silo_id: uuid.UUID) -> int:
+        result = await self._client.execute_query(
+            queries.COUNT_NODES,
+            {"silo_id": str(silo_id)},
+        )
+        count: int = result[0]["count"] if result else 0
+        return count
+
+    async def count_edges_in_silo(self, silo_id: uuid.UUID) -> int:
+        result = await self._client.execute_query(
+            queries.COUNT_EDGES_IN_SILO,
+            {"silo_id": str(silo_id)},
+        )
+        count: int = result[0]["count"] if result else 0
+        return count
+
+    async def sum_content_bytes_in_silo(self, silo_id: uuid.UUID) -> int:
+        result = await self._client.execute_query(
+            queries.SUM_CONTENT_BYTES_IN_SILO,
+            {"silo_id": str(silo_id)},
+        )
+        if not result:
+            return 0
+        value = result[0].get("bytes")
+        return int(value) if value is not None else 0
+
+    async def find_node_by_source_uri(self, silo_id: uuid.UUID, source_uri: str) -> Node | None:
+        result = await self._client.execute_query(
+            queries.FIND_NODE_BY_SOURCE_URI,
+            {"silo_id": str(silo_id), "source_uri": source_uri},
+        )
+        if not result:
+            return None
+        return self._node_from_record(result[0])
+
+    async def list_nodes_with_uri(self, silo_id: uuid.UUID) -> list[dict[str, Any]]:
+        return await self._client.execute_query(
+            queries.LIST_NODES_WITH_URI_BY_SILO,
+            {"silo_id": str(silo_id)},
+        )
+
+    async def mark_node_stale(self, node_id: uuid.UUID, silo_id: str, version: int) -> bool:
+        result = await self._client.execute_query(
+            queries.MARK_NODE_STALE,
+            {"id": str(node_id), "silo_id": silo_id, "expected_version": version},
+        )
+        return len(result) > 0
+
+    # --- Binary Edge CRUD ---
+
+    async def upsert_binary_edge(self, edge: BinaryEdge, silo_id: str) -> None:
+        await self._client.execute_write(
+            queries.CREATE_BINARY_EDGE,
+            {
+                "id": str(edge.id),
+                "type": edge.type,
+                "source_id": str(edge.source_id),
+                "target_id": str(edge.target_id),
+                "properties": json.dumps(edge.properties),
+                "silo_id": silo_id,
+            },
+        )
+
+    async def get_binary_edges(
+        self,
+        node_id: uuid.UUID,
+        silo_id: str,
+        *,
+        type: str | None = None,
+        direction: Literal["outgoing", "incoming", "both"] = "both",
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> tuple[list[BinaryEdge], str | None]:
+        offset = int(cursor) if cursor else 0
+        query_map = {
+            "outgoing": queries.GET_BINARY_EDGES_OUTGOING,
+            "incoming": queries.GET_BINARY_EDGES_INCOMING,
+            "both": queries.GET_BINARY_EDGES_BOTH,
+        }
+        result = await self._client.execute_query(
+            query_map[direction],
+            {
+                "node_id": str(node_id),
+                "silo_id": silo_id,
+                "type": type,
+                "offset": offset,
+                "limit": limit + 1,
+            },
+        )
+        edges = [self._binary_edge_from_record(r) for r in result[:limit]]
+        next_cursor = str(offset + limit) if len(result) > limit else None
+        return edges, next_cursor
+
+    async def get_entity_graph_neighbors(
+        self,
+        node_id: uuid.UUID,
+        silo_id: str,
+        *,
+        limit: int = 50,
+    ) -> list[tuple[Node, int]]:
+        """Find neighbor Nodes reachable via the entity-graph projection.
+
+        Returns list of (neighbor_node, strength) tuples where strength is
+        the count of distinct semantic relationships bridging the two source
+        nodes through their extracted entities. Higher strength = more
+        conceptually connected. Used by GraphWalker when traversing the
+        knowledge graph produced by LLM extraction.
+        """
+        result = await self._client.execute_query(
+            queries.GET_ENTITY_GRAPH_NEIGHBORS,
+            {
+                "node_id": str(node_id),
+                "silo_id": silo_id,
+                "limit": limit,
+            },
+        )
+        neighbors: list[tuple[Node, int]] = []
+        for row in result:
+            # The Cypher query returns rows with keys {b, shared_links,
+            # bridge_entities}. The _node_from_record helper expects a
+            # dict where the node is under key "n", so wrap accordingly.
+            node = self._node_from_record({"n": row["b"]})
+            strength = int(row["shared_links"])
+            neighbors.append((node, strength))
+        return neighbors
+
+    async def delete_binary_edge(self, edge_id: uuid.UUID, silo_id: str) -> bool:
+        result = await self._client.execute_write(
+            queries.DELETE_BINARY_EDGE,
+            {"id": str(edge_id), "silo_id": silo_id},
+        )
+        return bool(result and result[0].get("deleted", 0) > 0)
+
+    # --- HyperEdge CRUD ---
+
+    async def upsert_hyperedge(self, edge: HyperEdge, silo_id: str) -> None:
+        # Create or update HyperEdge node
+        await self._client.execute_write(
+            queries.CREATE_HYPEREDGE_NODE,
+            {
+                "id": str(edge.id),
+                "type": edge.type,
+                "properties": json.dumps(edge.properties),
+                "silo_id": silo_id,
+            },
+        )
+        # Delete old participants (for upsert)
+        await self._client.execute_write(
+            queries.DELETE_PARTICIPANTS,
+            {"edge_id": str(edge.id), "silo_id": silo_id},
+        )
+        # Create new participants
+        for participant in edge.participants:
+            await self._client.execute_write(
+                queries.CREATE_PARTICIPANT,
+                {
+                    "edge_id": str(edge.id),
+                    "node_id": str(participant.node_id),
+                    "role": participant.role,
+                    "silo_id": silo_id,
+                },
+            )
+
+    async def get_hyperedge(self, edge_id: uuid.UUID, silo_id: str) -> HyperEdge | None:
+        result = await self._client.execute_query(
+            queries.GET_HYPEREDGE,
+            {"id": str(edge_id), "silo_id": silo_id},
+        )
+        if not result:
+            return None
+        return self._hyperedge_from_record(result[0])
+
+    async def get_hyperedges_for_node(
+        self,
+        node_id: uuid.UUID,
+        silo_id: str,
+        *,
+        type: str | None = None,
+        role: str | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> tuple[list[HyperEdge], str | None]:
+        offset = int(cursor) if cursor else 0
+        result = await self._client.execute_query(
+            queries.GET_HYPEREDGES_FOR_NODE,
+            {
+                "node_id": str(node_id),
+                "silo_id": silo_id,
+                "type": type,
+                "role": role,
+                "offset": offset,
+                "limit": limit + 1,
+            },
+        )
+        edges = [self._hyperedge_from_record(r) for r in result[:limit]]
+        next_cursor = str(offset + limit) if len(result) > limit else None
+        return edges, next_cursor
+
+    async def delete_hyperedge(self, edge_id: uuid.UUID, silo_id: str) -> bool:
+        result = await self._client.execute_write(
+            queries.DELETE_HYPEREDGE,
+            {"id": str(edge_id), "silo_id": silo_id},
+        )
+        return bool(result and result[0].get("deleted", 0) > 0)
+
+    # --- Silo CRUD ---
+
+    async def create_silo(self, silo: Silo) -> None:
+        await self._client.execute_write(
+            queries.CREATE_SILO,
+            {
+                "id": str(silo.id),
+                "name": silo.name,
+                "description": silo.description,
+                "org_id": silo.org_id,
+                "dissolvability": silo.dissolvability,
+                "metadata": json.dumps(silo.metadata),
+            },
+        )
+
+    async def get_silo(self, scope: ScopeContext) -> Silo | None:
+        result = await self._client.execute_query(
+            queries.GET_SILO,
+            {"id": str(scope.silo_id), "org_id": scope.org_id},
+        )
+        if not result:
+            return None
+        return self._silo_from_record(result[0])
+
+    async def list_silos(self, org_id: str) -> list[Silo]:
+        result = await self._client.execute_query(
+            queries.LIST_SILOS,
+            {"org_id": org_id},
+        )
+        return [self._silo_from_record(r) for r in result]
+
+    async def update_silo(self, silo: Silo) -> None:
+        await self._client.execute_write(
+            queries.UPDATE_SILO,
+            {
+                "id": str(silo.id),
+                "org_id": silo.org_id,
+                "name": silo.name,
+                "description": silo.description,
+                "dissolvability": silo.dissolvability,
+                "metadata": json.dumps(silo.metadata),
+            },
+        )
+
+    async def delete_silo(self, scope: ScopeContext) -> bool:
+        result = await self._client.execute_write(
+            queries.DELETE_SILO,
+            {"id": str(scope.silo_id), "org_id": scope.org_id},
+        )
+        return bool(result and result[0].get("deleted", 0) > 0)
+
+    async def reset_silo(self, silo_id: uuid.UUID) -> int:
+        """Delete all nodes and edges in a silo, preserving the silo record.
+
+        Returns the count of deleted nodes.
+        """
+        result = await self._client.execute_write(
+            queries.RESET_SILO,
+            {"silo_id": str(silo_id)},
+        )
+        return result[0].get("deleted_nodes", 0) if result else 0
+
+    # --- Graph Traversal ---
+
+    async def neighborhood(
+        self,
+        node_id: uuid.UUID,
+        silo_id: str,
+        *,
+        max_depth: int = 2,
+        max_nodes: int = 100,
+        silo_scope: list[uuid.UUID] | None = None,
+    ) -> SubGraph:
+        capped_depth = min(max_depth, 5)  # hard cap
+        capped_nodes = min(max_nodes, 500)  # hard cap
+        query = queries.NEIGHBORHOOD % (capped_depth * 2)  # *2 for bipartite hops
+        result = await self._client.execute_query(
+            query,
+            {
+                "id": str(node_id),
+                "silo_id": silo_id,
+                "max_nodes": capped_nodes,
+            },
+        )
+        nodes: dict[uuid.UUID, Node] = {}
+        for r in result:
+            node = self._node_from_record({"n": r["other"]})
+            if silo_scope is None or node.silo_id in silo_scope:
+                nodes[node.id] = node
+
+        # Fetch edges between the discovered nodes
+        binary_edges: list[BinaryEdge] = []
+        if nodes:
+            node_ids = [str(nid) for nid in nodes]
+            _a_pred = content_union_predicate("a")
+            _b_pred = content_union_predicate("b")
+            edge_result = await self._client.execute_query(
+                f"""
+                MATCH (a)-[e:EDGE]->(b)
+                WHERE {_a_pred} AND {_b_pred}
+                  AND a.committed = true AND b.committed = true
+                  AND a.id IN $ids AND b.id IN $ids AND a.silo_id = $silo_id
+                RETURN e.id AS id, e.type AS type, e.properties AS properties,
+                       e.silo_id AS silo_id, e.created_at AS created_at,
+                       a.id AS source_id, b.id AS target_id
+""",
+                {"ids": node_ids, "silo_id": silo_id},
+            )
+            for r in edge_result:
+                props = r.get("properties", "{}")
+                if isinstance(props, str):
+                    props = json.loads(props)
+                binary_edges.append(
+                    BinaryEdge(
+                        id=uuid.UUID(r["id"]),
+                        type=r["type"],
+                        source_id=uuid.UUID(r["source_id"]),
+                        target_id=uuid.UUID(r["target_id"]),
+                        properties=props if isinstance(props, dict) else {},
+                        created_at=_parse_dt(r["created_at"]),
+                    )
+                )
+
+        return SubGraph(nodes=nodes, binary_edges=binary_edges, root_id=node_id)
+
+    async def shared_participation(
+        self,
+        node_id: uuid.UUID,
+        silo_id: str,
+        *,
+        threshold: int = 2,
+        limit: int = 50,
+    ) -> list[tuple[Node, int]]:
+        result = await self._client.execute_query(
+            queries.SHARED_PARTICIPATION,
+            {
+                "id": str(node_id),
+                "silo_id": silo_id,
+                "threshold": threshold,
+                "limit": limit,
+            },
+        )
+        return [(self._node_from_record({"n": r["b"]}), r["shared_count"]) for r in result]
+
+    async def shortest_path(
+        self,
+        source_id: uuid.UUID,
+        target_id: uuid.UUID,
+        silo_id: str,
+        *,
+        max_depth: int = 5,
+    ) -> list[Node] | None:
+        capped_depth = min(max_depth, 5) * 2  # *2 for bipartite
+        query = queries.SHORTEST_PATH % capped_depth
+        result = await self._client.execute_query(
+            query,
+            {
+                "source_id": str(source_id),
+                "target_id": str(target_id),
+                "silo_id": silo_id,
+            },
+        )
+        if not result:
+            return None
+        path_nodes = result[0].get("path_nodes", [])
+        content_labels = {"Document", "Passage", "Claim", "Entity", "Node"}
+        out: list[Node] = []
+        for n in path_nodes:
+            labels = n.get("labels", n.get("_labels", []))
+            if not content_labels.intersection(labels):
+                continue
+            out.append(self._node_from_record({"n": n, "_labels": labels}))
+        return out
+
+    # --- Export (Visualization) ---
+
+    async def export_nodes(self, silo_id: str, *, limit: int = 500, offset: int = 0) -> list[Node]:
+        result = await self._client.execute_query(
+            queries.EXPORT_ALL_NODES,
+            {"silo_id": silo_id, "offset": offset, "limit": limit},
+        )
+        return [self._node_from_record(r) for r in result]
+
+    async def export_binary_edges(
+        self, silo_id: str, *, limit: int = 500, offset: int = 0
+    ) -> list[BinaryEdge]:
+        result = await self._client.execute_query(
+            queries.EXPORT_ALL_BINARY_EDGES,
+            {"silo_id": silo_id, "offset": offset, "limit": limit},
+        )
+        edges = []
+        for r in result:
+            props = r.get("properties", "{}")
+            if isinstance(props, str):
+                props = json.loads(props)
+            edges.append(
+                BinaryEdge(
+                    id=uuid.UUID(r["id"]),
+                    type=r["type"],
+                    source_id=uuid.UUID(r["source_id"]),
+                    target_id=uuid.UUID(r["target_id"]),
+                    properties=props if isinstance(props, dict) else {},
+                    created_at=_parse_dt(r["created_at"]),
+                )
+            )
+        return edges
+
+    async def export_hyperedges(
+        self, silo_id: str, *, limit: int = 500, offset: int = 0
+    ) -> list[HyperEdge]:
+        result = await self._client.execute_query(
+            queries.EXPORT_ALL_HYPEREDGES,
+            {"silo_id": silo_id, "offset": offset, "limit": limit},
+        )
+        return [self._hyperedge_from_record(r) for r in result]
+
+    # --- Bulk Operations ---
+
+    async def batch_upsert_nodes(self, nodes: list[Node]) -> None:
+        if not nodes:
+            return
+        rows = [self._node_upsert_row(n) for n in nodes]
+        result = await self._client.execute_write(queries.BATCH_UPSERT_NODES, {"rows": rows})
+        for node, row in zip(nodes, result, strict=False):
+            if row.get("action") == "stale":
+                stored_version = row.get("stored_version") or 0
+                raise StaleVersionError(str(node.id), node.version, int(stored_version))
+
+    async def batch_upsert_binary_edges(self, edges: list[BinaryEdge], silo_id: str) -> None:
+        if not edges:
+            return
+        rows = [
+            {
+                "id": str(edge.id),
+                "type": edge.type,
+                "source_id": str(edge.source_id),
+                "target_id": str(edge.target_id),
+                "properties": json.dumps(edge.properties),
+                "silo_id": silo_id,
+            }
+            for edge in edges
+        ]
+        await self._client.execute_write(queries.BATCH_UPSERT_BINARY_EDGES, {"rows": rows})
+
+    async def batch_touch_accessed(self, node_ids: list[uuid.UUID], silo_id: str) -> int:
+        """Update last_accessed_at for a batch of nodes."""
+        if not node_ids:
+            return 0
+        result = await self._client.execute_write(
+            queries.BATCH_TOUCH_NODES_ACCESSED,
+            {"ids": [str(nid) for nid in node_ids], "silo_id": silo_id},
+        )
+        return result[0].get("touched", 0) if result else 0
+
+    # --- Schema ---
+
+    async def ensure_indexes(self) -> None:
+        for query in queries.INDEX_QUERIES:
+            try:
+                await self._client.execute_query(query)
+            except Exception:
+                logger.debug(f"Index may already exist: {query[:60]}...")

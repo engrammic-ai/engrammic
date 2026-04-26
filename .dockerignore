@@ -1,0 +1,61 @@
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[codz]
+*.egg-info
+.eggs
+dist
+build
+
+# Virtual environments
+.venv
+venv
+env
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Testing and quality
+.pytest_cache
+.mypy_cache
+.ruff_cache
+htmlcov
+.coverage
+coverage.xml
+
+# Documentation and context
+context/
+*.md
+!app/**/*.md
+
+# Docker data
+docker-data/
+memgraph-data/
+qdrant-data/
+redis-data/
+
+# Local config
+.env
+.env.*
+!.env.production.example
+.secrets/
+secrets/
+
+# Claude
+.claude/
+
+# Prefect
+.prefect/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tests (not needed in production image)
+tests/

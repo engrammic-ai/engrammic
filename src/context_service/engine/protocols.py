@@ -1,0 +1,182 @@
+"""Storage protocol for the hypergraph engine."""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Literal, Protocol
+
+if TYPE_CHECKING:
+    import uuid
+    from datetime import datetime
+
+    from context_service.engine.models import BinaryEdge, HyperEdge, Node, Silo, SubGraph
+    from context_service.services.models import ScopeContext
+
+
+class HyperGraphStore(Protocol):
+    """Domain-agnostic graph storage interface.
+
+    All methods that return lists use cursor-based pagination.
+    All read/write methods scoped to Nodes/Edges use silo_id for isolation.
+    Silo CRUD methods use org_id (WorkOS org owner).
+    upsert_node performs version checks for optimistic concurrency.
+    """
+
+    # --- Node CRUD ---
+
+    async def upsert_node(self, node: Node) -> None:
+        """Create or update a node. Raises StaleVersionError on version mismatch."""
+        ...
+
+    async def get_node(self, node_id: uuid.UUID, silo_id: str) -> Node | None: ...
+
+    async def batch_get_nodes(
+        self, node_ids: list[uuid.UUID], silo_id: str
+    ) -> dict[uuid.UUID, Node]: ...
+
+    async def delete_node(self, node_id: uuid.UUID, silo_id: str) -> bool: ...
+
+    async def create_supersedes_edge(
+        self,
+        from_id: uuid.UUID,
+        to_id: uuid.UUID,
+        silo_id: str,
+        valid_from: datetime,
+        source: str = "custodian",
+    ) -> bool:
+        """Link a newer node to an older one with a :SUPERSEDES edge.
+
+        Used by the Custodian to record semantic supersession between
+        independently-stored nodes (different doc_ids, no version chain).
+        ``from_id`` supersedes ``to_id``. Sets ``to.valid_to`` = ``valid_from``
+        if not already set.
+        """
+        ...
+
+    async def filter_superseded_at(
+        self,
+        node_ids: list[uuid.UUID],
+        silo_id: str,
+        as_of: datetime,
+    ) -> dict[uuid.UUID, uuid.UUID]:
+        """Batch version-check: map each input id to its valid version at ``as_of``.
+
+        Used by ``lookup(..., as_of=...)`` to substitute superseded ids
+        with their current tips. Missing keys in the result indicate no
+        valid version exists at that timestamp.
+        """
+        ...
+
+    async def find_nodes(
+        self,
+        silo_id: uuid.UUID,
+        *,
+        type: str | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> tuple[list[Node], str | None]: ...
+
+    async def count_nodes(self, silo_id: uuid.UUID) -> int: ...
+
+    async def count_edges_in_silo(self, silo_id: uuid.UUID) -> int: ...
+
+    async def sum_content_bytes_in_silo(self, silo_id: uuid.UUID) -> int: ...
+
+    # --- Binary Edge CRUD ---
+
+    async def upsert_binary_edge(self, edge: BinaryEdge, silo_id: str) -> None: ...
+
+    async def get_binary_edges(
+        self,
+        node_id: uuid.UUID,
+        silo_id: str,
+        *,
+        type: str | None = None,
+        direction: Literal["outgoing", "incoming", "both"] = "both",
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> tuple[list[BinaryEdge], str | None]: ...
+
+    async def get_entity_graph_neighbors(
+        self,
+        node_id: uuid.UUID,
+        silo_id: str,
+        *,
+        limit: int = 50,
+    ) -> list[tuple[Node, int]]:
+        """Find neighbor Nodes reachable via the LLM-extracted entity graph.
+
+        Returns a list of (neighbor_node, strength) tuples where strength is
+        the count of distinct semantic relationships bridging the source
+        and neighbor through their extracted entities. Used by GraphWalker
+        to traverse the real knowledge graph on extraction-produced data,
+        where direct (:Node)-[:EDGE]->(:Node) binary edges do not exist.
+        """
+        ...
+
+    async def delete_binary_edge(self, edge_id: uuid.UUID, silo_id: str) -> bool: ...
+
+    # --- HyperEdge CRUD ---
+
+    async def upsert_hyperedge(self, edge: HyperEdge, silo_id: str) -> None: ...
+
+    async def get_hyperedge(self, edge_id: uuid.UUID, silo_id: str) -> HyperEdge | None: ...
+
+    async def get_hyperedges_for_node(
+        self,
+        node_id: uuid.UUID,
+        silo_id: str,
+        *,
+        type: str | None = None,
+        role: str | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> tuple[list[HyperEdge], str | None]: ...
+
+    async def delete_hyperedge(self, edge_id: uuid.UUID, silo_id: str) -> bool: ...
+
+    # --- Graph Traversal ---
+
+    async def neighborhood(
+        self,
+        node_id: uuid.UUID,
+        silo_id: str,
+        *,
+        max_depth: int = 2,
+        max_nodes: int = 100,
+        silo_scope: list[uuid.UUID] | None = None,
+    ) -> SubGraph: ...
+
+    async def shared_participation(
+        self,
+        node_id: uuid.UUID,
+        silo_id: str,
+        *,
+        threshold: int = 2,
+        limit: int = 50,
+    ) -> list[tuple[Node, int]]: ...
+
+    async def shortest_path(
+        self,
+        source_id: uuid.UUID,
+        target_id: uuid.UUID,
+        silo_id: str,
+        *,
+        max_depth: int = 5,
+    ) -> list[Node] | None: ...
+
+    # --- Silo CRUD ---
+
+    async def create_silo(self, silo: Silo) -> None: ...
+    async def get_silo(self, scope: ScopeContext) -> Silo | None: ...
+    async def list_silos(self, org_id: str) -> list[Silo]: ...
+    async def update_silo(self, silo: Silo) -> None: ...
+    async def delete_silo(self, scope: ScopeContext) -> bool: ...
+
+    # --- Bulk Operations ---
+
+    async def batch_upsert_nodes(self, nodes: list[Node]) -> None: ...
+    async def batch_upsert_binary_edges(self, edges: list[BinaryEdge], silo_id: str) -> None: ...
+
+    # --- Schema ---
+
+    async def ensure_indexes(self) -> None: ...
