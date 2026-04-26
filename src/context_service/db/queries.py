@@ -1,0 +1,402 @@
+"""Cypher query templates for Memgraph operations.
+
+All queries use parameterized values for safety.
+Queries are silo-scoped; Node/Entity records carry silo_id only (no tenant_id).
+
+Phase-3 label scheme (O-30): content nodes are :Document, :Passage, :Claim.
+:Entity is the pivot label. No :Node label in new code.
+All retrieval-facing reads filter AND n.committed = true per O-75.
+"""
+
+from context_service.db.schema import (
+    EDGE_EXTRACTED_FROM,
+    EDGE_MENTIONS,
+    LABEL_ENTITY,
+    content_union_predicate,
+)
+
+# Entity queries
+CREATE_ENTITY_SILO_INDEX = "CREATE INDEX ON :Entity(silo_id);"
+
+FIND_ENTITY_BY_NAME = """
+MATCH (e:Entity {silo_id: $silo_id})
+WHERE toLower(e.name) = toLower($name)
+RETURN e
+"""
+
+CREATE_ENTITY = """
+CREATE (e:Entity {
+    id: $id,
+    silo_id: $silo_id,
+    name: $name,
+    entity_type: $entity_type,
+    description: $description,
+    qualified_name: $qualified_name,
+    file_path: $file_path,
+    created_at: $created_at
+})
+RETURN e
+"""
+
+
+def build_create_entity_relationship_query(rel_type: str) -> str:
+    """Build a CREATE entity relationship query with a real edge label.
+
+    The edge label comes from the closed :class:`RelationshipType` vocabulary.
+    Domain-specific nuance is captured on edge properties:
+    ``kind`` (free-form verb), ``directed``, ``confidence``, ``temporal``,
+    and ``source_node_ids``.
+    """
+    return f"""
+MATCH (a:Entity {{id: $source_id, silo_id: $silo_id}})
+MATCH (b:Entity {{id: $target_id, silo_id: $silo_id}})
+CREATE (a)-[r:{rel_type} {{
+    kind: $kind,
+    directed: $directed,
+    confidence: $confidence,
+    temporal: $temporal,
+    source_node_ids: $source_node_ids,
+    created_at: $created_at
+}}]->(b)
+RETURN r
+"""
+
+
+# Cluster index queries
+CREATE_CLUSTER_ID_INDEX = "CREATE INDEX ON :Cluster(id);"
+CREATE_CLUSTER_LEVEL_INDEX = "CREATE INDEX ON :Cluster(level);"
+CREATE_CLUSTER_SILO_INDEX = "CREATE INDEX ON :Cluster(silo_id);"
+
+# Cluster CRUD queries
+CREATE_CLUSTER = """
+CREATE (c:Cluster {
+    id: $id,
+    silo_id: $silo_id,
+    level: $level,
+    community_id: $community_id,
+    summary: $summary,
+    key_topics: $key_topics,
+    node_count: $node_count,
+    created_at: $created_at,
+    updated_at: $updated_at
+})
+RETURN c
+"""
+
+GET_CLUSTER = """
+MATCH (c:Cluster {id: $id, silo_id: $silo_id})
+RETURN c
+"""
+
+LIST_CLUSTERS = """
+MATCH (c:Cluster {silo_id: $silo_id})
+WHERE ($level IS NULL OR c.level = $level)
+RETURN c
+ORDER BY c.node_count DESC
+SKIP $offset
+LIMIT $limit
+"""
+
+COUNT_CLUSTERS = """
+MATCH (c:Cluster {silo_id: $silo_id})
+WHERE ($level IS NULL OR c.level = $level)
+RETURN count(c) as total
+"""
+
+DELETE_CLUSTERS = """
+MATCH (c:Cluster {silo_id: $silo_id})
+DETACH DELETE c
+RETURN count(c) as deleted
+"""
+
+# Cluster membership queries
+CREATE_BELONGS_TO = f"""
+MATCH (n {{id: $node_id}})
+MATCH (c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
+WHERE {content_union_predicate("n")} OR n:{LABEL_ENTITY}
+CREATE (n)-[r:BELONGS_TO {{weight: $weight, created_at: $created_at}}]->(c)
+RETURN r
+"""
+
+CREATE_PART_OF = """
+MATCH (child:Cluster {id: $child_id, silo_id: $silo_id})
+MATCH (parent:Cluster {id: $parent_id, silo_id: $silo_id})
+CREATE (child)-[r:PART_OF {created_at: $created_at}]->(parent)
+RETURN r
+"""
+
+GET_CLUSTER_MEMBERS = """
+MATCH (n)-[r:BELONGS_TO]->(c:Cluster {id: $cluster_id, silo_id: $silo_id})
+RETURN n, labels(n) as node_labels, r.weight as weight
+ORDER BY r.weight DESC
+"""
+
+GET_NODE_CLUSTERS = """
+MATCH (n {id: $node_id})-[r:BELONGS_TO]->(c:Cluster {silo_id: $silo_id})
+RETURN c, r.weight as weight
+ORDER BY c.level ASC
+"""
+
+GET_CLUSTER_PARENT = """
+MATCH (child:Cluster {id: $child_id, silo_id: $silo_id})-[:PART_OF]->(parent:Cluster)
+RETURN parent.id AS parent_id
+"""
+
+# Leiden community detection via Memgraph MAGE (igraph implementation).
+#
+# We use `igraphalg.community_leiden` (igraph's Leiden) instead of MAGE's
+# native `leiden_community_detection.get` because the native implementation
+# raises "No communities detected" on our graph at every resolution value.
+# igraph Leiden handles the same graph fine and is algorithmically the same.
+#
+# Signature:
+#   igraphalg.community_leiden(
+#     objective_function :: STRING = "CPM",
+#     weights :: STRING? = null,
+#     resolution_parameter :: FLOAT = 1.0,
+#     beta :: FLOAT = 0.01,
+#     initial_membership :: LIST? = null,
+#     n_iterations :: INTEGER = 2,
+#     node_weights :: LIST? = null
+#   ) :: (community_id :: INTEGER, node :: NODE)
+#
+# We pass CPM + varying resolution_parameter as our "gamma" to get the
+# hierarchical levels. Silo filtering is done after detection by only
+# processing assignments for nodes belonging to this silo.
+RUN_LEIDEN = f"""
+CALL igraphalg.community_leiden("CPM", null, $gamma, 0.01, null, 2, null)
+YIELD node, community_id
+WITH node, community_id
+WHERE node.silo_id = $silo_id
+  AND ({content_union_predicate("node")} OR node:{LABEL_ENTITY})
+RETURN node.id AS node_id, community_id
+"""
+
+# PageRank via Memgraph MAGE
+# Note: PageRank runs on the whole graph; filter results by silo. Importance
+# applies to Document, Passage, Claim, and Entity nodes — all participate in
+# clustering and retrieval ranking.
+RUN_PAGERANK = f"""
+CALL pagerank.get()
+YIELD node, rank
+WITH node, rank
+WHERE ({content_union_predicate("node")} OR node:{LABEL_ENTITY})
+  AND node.silo_id = $silo_id
+RETURN node.id AS node_id, rank
+"""
+
+UPDATE_CLUSTER_SUMMARY = """
+MATCH (c:Cluster {id: $id, silo_id: $silo_id})
+SET c.summary = $summary, c.key_topics = $key_topics, c.updated_at = $updated_at
+RETURN c
+"""
+
+# Batch operations
+BATCH_CREATE_BELONGS_TO = f"""
+MATCH (c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
+UNWIND $node_ids AS nid
+MATCH (n {{id: nid}})
+WHERE {content_union_predicate("n")} OR n:{LABEL_ENTITY}
+CREATE (n)-[:BELONGS_TO {{weight: $weight, created_at: $created_at}}]->(c)
+RETURN count(*) as created
+"""
+
+BATCH_UPDATE_NODE_IMPORTANCE = f"""
+UNWIND $updates AS u
+MATCH (n {{id: u.node_id, silo_id: $silo_id}})
+WHERE {content_union_predicate("n")} OR n:{LABEL_ENTITY}
+SET n.importance = u.rank
+RETURN count(n) as updated
+"""
+
+# --- Phase-3 §3.3 Claim write-path queries ---
+# NOTE: BATCH_CREATE_EXTRACTED_FROM (legacy Entity->Passage attribution) was
+# removed in phase-3.6. Per O-30, EXTRACTED_FROM is Claim->Passage only; the
+# legacy query wrote a spec-illegal edge shape. The Claim-mediated path lives
+# in ATTACH_CLAIM_TO_PASSAGE + UPSERT_ENTITY_MENTION below.
+
+UPSERT_CLAIM = """
+MERGE (c:Claim {id: $claim_id, silo_id: $silo_id})
+ON CREATE SET
+    c.fingerprint = $fingerprint,
+    c.subject = $subject,
+    c.predicate = $predicate,
+    c.object = $object,
+    c.valid_from = $valid_from,
+    c.valid_to = $valid_to,
+    c.source_doc_id = $source_doc_id,
+    c.source_passage_id = $source_passage_id,
+    c.confidence = $confidence,
+    c.created_at = $created_at,
+    c.committed = true
+RETURN c.id AS id
+"""
+
+ATTACH_CLAIM_TO_PASSAGE = """
+MATCH (ps:Passage {id: $passage_id, silo_id: $silo_id})
+MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
+MERGE (ps)<-[:EXTRACTED_FROM]-(c)
+"""
+
+ATTACH_CLAIM_TO_DOCUMENT = """
+MATCH (d:Document {id: $doc_id, silo_id: $silo_id})
+MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
+MERGE (d)<-[:EXTRACTED_FROM]-(c)
+"""
+
+UPSERT_ENTITY_MENTION = """
+MERGE (e:Entity {id: $entity_id, silo_id: $silo_id})
+ON CREATE SET
+    e.name = $name,
+    e.entity_type = $entity_type,
+    e.created_at = $created_at
+WITH e
+MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
+MERGE (c)-[:MENTIONS]->(e)
+"""
+
+ATTACH_CLAIM_REFERENCES_DOC = """
+MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
+MATCH (refd:Document {id: $ref_doc_id, silo_id: $silo_id})
+MERGE (c)-[:REFERENCES]->(refd)
+"""
+
+CREATE_CONTRADICTS_EDGE = """
+MATCH (a:Claim {id: $claim_id_a, silo_id: $silo_id})
+MATCH (b:Claim {id: $claim_id_b, silo_id: $silo_id})
+MERGE (a)-[r:CONTRADICTS {id: $edge_id}]->(b)
+"""
+
+
+def build_batch_entity_rel_query(rel_type: str) -> str:
+    """Build a batch CREATE entity relationship query with a real edge label.
+
+    The edge label comes from the closed :class:`RelationshipType` vocabulary.
+    Each row in ``$rels`` must carry ``source_id``, ``target_id``, ``kind``,
+    ``directed``, ``confidence``, ``temporal``, ``source_node_ids``, and
+    ``created_at``.
+    """
+    return f"""
+UNWIND $rels AS r
+MATCH (a:Entity {{id: r.source_id, silo_id: $silo_id}})
+MATCH (b:Entity {{id: r.target_id, silo_id: $silo_id}})
+CREATE (a)-[:{rel_type} {{
+    kind: r.kind,
+    directed: r.directed,
+    confidence: r.confidence,
+    temporal: r.temporal,
+    source_node_ids: r.source_node_ids,
+    created_at: r.created_at
+}}]->(b)
+RETURN count(*) as created
+"""
+
+
+# Entity retrieval channel queries
+
+FIND_ENTITIES_BY_NAME_TOKENS = """
+MATCH (e:Entity {silo_id: $silo_id})
+WHERE ANY(token IN $tokens WHERE toLower(e.name) CONTAINS token)
+RETURN e.id AS id, e.name AS name, e.entity_type AS entity_type,
+       e.description AS description, e.importance AS importance
+ORDER BY coalesce(e.importance, 0) DESC
+LIMIT $limit
+"""
+
+# Entity-to-content traversal (O-30 edge directions):
+#   Entity <-[:MENTIONS]- Claim -[:EXTRACTED_FROM]-> Passage/Document
+# i.e. (seed entity) <- MENTIONS - (claim) - EXTRACTED_FROM -> (content node)
+ENTITY_NEIGHBORHOOD_NODES = f"""
+MATCH (seed:{LABEL_ENTITY} {{id: $entity_id, silo_id: $silo_id}})
+OPTIONAL MATCH (seed)<-[:{EDGE_MENTIONS}]-(c1:Claim)-[:{EDGE_EXTRACTED_FROM}]->(direct)
+WHERE {content_union_predicate("direct")} AND direct.silo_id = $silo_id
+  AND coalesce(direct.stale, false) = false AND direct.committed = true
+WITH seed, collect(DISTINCT {{id: direct.id, silo_id: direct.silo_id, node_type: toLower(head(labels(direct))), dist: 0}}) AS directs
+OPTIONAL MATCH (seed)-[]-(e2:{LABEL_ENTITY} {{silo_id: $silo_id}})<-[:{EDGE_MENTIONS}]-(c2:Claim)-[:{EDGE_EXTRACTED_FROM}]->(hop)
+WHERE {content_union_predicate("hop")} AND hop.silo_id = $silo_id
+  AND coalesce(hop.stale, false) = false AND hop.committed = true
+WITH directs + collect(DISTINCT {{id: hop.id, silo_id: hop.silo_id, node_type: toLower(head(labels(hop))), dist: 1}}) AS all_nodes
+UNWIND all_nodes AS n
+RETURN DISTINCT n.id AS node_id, n.silo_id AS silo_id, n.node_type AS node_type, min(n.dist) AS hop_distance
+LIMIT $limit
+"""
+
+# Cluster retrieval channel queries
+
+GET_CLUSTER_MEMBER_IDS = f"""
+MATCH (n)-[r:BELONGS_TO]->(c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
+WHERE {content_union_predicate("n")} AND coalesce(n.stale, false) = false AND n.committed = true
+RETURN n.id AS node_id, n.silo_id AS silo_id, toLower(head(labels(n))) AS node_type, r.weight AS weight
+ORDER BY r.weight DESC
+LIMIT $limit
+"""
+
+SEARCH_CLUSTERS_BY_KEYWORDS = """
+MATCH (c:Cluster {silo_id: $silo_id})
+WHERE c.summary IS NOT NULL
+  AND ($level IS NULL OR c.level = $level)
+  AND ANY(token IN $tokens WHERE toLower(c.summary) CONTAINS token)
+RETURN c.id AS id, c.level AS level, c.summary AS summary, c.node_count AS node_count
+ORDER BY c.node_count DESC
+LIMIT $limit
+"""
+
+# Entity queries with qualified_name support
+FIND_ENTITY_BY_QUALIFIED_NAME = """
+MATCH (e:Entity {silo_id: $silo_id})
+WHERE toLower(e.name) = toLower($name)
+   OR ($qualified_name IS NOT NULL AND toLower(e.qualified_name) = toLower($qualified_name))
+RETURN e
+"""
+
+# Batch find-or-create entities in a single round trip.
+#
+# Each row in $entities carries: name, name_lower, qualified_name,
+# qualified_name_lower, entity_type, description, file_path, new_id.
+# Dedup semantics match FIND_ENTITY_BY_QUALIFIED_NAME (case-insensitive name
+# OR qualified_name match within the silo). When no existing match is
+# found, a new :Entity is created using new_id. Returns one row per input
+# entity: {name, id} so the caller can build a name -> id map.
+BATCH_FIND_OR_CREATE_ENTITIES = """
+UNWIND $entities AS ent
+OPTIONAL MATCH (existing:Entity {silo_id: $silo_id})
+WHERE toLower(existing.name) = ent.name_lower
+   OR (
+       ent.qualified_name_lower IS NOT NULL
+       AND toLower(existing.qualified_name) = ent.qualified_name_lower
+   )
+WITH ent, collect(existing)[0] AS hit
+FOREACH (_ IN CASE WHEN hit IS NULL THEN [1] ELSE [] END |
+    CREATE (n:Entity {
+        id: ent.new_id,
+        silo_id: $silo_id,
+        name: ent.name,
+        entity_type: ent.entity_type,
+        description: ent.description,
+        qualified_name: ent.qualified_name,
+        file_path: ent.file_path,
+        created_at: $created_at
+    })
+)
+WITH ent, hit
+OPTIONAL MATCH (created:Entity {id: ent.new_id, silo_id: $silo_id})
+WITH ent, coalesce(hit, created) AS e
+RETURN ent.name AS name, e.id AS id
+"""
+
+# Per-seed heat + cluster tier batch read for PPR restart-vector weighting
+# (phase-5.2). Returns heat_score (nullable — 0.0 if unset) and the parent
+# Cluster.tier (HOT/WARM/COLD/null) so the walker can apply a tier-based
+# fallback when a seed has no heat yet (cold-start, O-61).
+GET_SEED_HEAT_BATCH = """
+UNWIND $seed_ids AS sid
+MATCH (n {id: sid, silo_id: $silo_id})
+WHERE n.committed = true
+OPTIONAL MATCH (n)-[:BELONGS_TO]->(c:Cluster {silo_id: $silo_id})
+RETURN n.id AS node_id,
+       coalesce(n.heat_score, 0.0) AS heat,
+       c.tier AS cluster_tier
+"""
+
+# Health check query
+HEALTH_CHECK = "RETURN 1 as health"
