@@ -1,0 +1,319 @@
+"""Redis client for session management and caching.
+
+Uses redis.asyncio with hiredis for performance.
+"""
+
+from __future__ import annotations
+
+import json
+from json import JSONDecodeError
+from typing import Any
+
+from redis.asyncio import ConnectionPool, Redis
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import RedisError
+
+from context_service.config.logging import get_logger
+from context_service.config.settings import Settings, get_settings
+
+logger = get_logger(__name__)
+
+
+class RedisOperationError(Exception):
+    """Raised when a Redis operation fails."""
+
+
+async def create_redis_pool(settings: Settings | None = None) -> Redis[bytes]:
+    """Create an async Redis connection pool.
+
+    Args:
+        settings: Application settings. Uses default settings if not provided.
+
+    Returns:
+        Redis client with connection pool.
+    """
+    if settings is None:
+        settings = get_settings()
+
+    pool = ConnectionPool.from_url(
+        settings.redis_url,
+        max_connections=50,
+        decode_responses=False,
+    )
+
+    return Redis(connection_pool=pool)
+
+
+class RedisClient:
+    """High-level Redis client for session and cache operations."""
+
+    def __init__(self, redis: Redis[bytes]) -> None:
+        """Initialize the client with a Redis connection.
+
+        Args:
+            redis: Redis async client instance.
+        """
+        self._redis = redis
+
+    @staticmethod
+    def _session_key(silo_id: str, session_id: str) -> str:
+        """Build a silo-scoped session key."""
+        return f"session:{silo_id}:{session_id}"
+
+    @staticmethod
+    def _session_nodes_key(silo_id: str, session_id: str) -> str:
+        """Build a silo-scoped session nodes key."""
+        return f"session:{silo_id}:{session_id}:nodes"
+
+    async def health_check(self) -> bool:
+        """Check if Redis is reachable.
+
+        Returns:
+            True if healthy, False otherwise.
+        """
+        try:
+            result = await self._redis.ping()
+            return bool(result)
+        except RedisConnectionError:
+            logger.warning("redis_health_check_failed", reason="connection_error")
+            return False
+        except Exception as e:
+            logger.warning("redis_health_check_failed", error=str(e))
+            return False
+
+    # Session operations
+
+    async def set_session(
+        self,
+        silo_id: str,
+        session_id: str,
+        data: dict[str, Any],
+        ttl_seconds: int = 86400,
+    ) -> bool:
+        """Store session data.
+
+        Args:
+            silo_id: Silo identifier for key namespacing.
+            session_id: Unique session identifier.
+            data: Session metadata as dictionary.
+            ttl_seconds: Time to live in seconds (default 24 hours).
+
+        Returns:
+            True if successful.
+
+        Raises:
+            RedisOperationError: If the operation fails.
+        """
+        key = self._session_key(silo_id, session_id)
+        try:
+            await self._redis.set(key, json.dumps(data).encode(), ex=ttl_seconds)
+            return True
+        except (RedisConnectionError, RedisError) as e:
+            logger.error("redis_set_session_failed", session_id=session_id, error=str(e))
+            raise RedisOperationError(f"Failed to store session: {e}") from e
+
+    async def get_session(self, silo_id: str, session_id: str) -> dict[str, Any] | None:
+        """Retrieve session data.
+
+        Args:
+            silo_id: Silo identifier for key namespacing.
+            session_id: Unique session identifier.
+
+        Returns:
+            Session data or None if not found or corrupted.
+        """
+        key = self._session_key(silo_id, session_id)
+        try:
+            data = await self._redis.get(key)
+            if data is None:
+                return None
+            return json.loads(data.decode())
+        except JSONDecodeError as e:
+            logger.error("redis_session_corrupted", session_id=session_id, error=str(e))
+            return None
+        except (RedisConnectionError, RedisError) as e:
+            logger.error("redis_get_session_failed", session_id=session_id, error=str(e))
+            raise RedisOperationError(f"Failed to retrieve session: {e}") from e
+
+    async def delete_session(self, silo_id: str, session_id: str) -> bool:
+        """Delete a session and its associated nodes.
+
+        Args:
+            silo_id: Silo identifier for key namespacing.
+            session_id: Unique session identifier.
+
+        Returns:
+            True if session existed and was deleted.
+
+        Raises:
+            RedisOperationError: If the operation fails.
+        """
+        session_key = self._session_key(silo_id, session_id)
+        nodes_key = self._session_nodes_key(silo_id, session_id)
+
+        try:
+            pipeline = self._redis.pipeline()
+            pipeline.delete(session_key)
+            pipeline.delete(nodes_key)
+            results: list[Any] = await pipeline.execute()
+            return bool(results[0])
+        except (RedisConnectionError, RedisError) as e:
+            logger.error("redis_delete_session_failed", session_id=session_id, error=str(e))
+            raise RedisOperationError(f"Failed to delete session: {e}") from e
+
+    async def add_session_node(self, silo_id: str, session_id: str, node_id: str) -> bool:
+        """Add a node ID to a session's node set.
+
+        Args:
+            silo_id: Silo identifier for key namespacing.
+            session_id: Unique session identifier.
+            node_id: Context node ID to associate.
+
+        Returns:
+            True if node was added (not already present).
+
+        Raises:
+            RedisOperationError: If the operation fails.
+        """
+        key = self._session_nodes_key(silo_id, session_id)
+        try:
+            result = await self._redis.sadd(key, node_id.encode())
+            return bool(result)
+        except (RedisConnectionError, RedisError) as e:
+            logger.error("redis_add_session_node_failed", session_id=session_id, node_id=node_id, error=str(e))
+            raise RedisOperationError(f"Failed to add session node: {e}") from e
+
+    async def get_session_nodes(self, silo_id: str, session_id: str) -> list[str]:
+        """Get all node IDs associated with a session.
+
+        Args:
+            silo_id: Silo identifier for key namespacing.
+            session_id: Unique session identifier.
+
+        Returns:
+            List of node IDs.
+
+        Raises:
+            RedisOperationError: If the operation fails.
+        """
+        key = self._session_nodes_key(silo_id, session_id)
+        try:
+            members = await self._redis.smembers(key)
+            return [m.decode() for m in members]
+        except (RedisConnectionError, RedisError) as e:
+            logger.error("redis_get_session_nodes_failed", session_id=session_id, error=str(e))
+            raise RedisOperationError(f"Failed to get session nodes: {e}") from e
+
+    async def remove_session_node(self, silo_id: str, session_id: str, node_id: str) -> bool:
+        """Remove a node ID from a session's node set.
+
+        Args:
+            silo_id: Silo identifier for key namespacing.
+            session_id: Unique session identifier.
+            node_id: Context node ID to remove.
+
+        Returns:
+            True if node was removed.
+
+        Raises:
+            RedisOperationError: If the operation fails.
+        """
+        key = self._session_nodes_key(silo_id, session_id)
+        try:
+            result = await self._redis.srem(key, node_id.encode())
+            return bool(result)
+        except (RedisConnectionError, RedisError) as e:
+            logger.error("redis_remove_session_node_failed", session_id=session_id, node_id=node_id, error=str(e))
+            raise RedisOperationError(f"Failed to remove session node: {e}") from e
+
+    # Generic cache operations
+
+    async def set(
+        self,
+        key: str,
+        value: str | bytes,
+        ttl_seconds: int | None = None,
+    ) -> bool:
+        """Set a cache value.
+
+        Args:
+            key: Cache key.
+            value: Value to store.
+            ttl_seconds: Optional TTL.
+
+        Returns:
+            True if successful.
+
+        Raises:
+            RedisOperationError: If the operation fails.
+        """
+        if isinstance(value, str):
+            value = value.encode()
+        try:
+            await self._redis.set(key, value, ex=ttl_seconds)
+            return True
+        except (RedisConnectionError, RedisError) as e:
+            logger.error("redis_set_failed", key=key, error=str(e))
+            raise RedisOperationError(f"Failed to set cache value: {e}") from e
+
+    async def get(self, key: str) -> bytes | None:
+        """Get a cache value.
+
+        Args:
+            key: Cache key.
+
+        Returns:
+            Value or None if not found.
+
+        Raises:
+            RedisOperationError: If the operation fails.
+        """
+        try:
+            return await self._redis.get(key)
+        except (RedisConnectionError, RedisError) as e:
+            logger.error("redis_get_failed", key=key, error=str(e))
+            raise RedisOperationError(f"Failed to get cache value: {e}") from e
+
+    async def mget(self, keys: list[str]) -> list[bytes | None]:
+        """Get multiple cache values in one roundtrip.
+
+        Args:
+            keys: List of cache keys.
+
+        Returns:
+            List of values (None for missing keys), same order as input.
+
+        Raises:
+            RedisOperationError: If the operation fails.
+        """
+        try:
+            return await self._redis.mget(keys)
+        except (RedisConnectionError, RedisError) as e:
+            logger.error("redis_mget_failed", key_count=len(keys), error=str(e))
+            raise RedisOperationError(f"Failed to mget cache values: {e}") from e
+
+    async def delete(self, key: str) -> bool:
+        """Delete a cache key.
+
+        Args:
+            key: Cache key.
+
+        Returns:
+            True if key existed and was deleted.
+
+        Raises:
+            RedisOperationError: If the operation fails.
+        """
+        try:
+            result = await self._redis.delete(key)
+            return bool(result)
+        except (RedisConnectionError, RedisError) as e:
+            logger.error("redis_delete_failed", key=key, error=str(e))
+            raise RedisOperationError(f"Failed to delete cache value: {e}") from e
+
+    async def close(self) -> None:
+        """Close the Redis connection pool."""
+        try:
+            await self._redis.aclose()
+        except Exception as e:
+            logger.warning("redis_close_error", error=str(e))
