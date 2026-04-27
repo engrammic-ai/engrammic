@@ -108,6 +108,54 @@ class TestAssertToFact:
         )
         assert not rows, ":Fact label must not be present"
 
+    async def test_promote_auto_counts_derived_from_edges(
+        self,
+        memgraph_client: MemgraphClient,
+        unique_org_id: str,
+        unique_silo_id: uuid.UUID,
+        cleanup_silo: None,
+    ) -> None:
+        """When evidence_count is omitted, the count query must include DERIVED_FROM.
+
+        Regression: assert_claim writes DERIVED_FROM edges; an earlier version of
+        promote_claim_to_fact only counted REFERENCES, so auto-evidence-counting
+        always returned 0 and nothing promoted.
+        """
+        scope = ScopeContext(org_id=unique_org_id, silo_id=unique_silo_id)
+        silo_id_str = str(unique_silo_id)
+        service = _make_service(memgraph_client)
+
+        # Pre-create the evidence node so DERIVED_FROM has a target to MATCH.
+        ev_id = f"ev-{uuid.uuid4().hex[:8]}"
+        await memgraph_client.execute_write(
+            "CREATE (n:Document {id: $id, silo_id: $silo_id})",
+            {"id": ev_id, "silo_id": silo_id_str},
+        )
+
+        node = await service.assert_claim(
+            scope=scope,
+            claim="Berlin is in Germany",
+            evidence=[f"node:{ev_id}"],
+            source_type="document",
+            confidence=0.85,
+            metadata={"source_tier": "authoritative"},
+        )
+        claim_id = str(node.id)
+
+        # Omit evidence_count — promote_claim_to_fact must auto-count via the
+        # REFERENCES|DERIVED_FROM Cypher and find the DERIVED_FROM edge.
+        result = await service.promote_claim_to_fact(
+            silo_id=silo_id_str,
+            claim_id=claim_id,
+        )
+        assert result is not None, "Auto-count must include DERIVED_FROM edges"
+
+        rows = await memgraph_client.execute_query(
+            "MATCH (c:Claim:Fact {id: $claim_id, silo_id: $silo_id}) RETURN c",
+            {"claim_id": claim_id, "silo_id": silo_id_str},
+        )
+        assert rows, ":Fact label must be present after auto-counted promotion"
+
     async def test_promote_is_idempotent(
         self,
         memgraph_client: MemgraphClient,

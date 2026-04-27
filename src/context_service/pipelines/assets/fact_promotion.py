@@ -20,14 +20,18 @@ RETURN c.id AS id, properties(c) AS props
 LIMIT $batch_size
 """
 
-_COUNT_REFERENCES = """
-MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})-[:REFERENCES]->()
+# Count both edge types: extraction emits REFERENCES, assert_claim emits
+# DERIVED_FROM. Either signals evidence for promotion.
+_COUNT_EVIDENCE = """
+MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})-[:REFERENCES|DERIVED_FROM]->()
 RETURN count(*) AS cnt
 """
 
+# Corroborating claims = other :Claim nodes that reference (or derive from) the
+# same evidence node as this claim.
 _FETCH_CORROBORATIONS = """
-MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})-[:REFERENCES]->(ref)
-MATCH (other:Claim {silo_id: $silo_id})-[:REFERENCES]->(ref)
+MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})-[:REFERENCES|DERIVED_FROM]->(ref)
+MATCH (other:Claim {silo_id: $silo_id})-[:REFERENCES|DERIVED_FROM]->(ref)
 WHERE other.id <> $claim_id
 RETURN DISTINCT properties(other) AS props
 LIMIT 10
@@ -68,7 +72,7 @@ def claim_to_fact_promotion(
             claim_props: dict[str, Any] = dict(row["props"])
 
             count_rows = await client.execute_query(
-                _COUNT_REFERENCES,
+                _COUNT_EVIDENCE,
                 {"claim_id": claim_id, "silo_id": silo_id},
             )
             evidence_count: int = int(count_rows[0]["cnt"]) if count_rows else 0

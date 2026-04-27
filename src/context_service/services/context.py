@@ -660,9 +660,11 @@ class ContextService:
         from context_service.db.queries import PROMOTE_CLAIM_TO_FACT
 
         if evidence_count is None:
+            # Count both edge types: extraction emits REFERENCES, assert_claim
+            # emits DERIVED_FROM. Either signals evidence for promotion.
             count_rows = await self._memgraph.execute_query(
                 "MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})"
-                "-[:REFERENCES]->() RETURN count(*) AS cnt",
+                "-[:REFERENCES|DERIVED_FROM]->() RETURN count(*) AS cnt",
                 {"claim_id": claim_id, "silo_id": silo_id},
             )
             evidence_count = int(count_rows[0]["cnt"]) if count_rows else 0
