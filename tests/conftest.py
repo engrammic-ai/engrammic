@@ -34,9 +34,20 @@ def _bootstrap_custodian_models() -> None:
     if "context_service.custodian.models" in sys.modules:
         return
 
-    # Ensure package stubs exist so sub-module imports resolve.
-    for pkg in ["context_service", "context_service.custodian", "context_service.extraction"]:
+    # Import the real top-level package first so it is registered in sys.modules
+    # as the true package object before we start adding sub-package stubs.
+    import context_service  # noqa: F401
+
+    # Stub only sub-packages that haven't been loaded yet.
+    for pkg in [
+        "context_service.core",
+        "context_service.custodian",
+        "context_service.extraction",
+    ]:
         sys.modules.setdefault(pkg, ModuleType(pkg))
+
+    # Load core.settings directly so custodian.models can call get_settings().
+    _load_module_direct("context_service.core.settings")
 
     # Load extraction.models directly (no config required).
     _load_module_direct("context_service.extraction.models")

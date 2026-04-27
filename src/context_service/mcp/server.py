@@ -11,6 +11,7 @@ from fastmcp import FastMCP
 if TYPE_CHECKING:
     from context_service.embeddings import EmbeddingService
     from context_service.services.context import ContextService
+    from context_service.services.evidence import EvidenceValidator
     from context_service.services.silo import SiloService
     from context_service.stores import MemgraphClient, QdrantClient, RedisClient
 
@@ -30,6 +31,7 @@ def configure_services(
     Call this during application startup before serving MCP requests.
     """
     from context_service.services.context import ContextService
+    from context_service.services.evidence import EvidenceValidator
     from context_service.services.silo import SiloService
 
     _services["context"] = ContextService(
@@ -39,6 +41,7 @@ def configure_services(
         cache=redis,
     )
     _services["silo"] = SiloService(memgraph=memgraph)
+    _services["evidence"] = EvidenceValidator(memgraph=memgraph)
     logger.info("MCP services configured")
 
 
@@ -49,6 +52,17 @@ def get_context_service() -> ContextService:
     from context_service.services.context import ContextService as _CS
 
     return cast(_CS, _services["context"])
+
+
+def get_evidence_validator() -> EvidenceValidator:
+    """Get the configured EvidenceValidator instance."""
+    if "evidence" not in _services:
+        raise RuntimeError(
+            "EvidenceValidator not configured — call configure_services() at startup"
+        )
+    from context_service.services.evidence import EvidenceValidator as _EV
+
+    return cast(_EV, _services["evidence"])
 
 
 def get_silo_service() -> SiloService:

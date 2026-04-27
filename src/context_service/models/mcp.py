@@ -1,4 +1,5 @@
 """Pydantic models for MCP tool inputs/outputs."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -120,6 +121,8 @@ class Crystallization(BaseModel):
 
 class QueryFilters(BaseModel):
     """Filters for context_query."""
+
+    model_config = {"extra": "forbid"}
 
     tags: list[str] | None = None
     source_type: list[SourceType] | None = None

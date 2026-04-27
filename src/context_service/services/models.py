@@ -66,6 +66,52 @@ class ScopeContext:
     silo_id: uuid.UUID
 
 
+@dataclass
+class QueryResult:
+    """A single result from context_query."""
+
+    node_id: uuid.UUID
+    layer: str
+    content: str
+    confidence: float
+    relevance_score: float
+    summary: str | None = None
+    tags: list[str] | None = None
+    created_at: datetime | None = None
+
+
+@dataclass
+class GraphNode:
+    """A node in graph traversal results."""
+
+    node_id: str
+    layer: str
+    content: str
+    type: str
+    properties: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class GraphEdge:
+    """An edge in graph traversal results."""
+
+    from_node: str
+    to_node: str
+    relationship: str
+    weight: float = 1.0
+
+
+@dataclass
+class GraphResult:
+    """Result from graph traversal."""
+
+    nodes: list[dict[str, Any]]
+    edges: list[dict[str, Any]]
+    depth_reached: int
+    nodes_visited: int
+    edges_traversed: int
+
+
 def derive_silo_id(org_id: str) -> uuid.UUID:
     """Derive deterministic silo ID from org ID (MVP 1:1 mapping)."""
     return uuid.uuid5(uuid.NAMESPACE_DNS, f"silo:{org_id}")

@@ -71,6 +71,9 @@ target-version = "py312"
 select = ["E", "F", "I", "UP", "B", "SIM", "ARG"]
 ignore = ["E501"]
 
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["ARG001", "ARG002"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true
@@ -78,6 +81,7 @@ strict = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "--import-mode=importlib"
 
 [tool.uv.sources]
 primitives = { path = "../primitives", editable = true }

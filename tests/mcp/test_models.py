@@ -1,11 +1,11 @@
 """Tests for MCP tool models."""
-import pytest
+
 from context_service.models.mcp import (
-    SPOClaim,
     DecayClass,
-    SourceType,
-    ObservationType,
     EvidenceRef,
+    ObservationType,
+    SourceType,
+    SPOClaim,
 )
 
 

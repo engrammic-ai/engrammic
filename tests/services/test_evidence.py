@@ -1,7 +1,10 @@
 """Tests for evidence validation service."""
-import pytest
+
 from unittest.mock import AsyncMock, patch
-from context_service.services.evidence import EvidenceValidator, EvidenceResult
+
+import pytest
+
+from context_service.services.evidence import EvidenceValidator
 
 
 @pytest.fixture

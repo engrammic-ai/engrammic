@@ -1,0 +1,138 @@
+"""MCP tool: context_query - Semantic search with layer filtering."""
+
+from __future__ import annotations
+
+import time
+import uuid
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
+
+from context_service.mcp.auth import get_mcp_auth
+from context_service.mcp.server import get_context_service
+from context_service.models.mcp import Layer, QueryFilters
+from context_service.services.models import ScopeContext, derive_silo_id
+
+if TYPE_CHECKING:
+    from fastmcp import FastMCP
+
+
+async def _context_query(
+    silo_id: str,
+    query: str,
+    layers: list[str] | None = None,
+    filters: dict[str, Any] | None = None,
+    top_k: int = 10,
+    include_superseded: bool = False,
+    as_of: str | None = None,
+) -> dict[str, Any]:
+    """Internal implementation for testing."""
+
+    auth = get_mcp_auth()
+    ctx_svc = get_context_service()
+
+    expected_silo_id = derive_silo_id(auth.org_id)
+    try:
+        requested = uuid.UUID(silo_id)
+    except ValueError:
+        return {"error": "invalid_silo_id", "message": "silo_id must be a valid UUID"}
+
+    if requested != expected_silo_id:
+        return {"error": "silo_not_found", "silo_id": silo_id}
+
+    valid_layers = None
+    if layers:
+        try:
+            valid_layers = [Layer(layer) for layer in layers]
+        except ValueError:
+            return {"error": "invalid_layer", "valid": [e.value for e in Layer]}
+
+    as_of_dt = None
+    if as_of:
+        try:
+            as_of_dt = datetime.fromisoformat(as_of)
+        except ValueError:
+            return {"error": "invalid_as_of", "message": "Must be ISO format datetime"}
+
+    parsed_filters = None
+    if filters:
+        try:
+            parsed_filters = QueryFilters(**filters)
+        except Exception as exc:
+            return {"error": "invalid_filters", "message": str(exc)}
+
+    scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
+
+    start = time.perf_counter()
+    results = await ctx_svc.query(
+        scope=scope,
+        query=query,
+        layers=valid_layers,
+        filters=parsed_filters,
+        top_k=top_k,
+        include_superseded=include_superseded,
+        as_of=as_of_dt,
+    )
+    elapsed_ms = int((time.perf_counter() - start) * 1000)
+
+    return {
+        "results": [
+            {
+                "node_id": str(r.node_id),
+                "layer": r.layer,
+                "content": r.content,
+                "summary": r.summary,
+                "confidence": r.confidence,
+                "relevance_score": r.relevance_score,
+                "tags": r.tags or [],
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            }
+            for r in results
+        ],
+        "total_candidates": len(results),
+        "search_time_ms": elapsed_ms,
+    }
+
+
+def register(mcp: FastMCP) -> None:
+    """Register the context_query tool."""
+
+    @mcp.tool(
+        name="context_query",
+        description=(
+            "Semantic search across Memory, Knowledge, and Wisdom layers. "
+            "Supports layer filtering, time-travel (as_of), and metadata filters. "
+            "Replaces context_lookup with EAG-aware layer semantics."
+        ),
+    )
+    async def context_query(
+        silo_id: str,
+        query: str,
+        layers: list[str] | None = None,
+        filters: dict[str, Any] | None = None,
+        top_k: int = 10,
+        include_superseded: bool = False,
+        as_of: str | None = None,
+    ) -> dict[str, Any]:
+        """Semantic search with layer filtering.
+
+        Args:
+            silo_id: UUID of the silo.
+            query: Natural language search query.
+            layers: Filter to layers: memory, knowledge, wisdom, intelligence.
+            filters: QueryFilters: tags, source_type, min_confidence, created_after, created_before.
+            top_k: Maximum results (default 10).
+            include_superseded: Include superseded nodes (default False).
+            as_of: ISO 8601 datetime for time-travel (not yet implemented at store level).
+
+        Returns:
+            {results, total_candidates, search_time_ms}
+        """
+        return await _context_query(
+            silo_id=silo_id,
+            query=query,
+            layers=layers,
+            filters=filters,
+            top_k=top_k,
+            include_superseded=include_superseded,
+            as_of=as_of,
+        )
