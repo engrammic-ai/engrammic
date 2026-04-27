@@ -5,11 +5,20 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+import structlog
+
 from context_service.mcp.auth import get_mcp_auth
 from context_service.mcp.server import get_context_service, get_evidence_validator, get_silo_service
 from context_service.models.mcp import SourceType, SPOClaim
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
+
+logger = structlog.get_logger(__name__)
+
+# Minimum evidence count for R1 single-source promotion.
+# R1 requires raw_confidence >= 0.7 + authoritative source_tier — but the
+# evidence_count gate ensures we don't call the epistemology on zero-evidence claims.
+_R1_THRESHOLD = 1
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -85,12 +94,30 @@ async def _context_assert(
         agent_id=getattr(auth, "agent_id", None),
     )
 
+    promoted = False
+    if len(evidence_list) >= _R1_THRESHOLD:
+        try:
+            promotion_result = await ctx_svc.promote_claim_to_fact(
+                silo_id=str(expected_silo_id),
+                claim_id=str(node.id),
+                evidence_count=len(evidence_list),
+            )
+            if promotion_result is not None:
+                promoted = True
+        except Exception:
+            logger.warning(
+                "claim_assert_promotion_failed",
+                exc_info=True,
+                claim_id=str(node.id),
+            )
+
     return {
         "node_id": str(node.id),
         "layer": "knowledge",
         "claim_type": claim_type,
         "evidence_status": "verified" if evidence_mode == "sync" else "pending",
         "evidence_nodes": evidence_nodes,
+        "promoted_to_fact": promoted,
         "created_at": datetime.now(UTC).isoformat(),
     }
 

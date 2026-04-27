@@ -255,6 +255,13 @@ MATCH (refd:Document {id: $ref_doc_id, silo_id: $silo_id})
 MERGE (c)-[:REFERENCES]->(refd)
 """
 
+PROMOTE_CLAIM_TO_FACT = """
+MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
+WHERE NOT c:Fact
+SET c:Fact, c.promoted_at = datetime(), c.promotion_rule = $rule
+RETURN properties(c) AS props
+"""
+
 CREATE_CONTRADICTS_EDGE = """
 MATCH (a:Claim {id: $claim_id_a, silo_id: $silo_id})
 MATCH (b:Claim {id: $claim_id_b, silo_id: $silo_id})

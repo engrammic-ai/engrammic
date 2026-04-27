@@ -243,7 +243,7 @@ class TestStoreAtomicity:
             await service.store(
                 scope=scope_context,
                 content="Content that should fail on Qdrant",
-                node_type="Memory",
+                node_type="Document",
             )
 
 

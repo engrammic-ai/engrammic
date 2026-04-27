@@ -85,7 +85,7 @@ TODOs #1 and #2 closed by phase-eag-b-edge-migration on 2026-04-28.
 2. **Pre-existing lint errors** — 23 ruff errors existed before this audit (ARG/SIM/F841 in embeddings, MCP tools, pipelines resources). Not introduced by this work but should be cleaned up.
 
 ### Needs discussion before implementing
-5. **`:Finding` vs `:Fact` naming** — Decide whether the consensus promotion path should write `:Fact` (EAG canonical) or continue writing `:Finding` (RAG-era). Migration of existing `:Finding` nodes is non-trivial; a parallel-write pattern or a label-union read approach may be needed.
+5. **`:Finding` vs `:Fact` naming** — Resolved 2026-04-28 by phase-eag-a-claim-fact-promotion. See architecture/README.md.
 6. **`primitives.eag.epistemology` integration** — Once a `:Claim`→`:Fact` write path exists, `should_promote_r1`/`should_promote_r2` from primitives should replace the current `PromotionPlan`/`execute_promotion` which operates on Finding status flips. These are fundamentally different operations and should not be merged prematurely.
 7. **`RelationshipType.CAUSES` alignment** — `extraction/models.py:RelationshipType` and `primitives.schema.edges.CITEEdgeType` overlap on `CAUSES`. If the extraction pipeline is expected to write EAG semantic edges directly (rather than `:ProposedEdge` nodes), `RelationshipType` could be replaced by `CITEEdgeType`. Currently they serve different purposes (LLM extraction vocabulary vs graph edge type registry).
 
