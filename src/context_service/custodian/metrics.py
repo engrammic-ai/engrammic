@@ -5,6 +5,11 @@ from __future__ import annotations
 from opentelemetry import metrics
 
 from context_service.config.logging import get_logger
+from context_service.custodian.rejection_reasons import (
+    BusinessRejection,
+    CitationRejection,
+    StructuralRejection,
+)
 
 logger = get_logger(__name__)
 
@@ -62,6 +67,23 @@ _budget_skipped_visits = _meter.create_counter(
 _claim_rejections = _meter.create_counter(
     name="custodian.claim_rejections",
     description="Citation claim rejections by reason",
+    # TODO(2026-Q3): remove this deprecated alias once all dashboards use the
+    # three layer-specific counters below.
+)
+
+_structural_rejections = _meter.create_counter(
+    name="custodian.structural_rejections",
+    description="Stage 0 claim rejections by StructuralRejection reason",
+)
+
+_citation_rejections = _meter.create_counter(
+    name="custodian.citation_rejections",
+    description="Stage 2 claim rejections by CitationRejection reason",
+)
+
+_business_rejections = _meter.create_counter(
+    name="custodian.business_rejections",
+    description="Stage 3 claim rejections by BusinessRejection reason",
 )
 
 _finalize_budget_ratio = _meter.create_histogram(
@@ -146,10 +168,21 @@ def record_visit_strategy(strategy: str, level: str) -> None:
         logger.debug("record_visit_strategy failed", exc_info=True)
 
 
-def record_claim_rejection(reason: str) -> None:
-    """Increment the claim rejections counter."""
+def record_claim_rejection(
+    reason: StructuralRejection | CitationRejection | BusinessRejection,
+) -> None:
+    """Increment the layer-specific rejection counter and the legacy alias."""
     try:
-        _claim_rejections.add(1, attributes={"reason": reason})
+        reason_str = reason.value
+        attrs = {"reason": reason_str}
+        # Deprecated alias — both emitted until 2026-Q3 removal.
+        _claim_rejections.add(1, attributes=attrs)
+        if isinstance(reason, StructuralRejection):
+            _structural_rejections.add(1, attributes=attrs)
+        elif isinstance(reason, CitationRejection):
+            _citation_rejections.add(1, attributes=attrs)
+        elif isinstance(reason, BusinessRejection):
+            _business_rejections.add(1, attributes=attrs)
     except Exception:
         logger.debug("record_claim_rejection failed", exc_info=True)
 
@@ -210,11 +243,22 @@ def record_pro_escalation(reason: str) -> None:
 class CustodianRejectionMetrics:
     """Concrete implementation of the RejectionMetrics protocol backed by OTEL."""
 
-    def increment_claim_rejection(self, reason: object, count: int = 1) -> None:
-        """Increment rejection counter; reason.value used when it's a StrEnum."""
+    def increment_claim_rejection(
+        self,
+        reason: StructuralRejection | CitationRejection | BusinessRejection,
+        count: int = 1,
+    ) -> None:
+        """Increment the layer-specific counter and the deprecated legacy alias."""
         try:
-            reason_str = reason.value if hasattr(reason, "value") else str(reason)
-            _claim_rejections.add(count, attributes={"reason": reason_str})
+            attrs = {"reason": reason.value}
+            # Deprecated alias — both emitted until 2026-Q3 removal.
+            _claim_rejections.add(count, attributes=attrs)
+            if isinstance(reason, StructuralRejection):
+                _structural_rejections.add(count, attributes=attrs)
+            elif isinstance(reason, CitationRejection):
+                _citation_rejections.add(count, attributes=attrs)
+            elif isinstance(reason, BusinessRejection):
+                _business_rejections.add(count, attributes=attrs)
         except Exception:
             logger.debug(
                 "CustodianRejectionMetrics.increment_claim_rejection failed", exc_info=True

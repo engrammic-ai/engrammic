@@ -218,7 +218,7 @@ class WritePath:
         1. Validates every claim and proposed edge via the citation validator.
            Rejected items are dropped (validator records the metric).
         2. If every claim was rejected, returns a skip result without writing.
-        3. Computes :func:`quality_score` over the surviving claims.
+        3. Reads the quality score from :class:`BusinessRuleValidator` result.
         4. Inside a single bolt transaction: snapshots any prior finding to
            :FindingHistory, MERGEs the new :Finding body with scope-aware
            uniqueness, trims history, creates :CITES edges to every cited
