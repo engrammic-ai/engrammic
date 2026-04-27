@@ -394,3 +394,75 @@ RETURN n.id AS node_id,
 
 # Health check query
 HEALTH_CHECK = "RETURN 1 as health"
+
+# Meta-memory: provenance chain query
+# Traverses DERIVED_FROM / PROMOTED_FROM / SYNTHESIZED_FROM edges from a
+# given node back to its Memory-layer sources (leaves with no outbound edges).
+PROVENANCE_CHAIN = """
+MATCH path = (start {id: $node_id, silo_id: $silo_id})-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM*1..10]->(source)
+WITH path, nodes(path) AS ns, relationships(path) AS rs
+UNWIND range(0, size(ns) - 1) AS i
+WITH
+    ns[i].id AS node_id,
+    labels(ns[i])[0] AS layer,
+    CASE WHEN i < size(rs) THEN type(rs[i]) ELSE null END AS relationship,
+    coalesce(ns[i].confidence, 1.0) AS confidence,
+    length(path) AS depth
+RETURN DISTINCT node_id, layer, relationship, confidence
+ORDER BY depth
+"""
+
+# Leaf sources: nodes in the provenance chain with no further outbound edges
+PROVENANCE_ROOT_SOURCES = """
+MATCH path = (start {id: $node_id, silo_id: $silo_id})-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM*1..10]->(source)
+WHERE NOT (source)-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM]->()
+RETURN DISTINCT
+    source.id AS node_id,
+    labels(source)[0] AS layer,
+    source.content AS content,
+    coalesce(source.confidence, 1.0) AS confidence
+"""
+
+# Meta-memory: belief history via SUPERSEDES chain
+# Walks backward through SUPERSEDES edges to reconstruct the evolution of a belief.
+BELIEF_HISTORY_BY_NODE = """
+MATCH path = (current {id: $node_id, silo_id: $silo_id})<-[:SUPERSEDES*0..20]-(ancestor)
+WITH ancestor, length(path) AS depth
+RETURN
+    ancestor.id AS node_id,
+    ancestor.content AS content,
+    ancestor.valid_from AS valid_from,
+    ancestor.valid_to AS valid_to,
+    ancestor.confidence AS confidence,
+    ancestor.supersession_reason AS supersession_reason
+ORDER BY depth DESC
+"""
+
+BELIEF_HISTORY_CURRENT = """
+MATCH (n {id: $node_id, silo_id: $silo_id})
+OPTIONAL MATCH (n)-[:SUPERSEDES]->(next)
+RETURN
+    n.id AS node_id,
+    n.content AS content,
+    n.valid_from AS valid_from,
+    n.valid_to AS valid_to,
+    n.confidence AS confidence,
+    next.id AS superseded_by,
+    n.supersession_reason AS supersession_reason
+"""
+
+BELIEF_HISTORY_BY_SUBJECT = """
+MATCH (n {silo_id: $silo_id})
+WHERE toLower(n.content) CONTAINS toLower($subject)
+   OR ($subject IS NOT NULL AND n.subject IS NOT NULL AND toLower(n.subject) CONTAINS toLower($subject))
+WITH n
+ORDER BY coalesce(n.valid_from, 0) ASC
+RETURN
+    n.id AS node_id,
+    n.content AS content,
+    n.valid_from AS valid_from,
+    n.valid_to AS valid_to,
+    n.confidence AS confidence,
+    n.supersession_reason AS supersession_reason
+LIMIT 50
+"""
