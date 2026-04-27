@@ -58,9 +58,9 @@ class ClusteringService:
         4. Generate summaries for each cluster
         5. Run PageRank and update importance scores
 
-        # TODO(CAG scoping): Should clustering target all content nodes or only
+        # TODO(EAG scoping): Should clustering target all content nodes or only
         # :Fact nodes for Wisdom-layer synthesis? Current queries include
-        # Document, Passage, Claim, and Entity. Revisit when CAG layer
+        # Document, Passage, Claim, and Entity. Revisit when EAG layer
         # promotion stabilizes and Wisdom synthesis is designed.
         """
         job.status = ClusteringStatus.RUNNING

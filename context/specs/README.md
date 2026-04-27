@@ -10,7 +10,7 @@ Service-level specifications for the context-service. These cover implementation
 
 ## Relationship to primitives docs
 
-CAG paradigm documentation (layers, transitions, epistemology) lives in `primitives/context/specs/`. This directory covers what the service layer adds on top: storage integration, MCP interface, Custodian workers, extraction pipeline, and operational config.
+EAG (Epistemic Augmented Generation) paradigm documentation (layers, transitions, epistemology) lives in `primitives/context/specs/`. This directory covers what the service layer adds on top: storage integration, MCP interface, Custodian workers, extraction pipeline, and operational config.
 
 ## Relationship to contextr (original prototype)
 

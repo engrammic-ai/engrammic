@@ -1,4 +1,4 @@
-"""Memgraph index DDL for the CAG schema.
+"""Memgraph index DDL for the EAG schema.
 
 Run these on startup (idempotent — Memgraph silently skips existing indexes).
 Grouped by persistence layer so the runner can apply subsets during migration.

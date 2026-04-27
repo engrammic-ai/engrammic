@@ -1,6 +1,6 @@
 """Extraction filter — post-extraction pre-write common-knowledge filter.
 
-See context/cag/extraction-filter.md for design.
+See context/eag/extraction-filter.md for design.
 """
 
 from context_service.extraction.filter.models import FilterDecision, FilterRuleSet, RuleFired

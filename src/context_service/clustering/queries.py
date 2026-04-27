@@ -62,9 +62,9 @@ RETURN c
 
 # --- Cluster membership ---
 #
-# Edge label: MEMBER_OF (CAGEdgeType.MEMBER_OF from primitives.schema.edges).
-# The source graph uses BELONGS_TO; context-service uses MEMBER_OF per the CAG
-# edge schema. PART_OF is not in CAGEdgeType — it remains a plain string label
+# Edge label: MEMBER_OF (CITEEdgeType.MEMBER_OF from primitives.schema.edges).
+# The source graph uses BELONGS_TO; context-service uses MEMBER_OF per the CITE
+# edge schema. PART_OF is not in CITEEdgeType — it remains a plain string label
 # for the inter-cluster hierarchy relationship (child cluster -> parent cluster).
 
 BATCH_CREATE_MEMBER_OF = f"""

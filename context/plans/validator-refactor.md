@@ -230,10 +230,10 @@ Currently the code comment says "defensively re-runs checks" for edges arriving 
 The log line `custodian.{label}: recovered malformed output via output_recovery` should be observable in Grafana/Loki. If the recovery rate is near zero post-Gemini-mode changes, Phase C's migration risk drops significantly and Option B (remove monkey-patch) becomes straightforward. Check the logs before committing to a recovery strategy.
 
 **Q3: Should `quality.py`'s formula weights be config-driven?**  
-The current weights (density 0.25, coverage 0.30, relational 0.15, primary_ratio 0.20, summary_density 0.10) are hardcoded. If the Custodian's output distribution changes significantly post-CAG migration, retuning requires a code change. Moving weights to `CustodianSettings` would allow A/B testing without a deploy. Low priority for the refactor but worth noting.
+The current weights (density 0.25, coverage 0.30, relational 0.15, primary_ratio 0.20, summary_density 0.10) are hardcoded. If the Custodian's output distribution changes significantly post-EAG migration, retuning requires a code change. Moving weights to `CustodianSettings` would allow A/B testing without a deploy. Low priority for the refactor but worth noting.
 
 **Q4: What is the interaction between `ConsensusPromotion` and `BusinessRuleValidator`?**  
-`consensus_promotion.py` creates `:Finding` nodes directly from `:Commitment` nodes, bypassing the `WritePath` and therefore all validators. This is intentional (CAG-path findings have a different provenance), but it means the quality score and business-rule gates never fire for consensus-promoted findings. The refactor should explicitly document this bypass rather than accidentally closing it.
+`consensus_promotion.py` creates `:Finding` nodes directly from `:Commitment` nodes, bypassing the `WritePath` and therefore all validators. This is intentional (EAG-path findings have a different provenance), but it means the quality score and business-rule gates never fire for consensus-promoted findings. The refactor should explicitly document this bypass rather than accidentally closing it.
 
 ---
 
