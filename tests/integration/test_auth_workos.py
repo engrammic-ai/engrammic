@@ -26,6 +26,7 @@ def _make_request(auth_header: str | None = None) -> object:
 
 
 _WORKOS_SETTINGS = Settings(
+    _env_file=None,
     auth_enabled=True,
     workos_api_key="test-key",
     workos_client_id="test-client",

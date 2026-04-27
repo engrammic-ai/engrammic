@@ -22,7 +22,12 @@ class TestDevBypass:
     async def test_returns_dev_auth_context_when_auth_disabled(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        settings = Settings(auth_enabled=False, dev_org_id="test-org", dev_user_id="test-user")
+        settings = Settings(
+            _env_file=None,
+            auth_enabled=False,
+            dev_org_id="test-org",
+            dev_user_id="test-user",
+        )
         monkeypatch.setattr("context_service.api.auth_dep.get_settings", lambda: settings)
         auth_dep_mod._dev_bypass_logged = False
 
@@ -37,7 +42,12 @@ class TestDevBypass:
     async def test_dev_org_id_uses_settings_value(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        settings = Settings(auth_enabled=False, dev_org_id="my-org", dev_user_id="my-user")
+        settings = Settings(
+            _env_file=None,
+            auth_enabled=False,
+            dev_org_id="my-org",
+            dev_user_id="my-user",
+        )
         monkeypatch.setattr("context_service.api.auth_dep.get_settings", lambda: settings)
         auth_dep_mod._dev_bypass_logged = False
 

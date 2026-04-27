@@ -80,14 +80,21 @@ def get_silo_service() -> SiloService:
 def get_mcp_auth_context() -> AuthContext:
     """Return the current MCP auth context, resolving dev bypass if needed.
 
-    Call resolve_mcp_auth_context() during startup to populate this. Falls back
-    to dev AuthContext if not yet resolved (safe for tests).
+    Call resolve_mcp_auth_context() during startup to populate this. When
+    AUTH_ENABLED=false the unresolved fallback returns a dev AuthContext
+    (safe for tests). When AUTH_ENABLED=true the unresolved state raises —
+    auth must fail closed.
     """
+    from context_service.auth.resolve import MCPAuthError
     from context_service.config.settings import get_settings
 
     if _mcp_auth_context is not None:
         return _mcp_auth_context
     settings = get_settings()
+    if settings.auth_enabled:
+        raise MCPAuthError(
+            "MCP auth context not resolved; call resolve_mcp_auth_context() at startup"
+        )
     return AuthContext(
         org_id=settings.dev_org_id,
         user_id=settings.dev_user_id,
