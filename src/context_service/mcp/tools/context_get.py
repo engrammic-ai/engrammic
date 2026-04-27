@@ -7,6 +7,7 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 from context_service.services.models import derive_silo_id
+from context_service.services.silo import validate_silo_ownership
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -39,7 +40,7 @@ def register(mcp: FastMCP) -> None:
             Dictionary with 'nodes' list containing node data.
         """
         from context_service.mcp.auth import get_mcp_auth
-        from context_service.mcp.server import get_context_service
+        from context_service.mcp.server import get_context_service, get_silo_service
 
         auth = get_mcp_auth()
         ctx_svc = get_context_service()
@@ -49,16 +50,9 @@ def register(mcp: FastMCP) -> None:
 
         resolved_silo_id = derive_silo_id(auth.org_id)
         if silo_id is not None:
-            try:
-                requested = uuid.UUID(silo_id)
-            except ValueError:
-                return {"error": "invalid_silo_id", "message": "silo_id must be a valid UUID"}
-            if requested != resolved_silo_id:
-                return {
-                    "error": "silo_not_found",
-                    "silo_id": silo_id,
-                    "message": "Silo does not exist or org_id mismatch.",
-                }
+            err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+            if err is not None:
+                return err
 
         nodes_out: list[dict[str, Any]] = []
         for nid in node_ids:

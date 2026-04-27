@@ -122,16 +122,19 @@ class ContextService:
         )
 
         if content and len(content) >= MIN_CONTENT_FOR_EMBEDDING and self._embedding:
-            try:
-                vector = await self._embedding.embed_single(content)
-                await self._qdrant.upsert(
-                    node_id=str(node.id),
-                    vector=vector,
-                    payload={"type": node_type},
-                    silo_id=str(silo_id),
-                )
-            except Exception:
-                logger.warning("store_embedding_failed", node_id=str(node.id), exc_info=True)
+            # Qdrant failure is not swallowed: a node in Memgraph without a
+            # vector is invisible to semantic search (silent desync). Failing
+            # here lets the caller retry the whole operation atomically.
+            # Tradeoff: callers that tolerate graph-only storage must catch and
+            # handle this explicitly; the alternative (marking _qdrant_sync_pending
+            # on the node) would require a separate reconciliation worker.
+            vector = await self._embedding.embed_single(content)
+            await self._qdrant.upsert(
+                node_id=str(node.id),
+                vector=vector,
+                payload={"type": node_type},
+                silo_id=str(silo_id),
+            )
 
         if idempotency_key and self._cache:
             cache_key = f"idempotency:{silo_id}:{idempotency_key}"

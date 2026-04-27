@@ -14,6 +14,12 @@ def mock_deps():
         patch("context_service.mcp.tools.context_assert.get_mcp_auth") as auth_mock,
         patch("context_service.mcp.tools.context_assert.get_context_service") as svc_mock,
         patch("context_service.mcp.tools.context_assert.get_evidence_validator") as ev_mock,
+        patch("context_service.mcp.tools.context_assert.get_silo_service", return_value=MagicMock()),
+        patch(
+            "context_service.mcp.tools.context_assert.validate_silo_ownership",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
     ):
         auth = MagicMock()
         auth.org_id = "test-org"
@@ -82,11 +88,16 @@ async def test_assert_structured_claim(mock_deps):
 async def test_assert_invalid_silo(mock_deps):
     from context_service.mcp.tools.context_assert import _context_assert
 
-    result = await _context_assert(
-        silo_id="not-a-uuid",
-        claim="Test claim",
-        evidence="node:abc-123",
-        source_type="document",
-    )
+    with patch(
+        "context_service.mcp.tools.context_assert.validate_silo_ownership",
+        new_callable=AsyncMock,
+        return_value={"error": "invalid_silo_id", "message": "silo_id must be a valid UUID"},
+    ):
+        result = await _context_assert(
+            silo_id="not-a-uuid",
+            claim="Test claim",
+            evidence="node:abc-123",
+            source_type="document",
+        )
 
     assert result["error"] == "invalid_silo_id"

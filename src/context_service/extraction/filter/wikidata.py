@@ -7,6 +7,7 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
+import context_service.extraction.filter.circuit_breaker as cb_module
 from context_service.extraction.filter.circuit_breaker import CircuitBreaker
 from context_service.extraction.filter.models import FilterDecision, FilterRuleSet, RuleFired
 
@@ -64,6 +65,9 @@ class WikidataRule:
 
     fail-open: on timeout / CB-open / unparseable, returns an EXTERNAL_FAILURE
     FilterDecision which the orchestrator treats as non-decisive.
+
+    Pass silo_id to bind the CB to the registry so state persists across requests.
+    When silo_id is omitted (tests / one-shot usage) a fresh CB is used instead.
     """
 
     def __init__(
@@ -71,16 +75,35 @@ class WikidataRule:
         rs: FilterRuleSet,
         redis: RedisClient,
         sparql_fn: Callable[[str, ClaimTriple, float], Awaitable[bool]] | None = None,
+        *,
+        silo_id: str | None = None,
     ) -> None:
         self._rs = rs
         self._redis = redis
         self._sparql = sparql_fn or default_sparql_ask
-        self._cb = CircuitBreaker(
-            failure_threshold=rs.wikidata_cb_failure_threshold,
-            window_s=rs.wikidata_cb_window_s,
-            cooldown_s=rs.wikidata_cb_cooldown_s,
+        self._silo_id = silo_id
+        self._local_cb: CircuitBreaker | None = (
+            None
+            if silo_id is not None
+            else CircuitBreaker(
+                failure_threshold=rs.wikidata_cb_failure_threshold,
+                window_s=rs.wikidata_cb_window_s,
+                cooldown_s=rs.wikidata_cb_cooldown_s,
+            )
         )
         self._ttl_s = int(rs.wikidata_cache_ttl_days * 86400)
+
+    async def _get_cb(self) -> CircuitBreaker:
+        if self._local_cb is not None:
+            return self._local_cb
+        assert self._silo_id is not None
+        return await cb_module.get_or_create(
+            self._silo_id,
+            "wikidata",
+            failure_threshold=self._rs.wikidata_cb_failure_threshold,
+            window_s=self._rs.wikidata_cb_window_s,
+            cooldown_s=self._rs.wikidata_cb_cooldown_s,
+        )
 
     async def evaluate(self, claim: ClaimTriple) -> FilterDecision | None:
         key = _cache_key(claim)
@@ -92,7 +115,8 @@ class WikidataRule:
         except Exception as e:  # cache failures are non-fatal
             log.warning("wikidata cache read failed: %s", e)
 
-        if self._cb.is_open():
+        cb = await self._get_cb()
+        if await cb.is_open():
             return FilterDecision(
                 action="keep",
                 rule_fired=RuleFired.EXTERNAL_FAILURE,
@@ -103,7 +127,7 @@ class WikidataRule:
             present = await self._sparql(
                 self._rs.wikidata_endpoint, claim, self._rs.wikidata_timeout_s
             )
-            self._cb.record_success()
+            await cb.record_success()
             entry = {"present": present, "checked_at": datetime.now(UTC).isoformat()}
             try:
                 await self._redis.set(key, json.dumps(entry), ttl_seconds=self._ttl_s)
@@ -111,7 +135,7 @@ class WikidataRule:
                 log.warning("wikidata cache write failed: %s", e)
             return self._decision_from_present(present)
         except (TimeoutError, Exception) as e:
-            self._cb.record_failure()
+            await cb.record_failure()
             log.info("wikidata sparql failed: %s", e)
             return FilterDecision(
                 action="keep",

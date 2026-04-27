@@ -400,6 +400,7 @@ class WritePath:
                 await tx.run(
                     CLUSTER_LAST_CUSTODIAN_UPDATE,
                     cluster_id=finding.cluster_id,
+                    silo_id=finding.silo_id,
                     pass_id=pass_id,
                     now_iso=now_iso,
                 )

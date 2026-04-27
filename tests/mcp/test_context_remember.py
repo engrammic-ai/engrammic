@@ -16,6 +16,19 @@ def mock_auth():
 
 
 @pytest.fixture
+def mock_silo_valid():
+    with patch(
+        "context_service.mcp.tools.context_remember.validate_silo_ownership",
+        new_callable=AsyncMock,
+        return_value=None,
+    ), patch(
+        "context_service.mcp.tools.context_remember.get_silo_service",
+        return_value=MagicMock(),
+    ):
+        yield
+
+
+@pytest.fixture
 def mock_context_service():
     with patch("context_service.mcp.tools.context_remember.get_context_service") as m:
         svc = AsyncMock()
@@ -27,7 +40,7 @@ def mock_context_service():
 
 
 @pytest.mark.asyncio
-async def test_remember_basic(mock_auth, mock_context_service):
+async def test_remember_basic(mock_auth, mock_context_service, mock_silo_valid):
     from context_service.mcp.tools.context_remember import _context_remember
 
     result = await _context_remember(
@@ -42,7 +55,7 @@ async def test_remember_basic(mock_auth, mock_context_service):
 
 
 @pytest.mark.asyncio
-async def test_remember_with_decay_class(mock_auth, mock_context_service):
+async def test_remember_with_decay_class(mock_auth, mock_context_service, mock_silo_valid):
     from context_service.mcp.tools.context_remember import _context_remember
 
     result = await _context_remember(
@@ -56,11 +69,16 @@ async def test_remember_with_decay_class(mock_auth, mock_context_service):
 
 @pytest.mark.asyncio
 async def test_remember_invalid_silo(mock_auth):
-    from context_service.mcp.tools.context_remember import _context_remember
+    with patch(
+        "context_service.mcp.tools.context_remember.validate_silo_ownership",
+        new_callable=AsyncMock,
+        return_value={"error": "invalid_silo_id", "message": "silo_id must be a valid UUID"},
+    ), patch("context_service.mcp.tools.context_remember.get_silo_service"):
+        from context_service.mcp.tools.context_remember import _context_remember
 
-    result = await _context_remember(
-        silo_id="not-a-uuid",
-        content="Test",
-    )
+        result = await _context_remember(
+            silo_id="not-a-uuid",
+            content="Test",
+        )
 
-    assert result["error"] == "invalid_silo_id"
+        assert result["error"] == "invalid_silo_id"
