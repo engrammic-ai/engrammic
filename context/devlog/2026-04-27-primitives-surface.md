@@ -70,8 +70,22 @@ Wired `MemgraphStore` to inherit from `EAGKnowledgeStore`.
 - primitives: 53/53 tests pass, ruff clean, mypy clean
 - context-service: ruff clean, mypy clean (pre-existing stub errors only)
 
+### Final: Finding/Pass Query Import Wiring
+
+Wired remaining query imports.
+
+- `custodian_queries.py`: imports 11 queries from primitives (finding + pass_ledger)
+- Removed 259 lines of local query definitions
+
+**Skipped:** `EAGLifecycleManager.should_promote` — not applicable to `:Finding` nodes (custodian analysis artifacts). R1/R2 rules belong in claim→fact promotion path, separate CAG integration item.
+
+**Documented limitation:** Queries using `content_union_predicate()` cannot be extracted without moving that function to primitives or parameterizing it.
+
+## Commits (final)
+
+- **context-service** `2a190ee`: refactor: import finding/pass queries from primitives
+
 ## Remaining
 
-- Wire `EAGLifecycleManager.should_promote` into custodian promotion logic
-- Extract more queries with `content_union_predicate` dependency (needs refactor)
-- Wire context-service imports for finding/pass queries from primitives
+- Wire R1/R2 promotion into claim→fact path (CAG integration, see `context/plans/cag-integration-audit.md`)
+- Move `content_union_predicate` to primitives if more query extraction needed
