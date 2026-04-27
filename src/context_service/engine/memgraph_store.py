@@ -128,9 +128,7 @@ class MemgraphStore(EAGKnowledgeStore):
             return None
         return _node_to_knowledge_node(node)
 
-    async def get_batch(
-        self, node_ids: list[str], scope: Scope
-    ) -> list[KnowledgeNode]:
+    async def get_batch(self, node_ids: list[str], scope: Scope) -> list[KnowledgeNode]:
         # Adapter over batch_get_nodes.
         uuids = [uuid.UUID(nid) for nid in node_ids]
         node_map = await self.batch_get_nodes(uuids, scope.silo_id)

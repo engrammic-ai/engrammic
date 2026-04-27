@@ -75,23 +75,21 @@ def get_silo_service() -> SiloService:
 
 
 def create_mcp_server() -> FastMCP:
-    """Create and configure the FastMCP server with all tools registered."""
+    """Create and configure the FastMCP server with all EAG tools registered."""
     mcp = FastMCP(
         name="context-service",
-        instructions="Context management service for AI agents.",
+        instructions=(
+            "EAG context management for AI agents. "
+            "Use remember/assert/commit/reflect for writes, "
+            "query/get/graph for reads, "
+            "provenance/history for meta-memory."
+        ),
     )
 
-    # Register core tools
-    from context_service.mcp.tools.context_get import register as register_get
-    from context_service.mcp.tools.context_lookup import register as register_lookup
-    from context_service.mcp.tools.context_store import register as register_store
-    from context_service.mcp.tools.silo import register_silo_create, register_silo_list
+    # Register all EAG tools
+    from context_service.mcp.tools import register_all
 
-    register_store(mcp)
-    register_get(mcp)
-    register_lookup(mcp)
-    register_silo_create(mcp)
-    register_silo_list(mcp)
+    register_all(mcp)
 
-    logger.info("MCP server created", tools=5)
+    logger.info("MCP server created", tools=13)
     return mcp
