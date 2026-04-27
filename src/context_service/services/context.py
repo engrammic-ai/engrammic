@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 import structlog
+from primitives.schema.labels import ALL_CITE_LABELS
 
 from context_service.services.models import (
     GraphResult,
@@ -32,6 +33,23 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 MIN_CONTENT_FOR_EMBEDDING = 10
+
+# node_type values accepted by store(). Drawn from primitives schema plus
+# MetaObservation which is service-specific (not yet promoted to a primitives label).
+_ALLOWED_NODE_TYPES: frozenset[str] = ALL_CITE_LABELS | frozenset({"MetaObservation"})
+
+# Maps content_type strings from context_remember to proper Memgraph label names.
+_CONTENT_TYPE_TO_LABEL: dict[str, str] = {
+    "text": "Document",
+    "utterance": "Utterance",
+    "event": "Event",
+}
+
+# Properties written explicitly by CREATE — excluded from the SET n += $props pass
+# to avoid overwriting with same or stale values.
+_CREATE_PROPS: frozenset[str] = frozenset(
+    {"id", "type", "content", "silo_id", "source_uri", "content_hash", "created_at"}
+)
 
 
 class ContextService:
@@ -69,14 +87,23 @@ class ContextService:
         Args:
             scope: Org and silo context.
             content: Text content to store.
-            node_type: Node type label.
-            properties: Optional metadata.
+            node_type: Node type label — must be in _ALLOWED_NODE_TYPES.
+            properties: Optional metadata persisted to Memgraph via SET n += $props.
             idempotency_key: For deduplication.
             source_uri: Origin URI.
 
         Returns:
             Created or existing node.
+
+        Raises:
+            ValueError: If node_type is not in the allowed label set.
         """
+        if node_type not in _ALLOWED_NODE_TYPES:
+            raise ValueError(
+                f"Unknown node_type {node_type!r}. "
+                f"Allowed: {sorted(_ALLOWED_NODE_TYPES)}"
+            )
+
         silo_id = scope.silo_id
 
         if idempotency_key and self._cache:
@@ -98,9 +125,10 @@ class ContextService:
             content_hash=hashlib.sha256(content.encode()).hexdigest()[:16],
         )
 
-        await self._memgraph.execute_write(
-            """
-            CREATE (n:Node {
+        # node_type is validated against _ALLOWED_NODE_TYPES above — f-string is safe.
+        extra_props = {k: v for k, v in (properties or {}).items() if k not in _CREATE_PROPS}
+        create_query = f"""
+            CREATE (n:Node:{node_type} {{
                 id: $id,
                 type: $type,
                 content: $content,
@@ -108,18 +136,22 @@ class ContextService:
                 source_uri: $source_uri,
                 content_hash: $content_hash,
                 created_at: timestamp()
-            })
+            }})
+            {"SET n += $extra_props" if extra_props else ""}
             RETURN n
-            """,
-            {
-                "id": str(node.id),
-                "type": node.type,
-                "content": node.content,
-                "silo_id": str(silo_id),
-                "source_uri": source_uri or "",
-                "content_hash": node.content_hash,
-            },
-        )
+        """
+        params: dict[str, Any] = {
+            "id": str(node.id),
+            "type": node.type,
+            "content": node.content,
+            "silo_id": str(silo_id),
+            "source_uri": source_uri or "",
+            "content_hash": node.content_hash,
+        }
+        if extra_props:
+            params["extra_props"] = extra_props
+
+        await self._memgraph.execute_write(create_query, params)
 
         if content and len(content) >= MIN_CONTENT_FOR_EMBEDDING and self._embedding:
             # Qdrant failure is not swallowed: a node in Memgraph without a
@@ -545,10 +577,11 @@ class ContextService:
         if agent_id:
             props["agent_id"] = agent_id
 
+        label = _CONTENT_TYPE_TO_LABEL.get(content_type, content_type)
         return await self.store(
             scope=scope,
             content=content,
-            node_type=content_type,
+            node_type=label,
             properties=props,
         )
 
@@ -607,6 +640,71 @@ class ContextService:
                 )
 
         return node
+
+    async def promote_claim_to_fact(
+        self,
+        silo_id: str,
+        claim_id: str,
+        *,
+        evidence_count: int | None = None,
+        corroborations: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any] | None:
+        """Promote a :Claim to :Claim:Fact when the epistemology agrees.
+
+        Returns the updated node properties dict on promotion, or None if the
+        promotion was skipped (decision said no, or claim was already a :Fact).
+        Best-effort — DB errors are logged and re-raised for the caller to
+        decide.
+        """
+        from context_service.custodian.fact_promotion import evaluate_claim_for_fact
+        from context_service.db.queries import PROMOTE_CLAIM_TO_FACT
+
+        if evidence_count is None:
+            # Count both edge types: extraction emits REFERENCES, assert_claim
+            # emits DERIVED_FROM. Either signals evidence for promotion.
+            count_rows = await self._memgraph.execute_query(
+                "MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})"
+                "-[:REFERENCES|DERIVED_FROM]->() RETURN count(*) AS cnt",
+                {"claim_id": claim_id, "silo_id": silo_id},
+            )
+            evidence_count = int(count_rows[0]["cnt"]) if count_rows else 0
+
+        prop_rows = await self._memgraph.execute_query(
+            "MATCH (c:Claim {id: $claim_id, silo_id: $silo_id}) RETURN properties(c) AS props",
+            {"claim_id": claim_id, "silo_id": silo_id},
+        )
+        if not prop_rows:
+            return None
+
+        claim_props: dict[str, Any] = dict(prop_rows[0]["props"])
+
+        decision = evaluate_claim_for_fact(claim_props, evidence_count, corroborations)
+        if not decision.should_promote:
+            return None
+
+        rule_value: str = decision.rule.value if decision.rule is not None else ""
+        promoted_rows = await self._memgraph.execute_write(
+            PROMOTE_CLAIM_TO_FACT,
+            {"claim_id": claim_id, "silo_id": silo_id, "rule": rule_value},
+        )
+
+        if not promoted_rows:
+            # WHERE NOT c:Fact filtered it out — already promoted
+            already_rows = await self._memgraph.execute_query(
+                "MATCH (c:Claim:Fact {id: $claim_id, silo_id: $silo_id}) RETURN properties(c) AS props",
+                {"claim_id": claim_id, "silo_id": silo_id},
+            )
+            return dict(already_rows[0]["props"]) if already_rows else None
+
+        logger.info(
+            "claim_promoted_to_fact",
+            claim_id=claim_id,
+            silo_id=silo_id,
+            rule=rule_value,
+            evidence_count=evidence_count,
+        )
+        result_props: dict[str, Any] = dict(promoted_rows[0]["props"])
+        return result_props
 
     async def commit_belief(
         self,
