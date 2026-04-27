@@ -1,0 +1,44 @@
+"""Tests for the prod-guard validator in Settings."""
+
+from __future__ import annotations
+
+import pytest
+from pydantic import ValidationError
+
+from context_service.config.settings import Settings
+
+
+class TestProdGuard:
+    def test_production_without_auth_raises(self) -> None:
+        with pytest.raises(ValidationError, match="AUTH_ENABLED must be true"):
+            Settings(environment="production", auth_enabled=False)
+
+    def test_production_with_auth_and_keys_ok(self) -> None:
+        s = Settings(
+            environment="production",
+            auth_enabled=True,
+            workos_api_key="key-abc",
+            workos_client_id="client-xyz",
+        )
+        assert s.auth_enabled is True
+        assert s.environment == "production"
+
+    def test_auth_enabled_without_workos_key_raises(self) -> None:
+        with pytest.raises(ValidationError, match="WORKOS_API_KEY"):
+            Settings(auth_enabled=True, workos_client_id="client-xyz")
+
+    def test_auth_enabled_without_workos_client_id_raises(self) -> None:
+        with pytest.raises(ValidationError, match="WORKOS_API_KEY"):
+            Settings(auth_enabled=True, workos_api_key="key-abc")
+
+    def test_auth_enabled_with_both_keys_ok(self) -> None:
+        s = Settings(
+            auth_enabled=True,
+            workos_api_key="key-abc",
+            workos_client_id="client-xyz",
+        )
+        assert s.auth_enabled is True
+
+    def test_dev_environment_auth_disabled_ok(self) -> None:
+        s = Settings(environment="development", auth_enabled=False)
+        assert s.auth_enabled is False

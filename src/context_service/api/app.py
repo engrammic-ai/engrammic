@@ -49,6 +49,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.qdrant = qdrant_client
 
         from context_service.mcp import configure_services
+        from context_service.mcp.server import resolve_mcp_auth_context
 
         configure_services(
             memgraph=memgraph_client,
@@ -56,6 +57,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             redis=redis_client,
         )
         logger.info("mcp_services_configured")
+
+        await resolve_mcp_auth_context()
+        logger.info("mcp_auth_context_resolved")
 
     except Exception as e:
         logger.error("database_connection_failed", error=str(e))

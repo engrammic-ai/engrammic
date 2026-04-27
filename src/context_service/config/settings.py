@@ -5,6 +5,7 @@ Ported pattern from contextr/app/core/settings.py.
 
 from functools import lru_cache
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +25,23 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 8000
     reload: bool = False
+
+    # Auth
+    auth_enabled: bool = False
+    workos_api_key: str | None = None
+    workos_client_id: str | None = None
+    dev_org_id: str = "dev-org"
+    dev_user_id: str = "dev-user"
+
+    @model_validator(mode="after")
+    def _validate_auth(self) -> "Settings":
+        if self.environment == "production" and not self.auth_enabled:
+            raise ValueError("AUTH_ENABLED must be true when ENVIRONMENT=production")
+        if self.auth_enabled and (self.workos_api_key is None or self.workos_client_id is None):
+            raise ValueError(
+                "WORKOS_API_KEY and WORKOS_CLIENT_ID are required when AUTH_ENABLED=true"
+            )
+        return self
 
     # Graph (Memgraph)
     memgraph_uri: str = "bolt://localhost:7687"

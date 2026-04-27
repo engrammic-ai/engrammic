@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any, cast
 import structlog
 from fastmcp import FastMCP
 
+from context_service.auth.context import AuthContext
+
 if TYPE_CHECKING:
     from context_service.embeddings import EmbeddingService
     from context_service.services.context import ContextService
@@ -18,6 +20,7 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 _services: dict[str, Any] = {}
+_mcp_auth_context: AuthContext | None = None
 
 
 def configure_services(
@@ -72,6 +75,38 @@ def get_silo_service() -> SiloService:
     from context_service.services.silo import SiloService as _SS
 
     return cast(_SS, _services["silo"])
+
+
+def get_mcp_auth_context() -> AuthContext:
+    """Return the current MCP auth context, resolving dev bypass if needed.
+
+    Call resolve_mcp_auth_context() during startup to populate this. Falls back
+    to dev AuthContext if not yet resolved (safe for tests).
+    """
+    from context_service.config.settings import get_settings
+
+    if _mcp_auth_context is not None:
+        return _mcp_auth_context
+    settings = get_settings()
+    return AuthContext(
+        org_id=settings.dev_org_id,
+        user_id=settings.dev_user_id,
+        email=None,
+        is_dev=True,
+    )
+
+
+async def resolve_mcp_auth_context() -> None:
+    """Resolve and cache the MCP auth context at startup.
+
+    Called once during application startup. For per-request auth, see the
+    TODO in auth/resolve.py re: FastMCP transport-level header access.
+    """
+    global _mcp_auth_context
+    from context_service.auth.resolve import resolve_mcp_auth
+
+    _mcp_auth_context = await resolve_mcp_auth()
+    logger.info("MCP auth context resolved", is_dev=_mcp_auth_context.is_dev)
 
 
 def create_mcp_server() -> FastMCP:
