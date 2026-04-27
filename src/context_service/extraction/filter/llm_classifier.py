@@ -4,6 +4,7 @@ import asyncio
 import logging
 from typing import TYPE_CHECKING
 
+import context_service.extraction.filter.circuit_breaker as cb_module
 from context_service.extraction.filter.circuit_breaker import CircuitBreaker
 from context_service.extraction.filter.models import FilterDecision, FilterRuleSet, RuleFired
 
@@ -24,19 +25,46 @@ class LLMClassifierRule:
     """Rule 4 — provider-agnostic LLM confidence classifier with CB.
 
     Fail-open: unparseable / timeout / CB-open -> EXTERNAL_FAILURE (non-decisive).
+
+    Pass silo_id to bind the CB to the registry so state persists across requests.
+    When silo_id is omitted (tests / one-shot usage) a fresh CB is used instead.
     """
 
-    def __init__(self, rs: FilterRuleSet, llm: LLMProvider) -> None:
+    def __init__(
+        self,
+        rs: FilterRuleSet,
+        llm: LLMProvider,
+        *,
+        silo_id: str | None = None,
+    ) -> None:
         self._rs = rs
         self._llm = llm
-        self._cb = CircuitBreaker(
-            failure_threshold=rs.llm_cb_failure_threshold,
-            window_s=rs.llm_cb_window_s,
-            cooldown_s=rs.llm_cb_cooldown_s,
+        self._silo_id = silo_id
+        self._local_cb: CircuitBreaker | None = (
+            None
+            if silo_id is not None
+            else CircuitBreaker(
+                failure_threshold=rs.llm_cb_failure_threshold,
+                window_s=rs.llm_cb_window_s,
+                cooldown_s=rs.llm_cb_cooldown_s,
+            )
+        )
+
+    async def _get_cb(self) -> CircuitBreaker:
+        if self._local_cb is not None:
+            return self._local_cb
+        assert self._silo_id is not None
+        return await cb_module.get_or_create(
+            self._silo_id,
+            "llm_classifier",
+            failure_threshold=self._rs.llm_cb_failure_threshold,
+            window_s=self._rs.llm_cb_window_s,
+            cooldown_s=self._rs.llm_cb_cooldown_s,
         )
 
     async def evaluate(self, claim: ClaimTriple) -> FilterDecision | None:
-        if self._cb.is_open():
+        cb = await self._get_cb()
+        if await cb.is_open():
             return FilterDecision(
                 action="keep",
                 rule_fired=RuleFired.EXTERNAL_FAILURE,
@@ -55,7 +83,7 @@ class LLMClassifierRule:
                 timeout=self._rs.llm_timeout_s,
             )
         except (TimeoutError, Exception) as e:
-            self._cb.record_failure()
+            await cb.record_failure()
             log.info("llm classifier failed: %s", e)
             return FilterDecision(
                 action="keep",
@@ -73,7 +101,7 @@ class LLMClassifierRule:
                 reason=f"llm_unparseable:{text[:40]!r}",
             )
 
-        self._cb.record_success()
+        await cb.record_success()
         score = max(0.0, min(1.0, score))
         if score >= self._rs.llm_threshold:
             return FilterDecision.drop(

@@ -13,6 +13,12 @@ def mock_deps():
     with (
         patch("context_service.mcp.tools.context_graph.get_mcp_auth") as auth_mock,
         patch("context_service.mcp.tools.context_graph.get_context_service") as svc_mock,
+        patch("context_service.mcp.tools.context_graph.get_silo_service", return_value=MagicMock()),
+        patch(
+            "context_service.mcp.tools.context_graph.validate_silo_ownership",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
     ):
         auth = MagicMock()
         auth.org_id = "test-org"
@@ -78,7 +84,12 @@ async def test_graph_missing_seed(mock_deps):
 async def test_graph_invalid_silo_id(mock_deps):
     from context_service.mcp.tools.context_graph import _context_graph
 
-    result = await _context_graph(silo_id="not-a-uuid", query="test")
+    with patch(
+        "context_service.mcp.tools.context_graph.validate_silo_ownership",
+        new_callable=AsyncMock,
+        return_value={"error": "invalid_silo_id", "message": "silo_id must be a valid UUID"},
+    ):
+        result = await _context_graph(silo_id="not-a-uuid", query="test")
 
     assert result["error"] == "invalid_silo_id"
 
@@ -87,10 +98,15 @@ async def test_graph_invalid_silo_id(mock_deps):
 async def test_graph_wrong_silo_id(mock_deps):
     from context_service.mcp.tools.context_graph import _context_graph
 
-    result = await _context_graph(
-        silo_id=str(uuid.uuid4()),
-        query="test",
-    )
+    with patch(
+        "context_service.mcp.tools.context_graph.validate_silo_ownership",
+        new_callable=AsyncMock,
+        return_value={"error": "silo_not_found", "silo_id": str(uuid.uuid4())},
+    ):
+        result = await _context_graph(
+            silo_id=str(uuid.uuid4()),
+            query="test",
+        )
 
     assert result["error"] == "silo_not_found"
 

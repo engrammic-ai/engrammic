@@ -135,6 +135,7 @@ async def run_supersession_pass(
             silo_id=silo_id,
             valid_from=from_node.created_at,
             source=source,
+            reason=pair.reason,
         )
         if written:
             edges_written += 1

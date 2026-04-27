@@ -42,13 +42,15 @@ class HyperGraphStore(Protocol):
         silo_id: str,
         valid_from: datetime,
         source: str = "custodian",
+        reason: str = "contradiction",
     ) -> bool:
         """Link a newer node to an older one with a :SUPERSEDES edge.
 
         Used by the Custodian to record semantic supersession between
         independently-stored nodes (different doc_ids, no version chain).
         ``from_id`` supersedes ``to_id``. Sets ``to.valid_to`` = ``valid_from``
-        if not already set.
+        if not already set. ``reason`` must be one of: contradiction,
+        evidence_shift, author_update, evidence_erased (I5).
         """
         ...
 

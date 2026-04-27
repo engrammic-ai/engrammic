@@ -117,3 +117,40 @@ class SiloService:
             )
             for row in results
         ]
+
+
+async def validate_silo_ownership(
+    silo_service: SiloService,
+    silo_id: str,
+    org_id: str,
+) -> dict[str, Any] | None:
+    """Validate that a silo exists and belongs to the given org.
+
+    Returns None on success, or an error dict if validation fails.
+    The silo_id must be a valid UUID, match the org's deterministic silo,
+    and exist in the graph.
+    """
+    try:
+        requested = uuid.UUID(silo_id)
+    except ValueError:
+        return {"error": "invalid_silo_id", "message": "silo_id must be a valid UUID"}
+
+    expected = derive_silo_id(org_id)
+    if requested != expected:
+        return {
+            "error": "silo_not_found",
+            "silo_id": silo_id,
+            "message": "Silo does not exist or org_id mismatch.",
+        }
+
+    scope = ScopeContext(org_id=org_id, silo_id=expected)
+    silo = await silo_service.get_by_id(scope)
+    if silo is None:
+        logger.warning("silo_ownership_check_failed", silo_id=silo_id, org_id=org_id)
+        return {
+            "error": "silo_not_found",
+            "silo_id": silo_id,
+            "message": "Silo does not exist or org_id mismatch.",
+        }
+
+    return None

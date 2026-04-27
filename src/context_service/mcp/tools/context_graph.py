@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import uuid
 from typing import TYPE_CHECKING, Any
 
 from context_service.mcp.auth import get_mcp_auth
-from context_service.mcp.server import get_context_service
+from context_service.mcp.server import get_context_service, get_silo_service
 from context_service.models.mcp import Layer
 from context_service.services.models import derive_silo_id
+from context_service.services.silo import validate_silo_ownership
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -26,14 +26,11 @@ async def _context_graph(
     auth = get_mcp_auth()
     ctx_svc = get_context_service()
 
-    expected_silo_id = derive_silo_id(auth.org_id)
-    try:
-        requested = uuid.UUID(silo_id)
-    except ValueError:
-        return {"error": "invalid_silo_id", "message": "silo_id must be a valid UUID"}
+    err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+    if err is not None:
+        return err
 
-    if requested != expected_silo_id:
-        return {"error": "silo_not_found", "silo_id": silo_id}
+    expected_silo_id = derive_silo_id(auth.org_id)
 
     if not query and not seed_nodes:
         return {"error": "missing_seed", "message": "Provide query or seed_nodes"}

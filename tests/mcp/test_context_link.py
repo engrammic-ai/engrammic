@@ -13,6 +13,12 @@ def mock_deps():
     with (
         patch("context_service.mcp.tools.context_link.get_mcp_auth") as auth_mock,
         patch("context_service.mcp.tools.context_link.get_context_service") as svc_mock,
+        patch("context_service.mcp.tools.context_link.get_silo_service", return_value=MagicMock()),
+        patch(
+            "context_service.mcp.tools.context_link.validate_silo_ownership",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
     ):
         auth = MagicMock()
         auth.org_id = "test-org"
@@ -81,12 +87,17 @@ async def test_link_invalid_relationship(mock_deps):
 async def test_link_invalid_silo_id(mock_deps):
     from context_service.mcp.tools.context_link import _context_link
 
-    result = await _context_link(
-        silo_id="not-a-uuid",
-        from_node=str(uuid.uuid4()),
-        to_node=str(uuid.uuid4()),
-        relationship="REFERENCES",
-    )
+    with patch(
+        "context_service.mcp.tools.context_link.validate_silo_ownership",
+        new_callable=AsyncMock,
+        return_value={"error": "invalid_silo_id", "message": "silo_id must be a valid UUID"},
+    ):
+        result = await _context_link(
+            silo_id="not-a-uuid",
+            from_node=str(uuid.uuid4()),
+            to_node=str(uuid.uuid4()),
+            relationship="REFERENCES",
+        )
 
     assert result["error"] == "invalid_silo_id"
 
@@ -95,12 +106,17 @@ async def test_link_invalid_silo_id(mock_deps):
 async def test_link_wrong_silo_id(mock_deps):
     from context_service.mcp.tools.context_link import _context_link
 
-    result = await _context_link(
-        silo_id=str(uuid.uuid4()),
-        from_node=str(uuid.uuid4()),
-        to_node=str(uuid.uuid4()),
-        relationship="REFERENCES",
-    )
+    with patch(
+        "context_service.mcp.tools.context_link.validate_silo_ownership",
+        new_callable=AsyncMock,
+        return_value={"error": "silo_not_found", "silo_id": str(uuid.uuid4())},
+    ):
+        result = await _context_link(
+            silo_id=str(uuid.uuid4()),
+            from_node=str(uuid.uuid4()),
+            to_node=str(uuid.uuid4()),
+            relationship="REFERENCES",
+        )
 
     assert result["error"] == "silo_not_found"
 

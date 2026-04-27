@@ -13,6 +13,12 @@ def mock_deps():
     with (
         patch("context_service.mcp.tools.context_reflect.get_mcp_auth") as auth_mock,
         patch("context_service.mcp.tools.context_reflect.get_context_service") as svc_mock,
+        patch("context_service.mcp.tools.context_reflect.get_silo_service", return_value=MagicMock()),
+        patch(
+            "context_service.mcp.tools.context_reflect.validate_silo_ownership",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
     ):
         auth = MagicMock()
         auth.org_id = "test-org"
@@ -63,11 +69,16 @@ async def test_reflect_invalid_observation_type(mock_deps):
 async def test_reflect_invalid_silo(mock_deps):
     from context_service.mcp.tools.context_reflect import _context_reflect
 
-    result = await _context_reflect(
-        silo_id="not-a-uuid",
-        observation="Some observation",
-        observation_type="insight",
-        about=["node:x"],
-    )
+    with patch(
+        "context_service.mcp.tools.context_reflect.validate_silo_ownership",
+        new_callable=AsyncMock,
+        return_value={"error": "invalid_silo_id", "message": "silo_id must be a valid UUID"},
+    ):
+        result = await _context_reflect(
+            silo_id="not-a-uuid",
+            observation="Some observation",
+            observation_type="insight",
+            about=["node:x"],
+        )
 
     assert result["error"] == "invalid_silo_id"

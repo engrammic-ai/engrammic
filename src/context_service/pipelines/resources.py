@@ -7,7 +7,7 @@ call the existing async functions via asyncio.run() or await.
 from __future__ import annotations
 
 import asyncio
-import contextlib
+import concurrent.futures
 import os
 from typing import TYPE_CHECKING
 
@@ -20,6 +20,20 @@ if TYPE_CHECKING:
     from neo4j import AsyncDriver
     from qdrant_client import AsyncQdrantClient
     from redis.asyncio import Redis
+
+
+def _close_async(coro: object) -> None:
+    # asyncio.run() raises RuntimeError if a loop is already running (Dagster runs
+    # teardown from within its own event loop). Submit the close to a fresh thread
+    # that gets its own loop; block until it completes so the resource is released.
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        asyncio.run(coro)  # type: ignore[arg-type]
+        return
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        f: concurrent.futures.Future[None] = pool.submit(asyncio.run, coro)  # type: ignore[arg-type]
+        f.result()
 
 
 class MemgraphResource(dg.ConfigurableResource):  # type: ignore[type-arg]
@@ -47,8 +61,7 @@ class MemgraphResource(dg.ConfigurableResource):  # type: ignore[type-arg]
         if self._driver is not None:
             driver = self._driver
             self._driver = None
-            with contextlib.suppress(RuntimeError):
-                asyncio.run(driver.close())
+            _close_async(driver.close())
 
 
 class RedisResource(dg.ConfigurableResource):  # type: ignore[type-arg]
@@ -70,8 +83,7 @@ class RedisResource(dg.ConfigurableResource):  # type: ignore[type-arg]
         if self._client is not None:
             client = self._client
             self._client = None
-            with contextlib.suppress(RuntimeError):
-                asyncio.run(client.aclose())
+            _close_async(client.aclose())
 
 
 class QdrantResource(dg.ConfigurableResource):  # type: ignore[type-arg]
@@ -96,8 +108,7 @@ class QdrantResource(dg.ConfigurableResource):  # type: ignore[type-arg]
         if self._client is not None:
             client = self._client
             self._client = None
-            with contextlib.suppress(RuntimeError):
-                asyncio.run(client.close())
+            _close_async(client.close())
 
 
 def build_default_resources() -> dict[str, dg.ConfigurableResource]:  # type: ignore[type-arg]
@@ -129,6 +140,5 @@ __all__ = [
     "MemgraphResource",
     "QdrantResource",
     "RedisResource",
-    "asyncio",
     "build_default_resources",
 ]

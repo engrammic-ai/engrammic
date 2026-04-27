@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from context_service.models.mcp import Crystallization, ReasoningStep
 from context_service.services.models import derive_silo_id
+from context_service.services.silo import validate_silo_ownership
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -22,17 +23,15 @@ async def _context_reason(
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     from context_service.mcp.auth import get_mcp_auth
+    from context_service.mcp.server import get_context_service, get_silo_service
 
     auth = get_mcp_auth()
+
+    err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+    if err is not None:
+        return err
+
     expected_silo_id = derive_silo_id(auth.org_id)
-
-    try:
-        requested = uuid.UUID(silo_id)
-    except ValueError:
-        return {"error": "invalid_silo_id", "message": "silo_id must be a valid UUID"}
-
-    if requested != expected_silo_id:
-        return {"error": "silo_not_found", "silo_id": silo_id}
 
     if not steps:
         return {"error": "missing_steps", "message": "steps must be a non-empty list"}
@@ -47,12 +46,11 @@ async def _context_reason(
     except Exception as e:
         return {"error": "invalid_crystallizations", "message": str(e)}
 
-    from context_service.mcp.server import get_context_service
+    ctx_svc = get_context_service()
 
     session_id = getattr(auth, "session_id", None) or str(uuid.uuid4())
     agent_id = getattr(auth, "agent_id", None)
 
-    ctx_svc = get_context_service()
     result = await ctx_svc.reason(
         silo_id=str(expected_silo_id),
         steps=parsed_steps,

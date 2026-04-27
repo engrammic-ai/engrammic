@@ -13,6 +13,12 @@ def mock_deps():
     with (
         patch("context_service.mcp.tools.context_commit.get_mcp_auth") as auth_mock,
         patch("context_service.mcp.tools.context_commit.get_context_service") as svc_mock,
+        patch("context_service.mcp.tools.context_commit.get_silo_service", return_value=MagicMock()),
+        patch(
+            "context_service.mcp.tools.context_commit.validate_silo_ownership",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
     ):
         auth = MagicMock()
         auth.org_id = "test-org"
@@ -75,10 +81,15 @@ async def test_commit_missing_about(mock_deps):
 async def test_commit_invalid_silo(mock_deps):
     from context_service.mcp.tools.context_commit import _context_commit
 
-    result = await _context_commit(
-        silo_id="bad-id",
-        belief="Some belief",
-        about=["node:x"],
-    )
+    with patch(
+        "context_service.mcp.tools.context_commit.validate_silo_ownership",
+        new_callable=AsyncMock,
+        return_value={"error": "invalid_silo_id", "message": "silo_id must be a valid UUID"},
+    ):
+        result = await _context_commit(
+            silo_id="bad-id",
+            belief="Some belief",
+            about=["node:x"],
+        )
 
     assert result["error"] == "invalid_silo_id"

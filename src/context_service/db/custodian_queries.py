@@ -348,7 +348,7 @@ RETURN p.source_node_id AS source_node_id,
 #   pass_id    (str)
 #   now_iso    (str)
 CLUSTER_LAST_CUSTODIAN_UPDATE = """
-MATCH (c:Cluster {id: $cluster_id})
+MATCH (c:Cluster {id: $cluster_id, silo_id: $silo_id})
 SET c.last_custodian_pass_id = $pass_id,
     c.last_custodian_run_at = $now_iso
 RETURN c.id AS id

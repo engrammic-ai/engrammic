@@ -213,7 +213,7 @@ FOREACH (_ IN CASE WHEN action = 'version' THEN [1] ELSE [] END |
         last_reset_at: timestamp(),
         reclassified_at: NULL
     }})
-    CREATE (v)-[r:SUPERSEDES {{source: 'version_bump'}}]->(n)
+    CREATE (v)-[r:SUPERSEDES {{source: 'version_bump', reason: 'author_update'}}]->(n)
 )
 REMOVE n._upsert_action
 RETURN action,
@@ -281,7 +281,7 @@ FOREACH (_ IN CASE WHEN action = 'version' THEN [1] ELSE [] END |
         last_reset_at: timestamp(),
         reclassified_at: NULL
     }})
-    CREATE (v)-[r2:SUPERSEDES {{source: 'version_bump'}}]->(n)
+    CREATE (v)-[r2:SUPERSEDES {{source: 'version_bump', reason: 'author_update'}}]->(n)
 )
 REMOVE n._upsert_action
 RETURN r.id AS input_id,
@@ -340,7 +340,7 @@ CREATE_CROSS_NODE_SUPERSEDES = f"""
 MATCH (new) WHERE {content_union_predicate("new")} AND new.id = $from_id AND new.silo_id = $silo_id
 MATCH (old) WHERE {content_union_predicate("old")} AND old.id = $to_id AND old.silo_id = $silo_id
 WHERE new <> old
-MERGE (new)-[r:SUPERSEDES {{source: $source}}]->(old)
+MERGE (new)-[r:SUPERSEDES {{source: $source, reason: $reason}}]->(old)
 ON CREATE SET r.created_at = $valid_from
 WITH old, new, r
 FOREACH (_ IN CASE WHEN old.valid_to IS NULL THEN [1] ELSE [] END |
@@ -787,6 +787,8 @@ TOMBSTONE_DOCUMENT = f"""
 MATCH (d:{LABEL_DOCUMENT} {{id: $doc_id, silo_id: $silo_id}})
 OPTIONAL MATCH (d)<-[:{EDGE_DERIVED_FROM}]-(ps:{LABEL_PASSAGE})
 OPTIONAL MATCH (ps)<-[:HAS_CLAIM|SUPPORTS]-(f:Finding)
+// Right-to-erasure: intentionally matches all Findings regardless of
+// source or status. Overrides the rule-7 Finding read filter by design.
 WITH d, collect(DISTINCT ps) AS passages, collect(DISTINCT f) AS findings
 WITH d, passages, findings,
      size(passages) AS deleted_passages,
@@ -873,15 +875,17 @@ RETURN count(c) AS flipped
 CREATE_CRYSTALLIZED_INTO_EDGE = f"""
 MATCH (chain:{_LABEL_REASONING_CHAIN} {{id: $chain_id}})
 MATCH (target {{id: $target_id}})
-WHERE target:{LABEL_CLAIM} OR target:Finding OR target:{_LABEL_COMMITMENT}
+WHERE (target:{LABEL_CLAIM} OR target:Finding OR target:{_LABEL_COMMITMENT})
+  AND ({FILTER_FINDING_STATUS.format(var="target")})
 MERGE (chain)-[:CRYSTALLIZED_INTO]->(target)
 """
 
 CREATE_DERIVED_FROM_EVIDENCE_EDGE = f"""
 MATCH (chain:{_LABEL_REASONING_CHAIN} {{id: $chain_id}})
 MATCH (evidence {{id: $evidence_id}})
-WHERE evidence:{LABEL_DOCUMENT} OR evidence:{LABEL_PASSAGE} OR evidence:{LABEL_CLAIM}
-      OR evidence:Finding OR evidence:{_LABEL_COMMITMENT} OR evidence:{_LABEL_REASONING_CHAIN}
+WHERE (evidence:{LABEL_DOCUMENT} OR evidence:{LABEL_PASSAGE} OR evidence:{LABEL_CLAIM}
+      OR evidence:Finding OR evidence:{_LABEL_COMMITMENT} OR evidence:{_LABEL_REASONING_CHAIN})
+  AND ({FILTER_FINDING_STATUS.format(var="evidence")})
 MERGE (chain)-[r:DERIVED_FROM_EVIDENCE]->(evidence)
 SET r.rank = $rank, r.relevance_score = $relevance_score
 """
@@ -1033,9 +1037,9 @@ LIMIT $limit
 
 CHECK_CHAIN_AUDIT_LINKED = f"""
 MATCH (c:{_LABEL_REASONING_CHAIN} {{id: $chain_id}})
-WHERE EXISTS((c)<-[:PROMOTED_FROM]-(:Finding))
+WHERE EXISTS {{ MATCH (c)<-[:PROMOTED_FROM]-(f1:Finding) WHERE {FILTER_FINDING_STATUS.format(var="f1")} }}
    OR EXISTS((c)<-[:DERIVED_FROM_EVIDENCE]-(:{_LABEL_REASONING_CHAIN}))
-   OR EXISTS((c)-[:CRYSTALLIZED_INTO]->(:Finding))
+   OR EXISTS {{ MATCH (c)-[:CRYSTALLIZED_INTO]->(f2:Finding) WHERE {FILTER_FINDING_STATUS.format(var="f2")} }}
 RETURN true AS linked
 """
 

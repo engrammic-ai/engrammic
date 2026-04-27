@@ -426,6 +426,7 @@ class MemgraphStore(EAGKnowledgeStore):
         silo_id: str,
         valid_from: datetime,
         source: str = "custodian",
+        reason: str = "contradiction",
     ) -> bool:
         """Create a cross-node SUPERSEDES edge.
 
@@ -434,7 +435,8 @@ class MemgraphStore(EAGKnowledgeStore):
         to ``valid_from`` if not already set. Used by the Custodian semantic
         supersession pass. ``source`` tags the edge's origin mechanism so
         downstream attribution can distinguish per-cluster from cross-cluster
-        detections.
+        detections. ``reason`` must be one of: contradiction, evidence_shift,
+        author_update, evidence_erased (I5).
         """
         result = await self._client.execute_write(
             queries.CREATE_CROSS_NODE_SUPERSEDES,
@@ -444,6 +446,7 @@ class MemgraphStore(EAGKnowledgeStore):
                 "silo_id": silo_id,
                 "valid_from": valid_from.isoformat(),
                 "source": source,
+                "reason": reason,
             },
         )
         return bool(result and result[0].get("created", 0) > 0)
