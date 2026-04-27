@@ -368,7 +368,7 @@ RETURN c.id AS id
 FETCH_CLUSTERS_BY_LEVEL = f"""
 MATCH (c:Cluster {{silo_id: $silo_id}})
 WHERE c.level = $level
-MATCH (n)-[:BELONGS_TO|MEMBER_OF]->(c)
+MATCH (n)-[:MEMBER_OF]->(c)
 WHERE {content_union_predicate("n")} AND n.silo_id = $silo_id
 WITH c, count(n) AS member_count
 RETURN c.id AS cluster_id,

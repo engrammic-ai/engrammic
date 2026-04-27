@@ -78,11 +78,11 @@ All changes are mechanical string-to-constant substitutions. The generated Cyphe
 
 ## Remaining TODOs
 
+TODOs #1 and #2 closed by phase-eag-b-edge-migration on 2026-04-28.
+
 ### Clear follow-ups
-1. **`EDGE_REFERENCES` gap** — `"REFERENCES"` in `db/schema.py` is not in `CITEEdgeType`. Either add `REFERENCES` to `CITEEdgeType` in primitives, or document it as a context-service-only edge type.
-2. **`BELONGS_TO` / `PART_OF` edge inconsistency** — `db/queries.py` uses `BELONGS_TO` for clustering; `clustering/queries.py` uses `MEMBER_OF` (per `CITEEdgeType`). These are the same semantic relationship. One of these is wrong. `clustering/queries.py` has a comment noting `MEMBER_OF` is the correct EAG edge; `db/queries.py` should be migrated.
-3. **Prompts README** — `config/prompts/custodian/` has no README. Add a brief one explaining the two-mechanism split (custodian YAML with lenses vs extraction/clustering provider presets).
-4. **Pre-existing lint errors** — 23 ruff errors existed before this audit (ARG/SIM/F841 in embeddings, MCP tools, pipelines resources). Not introduced by this work but should be cleaned up.
+1. **Prompts README** — `config/prompts/custodian/` has no README. Add a brief one explaining the two-mechanism split (custodian YAML with lenses vs extraction/clustering provider presets).
+2. **Pre-existing lint errors** — 23 ruff errors existed before this audit (ARG/SIM/F841 in embeddings, MCP tools, pipelines resources). Not introduced by this work but should be cleaned up.
 
 ### Needs discussion before implementing
 5. **`:Finding` vs `:Fact` naming** — Decide whether the consensus promotion path should write `:Fact` (EAG canonical) or continue writing `:Finding` (RAG-era). Migration of existing `:Finding` nodes is non-trivial; a parallel-write pattern or a label-union read approach may be needed.
@@ -91,5 +91,4 @@ All changes are mechanical string-to-constant substitutions. The generated Cyphe
 
 ## Open Questions
 
-- Should `BELONGS_TO` (in `db/queries.py`) be migrated to `MEMBER_OF` (per EAG schema) before the next prod deploy, or deferred to a migration pass? Data in prod uses `BELONGS_TO` — a schema migration would be needed.
 - Is `:Finding` intentionally kept as the RAG-era output label for the Custodian cycle, with `:Fact` reserved for the future structured promotion pipeline? If yes, this should be documented in `architecture/README.md` to prevent future confusion.
