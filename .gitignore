@@ -98,3 +98,4 @@ terraform.tfvars
 # Logs
 *.log
 logs/
+CLAUDE.md
