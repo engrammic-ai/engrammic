@@ -21,7 +21,7 @@ CORE_CONTENT_LABELS: tuple[str, ...] = (LABEL_DOCUMENT, LABEL_PASSAGE, LABEL_CLA
 EDGE_DERIVED_FROM = CAGEdgeType.DERIVED_FROM.value  # "DERIVED_FROM"
 EDGE_EXTRACTED_FROM = CAGEdgeType.EXTRACTED_FROM.value  # "EXTRACTED_FROM"
 EDGE_MENTIONS = CAGEdgeType.MENTIONS.value  # "MENTIONS"
-EDGE_REFERENCES = "REFERENCES"  # Claim -> Document (not yet in CAGEdgeType)
+EDGE_REFERENCES = CAGEdgeType.REFERENCES.value  # "REFERENCES" — Claim -> Document
 
 
 def content_union_predicate(var: str = "n") -> str:

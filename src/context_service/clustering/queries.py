@@ -67,7 +67,7 @@ RETURN c
 # edge schema. PART_OF is not in CAGEdgeType — it remains a plain string label
 # for the inter-cluster hierarchy relationship (child cluster -> parent cluster).
 
-BATCH_CREATE_BELONGS_TO = f"""
+BATCH_CREATE_MEMBER_OF = f"""
 MATCH (c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
 UNWIND $node_ids AS nid
 MATCH (n {{id: nid}})

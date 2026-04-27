@@ -12,7 +12,7 @@ not here.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -23,6 +23,21 @@ from pydantic import (
 )
 
 from context_service.extraction.models import EXTRACTION_SCHEMA, RelationshipType
+
+
+def _remap_enum_cases(data: Any) -> Any:
+    """Lowercase short string fields before pydantic validates Literal/enum constraints.
+
+    Gemini returns uppercase/titlecase enum variants ("Low", "MEDIUM") when the
+    schema requires lowercase. Guard: only apply to short strings unlikely to be
+    free-form content (len <= 32).
+    """
+    if not isinstance(data, dict):
+        return data
+    return {
+        k: (v.lower() if isinstance(v, str) and v != v.lower() and len(v) <= 32 else v)
+        for k, v in data.items()
+    }
 
 # ---------------------------------------------------------------------------
 # Status enums
@@ -72,6 +87,11 @@ class Citation(BaseModel):
     kind: Literal["primary", "supporting"]
     snippet_hash: str | None = None
 
+    @model_validator(mode="before")
+    @classmethod
+    def fix_enum_cases(cls, data: Any) -> Any:
+        return _remap_enum_cases(data)
+
 
 class Claim(BaseModel):
     """A single cited claim committed by the Custodian agent."""
@@ -106,6 +126,11 @@ class FastPassObservation(BaseModel):
     complexity: Literal["low", "medium", "high"]
     needs_deep_pass: bool
 
+    @model_validator(mode="before")
+    @classmethod
+    def fix_enum_cases(cls, data: Any) -> Any:
+        return _remap_enum_cases(data)
+
 
 class VisitPlan(BaseModel):
     """Phase 2 output: the strategy the deep pass will execute."""
@@ -116,6 +141,11 @@ class VisitPlan(BaseModel):
     tool_call_sequence: list[str]
     stop_conditions: list[str]
     skip_reason: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def fix_enum_cases(cls, data: Any) -> Any:
+        return _remap_enum_cases(data)
 
 
 class BudgetStatus(BaseModel):
@@ -224,6 +254,11 @@ class FindingOutput(BaseModel):
     claims: list[Claim]
     inferred_relations: list[ProposedEdge]
     summary: StitchedSummary | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def fix_enum_cases(cls, data: Any) -> Any:
+        return _remap_enum_cases(data)
 
     @model_validator(mode="after")
     def validate_scope(self) -> FindingOutput:

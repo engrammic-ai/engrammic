@@ -197,30 +197,13 @@ def patch_agent_output_validators(
     output_type: type[BaseModel],
     label: str,
 ) -> None:
-    """Wrap the pydantic-ai Agent's output toolset validators with recovery logic.
+    """No-op: enum-case recovery migrated to model_validator(mode='before') on output types.
 
-    Mutates ``agent._output_toolset.processors[*].validator`` in-place by
-    replacing ``validate_python`` and ``validate_json`` with recovering
-    wrappers. No-ops if the agent has no output toolset (e.g. output_type=str).
-
-    Must be called after Agent construction, before the first agent.run().
+    Enum-case fixups (_remap_dict) are now applied deterministically in
+    models.py before pydantic validates Literal constraints, which eliminates
+    the need to monkey-patch pydantic-ai's private _output_toolset.processors.
+    This function is kept as a no-op so call sites don't need to be updated.
     """
-    toolset = getattr(agent, "_output_toolset", None)
-    if toolset is None:
-        return
-
-    processors = getattr(toolset, "processors", {})
-    for proc_name, proc in processors.items():
-        v = proc.validator
-        if v is None:
-            continue  # pragma: no cover
-
-        orig_vp = v.validate_python
-        orig_vj = v.validate_json
-
-        v.validate_python = _make_recovering_validate_python(orig_vp, output_type, label)
-        v.validate_json = _make_recovering_validate_json(orig_vj, output_type, label)
-
-        logger.debug(
-            f"custodian: patched output validator for agent={label!r} processor={proc_name!r}"
-        )
+    # Previously mutated agent._output_toolset.processors[*].validator in-place.
+    # Redundant now that custodian output models carry model_validator(mode='before').
+    _ = agent, output_type, label

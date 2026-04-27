@@ -1,8 +1,8 @@
 services:
   app:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: context-service/Dockerfile
     container_name: context-service-app
     ports:
       - "8000:8000"

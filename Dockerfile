@@ -6,8 +6,11 @@ WORKDIR /app
 # Install uv for fast dependency resolution
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
+# Copy primitives (local dependency)
+COPY primitives/ /primitives/
+
 # Copy dependency files
-COPY pyproject.toml uv.lock ./
+COPY context-service/pyproject.toml context-service/uv.lock ./
 
 # Install production dependencies only
 RUN uv sync --frozen --no-dev --no-install-project
@@ -23,15 +26,19 @@ RUN groupadd -r context-service && useradd -r -g context-service context-service
 # Copy virtual environment from builder
 COPY --from=builder /app/.venv /app/.venv
 
+# Copy primitives (needed at runtime for imports)
+COPY --from=builder /primitives /primitives
+
 # Copy application code
-COPY src/ /app/src/
-COPY docker/app-entrypoint.sh /app/entrypoint.sh
+COPY context-service/src/ /app/src/
+COPY context-service/docker/app-entrypoint.sh /app/entrypoint.sh
 
 # Make entrypoint executable
 RUN chmod +x /app/entrypoint.sh
 
 # Set environment
 ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app/src"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 

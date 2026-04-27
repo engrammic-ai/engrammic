@@ -110,11 +110,11 @@ RETURN count(c) as deleted
 """
 
 # Cluster membership queries
-CREATE_BELONGS_TO = f"""
+CREATE_MEMBER_OF = f"""
 MATCH (n {{id: $node_id}})
 MATCH (c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
 WHERE {content_union_predicate("n")} OR n:{LABEL_ENTITY}
-CREATE (n)-[r:BELONGS_TO {{weight: $weight, created_at: $created_at}}]->(c)
+CREATE (n)-[r:MEMBER_OF {{weight: $weight, created_at: $created_at}}]->(c)
 RETURN r
 """
 
@@ -126,13 +126,13 @@ RETURN r
 """
 
 GET_CLUSTER_MEMBERS = """
-MATCH (n)-[r:BELONGS_TO]->(c:Cluster {id: $cluster_id, silo_id: $silo_id})
+MATCH (n)-[r:BELONGS_TO|MEMBER_OF]->(c:Cluster {id: $cluster_id, silo_id: $silo_id})
 RETURN n, labels(n) as node_labels, r.weight as weight
 ORDER BY r.weight DESC
 """
 
 GET_NODE_CLUSTERS = """
-MATCH (n {id: $node_id})-[r:BELONGS_TO]->(c:Cluster {silo_id: $silo_id})
+MATCH (n {id: $node_id})-[r:BELONGS_TO|MEMBER_OF]->(c:Cluster {silo_id: $silo_id})
 RETURN c, r.weight as weight
 ORDER BY c.level ASC
 """
@@ -192,12 +192,12 @@ RETURN c
 """
 
 # Batch operations
-BATCH_CREATE_BELONGS_TO = f"""
+BATCH_CREATE_MEMBER_OF = f"""
 MATCH (c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
 UNWIND $node_ids AS nid
 MATCH (n {{id: nid}})
 WHERE {content_union_predicate("n")} OR n:{LABEL_ENTITY}
-CREATE (n)-[:BELONGS_TO {{weight: $weight, created_at: $created_at}}]->(c)
+CREATE (n)-[:MEMBER_OF {{weight: $weight, created_at: $created_at}}]->(c)
 RETURN count(*) as created
 """
 
@@ -324,7 +324,7 @@ LIMIT $limit
 # Cluster retrieval channel queries
 
 GET_CLUSTER_MEMBER_IDS = f"""
-MATCH (n)-[r:BELONGS_TO]->(c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
+MATCH (n)-[r:BELONGS_TO|MEMBER_OF]->(c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
 WHERE {content_union_predicate("n")} AND coalesce(n.stale, false) = false AND n.committed = true
 RETURN n.id AS node_id, n.silo_id AS silo_id, toLower(head(labels(n))) AS node_type, r.weight AS weight
 ORDER BY r.weight DESC
@@ -392,7 +392,7 @@ GET_SEED_HEAT_BATCH = """
 UNWIND $seed_ids AS sid
 MATCH (n {id: sid, silo_id: $silo_id})
 WHERE n.committed = true
-OPTIONAL MATCH (n)-[:BELONGS_TO]->(c:Cluster {silo_id: $silo_id})
+OPTIONAL MATCH (n)-[:BELONGS_TO|MEMBER_OF]->(c:Cluster {silo_id: $silo_id})
 RETURN n.id AS node_id,
        coalesce(n.heat_score, 0.0) AS heat,
        c.tier AS cluster_tier

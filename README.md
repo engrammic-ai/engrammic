@@ -2,6 +2,12 @@
 
 Delta Prime production backend. Private repo.
 
+## Provenance
+
+Ported from [NovusEdge/CTXR](https://github.com/NovusEdge/CTXR) (the `contextr` research prototype) on 2026-04-26 in a single session (~150 files, 0 lint/type errors on completion). The port moved architecture docs, CAG specs, RAG-era specs, and all service source into the `delta-prime` monorepo structure. `primitives` was separated into its own package during this session.
+
+Original contextr repo retains the full RAG-era development history (phases 1–8, brainstorms, benchmarks). This repo is the forward-moving production codebase.
+
 ## Structure
 
 ```
@@ -37,13 +43,16 @@ just dev
 just test
 ```
 
-## Porting from contextr
+## Port status
 
-Modules to port (in order):
-1. config/ - settings, logging
-2. stores/ - Memgraph, Qdrant, Redis clients
-3. embeddings/ - Jina, Vertex
-4. signals/ - heat, freshness, priority
-5. mcp/ - server + tools
-6. pipelines/ - Dagster (discuss DAG first)
-7. api/ - admin routes
+Port from contextr completed 2026-04-26. The checklist below is retained for reference; all items are done.
+
+1. config/ - settings, logging — done
+2. stores/ - Memgraph, Qdrant, Redis clients — done
+3. embeddings/ - Jina, Vertex — done
+4. signals/ - heat, freshness, priority — done
+5. mcp/ - server + tools — done
+6. pipelines/ - Dagster — done
+7. api/ - admin routes — done
+
+For deferred CAG integration items see `context/plans/cag-integration-audit.md`.

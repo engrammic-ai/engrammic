@@ -178,7 +178,7 @@ class ClusteringService:
 
                 try:
                     await self._memgraph.execute_write(
-                        queries.BATCH_CREATE_BELONGS_TO,
+                        queries.BATCH_CREATE_MEMBER_OF,
                         {
                             "node_ids": node_ids,
                             "cluster_id": cluster.id,
@@ -490,7 +490,7 @@ class ClusteringService:
                     )
 
                     await tx.run(
-                        queries.BATCH_CREATE_BELONGS_TO,
+                        queries.BATCH_CREATE_MEMBER_OF,
                         node_ids=node_ids,
                         cluster_id=cluster.id,
                         silo_id=silo_id,

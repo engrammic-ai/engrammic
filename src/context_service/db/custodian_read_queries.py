@@ -32,7 +32,7 @@ _cup = content_union_predicate
 # Return core-content members of a cluster, silo-scoped, paginated.
 # committed=true filter per O-75; Custodian visits only committed nodes.
 FETCH_CLUSTER_MEMBERS = f"""
-MATCH (n)-[:BELONGS_TO]->(c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
+MATCH (n)-[:BELONGS_TO|MEMBER_OF]->(c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
 WHERE {_cup("n")}
   AND n.silo_id = $silo_id
   AND n.committed = true
@@ -48,7 +48,7 @@ LIMIT $limit
 
 # Count committed core-content members of a cluster (for has_more / total).
 COUNT_CLUSTER_MEMBERS = f"""
-MATCH (n)-[:BELONGS_TO]->(c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
+MATCH (n)-[:BELONGS_TO|MEMBER_OF]->(c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
 WHERE {_cup("n")}
   AND n.silo_id = $silo_id
   AND n.committed = true
@@ -116,8 +116,8 @@ FETCH_NEIGHBORHOOD_TEMPLATE = FETCH_NEIGHBORHOOD_NEIGHBOURS_TEMPLATE
 # extraction); the relationship label itself is the generic ``:EDGE``.
 # committed=true on both endpoints per O-75 (retrieval-facing query).
 LIST_EDGES_OF_TYPE_IN_CLUSTER = f"""
-MATCH (a)-[:BELONGS_TO]->(c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
-MATCH (b)-[:BELONGS_TO]->(c)
+MATCH (a)-[:BELONGS_TO|MEMBER_OF]->(c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
+MATCH (b)-[:BELONGS_TO|MEMBER_OF]->(c)
 MATCH (a)-[e:EDGE]->(b)
 WHERE e.type = $edge_type
   AND {_cup("a")}
@@ -157,7 +157,7 @@ ORDER BY f.id
 
 # Member node_ids for fingerprint comparison. committed=true per O-75.
 FETCH_CLUSTER_MEMBER_IDS = f"""
-MATCH (n)-[:BELONGS_TO]->(c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
+MATCH (n)-[:BELONGS_TO|MEMBER_OF]->(c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
 WHERE {_cup("n")}
   AND n.silo_id = $silo_id
   AND n.committed = true
