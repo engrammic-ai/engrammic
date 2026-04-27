@@ -278,10 +278,11 @@ class CitationValidator:
         """Pure-Python confidence + schema checks; returns a rejection result
         or ``None`` to indicate the edge passes the pre-check.
 
-        # Defensive: load-bearing only if a future raw-dict path bypasses Pydantic
-        # construction. As of 2026-04-28, all production paths go through
-        # ProposedEdge.model_validate, so the schema + confidence checks below are
-        # belt-and-suspenders. Do not delete without re-auditing the call graph.
+        Defensive layer: load-bearing only if a future raw-dict path bypasses
+        Pydantic construction. As of 2026-04-28, all production paths go
+        through ``ProposedEdge.model_validate``, so the schema + confidence
+        checks below are belt-and-suspenders. Do not delete without
+        re-auditing the call graph.
 
         Uses ``StructuralRejection`` so that schema/confidence failures are
         labelled under ``custodian_structural_rejections``, not the citation
