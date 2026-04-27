@@ -18,6 +18,5 @@ def test_no_belongs_to_writes() -> None:
                 offenders.append(f"{path}:{lineno}: {line.strip()}")
 
     assert not offenders, (
-        "Found BELONGS_TO in Cypher CREATE/MERGE — use MEMBER_OF instead:\n"
-        + "\n".join(offenders)
+        "Found BELONGS_TO in Cypher CREATE/MERGE — use MEMBER_OF instead:\n" + "\n".join(offenders)
     )

@@ -4,6 +4,8 @@ Usage:
     uv run python -m scripts.migrate_belongs_to --silo-id <id>
     uv run python -m scripts.migrate_belongs_to --all-silos
     uv run python -m scripts.migrate_belongs_to --verify
+    uv run python -m scripts.migrate_belongs_to --dry-run --silo-id <id>
+    uv run python -m scripts.migrate_belongs_to --dry-run --all-silos
 
 Smoke check (requires live docker stack with seeded BELONGS_TO data):
     uv run python -m scripts.migrate_belongs_to --all-silos
@@ -11,6 +13,9 @@ Smoke check (requires live docker stack with seeded BELONGS_TO data):
 
 The migration is idempotent: MERGE ensures that if MEMBER_OF already exists
 the edge is not duplicated, and DELETE r removes BELONGS_TO so a re-run is a no-op.
+
+--dry-run prints the count of BELONGS_TO edges that would be migrated without
+making any mutations. Requires --silo-id or --all-silos.
 """
 
 from __future__ import annotations
@@ -34,6 +39,11 @@ DELETE r
 RETURN count(r2) AS processed
 """
 
+_DRY_RUN_SILO = """
+MATCH (n)-[r:BELONGS_TO]->(c:Cluster {silo_id: $silo_id})
+RETURN count(r) AS would_migrate
+"""
+
 # Verify is scoped to cluster-membership BELONGS_TO edges — the only shape this
 # script knows how to migrate. A BELONGS_TO edge to some non-Cluster target
 # would be out of scope and require a separate migration.
@@ -52,17 +62,23 @@ RETURN DISTINCT c.silo_id AS silo_id
 """
 
 
-async def migrate_silo(client: MemgraphClient, silo_id: str) -> int:
+async def migrate_silo(
+    client: MemgraphClient, silo_id: str, *, dry_run: bool = False
+) -> int:
     """Migrate BELONGS_TO -> MEMBER_OF for one silo.
 
-    Returns the number of legacy BELONGS_TO edges processed (which equals the
-    number of MERGE rows produced; some may have matched a pre-existing
-    MEMBER_OF rather than created a new one).
+    When dry_run=True, counts edges that would be migrated without mutating.
+    Returns the number of edges processed (or would-be-processed in dry-run).
     """
     log = get_logger(__name__)
-    rows: list[dict[str, Any]] = await client.execute_write(
-        _MIGRATE_SILO, {"silo_id": silo_id}
-    )
+    if dry_run:
+        rows: list[dict[str, Any]] = await client.execute_query(
+            _DRY_RUN_SILO, {"silo_id": silo_id}
+        )
+        count: int = rows[0]["would_migrate"] if rows else 0
+        log.info("silo_dry_run", silo_id=silo_id, would_migrate=count)
+        return count
+    rows = await client.execute_write(_MIGRATE_SILO, {"silo_id": silo_id})
     processed: int = rows[0]["processed"] if rows else 0
     log.info("silo_migrated", silo_id=silo_id, processed=processed)
     return processed
@@ -95,7 +111,18 @@ async def main() -> None:
         action="store_true",
         help="Check that no BELONGS_TO edges remain. Exits non-zero if any exist.",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "Print the count of BELONGS_TO edges that would be migrated without "
+            "mutating. Requires --silo-id or --all-silos."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.dry_run and args.verify:
+        parser.error("--dry-run cannot be combined with --verify")
 
     settings = get_settings()
     configure_logging(log_level=settings.log_level, json_format=True)
@@ -125,11 +152,14 @@ async def main() -> None:
 
         total_processed = 0
         for silo_id in silo_ids:
-            total_processed += await migrate_silo(client, silo_id)
+            total_processed += await migrate_silo(client, silo_id, dry_run=args.dry_run)
 
-        log.info(
-            "migration_complete", total_processed=total_processed, silos=len(silo_ids)
-        )
+        if args.dry_run:
+            log.info("dry_run_complete", would_migrate_total=total_processed, silos=len(silo_ids))
+        else:
+            log.info(
+                "migration_complete", total_processed=total_processed, silos=len(silo_ids)
+            )
     finally:
         await client.close()
 

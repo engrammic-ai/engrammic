@@ -44,9 +44,7 @@ class TestRecordClaimRejectionRouting:
         ):
             record_claim_rejection(StructuralRejection.SCHEMA_VIOLATION)
 
-        structural.add.assert_called_once_with(
-            1, attributes={"reason": "schema_violation"}
-        )
+        structural.add.assert_called_once_with(1, attributes={"reason": "schema_violation"})
         legacy.add.assert_called_once_with(1, attributes={"reason": "schema_violation"})
         citation.add.assert_not_called()
         business.add.assert_not_called()
@@ -65,12 +63,8 @@ class TestRecordClaimRejectionRouting:
         ):
             record_claim_rejection(CitationRejection.HALLUCINATED_NODE_ID)
 
-        citation.add.assert_called_once_with(
-            1, attributes={"reason": "hallucinated_node_id"}
-        )
-        legacy.add.assert_called_once_with(
-            1, attributes={"reason": "hallucinated_node_id"}
-        )
+        citation.add.assert_called_once_with(1, attributes={"reason": "hallucinated_node_id"})
+        legacy.add.assert_called_once_with(1, attributes={"reason": "hallucinated_node_id"})
         structural.add.assert_not_called()
         business.add.assert_not_called()
 
@@ -88,12 +82,8 @@ class TestRecordClaimRejectionRouting:
         ):
             record_claim_rejection(BusinessRejection.QUALITY_BELOW_THRESHOLD)
 
-        business.add.assert_called_once_with(
-            1, attributes={"reason": "quality_below_threshold"}
-        )
-        legacy.add.assert_called_once_with(
-            1, attributes={"reason": "quality_below_threshold"}
-        )
+        business.add.assert_called_once_with(1, attributes={"reason": "quality_below_threshold"})
+        legacy.add.assert_called_once_with(1, attributes={"reason": "quality_below_threshold"})
         structural.add.assert_not_called()
         citation.add.assert_not_called()
 
@@ -115,9 +105,7 @@ class TestCustodianRejectionMetricsRouting:
                 StructuralRejection.LOW_CONFIDENCE
             )
 
-        structural.add.assert_called_once_with(
-            1, attributes={"reason": "low_confidence"}
-        )
+        structural.add.assert_called_once_with(1, attributes={"reason": "low_confidence"})
         legacy.add.assert_called_once_with(1, attributes={"reason": "low_confidence"})
         citation.add.assert_not_called()
         business.add.assert_not_called()
@@ -159,11 +147,7 @@ class TestCustodianRejectionMetricsRouting:
                 BusinessRejection.ALL_CLAIMS_REJECTED
             )
 
-        business.add.assert_called_once_with(
-            1, attributes={"reason": "all_claims_rejected"}
-        )
-        legacy.add.assert_called_once_with(
-            1, attributes={"reason": "all_claims_rejected"}
-        )
+        business.add.assert_called_once_with(1, attributes={"reason": "all_claims_rejected"})
+        legacy.add.assert_called_once_with(1, attributes={"reason": "all_claims_rejected"})
         structural.add.assert_not_called()
         citation.add.assert_not_called()
