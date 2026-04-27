@@ -25,11 +25,14 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
+from context_service.core.settings import get_settings
 from context_service.custodian.rejection_reasons import (
     CitationRejection,
     StructuralRejection,
 )
 from context_service.db.schema import content_union_predicate
+
+_MIN_EDGE_CONFIDENCE: float = get_settings().custodian.min_edge_confidence
 
 if TYPE_CHECKING:
     from context_service.custodian.models import Claim, FindingOutput, ProposedEdge
@@ -276,12 +279,12 @@ class CitationValidator:
         labelled under ``custodian_structural_rejections``, not the citation
         metric prefix.
         """
-        if edge.confidence < 0.7:
+        if edge.confidence < _MIN_EDGE_CONFIDENCE:
             return EdgeValidationResult(
                 accepted=False,
                 rejection_reason=StructuralRejection.LOW_CONFIDENCE,
                 offending_node_ids=[],
-                detail=f"confidence {edge.confidence} < 0.7",
+                detail=f"confidence {edge.confidence} < {_MIN_EDGE_CONFIDENCE}",
             )
 
         from context_service.extraction.models import EXTRACTION_SCHEMA

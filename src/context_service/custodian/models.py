@@ -14,6 +14,9 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Any, Literal
 
+from primitives.eag.agents import (
+    BudgetStatus as BudgetStatus,  # noqa: F401  # type: ignore[import-untyped]
+)
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -22,7 +25,10 @@ from pydantic import (
     model_validator,
 )
 
+from context_service.core.settings import get_settings
 from context_service.extraction.models import EXTRACTION_SCHEMA, RelationshipType
+
+_MIN_EDGE_CONFIDENCE: float = get_settings().custodian.min_edge_confidence
 
 
 def _remap_enum_cases(data: Any) -> Any:
@@ -38,6 +44,7 @@ def _remap_enum_cases(data: Any) -> Any:
         k: (v.lower() if isinstance(v, str) and v != v.lower() and len(v) <= 32 else v)
         for k, v in data.items()
     }
+
 
 # ---------------------------------------------------------------------------
 # Status enums
@@ -148,22 +155,6 @@ class VisitPlan(BaseModel):
         return _remap_enum_cases(data)
 
 
-class BudgetStatus(BaseModel):
-    """Budget telemetry injected into every tool response during a visit.
-
-    **Scoped to the current phase's envelope**, not the whole visit. Phase 4
-    (stitch) always reports ``tool_calls_remaining = 0`` -- stitch never calls
-    tools and only includes ``BudgetStatus`` in its tool responses for schema
-    uniformity.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    tokens_remaining: int
-    tool_calls_remaining: int
-    wrap_up_signal: bool
-
-
 # ---------------------------------------------------------------------------
 # Proposed edges (inferred relations)
 # ---------------------------------------------------------------------------
@@ -193,8 +184,8 @@ class ProposedEdge(BaseModel):
 
     @model_validator(mode="after")
     def validate_all(self) -> ProposedEdge:
-        if self.confidence < 0.7:
-            raise ValueError(f"confidence {self.confidence} < 0.7")
+        if self.confidence < _MIN_EDGE_CONFIDENCE:
+            raise ValueError(f"confidence {self.confidence} < {_MIN_EDGE_CONFIDENCE}")
         if not EXTRACTION_SCHEMA.is_valid(self.source_type, self.type, self.target_type):
             raise ValueError(
                 f"({self.source_type}, {self.type}, {self.target_type}) "

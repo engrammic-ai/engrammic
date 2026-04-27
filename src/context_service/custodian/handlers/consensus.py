@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, TypedDict
 
+from primitives.eag.epistemology import noisy_or_aggregate
+
 from context_service.custodian.consensus_promotion import promote_consensus_to_finding
 
 if TYPE_CHECKING:
@@ -48,7 +50,7 @@ async def handle_consensus_task(
         return {"promoted": False, "reason": "no_chains"}
 
     distinct_agents = len({c["produced_by_agent_id"] for c in chains})
-    avg_confidence = sum(c["confidence"] for c in chains) / len(chains)
+    aggregate_confidence = noisy_or_aggregate([c["confidence"] for c in chains])
 
     if distinct_agents < min_distinct_agents:
         return {
@@ -57,11 +59,11 @@ async def handle_consensus_task(
             "distinct_agents": distinct_agents,
         }
 
-    if avg_confidence < min_avg_confidence:
+    if aggregate_confidence < min_avg_confidence:
         return {
             "promoted": False,
             "reason": "low_confidence",
-            "avg_confidence": avg_confidence,
+            "avg_confidence": aggregate_confidence,
         }
 
     chain_ids = [c["id"] for c in chains]
@@ -76,7 +78,7 @@ async def handle_consensus_task(
         "promoted": True,
         "finding_id": finding_id,
         "distinct_agents": distinct_agents,
-        "avg_confidence": avg_confidence,
+        "avg_confidence": aggregate_confidence,
         "chains_superseded": len(chain_ids),
     }
 

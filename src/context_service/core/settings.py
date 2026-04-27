@@ -69,6 +69,13 @@ class CustodianSettings(BaseModel):
     pro_model: str = Field(default="google-vertex:gemini-2.5-pro")
     pro_escalation_ab_sample_ratio: float = Field(default=0.10)
 
+    min_edge_confidence: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence for proposed edges; below this they are structurally rejected",
+    )
+
 
 class RetrievalTuning(BaseModel):
     """Retrieval-ranking tuning knobs."""

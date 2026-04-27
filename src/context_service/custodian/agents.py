@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from primitives.eag.agents import DepsProtocol  # noqa: F401  # type: ignore[import-untyped]
 from pydantic_ai import Agent
 from pydantic_ai.usage import UsageLimits
 
@@ -90,6 +91,9 @@ class VisitDeps:
     _phase_tool_calls_used: int = field(default=0)
     _phase_nominal_tokens: int = field(default=0)
     _phase_soft_signal_ratio: float = field(default=0.69)
+
+    def record_commit(self, event: dict[str, Any]) -> None:
+        self.commit_log.append(event)
 
 
 def build_fast_pass_agent() -> Agent[VisitDeps, FastPassObservation]:

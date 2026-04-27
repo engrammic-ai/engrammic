@@ -43,7 +43,7 @@ from context_service.db.schema import (
 )
 
 _LABEL_REASONING_CHAIN = IntelligenceLabel.REASONING_CHAIN  # "ReasoningChain"
-_LABEL_COMMITMENT = KnowledgeLabel.COMMITMENT                # "Commitment"
+_LABEL_COMMITMENT = KnowledgeLabel.COMMITMENT  # "Commitment"
 
 # --- Node Queries ---
 # NOTE: CREATE_NODE / UPSERT_NODE_SINGLE_RTT / BATCH_UPSERT_NODES are ingest-time
