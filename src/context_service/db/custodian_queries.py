@@ -84,6 +84,40 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from primitives.eag.queries.finding import (
+    FETCH_CURRENT_FINDING_CLUSTER_SCOPE as FETCH_CURRENT_FINDING_CLUSTER_SCOPE,
+)
+from primitives.eag.queries.finding import (
+    FETCH_CURRENT_FINDING_SILO_SCOPE as FETCH_CURRENT_FINDING_SILO_SCOPE,
+)
+from primitives.eag.queries.finding import (
+    FINDING_HISTORY_CREATE as FINDING_HISTORY_CREATE,
+)
+from primitives.eag.queries.finding import (
+    FINDING_HISTORY_TRIM as FINDING_HISTORY_TRIM,
+)
+from primitives.eag.queries.finding import (
+    FINDING_MERGE_CLUSTER_SCOPE as FINDING_MERGE_CLUSTER_SCOPE,
+)
+from primitives.eag.queries.finding import (
+    FINDING_MERGE_SILO_SCOPE as FINDING_MERGE_SILO_SCOPE,
+)
+from primitives.eag.queries.pass_ledger import (
+    PASS_CHECK_CLAIMED as PASS_CHECK_CLAIMED,
+)
+from primitives.eag.queries.pass_ledger import (
+    PASS_CLAIMED_EDGE_MERGE as PASS_CLAIMED_EDGE_MERGE,
+)
+from primitives.eag.queries.pass_ledger import (
+    PASS_CREATE as PASS_CREATE,
+)
+from primitives.eag.queries.pass_ledger import (
+    PASS_FINALIZE as PASS_FINALIZE,
+)
+from primitives.eag.queries.pass_ledger import (
+    PASS_GET_BY_ID as PASS_GET_BY_ID,
+)
+
 from context_service.config.logging import get_logger
 from context_service.db.schema import content_union_predicate
 
@@ -192,176 +226,12 @@ async def bootstrap_custodian_schema(client: MemgraphClient) -> None:
 # Per-visit write-path Cypher (Task 6)
 # =============================================================================
 #
-# These constants are the full set of parameterized Cypher statements that the
-# Custodian per-visit write path runs inside a single bolt transaction (see
-# ``context_service/custodian/write_path.py`` and the brainstorm's "Write Path
-# / Atomicity" section). Every statement is a plain module-level string with
-# ``$param`` placeholders so that (a) tests can inspect them verbatim and (b)
-# there is never any runtime string concatenation of Cypher with
-# caller-supplied values.
+# Finding and pass ledger query constants (FETCH_CURRENT_FINDING_*,
+# FINDING_MERGE_*, FINDING_HISTORY_*, PASS_*) are imported from
+# primitives.eag.queries at the top of this module.
 #
-# Naming convention: FINDING_*, REFERENCE_*, CITES_*, PROPOSED_EDGE_*,
-# CLUSTER_*, PASS_*. Parameter docstrings live as comments directly above
-# each constant.
-
-# Look up the prior :Finding for a cluster-scope (scope, cluster_id, silo_id)
-# triple, returning the fields needed to snapshot its body to :FindingHistory
-# and compute the next version number. Returns at most one row.
-#
-# Params:
-#   scope       (str)  -- always "cluster"
-#   cluster_id  (str)
-#   silo_id     (str)
-FETCH_CURRENT_FINDING_CLUSTER_SCOPE = """
-MATCH (f:Finding {scope: $scope, cluster_id: $cluster_id, silo_id: $silo_id})
-RETURN f.id AS id,
-       f.version AS version,
-       f.claims AS claims,
-       f.summary AS summary,
-       f.pass_id AS pass_id,
-       f.quality_score AS quality_score
-LIMIT 1
-"""
-
-# Look up the prior :Finding for a silo-scope (scope, silo_id) pair.
-#
-# Params:
-#   scope    (str)  -- always "silo"
-#   silo_id  (str)
-FETCH_CURRENT_FINDING_SILO_SCOPE = """
-MATCH (f:Finding {scope: $scope, silo_id: $silo_id})
-WHERE f.cluster_id IS NULL
-RETURN f.id AS id,
-       f.version AS version,
-       f.claims AS claims,
-       f.summary AS summary,
-       f.pass_id AS pass_id,
-       f.quality_score AS quality_score
-LIMIT 1
-"""
-
-# MERGE a cluster-scope :Finding row and attach the (:Finding)-[:ABOUT]->(:Cluster)
-# edge. The MERGE key is (scope, cluster_id, silo_id) — matching the
-# FINDING_CLUSTER_SCOPE_UNIQUE constraint. All body fields are set on every
-# write; the history snapshot runs as a separate statement *before* this one
-# so the prior body is preserved.
-#
-# Params:
-#   id                 (str)      -- stable finding id (reuses prior id on update)
-#   scope              (str)      -- "cluster"
-#   cluster_id         (str)
-#   silo_id            (str)
-#   org_id             (str)
-#   pass_id            (str)
-#   version            (int)
-#   status             (str)      -- "draft"
-#   summary_json       (str)      -- JSON-serialized StitchedSummary (or "null")
-#   claims_json        (str)      -- JSON-serialized list[Claim.model_dump()]
-#   inferred_json      (str)      -- JSON-serialized list[ProposedEdge.model_dump()]
-#   member_fingerprint (str | None)
-#   quality_score      (float)
-#   visit_ref          (str | None) -- Redis key; Task 10 populates, may be null
-#   source             (str)      -- "custodian"
-#   model              (str | None)
-#   created_at         (str)      -- ISO8601 datetime for first-write; callers
-#                                     pass the existing value on update so the
-#                                     ON CREATE branch keeps identical semantics
-#   updated_at         (str)      -- ISO8601 datetime
-FINDING_MERGE_CLUSTER_SCOPE = """
-MERGE (f:Finding {scope: $scope, cluster_id: $cluster_id, silo_id: $silo_id})
-ON CREATE SET
-    f.id = $id,
-    f.created_at = $created_at
-SET f.org_id = $org_id,
-    f.pass_id = $pass_id,
-    f.version = $version,
-    f.status = $status,
-    f.summary = $summary_json,
-    f.claims = $claims_json,
-    f.inferred_relations = $inferred_json,
-    f.member_fingerprint = $member_fingerprint,
-    f.quality_score = $quality_score,
-    f.visit_ref = $visit_ref,
-    f.needs_refresh = false,
-    f.source = $source,
-    f.model = $model,
-    f.updated_at = $updated_at
-WITH f
-MATCH (c:Cluster {id: $cluster_id})
-MERGE (f)-[:ABOUT]->(c)
-RETURN f.id AS id, f.version AS version
-"""
-
-# MERGE a silo-scope :Finding row and attach (:Finding)-[:SUMMARIZES]->(:Silo).
-# The MERGE key is (scope, silo_id); cluster_id stays null.
-#
-# Params: same as FINDING_MERGE_CLUSTER_SCOPE minus cluster_id.
-FINDING_MERGE_SILO_SCOPE = """
-MERGE (f:Finding {scope: $scope, silo_id: $silo_id})
-ON CREATE SET
-    f.id = $id,
-    f.created_at = $created_at,
-    f.cluster_id = null
-SET f.org_id = $org_id,
-    f.pass_id = $pass_id,
-    f.version = $version,
-    f.status = $status,
-    f.summary = $summary_json,
-    f.claims = $claims_json,
-    f.inferred_relations = $inferred_json,
-    f.member_fingerprint = $member_fingerprint,
-    f.quality_score = $quality_score,
-    f.visit_ref = $visit_ref,
-    f.needs_refresh = false,
-    f.source = $source,
-    f.model = $model,
-    f.updated_at = $updated_at
-WITH f
-MATCH (s:Silo {id: $silo_id})
-MERGE (f)-[:SUMMARIZES]->(s)
-RETURN f.id AS id, f.version AS version
-"""
-
-# Create a :FindingHistory snapshot of the prior body and link it via
-# (:Finding)-[:SUPERSEDES]->(:FindingHistory). Called only when a prior
-# finding existed (fetch_current_finding returned a row). Trimming to the
-# most-recent 20 entries is a separate statement run immediately after.
-#
-# Params:
-#   finding_id   (str)  -- the id returned by fetch_current_finding
-#   pass_id      (str)  -- the *prior* finding's pass_id, so history records
-#                          which pass authored the snapshotted body
-#   summary      (str)  -- prior summary JSON string (as stored)
-#   claims_hash  (str)  -- sha256 of the prior claims JSON
-#   created_at   (str)  -- ISO8601; the snapshot's own timestamp (now)
-#   org_id       (str)  -- carried on :FindingHistory for test-org cleanup
-FINDING_HISTORY_CREATE = """
-MATCH (f:Finding {id: $finding_id})
-CREATE (h:FindingHistory {
-    pass_id: $pass_id,
-    summary: $summary,
-    claims_hash: $claims_hash,
-    created_at: $created_at,
-    org_id: $org_id
-})
-CREATE (f)-[:SUPERSEDES]->(h)
-RETURN h.pass_id AS pass_id
-"""
-
-# Trim :FindingHistory nodes for a given finding to the most recent
-# ``$keep`` entries. Older snapshots are DETACH DELETEd. Ordering is by
-# the history node's own ``created_at`` property — callers always set this
-# with the write-path wall clock so order is stable and test-reproducible.
-#
-# Params:
-#   finding_id (str)
-#   keep       (int)  -- always 20 in v1
-FINDING_HISTORY_TRIM = """
-MATCH (f:Finding {id: $finding_id})-[:SUPERSEDES]->(h:FindingHistory)
-WITH h ORDER BY h.created_at DESC
-SKIP $keep
-DETACH DELETE h
-"""
+# Remaining constants below use content_union_predicate() and cannot be
+# extracted without carrying that dependency. They live here permanently.
 
 # MERGE a :Reference row on (org_id, url_canonical). Forward-compatible
 # plumbing for a future phase that extends Citation/ProposedEdge with URL
@@ -484,79 +354,9 @@ SET c.last_custodian_pass_id = $pass_id,
 RETURN c.id AS id
 """
 
-# Create a :Pass node with initial state. Used by Task 11's pass lifecycle;
-# defined here for centralization.
-#
-# Params:
-#   id         (str)
-#   silo_id    (str)
-#   org_id     (str)
-#   status     (str)  -- "running"
-#   started_at (str)
-PASS_CREATE = """
-CREATE (p:Pass {
-    id: $id,
-    silo_id: $silo_id,
-    org_id: $org_id,
-    status: $status,
-    started_at: $started_at,
-    finalized_at: null,
-    cost_usd: 0.0,
-    visit_count: 0
-})
-RETURN p.id AS id
-"""
-
-# MERGE the (:Pass)-[:CLAIMED {claimed_at}]->(:Cluster) ledger edge. A second
-# attempt to visit the same cluster within one pass sees this edge and is a
-# no-op in the orchestrator (Task 10); the write path MERGEs it here as part
-# of the committing transaction so the ledger is transactionally consistent
-# with the finding write.
-#
-# Params:
-#   pass_id    (str)
-#   cluster_id (str)
-#   claimed_at (str)
-PASS_CLAIMED_EDGE_MERGE = """
-MATCH (p:Pass {id: $pass_id})
-MATCH (c:Cluster {id: $cluster_id})
-MERGE (p)-[e:CLAIMED]->(c)
-ON CREATE SET e.claimed_at = $claimed_at
-RETURN e.claimed_at AS claimed_at
-"""
-
-
-# =============================================================================
-# Helper: read prior finding inside a caller-supplied transaction
-# =============================================================================
-
-
-# Check if a cluster is already CLAIMED in this pass.
-#
-# Params:
-#   pass_id    (str)
-#   cluster_id (str)
-PASS_CHECK_CLAIMED = """
-MATCH (p:Pass {id: $pass_id})-[:CLAIMED]->(c:Cluster {id: $cluster_id})
-RETURN count(*) > 0 AS claimed
-"""
-
-# Finalize a pass: set terminal status, finalized_at, accumulated cost, visit count.
-#
-# Params:
-#   pass_id      (str)
-#   status       (str)
-#   finalized_at (str)  -- ISO8601
-#   cost_usd     (float)
-#   visit_count  (int)
-PASS_FINALIZE = """
-MATCH (p:Pass {id: $pass_id})
-SET p.status = $status,
-    p.finalized_at = $finalized_at,
-    p.cost_usd = $cost_usd,
-    p.visit_count = $visit_count
-RETURN p.id AS id
-"""
+# ---------------------------------------------------------------------------
+# Pass lifecycle helpers
+# ---------------------------------------------------------------------------
 
 # Fetch clusters for a silo at a given level, with member counts. Clusters
 # carry silo_id; membership is also confirmed via :Node members with matching
@@ -796,23 +596,7 @@ async def fetch_top_entities_by_citation(
 # Pass status queries (Task 13)
 # =============================================================================
 
-# Fetch a :Pass node by id and org_id for org-isolated status reads.
-#
-# Params:
-#   pass_id (str)
-#   org_id  (str)
-PASS_GET_BY_ID = """
-MATCH (p:Pass {id: $pass_id, org_id: $org_id})
-RETURN p.id AS id,
-       p.silo_id AS silo_id,
-       p.org_id AS org_id,
-       p.status AS status,
-       p.started_at AS started_at,
-       p.finalized_at AS finalized_at,
-       p.cost_usd AS cost_usd,
-       p.visit_count AS visit_count
-LIMIT 1
-"""
+# PASS_GET_BY_ID is imported from primitives.eag.queries.pass_ledger above.
 
 
 async def get_pass(
