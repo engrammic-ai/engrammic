@@ -82,6 +82,9 @@ strict = true
 asyncio_mode = "auto"
 testpaths = ["tests"]
 addopts = "--import-mode=importlib"
+markers = [
+    "integration: tests that require live docker stack (Memgraph, Qdrant, Redis)",
+]
 
 [tool.uv.sources]
 primitives = { path = "../primitives", editable = true }

@@ -39,12 +39,17 @@ def _bootstrap_custodian_models() -> None:
     import context_service  # noqa: F401
 
     # Stub only sub-packages that haven't been loaded yet.
+    # Set __path__ so they behave as packages with submodules.
     for pkg in [
         "context_service.core",
         "context_service.custodian",
         "context_service.extraction",
     ]:
-        sys.modules.setdefault(pkg, ModuleType(pkg))
+        if pkg not in sys.modules:
+            stub = ModuleType(pkg)
+            parts = pkg.split(".")
+            stub.__path__ = [str(_SRC / Path(*parts))]
+            sys.modules[pkg] = stub
 
     # Load core.settings directly so custodian.models can call get_settings().
     _load_module_direct("context_service.core.settings")

@@ -1,0 +1,71 @@
+system_prompt: |
+  You are an expert at extracting structured information from text.
+  Given a passage, identify claims, entities, and relationships.
+
+  Rules:
+  - Extract factual claims with clear subjects and objects
+  - Identify named entities and their types
+  - Note relationships between entities
+  - Be precise and avoid speculation
+
+user_template: |
+  Extract claims, entities, and relationships from the following text:
+
+  ---
+  {content}
+  ---
+
+  Return structured JSON with claims, entities, and relationships arrays.
+
+schema:
+  type: object
+  properties:
+    claims:
+      type: array
+      items:
+        type: object
+        properties:
+          subject:
+            type: string
+          predicate:
+            type: string
+          object:
+            type: string
+          confidence:
+            type: number
+        required:
+          - subject
+          - predicate
+          - object
+    entities:
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+          type:
+            type: string
+        required:
+          - name
+          - type
+    relationships:
+      type: array
+      items:
+        type: object
+        properties:
+          source:
+            type: string
+          target:
+            type: string
+          type:
+            type: string
+        required:
+          - source
+          - target
+          - type
+  required:
+    - claims
+    - entities
+    - relationships
+  additionalProperties: false
