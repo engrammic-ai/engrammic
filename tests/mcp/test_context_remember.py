@@ -17,13 +17,16 @@ def mock_auth():
 
 @pytest.fixture
 def mock_silo_valid():
-    with patch(
-        "context_service.mcp.tools.context_remember.validate_silo_ownership",
-        new_callable=AsyncMock,
-        return_value=None,
-    ), patch(
-        "context_service.mcp.tools.context_remember.get_silo_service",
-        return_value=MagicMock(),
+    with (
+        patch(
+            "context_service.mcp.tools.context_remember.validate_silo_ownership",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "context_service.mcp.tools.context_remember.get_silo_service",
+            return_value=MagicMock(),
+        ),
     ):
         yield
 
@@ -69,11 +72,14 @@ async def test_remember_with_decay_class(mock_auth, mock_context_service, mock_s
 
 @pytest.mark.asyncio
 async def test_remember_invalid_silo(mock_auth):
-    with patch(
-        "context_service.mcp.tools.context_remember.validate_silo_ownership",
-        new_callable=AsyncMock,
-        return_value={"error": "invalid_silo_id", "message": "silo_id must be a valid UUID"},
-    ), patch("context_service.mcp.tools.context_remember.get_silo_service"):
+    with (
+        patch(
+            "context_service.mcp.tools.context_remember.validate_silo_ownership",
+            new_callable=AsyncMock,
+            return_value={"error": "invalid_silo_id", "message": "silo_id must be a valid UUID"},
+        ),
+        patch("context_service.mcp.tools.context_remember.get_silo_service"),
+    ):
         from context_service.mcp.tools.context_remember import _context_remember
 
         result = await _context_remember(

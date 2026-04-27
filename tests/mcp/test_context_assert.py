@@ -14,7 +14,9 @@ def mock_deps():
         patch("context_service.mcp.tools.context_assert.get_mcp_auth") as auth_mock,
         patch("context_service.mcp.tools.context_assert.get_context_service") as svc_mock,
         patch("context_service.mcp.tools.context_assert.get_evidence_validator") as ev_mock,
-        patch("context_service.mcp.tools.context_assert.get_silo_service", return_value=MagicMock()),
+        patch(
+            "context_service.mcp.tools.context_assert.get_silo_service", return_value=MagicMock()
+        ),
         patch(
             "context_service.mcp.tools.context_assert.validate_silo_ownership",
             new_callable=AsyncMock,

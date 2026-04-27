@@ -81,6 +81,7 @@ strict = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "--import-mode=importlib"
 markers = [
     "integration: tests that require live docker stack (Memgraph, Qdrant, Redis)",

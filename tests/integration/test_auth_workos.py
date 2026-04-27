@@ -42,12 +42,8 @@ _MOCK_AUTH_CTX = AuthContext(
 
 @pytest.mark.integration
 class TestWorkOSAuthDependency:
-    async def test_valid_token_returns_auth_context(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            "context_service.api.auth_dep.get_settings", lambda: _WORKOS_SETTINGS
-        )
+    async def test_valid_token_returns_auth_context(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("context_service.api.auth_dep.get_settings", lambda: _WORKOS_SETTINGS)
         with patch(
             "context_service.auth.workos_client.verify_session",
             new=AsyncMock(return_value=_MOCK_AUTH_CTX),
@@ -59,12 +55,8 @@ class TestWorkOSAuthDependency:
         assert ctx.email == "test@example.com"
         assert ctx.is_dev is False
 
-    async def test_invalid_token_raises_401(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(
-            "context_service.api.auth_dep.get_settings", lambda: _WORKOS_SETTINGS
-        )
+    async def test_invalid_token_raises_401(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr("context_service.api.auth_dep.get_settings", lambda: _WORKOS_SETTINGS)
         with (
             patch(
                 "context_service.auth.workos_client.verify_session",
@@ -80,9 +72,7 @@ class TestWorkOSAuthDependency:
     async def test_missing_authorization_header_raises_401(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr(
-            "context_service.api.auth_dep.get_settings", lambda: _WORKOS_SETTINGS
-        )
+        monkeypatch.setattr("context_service.api.auth_dep.get_settings", lambda: _WORKOS_SETTINGS)
         with pytest.raises(HTTPException) as exc_info:
             await get_auth_context(_make_request())  # type: ignore[arg-type]
 
@@ -92,9 +82,7 @@ class TestWorkOSAuthDependency:
     async def test_malformed_authorization_header_raises_401(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr(
-            "context_service.api.auth_dep.get_settings", lambda: _WORKOS_SETTINGS
-        )
+        monkeypatch.setattr("context_service.api.auth_dep.get_settings", lambda: _WORKOS_SETTINGS)
         with pytest.raises(HTTPException) as exc_info:
             await get_auth_context(_make_request("Basic dXNlcjpwYXNz"))  # type: ignore[arg-type]
 

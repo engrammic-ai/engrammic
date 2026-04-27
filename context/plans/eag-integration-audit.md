@@ -82,7 +82,8 @@ TODOs #1 and #2 closed by phase-eag-b-edge-migration on 2026-04-28.
 
 ### Clear follow-ups
 1. **Prompts README** — `config/prompts/custodian/` has no README. Add a brief one explaining the two-mechanism split (custodian YAML with lenses vs extraction/clustering provider presets).
-2. **Pre-existing lint errors** — 23 ruff errors existed before this audit (ARG/SIM/F841 in embeddings, MCP tools, pipelines resources). Not introduced by this work but should be cleaned up.
+
+TODO #2 (was #4) closed by P1 review fixes — see PR #1.
 
 ### Needs discussion before implementing
 5. **`:Finding` vs `:Fact` naming** — Decide whether the consensus promotion path should write `:Fact` (EAG canonical) or continue writing `:Finding` (RAG-era). Migration of existing `:Finding` nodes is non-trivial; a parallel-write pattern or a label-union read approach may be needed.

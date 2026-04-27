@@ -61,9 +61,7 @@ async def resolve_mcp_auth() -> AuthContext:
             "auth.mcp_token_missing",
             hint="Set MCP_DEV_TOKEN for authenticated MCP dev access",
         )
-        raise MCPAuthError(
-            "MCP auth required (AUTH_ENABLED=true) but MCP_DEV_TOKEN not set"
-        )
+        raise MCPAuthError("MCP auth required (AUTH_ENABLED=true) but MCP_DEV_TOKEN not set")
 
     from context_service.auth import workos_client
 

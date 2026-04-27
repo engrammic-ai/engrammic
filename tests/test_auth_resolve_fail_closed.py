@@ -67,9 +67,7 @@ class TestResolveMCPAuthFailClosed:
         monkeypatch.setattr("context_service.auth.resolve.get_settings", lambda: _AUTH_ON)
         monkeypatch.setenv("MCP_DEV_TOKEN", "valid")
 
-        mock_ctx = AuthContext(
-            org_id="org-1", user_id="user-1", email="x@y.com", is_dev=False
-        )
+        mock_ctx = AuthContext(org_id="org-1", user_id="user-1", email="x@y.com", is_dev=False)
         with patch(
             "context_service.auth.workos_client.verify_session",
             new=AsyncMock(return_value=mock_ctx),

@@ -39,9 +39,7 @@ class TestDevBypass:
         assert ctx.user_id == "test-user"
         assert ctx.email is None
 
-    async def test_dev_org_id_uses_settings_value(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_dev_org_id_uses_settings_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
         settings = Settings(
             _env_file=None,
             auth_enabled=False,
