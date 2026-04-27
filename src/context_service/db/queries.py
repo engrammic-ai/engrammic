@@ -16,7 +16,6 @@ from context_service.db.schema import (
 )
 
 # Entity queries
-CREATE_ENTITY_SILO_INDEX = "CREATE INDEX ON :Entity(silo_id);"
 
 FIND_ENTITY_BY_NAME = """
 MATCH (e:Entity {silo_id: $silo_id})
@@ -61,11 +60,6 @@ CREATE (a)-[r:{rel_type} {{
 RETURN r
 """
 
-
-# Cluster index queries
-CREATE_CLUSTER_ID_INDEX = "CREATE INDEX ON :Cluster(id);"
-CREATE_CLUSTER_LEVEL_INDEX = "CREATE INDEX ON :Cluster(level);"
-CREATE_CLUSTER_SILO_INDEX = "CREATE INDEX ON :Cluster(silo_id);"
 
 # Cluster CRUD queries
 CREATE_CLUSTER = """

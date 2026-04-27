@@ -3,13 +3,16 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 from fastmcp import FastMCP
 
 if TYPE_CHECKING:
-    pass
+    from context_service.embeddings import EmbeddingService
+    from context_service.services.context import ContextService
+    from context_service.services.silo import SiloService
+    from context_service.stores import MemgraphClient, QdrantClient, RedisClient
 
 logger = structlog.get_logger(__name__)
 
@@ -17,33 +20,44 @@ _services: dict[str, Any] = {}
 
 
 def configure_services(
-    # TODO: Add service dependencies as they are ported
-    # store: ContextStore,
-    # qdrant: QdrantStore,
-    # embedding: EmbeddingService,
+    memgraph: MemgraphClient,
+    qdrant: QdrantClient,
+    redis: RedisClient | None = None,
+    embedding: EmbeddingService | None = None,
 ) -> None:
     """Configure MCP service dependencies.
 
     Call this during application startup before serving MCP requests.
     """
-    # TODO: Wire up services when stores are ported
-    # _services["context"] = ContextService(...)
-    # _services["silo"] = SiloService(...)
-    logger.info("MCP services configured (stub)")
+    from context_service.services.context import ContextService
+    from context_service.services.silo import SiloService
+
+    _services["context"] = ContextService(
+        memgraph=memgraph,
+        qdrant=qdrant,
+        embedding=embedding,
+        cache=redis,
+    )
+    _services["silo"] = SiloService(memgraph=memgraph)
+    logger.info("MCP services configured")
 
 
-def get_context_service() -> Any:
+def get_context_service() -> ContextService:
     """Get the configured ContextService instance."""
     if "context" not in _services:
-        raise NotImplementedError("ContextService not yet wired - TODO: port services")
-    return _services["context"]
+        raise RuntimeError("ContextService not configured — call configure_services() at startup")
+    from context_service.services.context import ContextService as _CS
+
+    return cast(_CS, _services["context"])
 
 
-def get_silo_service() -> Any:
+def get_silo_service() -> SiloService:
     """Get the configured SiloService instance."""
     if "silo" not in _services:
-        raise NotImplementedError("SiloService not yet wired - TODO: port services")
-    return _services["silo"]
+        raise RuntimeError("SiloService not configured — call configure_services() at startup")
+    from context_service.services.silo import SiloService as _SS
+
+    return cast(_SS, _services["silo"])
 
 
 def create_mcp_server() -> FastMCP:

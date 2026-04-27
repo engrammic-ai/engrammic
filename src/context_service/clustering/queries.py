@@ -36,9 +36,3 @@ __all__ = [
     "RUN_PAGERANK",
     "UPDATE_CLUSTER_SUMMARY",
 ]
-
-# --- Index creation ---
-
-CREATE_CLUSTER_ID_INDEX = "CREATE INDEX ON :Cluster(id);"
-CREATE_CLUSTER_LEVEL_INDEX = "CREATE INDEX ON :Cluster(level);"
-CREATE_CLUSTER_SILO_INDEX = "CREATE INDEX ON :Cluster(silo_id);"

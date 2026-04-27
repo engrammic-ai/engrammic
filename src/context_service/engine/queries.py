@@ -1065,19 +1065,17 @@ RETURN c.id AS id
 
 CREATE_FINDING_FROM_COMMITMENT = f"""
 MATCH (c:{LABEL_CLAIM}:{_LABEL_COMMITMENT} {{id: $commitment_id, silo_id: $silo_id}})
-CREATE (f:Finding {{
-    id: $finding_id,
-    silo_id: $silo_id,
-    subject: c.subject,
-    predicate: c.predicate,
-    object: c.object,
-    source: 'custodian_consensus',
-    status: 'published',
-    created_at: datetime(),
-    confidence_tier: 'high',
-    distinct_agent_count: c.distinct_agent_count
-}})
-CREATE (c)-[:PROMOTED_TO]->(f)
+MERGE (f:Finding {{id: $finding_id, silo_id: $silo_id}})
+ON CREATE SET
+    f.subject = c.subject,
+    f.predicate = c.predicate,
+    f.object = c.object,
+    f.source = 'custodian_consensus',
+    f.status = 'published',
+    f.created_at = datetime(),
+    f.confidence_tier = 'high',
+    f.distinct_agent_count = c.distinct_agent_count
+MERGE (c)-[:PROMOTED_TO]->(f)
 RETURN f.id AS id
 """
 

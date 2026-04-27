@@ -194,6 +194,74 @@ class ContextService:
 
         return node
 
+    async def _batch_fetch_nodes(
+        self, node_ids: list[str], silo_id: uuid.UUID
+    ) -> dict[str, Node]:
+        """Fetch multiple nodes from cache then Memgraph for misses.
+
+        Returns a mapping of node_id string -> Node.
+        """
+        result: dict[str, Node] = {}
+
+        if self._cache:
+            cache_keys = [f"node:{silo_id}:{nid}" for nid in node_ids]
+            raw_values = await self._cache.mget(cache_keys)
+            miss_ids: list[str] = []
+            for nid, raw in zip(node_ids, raw_values, strict=True):
+                if raw is not None:
+                    try:
+                        data = json.loads(raw)
+                        result[nid] = Node(
+                            id=uuid.UUID(data["id"]),
+                            type=data["type"],
+                            content=data["content"],
+                            properties=data.get("properties", {}),
+                            silo_id=uuid.UUID(data["silo_id"]) if data.get("silo_id") else None,
+                            source_uri=data.get("source_uri"),
+                            content_hash=data.get("content_hash"),
+                        )
+                    except (KeyError, ValueError):
+                        miss_ids.append(nid)
+                else:
+                    miss_ids.append(nid)
+        else:
+            miss_ids = list(node_ids)
+
+        if miss_ids:
+            db_rows = await self._memgraph.execute_query(
+                """
+                UNWIND $ids AS id
+                MATCH (n:Node {id: id, silo_id: $silo_id})
+                RETURN n.id AS id, n.type AS type, n.content AS content,
+                       n.silo_id AS silo_id, n.source_uri AS source_uri,
+                       n.content_hash AS content_hash
+                """,
+                {"ids": miss_ids, "silo_id": str(silo_id)},
+            )
+            for row in db_rows:
+                node = Node(
+                    id=uuid.UUID(row["id"]),
+                    type=row["type"],
+                    content=row["content"],
+                    silo_id=uuid.UUID(row["silo_id"]) if row.get("silo_id") else None,
+                    source_uri=row.get("source_uri"),
+                    content_hash=row.get("content_hash"),
+                )
+                result[row["id"]] = node
+                if self._cache:
+                    cache_key = f"node:{silo_id}:{row['id']}"
+                    cache_data = {
+                        "id": str(node.id),
+                        "type": node.type,
+                        "content": node.content,
+                        "silo_id": str(node.silo_id) if node.silo_id else None,
+                        "source_uri": node.source_uri,
+                        "content_hash": node.content_hash,
+                    }
+                    await self._cache.set(cache_key, json.dumps(cache_data).encode())
+
+        return result
+
     async def lookup(
         self,
         query: str,
@@ -234,21 +302,32 @@ class ContextService:
             silo_id=str(scope_silo_id),
         )
 
+        if not search_results:
+            return LookupResult(
+                nodes=[],
+                silos_searched=silo_ids or [scope_silo_id],
+                total_candidates=0,
+                query=query,
+            )
+
+        result_ids = [r.node_id for r in search_results]
+        node_map = await self._batch_fetch_nodes(result_ids, scope_silo_id)
+        score_map = {r.node_id: r.score for r in search_results}
+
         scored_nodes: list[ScoredNode] = []
-        for result in search_results:
-            node = await self.get(uuid.UUID(result.node_id), scope_silo_id)
+        for node_id_str in result_ids:
+            node = node_map.get(node_id_str)
             if node is None:
                 continue
             if type_filter and node.type != type_filter:
                 continue
-
             scored_nodes.append(
                 ScoredNode(
                     node_id=node.id,
                     content=node.content,
                     type=node.type,
                     silo_id=node.silo_id or scope_silo_id,
-                    score=result.score,
+                    score=score_map[node_id_str],
                     properties=node.properties,
                 )
             )

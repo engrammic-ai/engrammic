@@ -18,8 +18,8 @@ def register_silo_create(mcp: FastMCP) -> None:
     )
     async def silo_create(
         name: str,
-        description: str | None = None,  # noqa: ARG001
-        dissolvability: float = 0.5,  # noqa: ARG001
+        description: str | None = None,
+        dissolvability: float = 0.5,
     ) -> dict[str, Any]:
         """Create a new silo.
 
@@ -35,12 +35,22 @@ def register_silo_create(mcp: FastMCP) -> None:
         from context_service.mcp.server import get_silo_service
 
         auth = get_mcp_auth()
-        get_silo_service()
+        silo_svc = get_silo_service()
 
-        # TODO: Implement when SiloService is ported
-        raise NotImplementedError(
-            f"silo_create not yet implemented. org_id={auth.org_id}, name={name}"
+        silo = await silo_svc.get_or_create(
+            name=name,
+            org_id=auth.org_id,
+            description=description,
+            dissolvability=dissolvability,
         )
+
+        return {
+            "silo_id": str(silo.id),
+            "name": silo.name,
+            "org_id": silo.org_id,
+            "description": silo.description,
+            "dissolvability": silo.dissolvability,
+        }
 
 
 def register_silo_list(mcp: FastMCP) -> None:
@@ -60,7 +70,19 @@ def register_silo_list(mcp: FastMCP) -> None:
         from context_service.mcp.server import get_silo_service
 
         auth = get_mcp_auth()
-        get_silo_service()
+        silo_svc = get_silo_service()
 
-        # TODO: Implement when SiloService is ported
-        raise NotImplementedError(f"silo_list not yet implemented. org_id={auth.org_id}")
+        silos = await silo_svc.list(org_id=auth.org_id)
+
+        return {
+            "silos": [
+                {
+                    "silo_id": str(s.id),
+                    "name": s.name,
+                    "org_id": s.org_id,
+                    "description": s.description,
+                    "dissolvability": s.dissolvability,
+                }
+                for s in silos
+            ],
+        }

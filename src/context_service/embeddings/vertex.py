@@ -10,6 +10,7 @@ import httpx
 from context_service.config.logging import get_logger
 
 if TYPE_CHECKING:
+    from context_service.cache.embedding_cache import EmbeddingCache
     from context_service.config.settings import Settings
 
 logger = get_logger(__name__)
@@ -32,7 +33,7 @@ class VertexAIEmbeddingService:
         region: str = "us-central1",
         model: str = "text-embedding-005",
         dimensions: int = 768,
-        _embedding_cache: Any | None = None,
+        _embedding_cache: EmbeddingCache | None = None,
     ) -> None:
         """Initialize the VertexAI embedding service.
 
@@ -41,7 +42,7 @@ class VertexAIEmbeddingService:
             region: GCP region for VertexAI.
             model: VertexAI embedding model name.
             dimensions: Output embedding dimensions.
-            _embedding_cache: Ignored (kept for interface compat).
+            _embedding_cache: Optional Redis-backed embedding cache.
         """
         self._project = project
         self._region = region
@@ -49,6 +50,7 @@ class VertexAIEmbeddingService:
         self._dimensions = dimensions
         self._client: httpx.AsyncClient | None = None
         self._credentials: Any = None
+        self._embedding_cache = _embedding_cache
 
     @property
     def dimensions(self) -> int:
@@ -58,13 +60,13 @@ class VertexAIEmbeddingService:
     def from_settings(
         cls,
         settings: Settings,
-        _embedding_cache: Any | None = None,
+        _embedding_cache: EmbeddingCache | None = None,
     ) -> VertexAIEmbeddingService:
         """Create a VertexAIEmbeddingService from application settings.
 
         Args:
             settings: Application settings instance.
-            _embedding_cache: Ignored (kept for interface compat).
+            _embedding_cache: Optional Redis-backed embedding cache.
 
         Returns:
             Configured VertexAIEmbeddingService.
@@ -78,6 +80,7 @@ class VertexAIEmbeddingService:
         return cls(
             project=settings.vertex_project_id,
             region=settings.vertex_location,
+            _embedding_cache=_embedding_cache,
         )
 
     @property
@@ -90,8 +93,8 @@ class VertexAIEmbeddingService:
 
     def _get_auth_token(self) -> str:
         """Get a valid OAuth2 token via Application Default Credentials."""
-        import google.auth
-        import google.auth.transport.requests
+        import google.auth  # type: ignore[import-untyped]
+        import google.auth.transport.requests  # type: ignore[import-untyped]
 
         if self._credentials is None:
             self._credentials, _ = google.auth.default(
@@ -198,8 +201,21 @@ class VertexAIEmbeddingService:
         if not texts:
             return []
 
+        task = self.TASK_DEFAULT
+        if self._embedding_cache:
+            cached_results: list[list[float] | None] = []
+            for text in texts:
+                cached_results.append(await self._embedding_cache.get(text, task))
+            if all(v is not None for v in cached_results):
+                return [v for v in cached_results if v is not None]
+            miss_indices = [i for i, v in enumerate(cached_results) if v is None]
+            miss_texts = [texts[i] for i in miss_indices]
+        else:
+            miss_indices = list(range(len(texts)))
+            miss_texts = texts
+
         client = await self._get_client()
-        payload = self._build_payload(texts)
+        payload = self._build_payload(miss_texts)
 
         try:
             response = await self._request_with_backoff(client, payload)
@@ -215,7 +231,17 @@ class VertexAIEmbeddingService:
             raise VertexAIEmbeddingError(f"Failed to connect to VertexAI API: {e}") from e
 
         data = response.json()
-        embeddings = self._parse_response(data)
+        fetched = self._parse_response(data)
+
+        if self._embedding_cache:
+            for text, vector in zip(miss_texts, fetched, strict=True):
+                await self._embedding_cache.set(text, task, vector)
+            embeddings: list[list[float]] = list(cached_results)  # type: ignore[arg-type]
+            for idx, vector in zip(miss_indices, fetched, strict=True):
+                embeddings[idx] = vector
+        else:
+            embeddings = fetched
+
         logger.debug("vertex_embed_complete", count=len(embeddings))
         return embeddings
 
@@ -249,6 +275,10 @@ class VertexAIEmbeddingService:
         Raises:
             VertexAIEmbeddingError: If the API request fails.
         """
+        if self._embedding_cache:
+            cached = await self._embedding_cache.get(query, self.TASK_DEFAULT)
+            if cached is not None:
+                return cached
         embeddings = await self.embed([query])
         logger.debug("vertex_embed_query_complete")
         return embeddings[0]

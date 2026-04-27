@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
+import uuid
 from typing import TYPE_CHECKING, Any
+
+from context_service.services.models import ScopeContext, derive_silo_id
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -24,8 +27,8 @@ def register(mcp: FastMCP) -> None:
         content: str,
         type: str,
         silo_id: str,
-        properties: dict[str, Any] | None = None,  # noqa: ARG001
-        idempotency_key: str | None = None,  # noqa: ARG001
+        properties: dict[str, Any] | None = None,
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         """Store a new context node.
 
@@ -37,18 +40,39 @@ def register(mcp: FastMCP) -> None:
             idempotency_key: Optional key for deduplication.
 
         Returns:
-            Dictionary with node_id, content, type, silo_id, and created_at.
+            Dictionary with node_id, status, and embedding_status.
         """
         from context_service.mcp.auth import get_mcp_auth
         from context_service.mcp.server import get_context_service
 
         auth = get_mcp_auth()
-        get_context_service()
+        ctx_svc = get_context_service()
 
-        # TODO: Implement when ContextService is ported
-        # For now, this serves as the interface contract
-        raise NotImplementedError(
-            f"context_store not yet implemented. "
-            f"org_id={auth.org_id}, silo_id={silo_id}, type={type}, "
-            f"content_len={len(content)}"
+        expected_silo_id = derive_silo_id(auth.org_id)
+        try:
+            requested = uuid.UUID(silo_id)
+        except ValueError:
+            return {"error": "invalid_silo_id", "message": "silo_id must be a valid UUID"}
+
+        if requested != expected_silo_id:
+            return {
+                "error": "silo_not_found",
+                "silo_id": silo_id,
+                "message": "Silo does not exist or org_id mismatch.",
+            }
+
+        scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
+        node = await ctx_svc.store(
+            scope=scope,
+            content=content,
+            node_type=type,
+            properties=properties,
+            idempotency_key=idempotency_key,
         )
+
+        return {
+            "node_id": str(node.id),
+            "status": "created",
+            "embedding_status": "indexed",
+            "extraction_queued": False,
+        }

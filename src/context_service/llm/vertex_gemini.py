@@ -14,8 +14,10 @@ from datetime import datetime
 from typing import Any
 
 import httpx
-from google.auth.transport.requests import Request as GoogleAuthRequest
-from google.oauth2 import service_account
+from google.auth.transport.requests import (  # type: ignore[import-untyped]
+    Request as GoogleAuthRequest,
+)
+from google.oauth2 import service_account  # type: ignore[import-untyped]
 
 from context_service.config import get_settings
 from context_service.config.logging import get_logger

@@ -15,15 +15,25 @@ from primitives.schema import (  # noqa: E402
     WisdomLabel,
 )
 
+# --- Cluster layer (not a schema enum label — bare string) ---
+
+CLUSTER_INDEX_QUERIES: tuple[str, ...] = (
+    "CREATE INDEX ON :Cluster(id);",
+    "CREATE INDEX ON :Cluster(level);",
+    "CREATE INDEX ON :Cluster(silo_id);",
+)
+
 # --- Memory layer ---
 
 MEMORY_INDEX_QUERIES: tuple[str, ...] = (
     f"CREATE INDEX ON :{MemoryLabel.DOCUMENT}(id);",
     f"CREATE INDEX ON :{MemoryLabel.DOCUMENT}(silo_id);",
     f"CREATE INDEX ON :{MemoryLabel.DOCUMENT}(silo_id, committed);",
+    f"CREATE INDEX ON :{MemoryLabel.DOCUMENT}(source_uri);",
     f"CREATE INDEX ON :{MemoryLabel.PASSAGE}(id);",
     f"CREATE INDEX ON :{MemoryLabel.PASSAGE}(silo_id);",
     f"CREATE INDEX ON :{MemoryLabel.PASSAGE}(silo_id, committed);",
+    f"CREATE INDEX ON :{MemoryLabel.PASSAGE}(source_uri);",
     f"CREATE INDEX ON :{MemoryLabel.UTTERANCE}(id);",
     f"CREATE INDEX ON :{MemoryLabel.UTTERANCE}(silo_id);",
     f"CREATE INDEX ON :{MemoryLabel.EVENT}(id);",
@@ -76,6 +86,7 @@ REGISTRY_INDEX_QUERIES: tuple[str, ...] = (
     # Entity is a pivot node; silo_id index mirrors the RAG-era :Entity index.
     f"CREATE INDEX ON :{RegistryLabel.ENTITY}(id);",
     f"CREATE INDEX ON :{RegistryLabel.ENTITY}(silo_id);",
+    f"CREATE INDEX ON :{RegistryLabel.ENTITY}(name);",
     f"CREATE INDEX ON :{RegistryLabel.AGENT}(id);",
     f"CREATE INDEX ON :{RegistryLabel.PREDICATE}(id);",
 )
@@ -95,6 +106,7 @@ AUDIT_INDEX_QUERIES: tuple[str, ...] = (
 # --- Aggregate ---
 
 ALL_INDEX_QUERIES: tuple[str, ...] = (
+    *CLUSTER_INDEX_QUERIES,
     *MEMORY_INDEX_QUERIES,
     *KNOWLEDGE_INDEX_QUERIES,
     *WISDOM_INDEX_QUERIES,

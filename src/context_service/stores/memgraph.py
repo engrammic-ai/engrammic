@@ -14,6 +14,7 @@ from neo4j.exceptions import ClientError, ServiceUnavailable
 from tenacity import (
     AsyncRetrying,
     RetryError,
+    retry_if_exception,
     retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
@@ -25,6 +26,25 @@ from context_service.config.settings import Settings, get_settings
 logger = get_logger(__name__)
 
 _READ_RETRY_MAX_ATTEMPTS = 3
+_WRITE_RETRY_MAX_ATTEMPTS = 3
+
+_TRANSIENT_CLIENT_ERROR_CODES = frozenset(
+    [
+        "Memgraph.TransientError.DeadlockDetected",
+        "Neo.TransientError.Transaction.DeadlockDetected",
+        "Neo.TransientError.General.DatabaseUnavailable",
+        "Neo.TransientError.Cluster.NotALeader",
+        "Neo.TransientError.Cluster.LeaderChanged",
+    ]
+)
+
+
+def _is_transient_client_error(exc: BaseException) -> bool:
+    """Return True for ClientError codes that are safe to retry."""
+    if not isinstance(exc, ClientError):
+        return False
+    code: str = getattr(exc, "code", "") or ""
+    return code in _TRANSIENT_CLIENT_ERROR_CODES
 
 
 def _coerce_params(params: dict[str, Any] | None) -> dict[str, Any]:
@@ -207,14 +227,39 @@ class MemgraphClient:
             data: list[dict[str, Any]] = await result.data()
             return data
 
-        try:
+        async def _run_once() -> list[dict[str, Any]]:
             async with self.session() as session:
                 result: list[dict[str, Any]] = await session.execute_write(
                     _write_tx, query, _coerce_params(parameters)
                 )
                 return result
+
+        retry_policy = retry_if_exception_type(ServiceUnavailable) | retry_if_exception(
+            _is_transient_client_error
+        )
+
+        try:
+            async for attempt in AsyncRetrying(
+                retry=retry_policy,
+                stop=stop_after_attempt(_WRITE_RETRY_MAX_ATTEMPTS),
+                wait=wait_exponential(multiplier=0.1, max=2.0),
+                reraise=True,
+            ):
+                with attempt:
+                    attempt_number = attempt.retry_state.attempt_number
+                    if attempt_number > 1:
+                        logger.warning(
+                            "memgraph_write_retry",
+                            attempt=attempt_number,
+                            max_attempts=_WRITE_RETRY_MAX_ATTEMPTS,
+                        )
+                    return await _run_once()
+            return []
         except ServiceUnavailable as e:
             logger.error("memgraph_service_unavailable", error=str(e))
+            raise MemgraphOperationError(f"Database unavailable: {e}") from e
+        except RetryError as e:
+            logger.error("memgraph_write_retry_exhausted", error=str(e))
             raise MemgraphOperationError(f"Database unavailable: {e}") from e
         except ClientError as e:
             logger.error("memgraph_write_error", error=str(e))
