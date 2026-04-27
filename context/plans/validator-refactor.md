@@ -1,6 +1,6 @@
 # Custodian Validator Refactor — Design Doc
 
-**Status:** Draft  
+**Status:** Phase A+B complete (2026-04-28). Phase C+D deferred — see below.
 **Date:** 2026-04-26  
 **Scope:** Research and architecture only; no implementation changes.
 
@@ -196,23 +196,34 @@ write_path.py        — Delegates entirely to ValidationPipeline; removes inlin
 ## 4. Migration Path
 
 ### Phase A — Enum cleanup (no behavior change, lowest risk)
+
+Status: ✓ Complete (2026-04-26 in port commit, refined 2026-04-28).
+
 1. Add `StructuralRejectionReason` enum in `models.py`.
 2. Move `SCHEMA_VIOLATION` and `LOW_CONFIDENCE` from `CitationRejectionReason` to `StructuralRejectionReason`.
 3. Update `_pre_check_edge` to use `StructuralRejectionReason`; update metric labels.
 4. All existing tests pass with updated metric label assertions.
 
 ### Phase B — Business rule isolation
+
+Status: ✓ Complete (2026-04-28 via phase-validator-b-finish).
+
 1. Create `business_rules.py` with `BusinessRuleValidator`.
 2. Move all-claims-rejected skip logic from `write_path.py` into `BusinessRuleValidator`.
 3. Move quality threshold gate from `promotion.py` into `BusinessRuleValidator` (keep `promotion.py` for the DB writes, remove threshold logic).
 4. `write_path.py` calls `BusinessRuleValidator` explicitly.
 
 ### Phase C — Recovery migration (highest risk, do last)
+
+Status: Deferred — output_recovery.py monkey-patch is working in production; pydantic-ai private-API migration carries real risk and no current pain.
 1. Add a `model_validator(mode='before')` to the affected output types that applies the enum-case fixup from `_remap_dict`. This is pure Pydantic with no private-API access.
 2. Add a smoke-test: construct a pydantic-ai Agent with the custodian output type, intentionally send a malformed enum variant, verify it recovers.
 3. If pydantic-ai `result_retries` is viable (requires benchmarking latency impact), remove `patch_agent_output_validators` entirely. If not, keep the monkey-patch but add the no-op detection test.
 
 ### Phase D — `ValidationPipeline` (optional, for testability)
+
+Status: Deferred — testability gain is real but no concrete pain point yet; revisit when adding a fourth validation stage.
+
 1. Create `pipeline.py` with a `ValidationPipeline` class.
 2. Each stage is injected (enables unit testing without DB). 
 3. `write_path.py` takes a `ValidationPipeline` instead of a raw `CitationValidator`.
@@ -241,8 +252,8 @@ The current weights (density 0.25, coverage 0.30, relational 0.15, primary_ratio
 
 | Decision | Chosen | Rejected | Reason |
 |----------|--------|----------|--------|
-| Recovery mechanism | `model_validator(mode='before')` + `result_retries` (Phase C) | Keep monkey-patch as-is | Private-API dependency; pydantic-ai layout can change silently |
+| Recovery mechanism | Deferred to post-v1-α | Keep monkey-patch as-is | Private-API dependency; pydantic-ai layout can change silently |
 | Rejection enum split | Three separate enums (Structural / Citation / Business) | Extend existing `CitationRejectionReason` | Metric label pollution; layer boundary violation |
-| Pipeline abstraction | Explicit `ValidationPipeline` (Phase D, optional) | Ad-hoc calls in `write_path.py` | Testability: unit tests need injectable stages without live Memgraph |
+| Pipeline abstraction | Deferred to post-v1-α | Ad-hoc calls in `write_path.py` | Testability: unit tests need injectable stages without live Memgraph |
 | `_pre_check_edge` fate | Audit first (Q1); remove if dead, document if live | Remove immediately | Unknown if code path that bypasses model validation exists |
 | Quality weights | Stay hardcoded for now | Move to `CustodianSettings` | Low priority; premature if weights haven't needed tuning post-ship |

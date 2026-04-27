@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 
 from context_service.core.settings import get_settings
 from context_service.custodian.rejection_reasons import (
+    BusinessRejection,
     CitationRejection,
     StructuralRejection,
 )
@@ -63,7 +64,9 @@ class RejectionMetrics(Protocol):
     """
 
     def increment_claim_rejection(
-        self, reason: CitationRejection | StructuralRejection, count: int = 1
+        self,
+        reason: StructuralRejection | CitationRejection | BusinessRejection,
+        count: int = 1,
     ) -> None: ...
 
 
@@ -274,6 +277,11 @@ class CitationValidator:
     def _pre_check_edge(self, edge: ProposedEdge) -> EdgeValidationResult | None:
         """Pure-Python confidence + schema checks; returns a rejection result
         or ``None`` to indicate the edge passes the pre-check.
+
+        # Defensive: load-bearing only if a future raw-dict path bypasses Pydantic
+        # construction. As of 2026-04-28, all production paths go through
+        # ProposedEdge.model_validate, so the schema + confidence checks below are
+        # belt-and-suspenders. Do not delete without re-auditing the call graph.
 
         Uses ``StructuralRejection`` so that schema/confidence failures are
         labelled under ``custodian_structural_rejections``, not the citation
