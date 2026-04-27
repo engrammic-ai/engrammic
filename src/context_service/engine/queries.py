@@ -28,6 +28,24 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from datetime import datetime
 
+from primitives.eag.queries.silo import (
+    CREATE_SILO as CREATE_SILO,
+)
+from primitives.eag.queries.silo import (
+    DELETE_SILO as DELETE_SILO,
+)
+from primitives.eag.queries.silo import (
+    GET_SILO as GET_SILO,
+)
+from primitives.eag.queries.silo import (
+    LIST_SILOS as LIST_SILOS,
+)
+from primitives.eag.queries.silo import (
+    RESET_SILO as RESET_SILO,
+)
+from primitives.eag.queries.silo import (
+    UPDATE_SILO as UPDATE_SILO,
+)
 from primitives.schema.labels import IntelligenceLabel, KnowledgeLabel
 
 from context_service.db.schema import (
@@ -554,55 +572,6 @@ DELETE_HYPEREDGE = """
 MATCH (he:HyperEdge {id: $id, silo_id: $silo_id})
 DETACH DELETE he
 RETURN count(he) AS deleted
-"""
-
-# --- Silo Queries ---
-
-CREATE_SILO = """
-CREATE (s:Silo {
-    id: $id,
-    name: $name,
-    description: $description,
-    org_id: $org_id,
-    dissolvability: $dissolvability,
-    metadata: $metadata,
-    created_at: timestamp(),
-    updated_at: timestamp()
-})
-RETURN s
-"""
-
-GET_SILO = """
-MATCH (s:Silo {id: $id, org_id: $org_id})
-RETURN s
-"""
-
-LIST_SILOS = """
-MATCH (s:Silo {org_id: $org_id})
-RETURN s
-ORDER BY s.name
-"""
-
-UPDATE_SILO = """
-MATCH (s:Silo {id: $id, org_id: $org_id})
-SET s.name = $name,
-    s.description = $description,
-    s.dissolvability = $dissolvability,
-    s.metadata = $metadata,
-    s.updated_at = timestamp()
-RETURN s
-"""
-
-DELETE_SILO = """
-MATCH (s:Silo {id: $id, org_id: $org_id})
-DELETE s
-RETURN count(s) AS deleted
-"""
-
-RESET_SILO = f"""
-MATCH (n) WHERE {content_union_predicate("n")} AND n.silo_id = $silo_id
-DETACH DELETE n
-RETURN count(n) AS deleted_nodes
 """
 
 # --- Graph Traversal Queries ---

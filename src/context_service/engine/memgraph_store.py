@@ -8,6 +8,9 @@ import uuid as uuid_mod
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
+from primitives.eag import EAGKnowledgeStore
+from primitives.protocols import DeleteResult, IngestResult, KnowledgeNode, Scope
+
 from context_service.config.logging import get_logger
 from context_service.db.schema import (
     LABEL_CLAIM,
@@ -34,6 +37,28 @@ _CONTENT_LABEL_SET: frozenset[str] = frozenset(
 _PATH_LABEL_SET: frozenset[str] = _CONTENT_LABEL_SET | {"Node"}
 
 
+def _node_to_knowledge_node(node: Node) -> KnowledgeNode:
+    """Translate a context-service Node to the primitives KnowledgeNode protocol shape."""
+    from primitives.protocols import Layer
+
+    _layer_map = {
+        "document": Layer.MEMORY,
+        "passage": Layer.MEMORY,
+        "claim": Layer.KNOWLEDGE,
+        "entity": Layer.KNOWLEDGE,
+    }
+    layer = _layer_map.get(node.type or node.label or "", Layer.MEMORY)
+    return KnowledgeNode(
+        id=str(node.id),
+        layer=layer,
+        silo_id=str(node.silo_id),
+        content=node.content,
+        metadata=node.properties or {},
+        created_at=node.created_at,
+        updated_at=node.updated_at,
+    )
+
+
 def _parse_dt(value: Any) -> datetime:
     """Parse a datetime from Memgraph -- handles str, native datetime, neo4j DateTime, and epoch-ms int."""
     if isinstance(value, datetime):
@@ -53,11 +78,78 @@ def _parse_dt(value: Any) -> datetime:
     return datetime.fromisoformat(str(value))
 
 
-class MemgraphStore:
-    """HyperGraphStore implementation backed by Memgraph."""
+class MemgraphStore(EAGKnowledgeStore):
+    """HyperGraphStore implementation backed by Memgraph.
+
+    Inherits EAGKnowledgeStore to satisfy the primitives protocol contract.
+    The five EAGKnowledgeStore abstract methods (ingest, query, get, get_batch,
+    delete) operate on primitives' Scope/KnowledgeNode/IngestResult/DeleteResult
+    types, while MemgraphStore's native API operates on context-service's own
+    Node/ScopeContext domain models. The adapter stubs below mark the gap —
+    they must be wired to the higher-level service layer (context_store /
+    retrieval pipeline) before the EAG protocol can be used end-to-end.
+    """
 
     def __init__(self, client: MemgraphClient) -> None:
         self._client = client
+
+    # --- EAGKnowledgeStore protocol adapters (not yet wired) ---
+
+    async def ingest(
+        self,
+        content: str,
+        metadata: dict[str, Any],
+        scope: Scope,
+    ) -> IngestResult:
+        # Ingestion in context-service flows through the store-batch pipeline
+        # (MCP context_store -> ingest service -> outbox -> Dagster assets).
+        # This adapter cannot be wired at the MemgraphStore layer without
+        # pulling in the full ingest service stack.
+        raise NotImplementedError(
+            "MemgraphStore.ingest: wire through context_service.services.ingest"
+        )
+
+    async def query(
+        self,
+        q: str,
+        scope: Scope,
+        limit: int = 10,
+    ) -> list[KnowledgeNode]:
+        # Retrieval in context-service uses the hybrid SPLADE+dense RRF pipeline
+        # in context_service.retrieval, not a direct store method.
+        raise NotImplementedError(
+            "MemgraphStore.query: wire through context_service.retrieval pipeline"
+        )
+
+    async def get(self, node_id: str, scope: Scope) -> KnowledgeNode | None:
+        # Adapter over get_node; translates primitives Scope -> silo_id string.
+        node = await self.get_node(uuid.UUID(node_id), scope.silo_id)
+        if node is None:
+            return None
+        return _node_to_knowledge_node(node)
+
+    async def get_batch(
+        self, node_ids: list[str], scope: Scope
+    ) -> list[KnowledgeNode]:
+        # Adapter over batch_get_nodes.
+        uuids = [uuid.UUID(nid) for nid in node_ids]
+        node_map = await self.batch_get_nodes(uuids, scope.silo_id)
+        return [_node_to_knowledge_node(n) for n in node_map.values()]
+
+    async def delete(
+        self,
+        node_id: str,
+        scope: Scope,
+        cascade: bool = False,
+    ) -> DeleteResult:
+        # Cascade walk (DERIVED_FROM / CITES DAG) is not yet implemented;
+        # see context/plans/cag-integration-audit.md right-to-erasure item.
+        if cascade:
+            raise NotImplementedError(
+                "MemgraphStore.delete cascade=True: implement erasure DAG walk first"
+            )
+        deleted = await self.delete_node(uuid.UUID(node_id), scope.silo_id)
+        return DeleteResult(deleted=deleted, node_id=node_id, cascade_count=0)
 
     # --- Helpers ---
 
