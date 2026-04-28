@@ -4,7 +4,10 @@ Active implementation plans for context-service. Each plan lives in its own file
 
 ## Active plans
 
-### v1-α — close paradigm gaps
+### v1-β — production hardening + paradigm completion (next)
+- [v1-beta-master.md](./v1-beta-master.md) — master index for v1-β. Six phases (auth finish, Dagster asset migration, SPLADE, silo export/import, integration test pack, paradigm completion + hygiene). Sub-plans land at phase kickoff.
+
+### v1-α — close paradigm gaps (complete 2026-04-28)
 - [v1a-claim-fact-promotion.md](./v1a-claim-fact-promotion.md) — wire `:Claim` → `:Fact` promotion via `primitives.eag.epistemology`; keep `:Finding` semantics intact.
 - [v1a-edge-migration.md](./v1a-edge-migration.md) — migrate legacy `BELONGS_TO` edges to `MEMBER_OF`; drop dual-read; close stale audit TODOs.
 - [v1a-validator-phase-b-finish.md](./v1a-validator-phase-b-finish.md) — split rejection metric into three counters; consolidate quality score in `BusinessRuleValidator`.
