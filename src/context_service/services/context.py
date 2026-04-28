@@ -902,7 +902,22 @@ class ContextService:
 
         Returns:
             Generated edge ID string.
+
+        Raises:
+            ValueError: If ``relationship`` is not a member of
+                ``models.mcp.RelationshipType``. Defense-in-depth so non-MCP
+                callers (services, tests, future APIs) cannot inject Cypher.
         """
+        from context_service.models.mcp import RelationshipType
+
+        try:
+            rel_type = RelationshipType(relationship).value
+        except ValueError as exc:
+            raise ValueError(
+                f"Invalid relationship {relationship!r}; "
+                f"must be one of {[e.value for e in RelationshipType]}"
+            ) from exc
+
         edge_id = str(uuid.uuid4())
         props: dict[str, Any] = {"id": edge_id, "weight": weight}
         if note:
@@ -912,7 +927,7 @@ class ContextService:
             f"""
             MATCH (a {{id: $from_id, silo_id: $silo_id}})
             MATCH (b {{id: $to_id, silo_id: $silo_id}})
-            CREATE (a)-[r:{relationship} $props]->(b)
+            CREATE (a)-[r:{rel_type} $props]->(b)
             """,
             {"from_id": from_node, "to_id": to_node, "silo_id": silo_id, "props": props},
         )
