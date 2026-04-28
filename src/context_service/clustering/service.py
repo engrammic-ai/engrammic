@@ -369,7 +369,7 @@ class ClusteringService:
             batch = with_summary[i : i + batch_size]
             texts = [c.summary for c in batch]
             try:
-                vectors, _usage = await self._embedding.embed(texts)
+                vectors = await self._embedding.embed(texts)
             except Exception as e:
                 logger.warning(
                     "failed to embed cluster summary batch",
