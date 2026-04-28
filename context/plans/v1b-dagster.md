@@ -136,3 +136,15 @@ The DAG handles bulk + scheduled processing only. **Real-time per-call writes** 
 - Cost-aware scheduling (just rate limits via concurrency keys; no spend budgeting).
 - Cross-silo reconciliation jobs.
 - UI for manual asset launches beyond what `just dagster-web` provides natively.
+
+## Findings to absorb (from review 2026-04-28)
+
+The 2026-04-28 codebase review (`context/review/codebase-review-2026-04-28.md`) flagged four batching findings that belong in the asset migrations:
+
+- **R-003** / **F-016** (β2a — extraction asset) — `apply_claims_to_graph` and `apply_document_claims` issue 3-4 `execute_write` calls per triple (~100 RTTs per extraction job). When the extraction asset is rewritten, collapse to UNWIND-batched queries (one upsert claims + one upsert mentions + one attach passages + one attach references; four total instead of N×4).
+- **R-005** (β2b — custodian finalize asset) — `consensus_promotion.py:46-51` issues per-chain `CREATE_PROMOTED_FROM_EDGE` calls. Batch via UNWIND in the asset rewrite.
+- **R-006** (β2c — clustering asset) — `clustering/service.py:164-177` writes hierarchy per-cluster. Batch.
+- **R-007** (β2c — clustering asset) — `clustering/service.py:383-399` upserts Qdrant cluster embeddings one-by-one despite the batch upsert API. Use the batch endpoint.
+- **R-004** (already absorbed) — `clustering/service.py:372` unpacked `embed()` as a tuple. Fixed in `phase-eag-c-review-cleanup` commit `86baa4c`. No β2 work needed.
+
+These four are not gating; the existing service-layer code paths still work, just inefficiently. The asset rewrites are the natural place to fix them.
