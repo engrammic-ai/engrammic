@@ -152,13 +152,17 @@ class ContextService:
 
         await self._memgraph.execute_write(create_query, params)
 
+        # Idempotency cache is written BEFORE Qdrant so a Qdrant failure does
+        # not cause the next retry to mint a fresh node id (which would leave
+        # an orphan Memgraph node behind). Trade-off: a successful Memgraph +
+        # Redis write followed by a Qdrant failure leaves a node without a
+        # vector — invisible to semantic search but recoverable by a
+        # reconciliation worker. Duplicate nodes are not. (N-009)
+        if idempotency_key and self._cache:
+            cache_key = f"idempotency:{silo_id}:{idempotency_key}"
+            await self._cache.set(cache_key, str(node.id).encode(), ttl_seconds=86400)
+
         if content and len(content) >= MIN_CONTENT_FOR_EMBEDDING and self._embedding:
-            # Qdrant failure is not swallowed: a node in Memgraph without a
-            # vector is invisible to semantic search (silent desync). Failing
-            # here lets the caller retry the whole operation atomically.
-            # Tradeoff: callers that tolerate graph-only storage must catch and
-            # handle this explicitly; the alternative (marking _qdrant_sync_pending
-            # on the node) would require a separate reconciliation worker.
             vector = await self._embedding.embed_single(content)
             await self._qdrant.upsert(
                 node_id=str(node.id),
@@ -166,10 +170,6 @@ class ContextService:
                 payload={"type": node_type},
                 silo_id=str(silo_id),
             )
-
-        if idempotency_key and self._cache:
-            cache_key = f"idempotency:{silo_id}:{idempotency_key}"
-            await self._cache.set(cache_key, str(node.id).encode(), ttl_seconds=86400)
 
         logger.info("context_stored", node_id=str(node.id), type=node_type, silo_id=str(silo_id))
         return node
