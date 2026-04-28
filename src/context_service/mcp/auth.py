@@ -11,6 +11,7 @@ phase 1 (``v1b-auth-finish.md``) will rebuild per-request auth around it.
 
 from __future__ import annotations
 
+import hmac
 import os
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -19,6 +20,8 @@ from typing import TYPE_CHECKING, Any
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
+
+from context_service.config.settings import get_settings
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -32,6 +35,14 @@ DEV_ORG_ID = "dev-org"
 ALL_PERMISSIONS = ["read", "write", "admin"]
 
 _mcp_auth_context: ContextVar[MCPAuthContext | None] = ContextVar("mcp_auth_context", default=None)
+
+
+class MCPAuthError(ValueError):
+    """Raised when MCP request authentication fails.
+
+    Subclasses ``ValueError`` so existing middleware ``except ValueError``
+    handlers continue to catch it during the v1-β transition.
+    """
 
 
 @dataclass
@@ -81,12 +92,20 @@ async def validate_mcp_request(authorization: str | None) -> MCPAuthContext:
         MCPAuthContext with org_id and permissions.
 
     Raises:
-        ValueError: If authentication fails.
+        MCPAuthError: If authentication fails or the dev fallback is reached
+            in a production environment.
     """
     expected_key = os.environ.get("MCP_API_KEY")
 
     # Dev mode: no API key configured
     if not expected_key:
+        # Request-layer prod guard — mirrors the boot-time guard in
+        # ``Settings._validate_auth`` so a missing MCP_API_KEY can never
+        # silently grant admin access in production.
+        if get_settings().environment == "production":
+            raise MCPAuthError(
+                "MCP_API_KEY must be set when ENVIRONMENT=production"
+            )
         logger.debug("MCP running in dev mode (no MCP_API_KEY)")
         return MCPAuthContext(
             org_id=DEV_ORG_ID,
@@ -96,18 +115,19 @@ async def validate_mcp_request(authorization: str | None) -> MCPAuthContext:
 
     # Validate Bearer token
     if not authorization:
-        raise ValueError("Missing Authorization header")
+        raise MCPAuthError("Missing Authorization header")
 
     parts = authorization.split(" ", 1)
     if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise ValueError("Invalid Authorization header format")
+        raise MCPAuthError("Invalid Authorization header format")
 
     token = parts[1].strip()
     if not token:
-        raise ValueError("Empty API key")
+        raise MCPAuthError("Empty API key")
 
-    if token != expected_key:
-        raise ValueError("Invalid API key")
+    # Timing-safe comparison to avoid leaking key bytes via response timing.
+    if not hmac.compare_digest(token.encode("utf-8"), expected_key.encode("utf-8")):
+        raise MCPAuthError("Invalid API key")
 
     # In production, org_id would come from API key lookup
     # For now, use env var or default
