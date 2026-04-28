@@ -35,8 +35,7 @@ def test_tool_does_not_import_broken_get_mcp_auth(module_name: str) -> None:
     )
     if "get_mcp_auth(" in source:
         assert "get_mcp_auth_context(" in source, (
-            f"{module_name} calls bare get_mcp_auth() instead of "
-            f"get_mcp_auth_context() (S-001)"
+            f"{module_name} calls bare get_mcp_auth() instead of get_mcp_auth_context() (S-001)"
         )
 
 

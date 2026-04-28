@@ -36,6 +36,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         memgraph_client = MemgraphClient(memgraph_driver)
         logger.info("memgraph_connected")
 
+        from context_service.db.custodian_queries import bootstrap_custodian_schema
+        from context_service.db.indexes import apply_all_indexes
+
+        await apply_all_indexes(memgraph_client)
+        await bootstrap_custodian_schema(memgraph_client)
+        logger.info("memgraph_schema_applied")
+
         redis_pool = await create_redis_pool(settings)
         redis_client = RedisClient(redis_pool)
         logger.info("redis_connected")
