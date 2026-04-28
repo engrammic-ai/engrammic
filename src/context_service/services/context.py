@@ -514,16 +514,19 @@ class ContextService:
 
         await self._memgraph.execute_write(
             """
-            CREATE (n:ReasoningChain {
-                id: $id,
-                silo_id: $silo_id,
-                content: $content,
-                layer: 'intelligence',
-                session_id: $session_id,
-                steps: $steps,
-                steps_count: $steps_count,
-                created_at: timestamp()
-            })
+            MERGE (n:ReasoningChain {id: $id})
+            ON CREATE SET
+                n.silo_id = $silo_id,
+                n.content = $content,
+                n.layer = 'intelligence',
+                n.session_id = $session_id,
+                n.steps = $steps,
+                n.steps_count = $steps_count,
+                n.created_at = timestamp()
+            ON MATCH SET
+                n.content = $content,
+                n.steps = $steps,
+                n.steps_count = $steps_count
             """,
             {
                 "id": str(chain_id),
