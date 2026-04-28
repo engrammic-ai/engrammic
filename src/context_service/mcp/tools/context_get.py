@@ -75,15 +75,23 @@ def register(mcp: FastMCP) -> None:
                     }
                 )
             else:
+                props = node.properties or {}
                 nodes_out.append(
                     {
                         "node_id": str(node.id),
                         "content": node.content,
                         "type": node.type,
                         "silo_id": str(node.silo_id) if node.silo_id else None,
-                        "properties": node.properties,
+                        "properties": props,
                         "source_uri": node.source_uri,
                         "content_hash": node.content_hash,
+                        "layer": props.get("layer"),
+                        "summary": props.get("summary"),
+                        "confidence": props.get("confidence"),
+                        "tags": props.get("tags"),
+                        "created_at": (
+                            node.created_at.isoformat() if node.created_at else None
+                        ),
                     }
                 )
 
