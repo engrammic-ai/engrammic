@@ -598,8 +598,14 @@ class ContextService:
         metadata: dict[str, Any] | None = None,
         tags: list[str] | None = None,
         agent_id: str | None = None,
+        source_tier: str | None = None,
     ) -> Node:
-        """Assert a claim to Knowledge layer with evidence."""
+        """Assert a claim to Knowledge layer with evidence.
+
+        ``source_tier`` (one of authoritative/validated/community/unknown) is
+        persisted on the claim for downstream :Claim -> :Fact promotion via
+        ``primitives.eag.epistemology``. Defaults to unknown if omitted.
+        """
         from context_service.models.mcp import SPOClaim
 
         props = dict(metadata or {})
@@ -607,6 +613,8 @@ class ContextService:
         props["source_type"] = source_type.value if hasattr(source_type, "value") else source_type
         props["confidence"] = confidence
         props["evidence"] = evidence
+        if source_tier is not None:
+            props["source_tier"] = source_tier
         if tags:
             props["tags"] = tags
         if agent_id:

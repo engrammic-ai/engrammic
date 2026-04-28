@@ -28,6 +28,9 @@ if TYPE_CHECKING:
     from fastmcp import FastMCP
 
 
+_VALID_SOURCE_TIERS = ("authoritative", "validated", "community", "unknown")
+
+
 async def _context_assert(
     silo_id: str,
     claim: str | dict[str, Any],
@@ -37,6 +40,7 @@ async def _context_assert(
     metadata: dict[str, Any] | None = None,
     tags: list[str] | None = None,
     evidence_mode: str = "sync",
+    source_tier: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation."""
     auth = get_mcp_auth_context()
@@ -55,6 +59,12 @@ async def _context_assert(
         return {
             "error": "invalid_source_type",
             "message": f"Must be one of: {[e.value for e in SourceType]}",
+        }
+
+    if source_tier is not None and source_tier not in _VALID_SOURCE_TIERS:
+        return {
+            "error": "invalid_source_tier",
+            "message": f"Must be one of: {list(_VALID_SOURCE_TIERS)}",
         }
 
     if not 0.0 <= confidence <= 1.0:
@@ -96,6 +106,7 @@ async def _context_assert(
         metadata=metadata,
         tags=tags,
         agent_id=getattr(auth, "agent_id", None),
+        source_tier=source_tier,
     )
 
     promoted = False
@@ -146,6 +157,7 @@ def register(mcp: FastMCP) -> None:
         metadata: dict[str, Any] | None = None,
         tags: list[str] | None = None,
         evidence_mode: str = "sync",
+        source_tier: str | None = None,
     ) -> dict[str, Any]:
         """Assert a claim with evidence.
 
@@ -158,6 +170,10 @@ def register(mcp: FastMCP) -> None:
             metadata: Optional metadata.
             tags: Optional tags.
             evidence_mode: sync (validate first) or async (validate later).
+            source_tier: Source credibility tier — one of authoritative,
+                validated, community, unknown. Persisted on the claim and
+                consumed by Claim->Fact promotion. Defaults to unknown if
+                omitted (which fails R1 single-source promotion).
 
         Returns:
             {node_id, layer, claim_type, evidence_status, evidence_nodes, created_at}
@@ -171,4 +187,5 @@ def register(mcp: FastMCP) -> None:
             metadata=metadata,
             tags=tags,
             evidence_mode=evidence_mode,
+            source_tier=source_tier,
         )
