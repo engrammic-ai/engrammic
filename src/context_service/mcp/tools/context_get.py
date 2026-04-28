@@ -6,6 +6,11 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Any
 
+from context_service.mcp.server import (
+    get_context_service,
+    get_mcp_auth_context,
+    get_silo_service,
+)
 from context_service.services.models import derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 
@@ -45,11 +50,6 @@ def register(mcp: FastMCP) -> None:
                 "error": "as_of_not_supported",
                 "message": "Point-in-time retrieval is not yet implemented",
             }
-        from context_service.mcp.server import (
-            get_context_service,
-            get_mcp_auth_context,
-            get_silo_service,
-        )
 
         auth = get_mcp_auth_context()
         ctx_svc = get_context_service()

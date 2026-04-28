@@ -22,7 +22,10 @@ class Settings(BaseSettings):
     service_name: str = "context-service"
     environment: str = "development"
     debug: bool = False
-    host: str = "0.0.0.0"
+    # 127.0.0.1 is safer by default. Container deployments override via the
+    # HOST env var (or by passing --host 0.0.0.0 to uvicorn) when the service
+    # needs to be reachable from outside the container.
+    host: str = "127.0.0.1"
     port: int = 8000
     reload: bool = False
 

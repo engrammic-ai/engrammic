@@ -10,6 +10,12 @@ if TYPE_CHECKING:
 
 # Registry: (silo_id, service_name) -> CircuitBreaker
 # Ensures CB state persists across requests for the same silo/service pair.
+#
+# NOTE: _registry_lock is bound to the event loop that imports this module.
+# All current callers (FastAPI, Dagster ops, MCP tools) run on a single shared
+# loop per process, so this is safe today. If a future caller spins a private
+# loop and reimports, the lock will not arbitrate across loops — switch to a
+# per-loop registry then.
 _registry: dict[tuple[str, str], CircuitBreaker] = {}
 _registry_lock = asyncio.Lock()
 

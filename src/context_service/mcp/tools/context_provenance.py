@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING, Any
 
+from context_service.mcp.server import get_context_service, get_mcp_auth_context
 from context_service.services.models import derive_silo_id
 
 if TYPE_CHECKING:
@@ -17,8 +18,6 @@ async def _context_provenance(
     max_depth: int = 10,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
-    from context_service.mcp.server import get_mcp_auth_context
-
     auth = get_mcp_auth_context()
     expected_silo_id = derive_silo_id(auth.org_id)
 
@@ -32,8 +31,6 @@ async def _context_provenance(
 
     if not node_id or not node_id.strip():
         return {"error": "missing_node_id", "message": "node_id is required"}
-
-    from context_service.mcp.server import get_context_service
 
     ctx_svc = get_context_service()
     result = await ctx_svc.provenance(
