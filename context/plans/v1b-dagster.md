@@ -12,6 +12,25 @@ Move the extraction → embedding → custodian → clustering → fact-promotio
 
 `pipelines/assets/` today contains exactly one asset (`fact_promotion.py`, unscheduled). Every pipeline step still runs as a service-call sequence with no retry budget, no per-silo isolation, no run history, and no observable metrics. Production reliability needs Dagster on the spine.
 
+## Cadence by asset (NOT triggered per-document)
+
+The arrows between assets are **data dependencies**, not trigger-time coupling. Each asset runs at its own cadence; downstream waits for upstream's data to exist, not for upstream to run.
+
+| Asset | Trigger | Realistic cadence |
+|---|---|---|
+| Extraction | Sensor on `:Document` arrival | Batched per silo: every ~5 min or when N docs queued |
+| Embedding | Sensor on pending-vector count | Same window as extraction; runs in parallel |
+| Custodian visit | Schedule | Every 15 min per active silo |
+| Custodian finalize | Schedule (post-visit) | Same window as visit |
+| Fact-promotion sweep | Schedule | Hourly per silo |
+| Clustering | Schedule | Daily off-peak per silo (Leiden is expensive) |
+
+So a single doc ingested doesn't fire clustering — clustering runs once a day on accumulated state. A burst of 50 docs gets one extraction batch, one embedding batch, one or two visits, and clustering catches up overnight.
+
+Concurrency: across silos parallel via per-silo concurrency keys; within a silo, single-runner per partition but each run batches (Memgraph supports concurrent writes; LLM calls bounded by a semaphore).
+
+The DAG handles bulk + scheduled processing only. **Real-time per-call writes** via MCP tools (`context_remember`, `context_assert`, `context_commit`, `context_reflect`) bypass Dagster entirely — they go through `services/context.py::store()` synchronously. The DAG is for scaled bulk ingest, custodian sweeps, and periodic clustering.
+
 ## Current state (anchored from audit on 2026-04-28)
 
 - `src/context_service/pipelines/definitions.py` — bare `Definitions` with `all_assets`, no jobs/schedules, plus `all_sensors`. Loads cleanly via `just dagster-web`.
