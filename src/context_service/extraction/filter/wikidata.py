@@ -26,11 +26,32 @@ def _cache_key(claim: ClaimTriple) -> str:
     return f"wikidata:hit:{h}"
 
 
+_SPARQL_ESCAPES = (
+    ("\\", "\\\\"),  # backslash MUST be first
+    ('"', '\\"'),
+    ("\n", "\\n"),
+    ("\r", "\\r"),
+    ("\t", "\\t"),
+)
+
+
+def _escape_sparql_literal(value: str) -> str:
+    """Escape a string for safe inclusion inside a double-quoted SPARQL literal.
+
+    Per SPARQL 1.1 §19.7 the string-literal escape set is \\, ", \\n, \\r, \\t,
+    \\u, \\U. We don't emit \\u/\\U sequences here, so the input set above is
+    sufficient to prevent breaking out of the literal.
+    """
+    for needle, replacement in _SPARQL_ESCAPES:
+        value = value.replace(needle, replacement)
+    return value
+
+
 def _build_sparql_ask(claim: ClaimTriple) -> str:
     # Minimum-viable: label-based ASK. Precision is low but FP rate stays near zero
     # because a NO answer falls through — a YES is only produced on an actual match.
-    s = str(claim.subject).replace('"', '\\"')
-    o = str(claim.object).replace('"', '\\"')
+    s = _escape_sparql_literal(str(claim.subject))
+    o = _escape_sparql_literal(str(claim.object))
     return f'''
 ASK {{
   ?subj ?p ?obj .
