@@ -1010,10 +1010,11 @@ class ContextService:
         if rows:
             node_ids_found = [r["node_id"] for r in rows if r.get("node_id")]
             if len(node_ids_found) > 1:
+                params: dict[str, Any] = {"node_ids": node_ids_found}
                 rel_filter = ""
                 if relationship_types:
-                    rel_labels = "|".join(relationship_types)
-                    rel_filter = f"AND type(r) IN ['{rel_labels}']"
+                    rel_filter = "AND type(r) IN $rel_types"
+                    params["rel_types"] = list(relationship_types)
                 edge_rows = await self._memgraph.execute_query(
                     f"""
                     UNWIND $node_ids AS nid
@@ -1022,7 +1023,7 @@ class ContextService:
                     RETURN a.id AS from_node, b.id AS to_node, type(r) AS relationship,
                            COALESCE(r.weight, 1.0) AS weight
                     """,
-                    {"node_ids": node_ids_found},
+                    params,
                 )
 
         nodes_out = [
