@@ -8,7 +8,7 @@ from context_service.extraction.filter.wikidata import _escape_sparql_literal
 
 
 def test_escape_double_quote() -> None:
-    assert _escape_sparql_literal('he said "hi"') == r'he said \"hi\"'
+    assert _escape_sparql_literal('he said "hi"') == r"he said \"hi\""
 
 
 def test_escape_backslash_first() -> None:
@@ -28,16 +28,14 @@ def test_escape_keeps_payload_inside_literal() -> None:
     # No unescaped double-quote — every " is preceded by \\
     for i, ch in enumerate(escaped):
         if ch == '"':
-            assert i > 0 and escaped[i - 1] == "\\", (
-                f"unescaped quote at index {i} in {escaped!r}"
-            )
+            assert i > 0 and escaped[i - 1] == "\\", f"unescaped quote at index {i} in {escaped!r}"
 
 
 def test_escape_neutralizes_backslash_quote_attack() -> None:
     """Naive single-pass escape that only handled " would turn \\" into \\\\"
     and let the closing " through. Confirm backslash-first ordering blocks it.
     """
-    payload = r'a\"b'
+    payload = r"a\"b"
     escaped = _escape_sparql_literal(payload)
     # backslash itself doubled, original \" becomes \\\\\" (4 backslashes + ")
     assert escaped == r"a\\\"b"

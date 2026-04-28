@@ -22,11 +22,10 @@ All retrieval-facing reads filter AND n.committed = true per O-75.
 
 from __future__ import annotations
 
-import hashlib
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from datetime import datetime
+    pass
 
 from primitives.eag.queries.silo import (
     CREATE_SILO as CREATE_SILO,
@@ -943,34 +942,6 @@ RETURN chain.id AS id
 
 # Sentinel for Qdrant commitment vector deletion (not a Cypher query).
 DELETE_COMMITMENT_VECTOR = "qdrant_delete"
-
-
-def _canonical(value: str) -> str:
-    """Normalize string for stable hashing."""
-    return value.strip().lower()
-
-
-def compute_claim_id(
-    *,
-    subject: str,
-    predicate: str,
-    object: str,
-    valid_from: datetime | None,
-    valid_to: datetime | None,
-    source_doc_id: str | None,
-    label_tier: str = "claim",
-) -> str:
-    """O-12 claim-ID hash extended with label_tier per R16-12."""
-    parts = [
-        _canonical(subject),
-        predicate,
-        _canonical(object),
-        str(int(valid_from.timestamp() * 1e6)) if valid_from else "",
-        str(int(valid_to.timestamp() * 1e6)) if valid_to else "",
-        source_doc_id or "",
-        label_tier,
-    ]
-    return hashlib.blake2b("|".join(parts).encode(), digest_size=32).hexdigest()
 
 
 # ---------------------------------------------------------------------------
