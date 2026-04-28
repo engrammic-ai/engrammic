@@ -12,7 +12,9 @@ from typing import Any
 
 import yaml
 
-CONFIG_DIR = Path(__file__).resolve().parent.parent.parent.parent / "config"
+from context_service.config.paths import config_dir
+
+CONFIG_DIR: Path = config_dir()
 
 
 @lru_cache

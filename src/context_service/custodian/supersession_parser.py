@@ -11,15 +11,11 @@ import json
 import re
 from dataclasses import dataclass
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from context_service.custodian.prompt_loader import load_prompt
 
-_PROMPTS_DIR = (
-    Path(__file__).resolve().parent.parent.parent.parent / "config" / "prompts" / "custodian"
-)
-_SUPERSESSION_PROMPT_PATH = _PROMPTS_DIR / "supersession.yaml"
+_SUPERSESSION_PROMPT_PATH = "prompts/custodian/supersession.yaml"
 
 
 @dataclass(frozen=True)
