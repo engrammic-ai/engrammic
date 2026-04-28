@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from context_service.mcp.auth import get_mcp_auth
-from context_service.mcp.server import get_context_service, get_silo_service
+from context_service.mcp.server import get_context_service, get_mcp_auth_context, get_silo_service
 from context_service.models.mcp import Layer
 from context_service.services.models import derive_silo_id
 from context_service.services.silo import validate_silo_ownership
@@ -23,7 +22,7 @@ async def _context_graph(
     relationship_types: list[str] | None = None,
     layers: list[str] | None = None,
 ) -> dict[str, Any]:
-    auth = get_mcp_auth()
+    auth = get_mcp_auth_context()
     ctx_svc = get_context_service()
 
     err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)

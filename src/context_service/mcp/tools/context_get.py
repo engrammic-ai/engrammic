@@ -39,10 +39,13 @@ def register(mcp: FastMCP) -> None:
         Returns:
             Dictionary with 'nodes' list containing node data.
         """
-        from context_service.mcp.auth import get_mcp_auth
-        from context_service.mcp.server import get_context_service, get_silo_service
+        from context_service.mcp.server import (
+            get_context_service,
+            get_mcp_auth_context,
+            get_silo_service,
+        )
 
-        auth = get_mcp_auth()
+        auth = get_mcp_auth_context()
         ctx_svc = get_context_service()
 
         if isinstance(node_ids, str):

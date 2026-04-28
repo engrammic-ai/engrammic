@@ -17,9 +17,9 @@ async def _context_history(
     node_id: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
-    from context_service.mcp.auth import get_mcp_auth
+    from context_service.mcp.server import get_mcp_auth_context
 
-    auth = get_mcp_auth()
+    auth = get_mcp_auth_context()
     expected_silo_id = derive_silo_id(auth.org_id)
 
     try:

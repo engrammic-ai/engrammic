@@ -8,7 +8,7 @@ import pytest
 
 @pytest.fixture
 def mock_auth():
-    with patch("context_service.mcp.tools.context_remember.get_mcp_auth") as m:
+    with patch("context_service.mcp.tools.context_remember.get_mcp_auth_context") as m:
         auth = MagicMock()
         auth.org_id = "test-org"
         m.return_value = auth

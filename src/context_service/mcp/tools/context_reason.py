@@ -22,10 +22,13 @@ async def _context_reason(
     crystallizations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
-    from context_service.mcp.auth import get_mcp_auth
-    from context_service.mcp.server import get_context_service, get_silo_service
+    from context_service.mcp.server import (
+        get_context_service,
+        get_mcp_auth_context,
+        get_silo_service,
+    )
 
-    auth = get_mcp_auth()
+    auth = get_mcp_auth_context()
 
     err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
     if err is not None:

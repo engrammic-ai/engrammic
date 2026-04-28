@@ -6,8 +6,7 @@ import time
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from context_service.mcp.auth import get_mcp_auth
-from context_service.mcp.server import get_context_service, get_silo_service
+from context_service.mcp.server import get_context_service, get_mcp_auth_context, get_silo_service
 from context_service.models.mcp import Layer, QueryFilters
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
@@ -27,7 +26,7 @@ async def _context_query(
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
 
-    auth = get_mcp_auth()
+    auth = get_mcp_auth_context()
     ctx_svc = get_context_service()
 
     err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)

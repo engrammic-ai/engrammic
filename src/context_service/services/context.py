@@ -100,8 +100,7 @@ class ContextService:
         """
         if node_type not in _ALLOWED_NODE_TYPES:
             raise ValueError(
-                f"Unknown node_type {node_type!r}. "
-                f"Allowed: {sorted(_ALLOWED_NODE_TYPES)}"
+                f"Unknown node_type {node_type!r}. Allowed: {sorted(_ALLOWED_NODE_TYPES)}"
             )
 
         silo_id = scope.silo_id
