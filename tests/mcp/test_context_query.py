@@ -12,7 +12,7 @@ import pytest
 @pytest.fixture
 def mock_deps():
     with (
-        patch("context_service.mcp.tools.context_query.get_mcp_auth") as auth_mock,
+        patch("context_service.mcp.tools.context_query.get_mcp_auth_context") as auth_mock,
         patch("context_service.mcp.tools.context_query.get_context_service") as svc_mock,
         patch("context_service.mcp.tools.context_query.get_silo_service", return_value=MagicMock()),
         patch(
@@ -167,16 +167,16 @@ async def test_query_invalid_filters(mock_deps):
 
 
 @pytest.mark.asyncio
-async def test_query_invalid_as_of(mock_deps):
+async def test_query_rejects_as_of(mock_deps):
     from context_service.mcp.tools.context_query import _context_query
 
     result = await _context_query(
         silo_id=str(uuid.uuid5(uuid.NAMESPACE_DNS, "silo:test-org")),
         query="test",
-        as_of="not-a-datetime",
+        as_of="2026-01-01T00:00:00",
     )
 
-    assert result["error"] == "invalid_as_of"
+    assert result["error"] == "as_of_not_supported"
 
 
 @pytest.mark.asyncio

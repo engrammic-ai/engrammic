@@ -1,5 +1,13 @@
 # context_service/mcp/auth.py
-"""MCP authentication - simplified API key auth."""
+"""MCP authentication — simplified API key auth.
+
+Do not import ``get_mcp_auth`` directly from here. The ContextVar it reads is
+populated only when ``MCPAuthMiddleware`` is mounted, which it currently is not
+(see review finding S-001). Tool callsites should use
+``context_service.mcp.server.get_mcp_auth_context()`` instead, which returns the
+startup-resolved ``AuthContext``. This module is kept in place because v1-β
+phase 1 (``v1b-auth-finish.md``) will rebuild per-request auth around it.
+"""
 
 from __future__ import annotations
 

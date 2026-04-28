@@ -613,13 +613,24 @@ class ExtractionService:
                 f"{entities_created} entities, {relationships_created} rels, "
                 f"{claims_written} claims (from {len(triples)} synthesized)"
             )
-            job.status = ExtractionStatus.COMPLETED
-            job.entity_count = entities_created
-            job.relationship_count = relationships_created
-            job.claim_node_ids = claim_node_ids
-            job.cost_usd = 0.0
-            job.completed_at = now
-            await self._update_node_extraction_status(silo_id, job.node_id, "done")
+            if kept_triples and claims_written == 0:
+                job.status = ExtractionStatus.FAILED
+                job.error = f"All {len(kept_triples)} claim writes failed; see prior warnings"
+                job.completed_at = datetime.now(UTC)
+                await self._update_node_extraction_status(silo_id, job.node_id, "failed")
+                logger.error(
+                    "extraction_all_writes_failed",
+                    job_id=job.id,
+                    triples=len(kept_triples),
+                )
+            else:
+                job.status = ExtractionStatus.COMPLETED
+                job.entity_count = entities_created
+                job.relationship_count = relationships_created
+                job.claim_node_ids = claim_node_ids
+                job.cost_usd = 0.0
+                job.completed_at = now
+                await self._update_node_extraction_status(silo_id, job.node_id, "done")
         except Exception as e:
             job.status = ExtractionStatus.FAILED
             job.error = str(e)

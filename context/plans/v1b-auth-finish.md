@@ -57,3 +57,15 @@ v1-α shipped boot-time prod-guard + fail-closed resolver paths, but the MCP sur
 - WorkOS verify call works against a real tenant or the API is documented as-is with a verified SDK version pin.
 - Cross-org silo access raises and the regression test pins it.
 - `just check` and `just test` green.
+
+## Findings to absorb (from review 2026-04-28)
+
+The 2026-04-28 codebase review (`context/review/codebase-review-2026-04-28.md`) flagged five auth findings that belong here. **S-001** was lifted into β0 (`v1b-review-cleanup.md`) because the MCP surface raised `RuntimeError` on every call without it; the rest stay here:
+
+- **S-002** (`mcp/auth.py:78-87`) — `validate_mcp_request()` dev-mode fallback has no env guard at request layer; misconfigured prod is full-admin. Add a hard prod check inside the validator, complementing the boot-time guard already shipped in v1-α.
+- **S-003** (`auth/resolve.py:58`) — single process-wide `MCP_DEV_TOKEN` static token. Rotation requires restart. The per-request rewrite in task 3 above closes this; ensure the env-var path is dev-only.
+- **S-004** (`mcp/auth.py:101`) — `token != expected_key` is timing-unsafe. Replace with `hmac.compare_digest`. Two-line fix; bundle with task 3.
+- **S-007** (`auth/workos_client.py:28,37`) — WorkOS SDK method has a TODO marker; verify against the pinned SDK version. Already in this plan as task 4.
+- **S-008** (`auth/workos_client.py:28`) — `workos_api_key` typed as `str`, should be `SecretStr` (pydantic). Bundle with task 4.
+
+S-001 status: fixed in `phase-eag-c-review-cleanup` commit `2c68e1a` (route tools to startup auth context). Per-request resolution in this plan supersedes that fix; the absorbing work for β1 is to rewrite around `mcp/auth.py`'s `MCPAuthContext` properly, not to revert the β0 routing.

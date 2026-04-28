@@ -100,8 +100,7 @@ class ContextService:
         """
         if node_type not in _ALLOWED_NODE_TYPES:
             raise ValueError(
-                f"Unknown node_type {node_type!r}. "
-                f"Allowed: {sorted(_ALLOWED_NODE_TYPES)}"
+                f"Unknown node_type {node_type!r}. Allowed: {sorted(_ALLOWED_NODE_TYPES)}"
             )
 
         silo_id = scope.silo_id
@@ -153,13 +152,17 @@ class ContextService:
 
         await self._memgraph.execute_write(create_query, params)
 
+        # Idempotency cache is written BEFORE Qdrant so a Qdrant failure does
+        # not cause the next retry to mint a fresh node id (which would leave
+        # an orphan Memgraph node behind). Trade-off: a successful Memgraph +
+        # Redis write followed by a Qdrant failure leaves a node without a
+        # vector — invisible to semantic search but recoverable by a
+        # reconciliation worker. Duplicate nodes are not. (N-009)
+        if idempotency_key and self._cache:
+            cache_key = f"idempotency:{silo_id}:{idempotency_key}"
+            await self._cache.set(cache_key, str(node.id).encode(), ttl_seconds=86400)
+
         if content and len(content) >= MIN_CONTENT_FOR_EMBEDDING and self._embedding:
-            # Qdrant failure is not swallowed: a node in Memgraph without a
-            # vector is invisible to semantic search (silent desync). Failing
-            # here lets the caller retry the whole operation atomically.
-            # Tradeoff: callers that tolerate graph-only storage must catch and
-            # handle this explicitly; the alternative (marking _qdrant_sync_pending
-            # on the node) would require a separate reconciliation worker.
             vector = await self._embedding.embed_single(content)
             await self._qdrant.upsert(
                 node_id=str(node.id),
@@ -167,10 +170,6 @@ class ContextService:
                 payload={"type": node_type},
                 silo_id=str(silo_id),
             )
-
-        if idempotency_key and self._cache:
-            cache_key = f"idempotency:{silo_id}:{idempotency_key}"
-            await self._cache.set(cache_key, str(node.id).encode(), ttl_seconds=86400)
 
         logger.info("context_stored", node_id=str(node.id), type=node_type, silo_id=str(silo_id))
         return node
@@ -515,16 +514,19 @@ class ContextService:
 
         await self._memgraph.execute_write(
             """
-            CREATE (n:ReasoningChain {
-                id: $id,
-                silo_id: $silo_id,
-                content: $content,
-                layer: 'intelligence',
-                session_id: $session_id,
-                steps: $steps,
-                steps_count: $steps_count,
-                created_at: timestamp()
-            })
+            MERGE (n:ReasoningChain {id: $id})
+            ON CREATE SET
+                n.silo_id = $silo_id,
+                n.content = $content,
+                n.layer = 'intelligence',
+                n.session_id = $session_id,
+                n.steps = $steps,
+                n.steps_count = $steps_count,
+                n.created_at = timestamp()
+            ON MATCH SET
+                n.content = $content,
+                n.steps = $steps,
+                n.steps_count = $steps_count
             """,
             {
                 "id": str(chain_id),
@@ -596,8 +598,14 @@ class ContextService:
         metadata: dict[str, Any] | None = None,
         tags: list[str] | None = None,
         agent_id: str | None = None,
+        source_tier: str | None = None,
     ) -> Node:
-        """Assert a claim to Knowledge layer with evidence."""
+        """Assert a claim to Knowledge layer with evidence.
+
+        ``source_tier`` (one of authoritative/validated/community/unknown) is
+        persisted on the claim for downstream :Claim -> :Fact promotion via
+        ``primitives.eag.epistemology``. Defaults to unknown if omitted.
+        """
         from context_service.models.mcp import SPOClaim
 
         props = dict(metadata or {})
@@ -605,6 +613,8 @@ class ContextService:
         props["source_type"] = source_type.value if hasattr(source_type, "value") else source_type
         props["confidence"] = confidence
         props["evidence"] = evidence
+        if source_tier is not None:
+            props["source_tier"] = source_tier
         if tags:
             props["tags"] = tags
         if agent_id:
@@ -903,7 +913,22 @@ class ContextService:
 
         Returns:
             Generated edge ID string.
+
+        Raises:
+            ValueError: If ``relationship`` is not a member of
+                ``models.mcp.RelationshipType``. Defense-in-depth so non-MCP
+                callers (services, tests, future APIs) cannot inject Cypher.
         """
+        from context_service.models.mcp import RelationshipType
+
+        try:
+            rel_type = RelationshipType(relationship).value
+        except ValueError as exc:
+            raise ValueError(
+                f"Invalid relationship {relationship!r}; "
+                f"must be one of {[e.value for e in RelationshipType]}"
+            ) from exc
+
         edge_id = str(uuid.uuid4())
         props: dict[str, Any] = {"id": edge_id, "weight": weight}
         if note:
@@ -913,7 +938,7 @@ class ContextService:
             f"""
             MATCH (a {{id: $from_id, silo_id: $silo_id}})
             MATCH (b {{id: $to_id, silo_id: $silo_id}})
-            CREATE (a)-[r:{relationship} $props]->(b)
+            CREATE (a)-[r:{rel_type} $props]->(b)
             """,
             {"from_id": from_node, "to_id": to_node, "silo_id": silo_id, "props": props},
         )
@@ -996,10 +1021,11 @@ class ContextService:
         if rows:
             node_ids_found = [r["node_id"] for r in rows if r.get("node_id")]
             if len(node_ids_found) > 1:
+                params: dict[str, Any] = {"node_ids": node_ids_found}
                 rel_filter = ""
                 if relationship_types:
-                    rel_labels = "|".join(relationship_types)
-                    rel_filter = f"AND type(r) IN ['{rel_labels}']"
+                    rel_filter = "AND type(r) IN $rel_types"
+                    params["rel_types"] = list(relationship_types)
                 edge_rows = await self._memgraph.execute_query(
                     f"""
                     UNWIND $node_ids AS nid
@@ -1008,7 +1034,7 @@ class ContextService:
                     RETURN a.id AS from_node, b.id AS to_node, type(r) AS relationship,
                            COALESCE(r.weight, 1.0) AS weight
                     """,
-                    {"node_ids": node_ids_found},
+                    params,
                 )
 
         nodes_out = [

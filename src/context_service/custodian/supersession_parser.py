@@ -84,7 +84,7 @@ def parse_supersession_response(response: str) -> list[SupersessionPair]:
                 SupersessionPair(
                     superseding_id=str(item["superseding_id"]),
                     superseded_id=str(item["superseded_id"]),
-                    confidence=float(item["confidence"]),
+                    confidence=max(0.0, min(1.0, float(item["confidence"]))),
                     reason=str(item["reason"]),
                 )
             )

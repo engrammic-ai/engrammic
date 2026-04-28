@@ -11,7 +11,7 @@ import pytest
 @pytest.fixture
 def mock_deps():
     with (
-        patch("context_service.mcp.tools.context_link.get_mcp_auth") as auth_mock,
+        patch("context_service.mcp.tools.context_link.get_mcp_auth_context") as auth_mock,
         patch("context_service.mcp.tools.context_link.get_context_service") as svc_mock,
         patch("context_service.mcp.tools.context_link.get_silo_service", return_value=MagicMock()),
         patch(

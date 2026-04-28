@@ -26,6 +26,8 @@ dependencies = [
     # Pipelines
     "dagster>=1.7",
     "dagster-webserver>=1.7",
+    # Custodian agents
+    "pydantic-ai>=0.0.14",
     # Observability (structlog only, no OTel)
     "structlog>=24.1",
     # Redis

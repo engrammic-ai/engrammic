@@ -36,6 +36,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         memgraph_client = MemgraphClient(memgraph_driver)
         logger.info("memgraph_connected")
 
+        from context_service.db.custodian_queries import bootstrap_custodian_schema
+        from context_service.db.indexes import apply_all_indexes
+
+        await apply_all_indexes(memgraph_client)
+        await bootstrap_custodian_schema(memgraph_client)
+        logger.info("memgraph_schema_applied")
+
         redis_pool = await create_redis_pool(settings)
         redis_client = RedisClient(redis_pool)
         logger.info("redis_connected")
@@ -48,13 +55,38 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.redis = redis_client
         app.state.qdrant = qdrant_client
 
+        from context_service.cache.embedding_cache import EmbeddingCache
+        from context_service.embeddings.base import EmbeddingService
         from context_service.mcp import configure_services
         from context_service.mcp.server import resolve_mcp_auth_context
+
+        embedding_cache = EmbeddingCache(redis_client)
+        embedding_service: EmbeddingService | None = None
+        if settings.vertex_project_id:
+            from context_service.embeddings.vertex import VertexAIEmbeddingService
+
+            embedding_service = VertexAIEmbeddingService.from_settings(settings, embedding_cache)
+        elif settings.jina_api_key:
+            from context_service.embeddings.jina import JinaEmbeddingService
+
+            embedding_service = JinaEmbeddingService.from_settings(settings, embedding_cache)
+
+        if embedding_service is None:
+            logger.warning(
+                "embedding_service_unconfigured",
+                hint="set jina_api_key or embedding_provider=vertex to enable semantic search",
+            )
+        else:
+            logger.info(
+                "embedding_service_configured",
+                provider=type(embedding_service).__name__,
+            )
 
         configure_services(
             memgraph=memgraph_client,
             qdrant=qdrant_client,
             redis=redis_client,
+            embedding=embedding_service,
         )
         logger.info("mcp_services_configured")
 
@@ -90,13 +122,15 @@ def create_app() -> FastAPI:
     json_format = settings.environment != "development"
     configure_logging(log_level=log_level, json_format=json_format)
 
+    docs_enabled = settings.environment != "production"
+
     app = FastAPI(
         title="Context Service",
         description="Delta Prime context infrastructure service.",
         version=__version__,
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url="/openapi.json",
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url="/openapi.json" if docs_enabled else None,
         lifespan=lifespan,
         openapi_tags=[
             {"name": "health", "description": "Health checks and status"},

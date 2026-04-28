@@ -13,8 +13,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from primitives.eag.agents import DepsProtocol  # noqa: F401  # type: ignore[import-untyped]
-from pydantic_ai import Agent  # type: ignore[import-not-found]
-from pydantic_ai.usage import UsageLimits  # type: ignore[import-not-found]
+from pydantic_ai import Agent
+from pydantic_ai.usage import UsageLimits
 
 from context_service.core.settings import get_settings
 from context_service.custodian.models import (

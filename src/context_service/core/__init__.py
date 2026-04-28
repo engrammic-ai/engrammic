@@ -1,6 +1,5 @@
-"""Core application utilities: settings and service factory."""
+"""Core application utilities: settings."""
 
-from context_service.core.service_factory import ServiceFactory
 from context_service.core.settings import (
     CacheConfig,
     CustodianSettings,
@@ -16,7 +15,6 @@ from context_service.core.settings import (
 )
 
 __all__ = [
-    "ServiceFactory",
     "Settings",
     "get_settings",
     "settings",

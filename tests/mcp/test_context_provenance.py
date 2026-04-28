@@ -14,7 +14,7 @@ SILO_ID = str(uuid.uuid5(uuid.NAMESPACE_DNS, "silo:test-org"))
 
 @pytest.fixture
 def mock_auth():
-    with patch("context_service.mcp.auth.get_mcp_auth") as m:
+    with patch("context_service.mcp.tools.context_provenance.get_mcp_auth_context") as m:
         auth = MagicMock()
         auth.org_id = "test-org"
         m.return_value = auth
@@ -23,7 +23,7 @@ def mock_auth():
 
 @pytest.fixture
 def mock_context_service():
-    with patch("context_service.mcp.server.get_context_service") as m:
+    with patch("context_service.mcp.tools.context_provenance.get_context_service") as m:
         svc = AsyncMock()
         svc.provenance.return_value = ProvenanceResult(
             chain=[
