@@ -13,7 +13,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pydantic_ai import Agent  # type: ignore[import-not-found]
+from pydantic_ai import Agent
 
 from context_service.core.settings import get_settings
 from context_service.custodian.models import FindingOutput, StitchedSummary

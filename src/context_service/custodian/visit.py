@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from pydantic_ai.exceptions import UsageLimitExceeded  # type: ignore[import-not-found]
+from pydantic_ai.exceptions import UsageLimitExceeded
 
 from context_service.config.logging import get_logger
 from context_service.core.settings import CustodianSettings, get_settings

@@ -93,8 +93,8 @@ class VertexAIEmbeddingService:
 
     def _get_auth_token(self) -> str:
         """Get a valid OAuth2 token via Application Default Credentials."""
-        import google.auth  # type: ignore[import-untyped]
-        import google.auth.transport.requests  # type: ignore[import-untyped]
+        import google.auth
+        import google.auth.transport.requests
 
         if self._credentials is None:
             self._credentials, _ = google.auth.default(
