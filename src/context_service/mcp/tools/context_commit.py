@@ -23,7 +23,7 @@ async def _context_commit(
     tags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Internal implementation."""
-    auth = get_mcp_auth_context()
+    auth = await get_mcp_auth_context()
     ctx_svc = get_context_service()
 
     err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)

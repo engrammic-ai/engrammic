@@ -43,7 +43,7 @@ async def _context_assert(
     source_tier: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation."""
-    auth = get_mcp_auth_context()
+    auth = await get_mcp_auth_context()
     ctx_svc = get_context_service()
     ev_validator = get_evidence_validator()
 

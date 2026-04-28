@@ -5,7 +5,7 @@ Ported pattern from contextr/app/core/settings.py.
 
 from functools import lru_cache
 
-from pydantic import model_validator
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -31,8 +31,11 @@ class Settings(BaseSettings):
 
     # Auth
     auth_enabled: bool = False
-    workos_api_key: str | None = None
+    workos_api_key: SecretStr | None = None
     workos_client_id: str | None = None
+    # Sealed-session secret used by WorkOS SDK v6 to seal/unseal session
+    # cookies (32-byte URL-safe base64). Required for authenticate_with_session_cookie.
+    workos_cookie_password: SecretStr | None = None
     dev_org_id: str = "dev-org"
     dev_user_id: str = "dev-user"
 
@@ -40,9 +43,14 @@ class Settings(BaseSettings):
     def _validate_auth(self) -> "Settings":
         if self.environment == "production" and not self.auth_enabled:
             raise ValueError("AUTH_ENABLED must be true when ENVIRONMENT=production")
-        if self.auth_enabled and (self.workos_api_key is None or self.workos_client_id is None):
+        if self.auth_enabled and (
+            self.workos_api_key is None
+            or self.workos_client_id is None
+            or self.workos_cookie_password is None
+        ):
             raise ValueError(
-                "WORKOS_API_KEY and WORKOS_CLIENT_ID are required when AUTH_ENABLED=true"
+                "WORKOS_API_KEY, WORKOS_CLIENT_ID, and WORKOS_COOKIE_PASSWORD "
+                "are required when AUTH_ENABLED=true"
             )
         return self
 

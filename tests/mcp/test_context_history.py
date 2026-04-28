@@ -13,8 +13,29 @@ SILO_ID = str(uuid.uuid5(uuid.NAMESPACE_DNS, "silo:test-org"))
 
 
 @pytest.fixture
+def mock_silo_validation():
+    """Override conftest autouse — let the real validate_silo_ownership run.
+
+    The per-test ``mock_auth`` fixture wires a silo_svc whose ``get_by_id``
+    returns truthy, so the real validator passes for valid UUIDs and returns
+    ``invalid_silo_id`` for malformed ones (which is what test_history_invalid_silo
+    actually pins).
+    """
+    yield
+
+
+@pytest.fixture
 def mock_auth():
-    with patch("context_service.mcp.server.get_mcp_auth_context") as m:
+    silo_svc = MagicMock()
+    silo_svc.ownership_cache = None
+    silo_svc.get_by_id = AsyncMock(return_value=MagicMock())
+    with (
+        patch(
+            "context_service.mcp.server.get_mcp_auth_context",
+            new_callable=AsyncMock,
+        ) as m,
+        patch("context_service.mcp.server.get_silo_service", return_value=silo_svc),
+    ):
         auth = MagicMock()
         auth.org_id = "test-org"
         m.return_value = auth

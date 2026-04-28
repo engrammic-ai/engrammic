@@ -33,7 +33,7 @@ def register_silo_create(mcp: FastMCP) -> None:
         """
         from context_service.mcp.server import get_mcp_auth_context, get_silo_service
 
-        auth = get_mcp_auth_context()
+        auth = await get_mcp_auth_context()
         silo_svc = get_silo_service()
 
         silo = await silo_svc.get_or_create(
@@ -67,7 +67,7 @@ def register_silo_list(mcp: FastMCP) -> None:
         """
         from context_service.mcp.server import get_mcp_auth_context, get_silo_service
 
-        auth = get_mcp_auth_context()
+        auth = await get_mcp_auth_context()
         silo_svc = get_silo_service()
 
         silos = await silo_svc.list(org_id=auth.org_id)

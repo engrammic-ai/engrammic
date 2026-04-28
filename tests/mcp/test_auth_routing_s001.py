@@ -39,13 +39,12 @@ def test_tool_does_not_import_broken_get_mcp_auth(module_name: str) -> None:
         )
 
 
-def test_get_mcp_auth_context_returns_dev_fallback_when_unresolved(
+@pytest.mark.asyncio
+async def test_get_mcp_auth_context_returns_dev_fallback_when_no_header(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from context_service.config import settings as settings_module
     from context_service.mcp import server
-
-    monkeypatch.setattr(server, "_mcp_auth_context", None, raising=False)
 
     real_get_settings = settings_module.get_settings
     real_settings = real_get_settings()
@@ -56,6 +55,9 @@ def test_get_mcp_auth_context_returns_dev_fallback_when_unresolved(
         raising=False,
     )
 
-    auth = server.get_mcp_auth_context()
+    # Simulate stdio / no-HTTP-request: get_http_headers returns {}.
+    monkeypatch.setattr(server, "get_http_headers", lambda **_kw: {})
+
+    auth = await server.get_mcp_auth_context()
     assert auth.org_id
     assert auth.is_dev is True

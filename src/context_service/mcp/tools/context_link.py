@@ -22,7 +22,7 @@ async def _context_link(
     weight: float = 1.0,
     note: str | None = None,
 ) -> dict[str, Any]:
-    auth = get_mcp_auth_context()
+    auth = await get_mcp_auth_context()
     ctx_svc = get_context_service()
 
     err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)

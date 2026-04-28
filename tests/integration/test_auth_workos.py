@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import HTTPException
+from pydantic import SecretStr
 
 from context_service.api.auth_dep import get_auth_context
 from context_service.auth.context import AuthContext
@@ -28,8 +29,9 @@ def _make_request(auth_header: str | None = None) -> object:
 _WORKOS_SETTINGS = Settings(
     _env_file=None,
     auth_enabled=True,
-    workos_api_key="test-key",
+    workos_api_key=SecretStr("test-key"),
     workos_client_id="test-client",
+    workos_cookie_password=SecretStr("test-cookie-password-32-bytes-min!"),
 )
 
 _MOCK_AUTH_CTX = AuthContext(

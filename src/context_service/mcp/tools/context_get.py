@@ -51,7 +51,7 @@ def register(mcp: FastMCP) -> None:
                 "message": "Point-in-time retrieval is not yet implemented",
             }
 
-        auth = get_mcp_auth_context()
+        auth = await get_mcp_auth_context()
         ctx_svc = get_context_service()
 
         if isinstance(node_ids, str):

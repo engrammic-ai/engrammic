@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from typing import TYPE_CHECKING, Any
 
 from context_service.mcp.server import get_context_service, get_mcp_auth_context
@@ -18,16 +17,16 @@ async def _context_provenance(
     max_depth: int = 10,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
-    auth = get_mcp_auth_context()
+    from context_service.mcp.server import get_silo_service
+    from context_service.services.silo import validate_silo_ownership
+
+    auth = await get_mcp_auth_context()
+
+    err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+    if err is not None:
+        return err
+
     expected_silo_id = derive_silo_id(auth.org_id)
-
-    try:
-        requested = uuid.UUID(silo_id)
-    except ValueError:
-        return {"error": "invalid_silo_id", "message": "silo_id must be a valid UUID"}
-
-    if requested != expected_silo_id:
-        return {"error": "silo_not_found", "silo_id": silo_id}
 
     if not node_id or not node_id.strip():
         return {"error": "missing_node_id", "message": "node_id is required"}
