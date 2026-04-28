@@ -51,11 +51,16 @@ def register(mcp: FastMCP) -> None:
         if isinstance(node_ids, str):
             node_ids = [node_ids]
 
-        resolved_silo_id = derive_silo_id(auth.org_id)
         if silo_id is not None:
             err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
             if err is not None:
                 return err
+            try:
+                resolved_silo_id = uuid.UUID(silo_id)
+            except ValueError:
+                return {"error": "invalid_silo_id", "silo_id": silo_id}
+        else:
+            resolved_silo_id = derive_silo_id(auth.org_id)
 
         nodes_out: list[dict[str, Any]] = []
         for nid in node_ids:
