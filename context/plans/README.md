@@ -5,7 +5,13 @@ Active implementation plans for context-service. Each plan lives in its own file
 ## Active plans
 
 ### v1-β — production hardening + paradigm completion (next)
-- [v1-beta-master.md](./v1-beta-master.md) — master index for v1-β. Six phases (auth finish, Dagster asset migration, SPLADE, silo export/import, integration test pack, paradigm completion + hygiene). Sub-plans land at phase kickoff.
+- [v1-beta-master.md](./v1-beta-master.md) — master index. Six phases.
+- [v1b-auth-finish.md](./v1b-auth-finish.md) — phase β1. Per-request MCP auth + silo ownership enforcement + WorkOS SDK verify.
+- [v1b-dagster.md](./v1b-dagster.md) — phase β2 (sub-phased a/b/c). Asset migration: extraction → embedding+custodian → clustering+scheduling.
+- [v1b-splade.md](./v1b-splade.md) — phase β3. SPLADE sparse retrieval + Qdrant hybrid search + RRF fusion.
+- [v1b-silo-portability.md](./v1b-silo-portability.md) — phase β4. Silo export/import via JSONL with manifest + schema versioning.
+- [v1b-integration-test-pack.md](./v1b-integration-test-pack.md) — phase β5. E2E ingest→query, cross-silo isolation, auth flow, failure-mode tests.
+- [v1b-eag-completion.md](./v1b-eag-completion.md) — phase β6. Wire supersession + confidence primitives, schedule fact_promotion, hygiene cleanup.
 
 ### v1-α — close paradigm gaps (complete 2026-04-28)
 - [v1a-claim-fact-promotion.md](./v1a-claim-fact-promotion.md) — wire `:Claim` → `:Fact` promotion via `primitives.eag.epistemology`; keep `:Finding` semantics intact.
