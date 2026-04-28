@@ -33,6 +33,7 @@ def configure_services(
 
     Call this during application startup before serving MCP requests.
     """
+    from context_service.cache.silo_ownership_cache import SiloOwnershipCache
     from context_service.services.context import ContextService
     from context_service.services.evidence import EvidenceValidator
     from context_service.services.silo import SiloService
@@ -43,7 +44,8 @@ def configure_services(
         embedding=embedding,
         cache=redis,
     )
-    _services["silo"] = SiloService(memgraph=memgraph)
+    ownership_cache = SiloOwnershipCache(redis) if redis is not None else None
+    _services["silo"] = SiloService(memgraph=memgraph, ownership_cache=ownership_cache)
     _services["evidence"] = EvidenceValidator(memgraph=memgraph)
     logger.info("MCP services configured")
 
