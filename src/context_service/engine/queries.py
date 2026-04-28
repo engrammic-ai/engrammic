@@ -1086,6 +1086,6 @@ RETURN f.id AS id
 CREATE_PROMOTED_FROM_EDGE = f"""
 MATCH (f:Finding {{id: $finding_id}})
 MATCH (c:{_LABEL_REASONING_CHAIN} {{id: $chain_id}})
-CREATE (f)-[:PROMOTED_FROM]->(c)
+MERGE (f)-[:PROMOTED_FROM]->(c)
 SET c.status = 'superseded'
 """
