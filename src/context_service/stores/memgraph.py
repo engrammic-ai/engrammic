@@ -5,7 +5,7 @@ The neo4j driver works with Memgraph via the Bolt protocol.
 
 import contextlib
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -119,7 +119,9 @@ class MemgraphClient:
         """Yield an explicit bolt transaction for multi-statement atomic writes.
 
         The transaction is committed on clean exit and rolled back if the body raises.
-        Retries are not performed at this layer — the caller decides retry policy.
+        Retries are not performed at this layer — once the body has run, retry would
+        require re-executing user code, which is not possible from a context manager.
+        Use :meth:`run_in_transaction` for callback-style retry on transient errors.
         """
         async with self.session() as session:
             tx = await session.begin_transaction()
@@ -131,6 +133,48 @@ class MemgraphClient:
                 raise
             else:
                 await tx.commit()
+
+    async def run_in_transaction(
+        self,
+        body: "Callable[[AsyncTransaction], Awaitable[Any]]",
+    ) -> Any:
+        """Run a callback inside an explicit bolt transaction with retry on transient errors.
+
+        ``body`` receives the open transaction and returns any value. If it
+        raises a transient driver error (deadlock, leader change, database
+        unavailable), the whole callback is retried up to
+        ``_WRITE_RETRY_MAX_ATTEMPTS`` times with exponential backoff. Logical
+        errors (constraint violations, syntax) are not retried.
+
+        Each attempt opens a fresh session+transaction so the body sees a
+        clean state.
+        """
+        retry_policy = retry_if_exception_type(ServiceUnavailable) | retry_if_exception(
+            _is_transient_client_error
+        )
+
+        async def _attempt() -> Any:
+            async with self.transaction() as tx:
+                return await body(tx)
+
+        try:
+            async for attempt in AsyncRetrying(
+                retry=retry_policy,
+                stop=stop_after_attempt(_WRITE_RETRY_MAX_ATTEMPTS),
+                wait=wait_exponential(multiplier=0.1, max=2.0),
+                reraise=True,
+            ):
+                with attempt:
+                    if attempt.retry_state.attempt_number > 1:
+                        logger.warning(
+                            "memgraph_transaction_retry",
+                            attempt=attempt.retry_state.attempt_number,
+                            max_attempts=_WRITE_RETRY_MAX_ATTEMPTS,
+                        )
+                    return await _attempt()
+        except RetryError as e:
+            raise MemgraphOperationError(f"Transaction unavailable: {e}") from e
+        return None
 
     async def health_check(self) -> bool:
         """Check if Memgraph is reachable.
