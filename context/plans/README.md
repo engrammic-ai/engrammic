@@ -12,6 +12,8 @@ Active implementation plans for context-service. Each plan lives in its own file
 - [v1b-silo-portability.md](./v1b-silo-portability.md) — phase β4. Silo export/import via JSONL with manifest + schema versioning.
 - [v1b-integration-test-pack.md](./v1b-integration-test-pack.md) — phase β5. E2E ingest→query, cross-silo isolation, auth flow, failure-mode tests.
 - [v1b-eag-completion.md](./v1b-eag-completion.md) — phase β6. Wire supersession + confidence primitives, schedule fact_promotion, hygiene cleanup.
+- [v1b-architecture-cleanup.md](./v1b-architecture-cleanup.md) — phase β6+ (parallel). Storage protocol adoption (NF-003/006/009) + Settings consolidation (B2). Deferred from β0 review-cleanup.
+- [v1b-review-cleanup.md](./v1b-review-cleanup.md) — phase β0. Orphan findings from the 2026-04-28 codebase review not owned by another β phase.
 
 ### v1-α — close paradigm gaps (complete 2026-04-28)
 - [v1a-claim-fact-promotion.md](./v1a-claim-fact-promotion.md) — wire `:Claim` → `:Fact` promotion via `primitives.eag.epistemology`; keep `:Finding` semantics intact.
