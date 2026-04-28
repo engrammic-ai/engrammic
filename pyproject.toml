@@ -55,7 +55,7 @@ llm = [
     "openai>=1.30",
 ]
 auth = [
-    "workos>=4.0",
+    "workos==6.0.8",
 ]
 
 [build-system]

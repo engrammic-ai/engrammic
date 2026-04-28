@@ -9,6 +9,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from pydantic import SecretStr
 
 import context_service.auth.resolve as resolve_mod
 from context_service.auth.context import AuthContext
@@ -18,8 +19,9 @@ from context_service.config.settings import Settings
 _AUTH_ON = Settings(
     _env_file=None,
     auth_enabled=True,
-    workos_api_key="test-key",
+    workos_api_key=SecretStr("test-key"),
     workos_client_id="test-client",
+    workos_cookie_password=SecretStr("test-cookie-password-32-bytes-min!"),
 )
 
 _AUTH_OFF = Settings(_env_file=None, auth_enabled=False)
