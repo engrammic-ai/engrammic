@@ -55,13 +55,42 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.redis = redis_client
         app.state.qdrant = qdrant_client
 
+        from context_service.cache.embedding_cache import EmbeddingCache
+        from context_service.embeddings.base import EmbeddingService
         from context_service.mcp import configure_services
         from context_service.mcp.server import resolve_mcp_auth_context
+
+        embedding_cache = EmbeddingCache(redis_client)
+        embedding_service: EmbeddingService | None = None
+        if settings.vertex_project_id:
+            from context_service.embeddings.vertex import VertexAIEmbeddingService
+
+            embedding_service = VertexAIEmbeddingService.from_settings(
+                settings, embedding_cache
+            )
+        elif settings.jina_api_key:
+            from context_service.embeddings.jina import JinaEmbeddingService
+
+            embedding_service = JinaEmbeddingService.from_settings(
+                settings, embedding_cache
+            )
+
+        if embedding_service is None:
+            logger.warning(
+                "embedding_service_unconfigured",
+                hint="set jina_api_key or embedding_provider=vertex to enable semantic search",
+            )
+        else:
+            logger.info(
+                "embedding_service_configured",
+                provider=type(embedding_service).__name__,
+            )
 
         configure_services(
             memgraph=memgraph_client,
             qdrant=qdrant_client,
             redis=redis_client,
+            embedding=embedding_service,
         )
         logger.info("mcp_services_configured")
 
