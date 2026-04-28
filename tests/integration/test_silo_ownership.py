@@ -80,7 +80,7 @@ class TestCrossOrgSiloOwnership:
         mock_ctx_svc.query.return_value = []
 
         with (
-            patch.object(cq_mod, "get_mcp_auth_context", return_value=auth),
+            patch.object(cq_mod, "get_mcp_auth_context", new=AsyncMock(return_value=auth)),
             patch.object(cq_mod, "get_silo_service", return_value=silo_service),
             patch.object(cq_mod, "get_context_service", return_value=mock_ctx_svc),
         ):
@@ -118,7 +118,7 @@ class TestCrossOrgSiloOwnership:
         mock_ctx_svc = AsyncMock()
 
         with (
-            patch.object(cq_mod, "get_mcp_auth_context", return_value=auth),
+            patch.object(cq_mod, "get_mcp_auth_context", new=AsyncMock(return_value=auth)),
             patch.object(cq_mod, "get_silo_service", return_value=silo_service),
             patch.object(cq_mod, "get_context_service", return_value=mock_ctx_svc),
         ):

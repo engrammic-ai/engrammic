@@ -1,72 +1,54 @@
-"""Transport-agnostic auth context resolution.
+"""Per-request MCP auth context resolution.
 
-MCP transport-level auth header negotiation with FastMCP is deferred (see plan
-v1a-auth-toggle.md). For v1-alpha, when AUTH_ENABLED=true, the MCP surface reads
-MCP_DEV_TOKEN from the environment as a stop-gap bearer token.
+The resolver takes an inbound `Authorization` header value (typically read
+from the live FastMCP request via `fastmcp.server.dependencies.get_http_headers`)
+and returns an `AuthContext` after WorkOS sealed-session verification.
 
-TODO: Replace MCP_DEV_TOKEN stop-gap with proper FastMCP transport auth once
-FastMCP exposes per-request header access in a stable, non-HTTP transport-safe way.
-See plan v1a-auth-toggle.md "Out of scope" section.
+The dev fallback (no header, `AUTH_ENABLED=false`) is wired in
+`context_service.mcp.server.get_mcp_auth_context`, not here — this module is
+strictly the per-header resolver and fails closed on any malformed/missing
+input.
+
+`MCPAuthError` is owned by `context_service.mcp.auth` (the canonical
+location, also used by the request-layer guard `validate_mcp_request`); we
+re-export it here as a convenience for resolver callers.
 """
 
 from __future__ import annotations
 
-import os
-
 from context_service.auth.context import AuthContext
 from context_service.config.logging import get_logger
-from context_service.config.settings import get_settings
+from context_service.mcp.auth import MCPAuthError
+
+__all__ = ["MCPAuthError", "resolve_mcp_auth_from_header"]
 
 logger = get_logger(__name__)
 
-_dev_bypass_logged = False
 
+async def resolve_mcp_auth_from_header(authorization: str) -> AuthContext:
+    """Resolve an `AuthContext` from an inbound Authorization header value.
 
-class MCPAuthError(RuntimeError):
-    """Raised when MCP auth resolution fails under AUTH_ENABLED=true.
+    Expects a `Bearer <sealed-session>` token. The sealed session is
+    forwarded to WorkOS for verification.
 
-    Auth must fail closed: silently degrading to a dev AuthContext would
-    defeat the boot-time prod-guard in Settings.
+    Raises:
+        MCPAuthError: missing, empty, or malformed header; rejected by WorkOS.
     """
+    if not authorization:
+        raise MCPAuthError("Missing Authorization header on authenticated MCP transport")
 
+    parts = authorization.split(" ", 1)
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise MCPAuthError("Invalid Authorization header format; expected 'Bearer <token>'")
 
-async def resolve_mcp_auth() -> AuthContext:
-    """Resolve AuthContext for an MCP request.
-
-    Dev bypass: AUTH_ENABLED=false returns the dev AuthContext.
-    Auth enabled: uses MCP_DEV_TOKEN env var as a stop-gap bearer token for
-    WorkOS verification. Missing or invalid tokens raise MCPAuthError —
-    never silently fall back to dev.
-    """
-    global _dev_bypass_logged
-
-    settings = get_settings()
-
-    if not settings.auth_enabled:
-        if not _dev_bypass_logged:
-            logger.info("auth.mcp_dev_bypass_active", reason="AUTH_ENABLED=false")
-            _dev_bypass_logged = True
-        return AuthContext(
-            org_id=settings.dev_org_id,
-            user_id=settings.dev_user_id,
-            email=None,
-            is_dev=True,
-        )
-
-    # TODO: Replace with per-request header extraction once FastMCP exposes a
-    # stable transport-agnostic header ContextVar outside HTTP-only code paths.
-    token = os.environ.get("MCP_DEV_TOKEN", "")
+    token = parts[1].strip()
     if not token:
-        logger.error(
-            "auth.mcp_token_missing",
-            hint="Set MCP_DEV_TOKEN for authenticated MCP dev access",
-        )
-        raise MCPAuthError("MCP auth required (AUTH_ENABLED=true) but MCP_DEV_TOKEN not set")
+        raise MCPAuthError("Empty bearer token on authenticated MCP transport")
 
     from context_service.auth import workos_client
 
     try:
         return await workos_client.verify_session(token)
     except ValueError as exc:
-        logger.error("auth.mcp_token_invalid", hint="MCP_DEV_TOKEN rejected by WorkOS")
-        raise MCPAuthError(f"MCP_DEV_TOKEN rejected by WorkOS: {exc}") from exc
+        logger.error("auth.mcp_token_invalid", hint="bearer token rejected by WorkOS")
+        raise MCPAuthError(f"Bearer token rejected by WorkOS: {exc}") from exc

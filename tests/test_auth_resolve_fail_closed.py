@@ -1,7 +1,14 @@
-"""Regression tests: MCP auth resolver must fail closed when AUTH_ENABLED=true.
+"""Regression tests: per-request MCP auth must fail closed.
 
-Silent fallback to a dev AuthContext under AUTH_ENABLED=true would defeat the
-boot-time prod-guard in Settings. These tests pin the fail-closed behavior.
+The resolver `resolve_mcp_auth_from_header` is the per-call WorkOS verification
+helper used by `mcp.server.get_mcp_auth_context`. Silent fallback to a dev
+AuthContext when AUTH_ENABLED=true would defeat the boot-time prod-guard in
+Settings, so missing/malformed headers and rejected tokens must raise
+``MCPAuthError``.
+
+The dev fallback (AUTH_ENABLED=false, no header) lives in
+``mcp.server.get_mcp_auth_context`` and is pinned in
+``tests/test_resolve_per_request.py``.
 """
 
 from __future__ import annotations
@@ -9,40 +16,29 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from pydantic import SecretStr
 
-import context_service.auth.resolve as resolve_mod
 from context_service.auth.context import AuthContext
-from context_service.auth.resolve import MCPAuthError, resolve_mcp_auth
-from context_service.config.settings import Settings
-
-_AUTH_ON = Settings(
-    _env_file=None,
-    auth_enabled=True,
-    workos_api_key=SecretStr("test-key"),
-    workos_client_id="test-client",
-    workos_cookie_password=SecretStr("test-cookie-password-32-bytes-min!"),
-)
-
-_AUTH_OFF = Settings(_env_file=None, auth_enabled=False)
+from context_service.auth.resolve import MCPAuthError, resolve_mcp_auth_from_header
 
 
-class TestResolveMCPAuthFailClosed:
-    async def test_missing_token_raises_when_auth_enabled(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr("context_service.auth.resolve.get_settings", lambda: _AUTH_ON)
-        monkeypatch.delenv("MCP_DEV_TOKEN", raising=False)
+class TestResolveMCPAuthFromHeaderFailClosed:
+    async def test_empty_header_raises(self) -> None:
+        with pytest.raises(MCPAuthError, match="Missing Authorization header"):
+            await resolve_mcp_auth_from_header("")
 
-        with pytest.raises(MCPAuthError, match="MCP_DEV_TOKEN not set"):
-            await resolve_mcp_auth()
+    async def test_malformed_header_raises(self) -> None:
+        with pytest.raises(MCPAuthError, match="Invalid Authorization header format"):
+            await resolve_mcp_auth_from_header("NotBearer abc")
 
-    async def test_invalid_token_raises_when_auth_enabled(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr("context_service.auth.resolve.get_settings", lambda: _AUTH_ON)
-        monkeypatch.setenv("MCP_DEV_TOKEN", "bogus")
+    async def test_wrong_scheme_raises(self) -> None:
+        with pytest.raises(MCPAuthError, match="Invalid Authorization header format"):
+            await resolve_mcp_auth_from_header("Basic dXNlcjpwYXNz")
 
+    async def test_empty_token_raises(self) -> None:
+        with pytest.raises(MCPAuthError, match="Empty bearer token"):
+            await resolve_mcp_auth_from_header("Bearer    ")
+
+    async def test_workos_rejection_raises(self) -> None:
         with (
             patch(
                 "context_service.auth.workos_client.verify_session",
@@ -50,31 +46,25 @@ class TestResolveMCPAuthFailClosed:
             ),
             pytest.raises(MCPAuthError, match="rejected by WorkOS"),
         ):
-            await resolve_mcp_auth()
+            await resolve_mcp_auth_from_header("Bearer bogus")
 
-    async def test_dev_bypass_returns_dev_context_when_auth_disabled(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr("context_service.auth.resolve.get_settings", lambda: _AUTH_OFF)
-        resolve_mod._dev_bypass_logged = False
-
-        ctx = await resolve_mcp_auth()
-
-        assert isinstance(ctx, AuthContext)
-        assert ctx.is_dev is True
-
-    async def test_valid_token_returns_workos_context(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr("context_service.auth.resolve.get_settings", lambda: _AUTH_ON)
-        monkeypatch.setenv("MCP_DEV_TOKEN", "valid")
-
+    async def test_valid_token_returns_workos_context(self) -> None:
         mock_ctx = AuthContext(org_id="org-1", user_id="user-1", email="x@y.com", is_dev=False)
         with patch(
             "context_service.auth.workos_client.verify_session",
             new=AsyncMock(return_value=mock_ctx),
-        ):
-            ctx = await resolve_mcp_auth()
+        ) as verify:
+            ctx = await resolve_mcp_auth_from_header("Bearer valid-sealed-session")
 
         assert ctx is mock_ctx
         assert ctx.is_dev is False
+        verify.assert_awaited_once_with("valid-sealed-session")
+
+    async def test_bearer_prefix_case_insensitive(self) -> None:
+        mock_ctx = AuthContext(org_id="org-1", user_id="user-1", email=None, is_dev=False)
+        with patch(
+            "context_service.auth.workos_client.verify_session",
+            new=AsyncMock(return_value=mock_ctx),
+        ):
+            ctx = await resolve_mcp_auth_from_header("bearer some-token")
+        assert ctx is mock_ctx

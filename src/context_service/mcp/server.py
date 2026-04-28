@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import structlog
 from fastmcp import FastMCP
+from fastmcp.server.dependencies import get_http_headers
 
 from context_service.auth.context import AuthContext
 
@@ -20,7 +21,6 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 _services: dict[str, Any] = {}
-_mcp_auth_context: AuthContext | None = None
 
 
 def configure_services(
@@ -79,23 +79,41 @@ def get_silo_service() -> SiloService:
     return cast(_SS, _services["silo"])
 
 
-def get_mcp_auth_context() -> AuthContext:
-    """Return the current MCP auth context, resolving dev bypass if needed.
+async def get_mcp_auth_context() -> AuthContext:
+    """Resolve the MCP auth context for the current request.
 
-    Call resolve_mcp_auth_context() during startup to populate this. When
-    AUTH_ENABLED=false the unresolved fallback returns a dev AuthContext
-    (safe for tests). When AUTH_ENABLED=true the unresolved state raises —
-    auth must fail closed.
+    Reads the inbound Authorization header from the live FastMCP request via
+    `fastmcp.server.dependencies.get_http_headers` and verifies it through
+    WorkOS. There is no session-level cache — auth is resolved per call so
+    that org boundaries are honoured on every tool invocation.
+
+    Behaviour:
+      - HTTP transport with `Authorization: Bearer <sealed-session>`:
+        verifies via WorkOS and returns the resulting `AuthContext`.
+      - No header (stdio transport, dev runs, tests, or a misconfigured
+        client) and `auth_enabled=true`: raises `MCPAuthError` — auth fails
+        closed.
+      - No header and `auth_enabled=false`: returns a dev `AuthContext`
+        built from `settings.dev_org_id` / `dev_user_id`. The boot-time
+        guard in `Settings._validate_auth` already prevents this branch in
+        production.
     """
-    from context_service.auth.resolve import MCPAuthError
+    from context_service.auth.resolve import (
+        MCPAuthError,
+        resolve_mcp_auth_from_header,
+    )
     from context_service.config.settings import get_settings
 
-    if _mcp_auth_context is not None:
-        return _mcp_auth_context
+    headers = get_http_headers(include={"authorization"})
+    auth_header = headers.get("authorization")
+
+    if auth_header:
+        return await resolve_mcp_auth_from_header(auth_header)
+
     settings = get_settings()
     if settings.auth_enabled:
         raise MCPAuthError(
-            "MCP auth context not resolved; call resolve_mcp_auth_context() at startup"
+            "Missing Authorization header on authenticated MCP transport"
         )
     return AuthContext(
         org_id=settings.dev_org_id,
@@ -103,19 +121,6 @@ def get_mcp_auth_context() -> AuthContext:
         email=None,
         is_dev=True,
     )
-
-
-async def resolve_mcp_auth_context() -> None:
-    """Resolve and cache the MCP auth context at startup.
-
-    Called once during application startup. For per-request auth, see the
-    TODO in auth/resolve.py re: FastMCP transport-level header access.
-    """
-    global _mcp_auth_context
-    from context_service.auth.resolve import resolve_mcp_auth
-
-    _mcp_auth_context = await resolve_mcp_auth()
-    logger.info("MCP auth context resolved", is_dev=_mcp_auth_context.is_dev)
 
 
 def create_mcp_server() -> FastMCP:

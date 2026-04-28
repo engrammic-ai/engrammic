@@ -29,7 +29,10 @@ def mock_auth():
     silo_svc.ownership_cache = None
     silo_svc.get_by_id = AsyncMock(return_value=MagicMock())
     with (
-        patch("context_service.mcp.tools.context_provenance.get_mcp_auth_context") as m,
+        patch(
+            "context_service.mcp.tools.context_provenance.get_mcp_auth_context",
+            new_callable=AsyncMock,
+        ) as m,
         patch("context_service.mcp.server.get_silo_service", return_value=silo_svc),
     ):
         auth = MagicMock()

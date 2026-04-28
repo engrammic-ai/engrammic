@@ -20,7 +20,7 @@ async def _context_provenance(
     from context_service.mcp.server import get_silo_service
     from context_service.services.silo import validate_silo_ownership
 
-    auth = get_mcp_auth_context()
+    auth = await get_mcp_auth_context()
 
     err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
     if err is not None:

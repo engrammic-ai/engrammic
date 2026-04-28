@@ -28,7 +28,7 @@ async def _context_reason(
         get_silo_service,
     )
 
-    auth = get_mcp_auth_context()
+    auth = await get_mcp_auth_context()
 
     err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
     if err is not None:

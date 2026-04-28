@@ -58,7 +58,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from context_service.cache.embedding_cache import EmbeddingCache
         from context_service.embeddings.base import EmbeddingService
         from context_service.mcp import configure_services
-        from context_service.mcp.server import resolve_mcp_auth_context
 
         embedding_cache = EmbeddingCache(redis_client)
         embedding_service: EmbeddingService | None = None
@@ -89,9 +88,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             embedding=embedding_service,
         )
         logger.info("mcp_services_configured")
-
-        await resolve_mcp_auth_context()
-        logger.info("mcp_auth_context_resolved")
 
     except Exception as e:
         logger.error("database_connection_failed", error=str(e))
