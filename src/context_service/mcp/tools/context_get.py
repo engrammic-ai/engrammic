@@ -20,25 +20,31 @@ def register(mcp: FastMCP) -> None:
         name="context_get",
         description=(
             "Retrieve one or more context nodes by their IDs. "
-            "Returns full node data including content, properties, and version. "
-            "Pass as_of (ISO 8601) to retrieve the node state at a point in time."
+            "Returns full node data including content, properties, and version."
         ),
     )
     async def context_get(
         node_ids: str | list[str],
         silo_id: str | None = None,
-        as_of: str | None = None,  # noqa: ARG001
+        as_of: str | None = None,
     ) -> dict[str, Any]:
         """Retrieve context nodes by ID.
 
         Args:
             node_ids: A single node ID string or a list of node ID strings.
             silo_id: UUID of the silo to scope the lookup. Defaults to the org's primary silo.
-            as_of: Optional ISO 8601 timestamp for point-in-time retrieval (not yet implemented).
+            as_of: Reserved for point-in-time retrieval. Currently raises
+                "as_of_not_supported" if non-null — time-travel querying is
+                not wired yet (see meta-memory-roadmap.md).
 
         Returns:
             Dictionary with 'nodes' list containing node data.
         """
+        if as_of is not None:
+            return {
+                "error": "as_of_not_supported",
+                "message": "Point-in-time retrieval is not yet implemented",
+            }
         from context_service.mcp.server import (
             get_context_service,
             get_mcp_auth_context,
@@ -94,9 +100,7 @@ def register(mcp: FastMCP) -> None:
                         "summary": props.get("summary"),
                         "confidence": props.get("confidence"),
                         "tags": props.get("tags"),
-                        "created_at": (
-                            node.created_at.isoformat() if node.created_at else None
-                        ),
+                        "created_at": (node.created_at.isoformat() if node.created_at else None),
                     }
                 )
 

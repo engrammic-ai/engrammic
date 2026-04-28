@@ -65,15 +65,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if settings.vertex_project_id:
             from context_service.embeddings.vertex import VertexAIEmbeddingService
 
-            embedding_service = VertexAIEmbeddingService.from_settings(
-                settings, embedding_cache
-            )
+            embedding_service = VertexAIEmbeddingService.from_settings(settings, embedding_cache)
         elif settings.jina_api_key:
             from context_service.embeddings.jina import JinaEmbeddingService
 
-            embedding_service = JinaEmbeddingService.from_settings(
-                settings, embedding_cache
-            )
+            embedding_service = JinaEmbeddingService.from_settings(settings, embedding_cache)
 
         if embedding_service is None:
             logger.warning(

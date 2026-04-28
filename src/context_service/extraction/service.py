@@ -615,9 +615,7 @@ class ExtractionService:
             )
             if kept_triples and claims_written == 0:
                 job.status = ExtractionStatus.FAILED
-                job.error = (
-                    f"All {len(kept_triples)} claim writes failed; see prior warnings"
-                )
+                job.error = f"All {len(kept_triples)} claim writes failed; see prior warnings"
                 job.completed_at = datetime.now(UTC)
                 await self._update_node_extraction_status(silo_id, job.node_id, "failed")
                 logger.error(
