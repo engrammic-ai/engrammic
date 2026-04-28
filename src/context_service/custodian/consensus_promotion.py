@@ -5,7 +5,10 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING, Any
 
-from context_service.engine.queries import CREATE_FINDING_FROM_COMMITMENT, CREATE_PROMOTED_FROM_EDGE
+from context_service.engine.queries import (
+    BATCH_CREATE_PROMOTED_FROM_EDGES,
+    CREATE_FINDING_FROM_COMMITMENT,
+)
 
 if TYPE_CHECKING:
     from context_service.stores.memgraph import MemgraphClient
@@ -43,12 +46,13 @@ async def promote_consensus_to_finding(
         if not rows:
             raise ValueError(f"Failed to create finding for commitment {commitment_id}")
 
-        for chain_id in contributing_chain_ids:
-            await tx.run(
-                CREATE_PROMOTED_FROM_EDGE,
-                finding_id=finding_id,
-                chain_id=chain_id,
-            )
+        # R-005: batch all PROMOTED_FROM edges in one UNWIND round-trip instead
+        # of one tx.run() per chain.
+        await tx.run(
+            BATCH_CREATE_PROMOTED_FROM_EDGES,
+            finding_id=finding_id,
+            chain_ids=contributing_chain_ids,
+        )
 
     return finding_id
 

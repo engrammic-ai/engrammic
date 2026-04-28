@@ -1060,3 +1060,13 @@ MATCH (c:{_LABEL_REASONING_CHAIN} {{id: $chain_id}})
 MERGE (f)-[:PROMOTED_FROM]->(c)
 SET c.status = 'superseded'
 """
+
+# R-005: batch variant — collapses N per-chain tx.run() calls to one RTT.
+BATCH_CREATE_PROMOTED_FROM_EDGES = f"""
+MATCH (f:Finding {{id: $finding_id}})
+UNWIND $chain_ids AS cid
+MATCH (c:{_LABEL_REASONING_CHAIN} {{id: cid}})
+MERGE (f)-[:PROMOTED_FROM]->(c)
+SET c.status = 'superseded'
+RETURN count(c) AS updated
+"""

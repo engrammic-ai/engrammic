@@ -253,6 +253,35 @@ class EngineQdrantStore:
         )
         await client.upsert(collection_name=collection, points=[point])
 
+    async def batch_upsert_cluster_embeddings(
+        self,
+        items: list[dict[str, Any]],
+        silo_id: str,
+    ) -> int:
+        """Upsert many cluster embeddings in a single Qdrant call. R-007 fix.
+
+        Each item: {cluster_id: str, vector: list[float], level: int, node_count: int}.
+        Returns number of points upserted.
+        """
+        if not items:
+            return 0
+        collection = await self.ensure_cluster_collection(silo_id)
+        client = await self._qdrant._get_client()
+        points = [
+            PointStruct(
+                id=item["cluster_id"],
+                vector=item["vector"],
+                payload={
+                    "level": item.get("level", 0),
+                    "node_count": item.get("node_count", 0),
+                    "silo_id": silo_id,
+                },
+            )
+            for item in items
+        ]
+        await client.upsert(collection_name=collection, points=points)
+        return len(points)
+
     async def search_clusters(
         self,
         vector: list[float],

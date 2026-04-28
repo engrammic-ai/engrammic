@@ -63,6 +63,23 @@ class ExtractionService:
         self._job_store = job_store
         self._filter = filter_orchestrator
 
+    @classmethod
+    def llm_only(cls, llm: LLMProvider) -> ExtractionService:
+        """Construct a service capable of running extract() with only an LLM.
+
+        The resulting instance must not call any method that touches memgraph or
+        job_store. Used by the Dagster extraction asset which manages graph writes
+        directly via batched Cypher.
+        """
+        from typing import Any, cast
+
+        inst: ExtractionService = object.__new__(cls)
+        inst._llm = llm
+        inst._memgraph = cast(Any, None)
+        inst._job_store = cast(Any, None)
+        inst._filter = None
+        return inst
+
     async def extract(self, content: str) -> tuple[ExtractionResult, Usage]:
         """Extract entities and relationships from content using LLM.
 
