@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models
@@ -17,6 +17,8 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 COLLECTION_NAME = "context_vectors"
+DENSE_VECTOR_NAME = "dense"
+SPARSE_VECTOR_NAME = "sparse"
 
 
 class QdrantOperationError(Exception):
@@ -79,8 +81,14 @@ class QdrantClient:
             )
         return self._client
 
-    async def ensure_collection(self) -> None:
-        """Create the collection if it doesn't exist."""
+    async def ensure_collection(self, *, hybrid: bool = False) -> None:
+        """Create the collection if it doesn't exist.
+
+        Args:
+            hybrid: When True, declares both dense and sparse named-vector
+                configs (Qdrant 1.10+). Existing collections are left as-is
+                with a warning if the mode differs.
+        """
         client = await self._get_client()
 
         try:
@@ -88,16 +96,44 @@ class QdrantClient:
             collection_names = [c.name for c in collections.collections]
 
             if COLLECTION_NAME not in collection_names:
-                await client.create_collection(
-                    collection_name=COLLECTION_NAME,
-                    vectors_config=models.VectorParams(
-                        size=self._vector_size,
-                        distance=models.Distance.COSINE,
-                    ),
+                if hybrid:
+                    await client.create_collection(
+                        collection_name=COLLECTION_NAME,
+                        vectors_config={
+                            DENSE_VECTOR_NAME: models.VectorParams(
+                                size=self._vector_size,
+                                distance=models.Distance.COSINE,
+                            ),
+                        },
+                        sparse_vectors_config={
+                            SPARSE_VECTOR_NAME: models.SparseVectorParams(),
+                        },
+                    )
+                else:
+                    await client.create_collection(
+                        collection_name=COLLECTION_NAME,
+                        vectors_config=models.VectorParams(
+                            size=self._vector_size,
+                            distance=models.Distance.COSINE,
+                        ),
+                    )
+                logger.info(
+                    "qdrant_collection_created",
+                    collection=COLLECTION_NAME,
+                    hybrid=hybrid,
                 )
-                logger.info("qdrant_collection_created", collection=COLLECTION_NAME)
             else:
-                logger.debug("qdrant_collection_exists", collection=COLLECTION_NAME)
+                if hybrid:
+                    logger.warning(
+                        "qdrant_collection_exists_hybrid_mismatch",
+                        collection=COLLECTION_NAME,
+                        message=(
+                            "Collection exists; if created without hybrid mode, "
+                            "named-vector upserts will fail. Recreate to enable hybrid."
+                        ),
+                    )
+                else:
+                    logger.debug("qdrant_collection_exists", collection=COLLECTION_NAME)
         except Exception as e:
             self._client = None
             logger.error("qdrant_ensure_collection_failed", error=str(e))
@@ -123,14 +159,23 @@ class QdrantClient:
         vector: list[float],
         payload: dict[str, Any] | None = None,
         silo_id: str | None = None,
+        sparse_indices: list[int] | None = None,
+        sparse_values: list[float] | None = None,
     ) -> bool:
         """Insert or update a vector.
 
+        When ``sparse_indices`` and ``sparse_values`` are provided the point is
+        stored with named dense + sparse vectors (hybrid mode). The collection
+        must have been created with ``ensure_collection(hybrid=True)``
+        beforehand; otherwise Qdrant will reject the named-vector format.
+
         Args:
             node_id: Unique identifier for the vector.
-            vector: Embedding vector.
+            vector: Dense embedding vector.
             payload: Optional metadata to store with the vector.
             silo_id: Optional silo identifier for payload filtering.
+            sparse_indices: Sparse-vector token indices (SPLADE output).
+            sparse_values: Sparse-vector activation values (SPLADE output).
 
         Returns:
             True if successful.
@@ -145,18 +190,31 @@ class QdrantClient:
         if silo_id is not None:
             point_payload["silo_id"] = silo_id
 
+        has_sparse = sparse_indices is not None and sparse_values is not None
+
         try:
+            if has_sparse:
+                point_vector: Any = {
+                    DENSE_VECTOR_NAME: vector,
+                    SPARSE_VECTOR_NAME: models.SparseVector(
+                        indices=sparse_indices,  # type: ignore[arg-type]
+                        values=sparse_values,  # type: ignore[arg-type]
+                    ),
+                }
+            else:
+                point_vector = vector
+
             await client.upsert(
                 collection_name=COLLECTION_NAME,
                 points=[
                     models.PointStruct(
                         id=node_id,
-                        vector=vector,
+                        vector=point_vector,
                         payload=point_payload,
                     )
                 ],
             )
-            logger.debug("qdrant_upsert", node_id=node_id)
+            logger.debug("qdrant_upsert", node_id=node_id, hybrid=has_sparse)
             return True
         except UnexpectedResponse as e:
             logger.error("qdrant_upsert_error", node_id=node_id, error=str(e))
@@ -172,15 +230,29 @@ class QdrantClient:
         score_threshold: float | None = None,
         silo_id: str | None = None,
         filter_conditions: list[models.FieldCondition] | None = None,
+        search_mode: Literal["hybrid", "dense", "sparse"] = "dense",
+        sparse_indices: list[int] | None = None,
+        sparse_values: list[float] | None = None,
     ) -> list[SearchResult]:
         """Search for similar vectors.
 
+        When ``search_mode="hybrid"``, both dense and sparse prefetch legs are
+        issued and fused via RRF. ``sparse_indices`` / ``sparse_values`` are
+        required for hybrid and sparse modes; missing them in hybrid mode
+        causes an automatic fallback to dense with a warning.
+
         Args:
-            vector: Query embedding vector.
+            vector: Dense query embedding vector.
             limit: Maximum number of results.
             score_threshold: Minimum similarity score (0-1 for cosine).
             silo_id: Optional silo identifier to scope results.
             filter_conditions: Additional filter conditions.
+            search_mode: Retrieval mode — ``"hybrid"``, ``"dense"``, or
+                ``"sparse"``.
+            sparse_indices: Sparse-vector token indices (required for hybrid /
+                sparse modes).
+            sparse_values: Sparse-vector activation values (required for hybrid
+                / sparse modes).
 
         Returns:
             List of search results ordered by similarity.
@@ -200,16 +272,70 @@ class QdrantClient:
             )
         if filter_conditions:
             must_conditions.extend(filter_conditions)
-        query_filter = models.Filter(must=must_conditions) if must_conditions else None  # type: ignore[arg-type]
+        query_filter: models.Filter | None = (
+            models.Filter(must=must_conditions) if must_conditions else None  # type: ignore[arg-type]
+        )
+
+        has_sparse = sparse_indices is not None and sparse_values is not None
+
+        effective_mode = search_mode
+        if search_mode == "hybrid" and not has_sparse:
+            logger.warning(
+                "qdrant_hybrid_fallback",
+                reason="sparse_indices/values not provided; falling back to dense",
+            )
+            effective_mode = "dense"
 
         try:
-            response = await client.query_points(
-                collection_name=COLLECTION_NAME,
-                query=vector,
-                limit=limit,
-                score_threshold=score_threshold,
-                query_filter=query_filter,
-            )
+            if effective_mode == "sparse":
+                if not has_sparse:
+                    raise QdrantOperationError(
+                        "sparse_indices and sparse_values are required for sparse mode"
+                    )
+                response = await client.query_points(
+                    collection_name=COLLECTION_NAME,
+                    query=models.SparseVector(
+                        indices=sparse_indices,  # type: ignore[arg-type]
+                        values=sparse_values,  # type: ignore[arg-type]
+                    ),
+                    using=SPARSE_VECTOR_NAME,
+                    limit=limit,
+                    score_threshold=score_threshold,
+                    query_filter=query_filter,
+                )
+            elif effective_mode == "hybrid":
+                response = await client.query_points(
+                    collection_name=COLLECTION_NAME,
+                    prefetch=[
+                        models.Prefetch(
+                            query=vector,
+                            using=DENSE_VECTOR_NAME,
+                            filter=query_filter,
+                            limit=limit * 2,
+                        ),
+                        models.Prefetch(
+                            query=models.SparseVector(
+                                indices=sparse_indices,  # type: ignore[arg-type]
+                                values=sparse_values,  # type: ignore[arg-type]
+                            ),
+                            using=SPARSE_VECTOR_NAME,
+                            filter=query_filter,
+                            limit=limit * 2,
+                        ),
+                    ],
+                    query=models.FusionQuery(fusion=models.Fusion.RRF),
+                    limit=limit,
+                    score_threshold=score_threshold,
+                )
+            else:
+                # Dense-only (default legacy path)
+                response = await client.query_points(
+                    collection_name=COLLECTION_NAME,
+                    query=vector,
+                    limit=limit,
+                    score_threshold=score_threshold,
+                    query_filter=query_filter,
+                )
 
             results = [
                 SearchResult(
@@ -220,7 +346,11 @@ class QdrantClient:
                 for r in response.points
             ]
 
-            logger.debug("qdrant_search", result_count=len(results))
+            logger.debug(
+                "qdrant_search",
+                result_count=len(results),
+                search_mode=effective_mode,
+            )
             return results
         except UnexpectedResponse as e:
             logger.error("qdrant_search_error", error=str(e))
