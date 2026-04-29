@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from qdrant_client.models import (
     Distance,
     FieldCondition,
+    Fusion,
+    FusionQuery,
     MatchValue,
     PointStruct,
+    Prefetch,
     SparseVector,
     SparseVectorParams,
     VectorParams,
@@ -24,6 +27,8 @@ if TYPE_CHECKING:
     from context_service.stores.qdrant import QdrantClient
 
 logger = get_logger(__name__)
+
+SearchMode = Literal["hybrid", "dense", "sparse"]
 
 
 @dataclass
@@ -186,6 +191,117 @@ class EngineQdrantStore:
                 points.append(PointStruct(id=str(node_id), vector=vector, payload=payload))
 
         await client.upsert(collection_name=collection, points=points)
+
+    async def query(
+        self,
+        vector: list[float],
+        silo_id: str,
+        *,
+        limit: int = 10,
+        search_mode: SearchMode = "hybrid",
+        sparse_indices: list[int] | None = None,
+        sparse_values: list[float] | None = None,
+        score_threshold: float | None = None,
+    ) -> list[VectorSearchResult]:
+        """Search for similar vectors using the specified retrieval mode.
+
+        For ``search_mode="hybrid"`` the method issues a Qdrant Query API
+        request with two prefetch legs (dense + sparse) fused via RRF.
+        Dense-only and sparse-only modes issue a single-leg query.
+
+        In hybrid mode, ``sparse_indices`` and ``sparse_values`` are required;
+        if they are not supplied, the method falls back to dense-only mode
+        with a warning.
+
+        Args:
+            vector: Dense query vector.
+            silo_id: Tenant silo identifier (used for collection scoping and
+                payload filter).
+            limit: Maximum number of results.
+            search_mode: ``"hybrid"``, ``"dense"``, or ``"sparse"``.
+            sparse_indices: Sparse vector token indices (required for hybrid /
+                sparse modes).
+            sparse_values: Sparse vector activation values (required for hybrid
+                / sparse modes).
+            score_threshold: Optional minimum score filter.
+
+        Returns:
+            List of :class:`VectorSearchResult` ordered by descending score.
+        """
+        collection = await self._ensure_collection(silo_id)
+        client = await self._qdrant._get_client()
+
+        must: list[Any] = [FieldCondition(key="silo_id", match=MatchValue(value=silo_id))]
+        query_filter = QdrantFilter(must=must)
+
+        has_sparse = sparse_indices is not None and sparse_values is not None
+
+        effective_mode = search_mode
+        if search_mode == "hybrid" and not has_sparse:
+            logger.warning(
+                "splade_hybrid_fallback",
+                reason="sparse_indices/values not provided; falling back to dense",
+            )
+            effective_mode = "dense"
+
+        if effective_mode == "dense":
+            response = await client.query_points(
+                collection_name=collection,
+                query=vector,
+                using=self.DENSE_VECTOR_NAME if self._hybrid else None,
+                query_filter=query_filter,
+                limit=limit,
+                score_threshold=score_threshold,
+            )
+        elif effective_mode == "sparse":
+            if not has_sparse:
+                raise ValueError("sparse_indices and sparse_values are required for sparse mode")
+            response = await client.query_points(
+                collection_name=collection,
+                query=SparseVector(
+                    indices=sparse_indices,  # type: ignore[arg-type]
+                    values=sparse_values,  # type: ignore[arg-type]
+                ),
+                using=self.SPARSE_VECTOR_NAME,
+                query_filter=query_filter,
+                limit=limit,
+                score_threshold=score_threshold,
+            )
+        else:
+            # Hybrid: RRF fusion over dense + sparse prefetch legs.
+            response = await client.query_points(
+                collection_name=collection,
+                prefetch=[
+                    Prefetch(
+                        query=vector,
+                        using=self.DENSE_VECTOR_NAME,
+                        filter=query_filter,
+                        limit=limit * 2,
+                    ),
+                    Prefetch(
+                        query=SparseVector(
+                            indices=sparse_indices,  # type: ignore[arg-type]
+                            values=sparse_values,  # type: ignore[arg-type]
+                        ),
+                        using=self.SPARSE_VECTOR_NAME,
+                        filter=query_filter,
+                        limit=limit * 2,
+                    ),
+                ],
+                query=FusionQuery(fusion=Fusion.RRF),
+                limit=limit,
+                score_threshold=score_threshold,
+            )
+
+        return [
+            VectorSearchResult(
+                node_id=str(r.id),
+                score=r.score,
+                silo_id=r.payload.get("silo_id") if r.payload else None,
+                node_type=r.payload.get("type") if r.payload else None,
+            )
+            for r in response.points
+        ]
 
     async def delete(self, node_id: uuid.UUID, silo_id: str) -> None:
         collection = await self._ensure_collection(silo_id)

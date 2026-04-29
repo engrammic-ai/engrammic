@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from context_service.mcp.server import get_context_service, get_mcp_auth_context, get_silo_service
 from context_service.models.mcp import Layer, QueryFilters
@@ -14,6 +14,9 @@ if TYPE_CHECKING:
     from fastmcp import FastMCP
 
 
+_VALID_SEARCH_MODES = frozenset({"hybrid", "dense", "sparse"})
+
+
 async def _context_query(
     silo_id: str,
     query: str,
@@ -22,6 +25,7 @@ async def _context_query(
     top_k: int = 10,
     include_superseded: bool = False,
     as_of: str | None = None,
+    search_mode: Literal["hybrid", "dense", "sparse"] = "hybrid",
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
 
@@ -66,6 +70,7 @@ async def _context_query(
         top_k=top_k,
         include_superseded=include_superseded,
         as_of=as_of_dt,
+        search_mode=search_mode,
     )
     elapsed_ms = int((time.perf_counter() - start) * 1000)
 
@@ -85,6 +90,7 @@ async def _context_query(
         ],
         "total_candidates": len(results),
         "search_time_ms": elapsed_ms,
+        "search_mode": search_mode,
     }
 
 
@@ -107,6 +113,7 @@ def register(mcp: FastMCP) -> None:
         top_k: int = 10,
         include_superseded: bool = False,
         as_of: str | None = None,
+        search_mode: str = "hybrid",
     ) -> dict[str, Any]:
         """Semantic search with layer filtering.
 
@@ -118,10 +125,19 @@ def register(mcp: FastMCP) -> None:
             top_k: Maximum results (default 10).
             include_superseded: Include superseded nodes (default False).
             as_of: ISO 8601 datetime for time-travel (not yet implemented at store level).
+            search_mode: Retrieval mode — "hybrid" (dense+sparse RRF, default),
+                "dense" (dense-only), or "sparse" (SPLADE-only).
 
         Returns:
-            {results, total_candidates, search_time_ms}
+            {results, total_candidates, search_time_ms, search_mode}
         """
+        # Validate search_mode before passing to the typed internal function.
+        if search_mode not in _VALID_SEARCH_MODES:
+            return {
+                "error": "invalid_search_mode",
+                "valid": sorted(_VALID_SEARCH_MODES),
+            }
+        validated_mode: Literal["hybrid", "dense", "sparse"] = search_mode  # type: ignore[assignment]
         return await _context_query(
             silo_id=silo_id,
             query=query,
@@ -130,4 +146,5 @@ def register(mcp: FastMCP) -> None:
             top_k=top_k,
             include_superseded=include_superseded,
             as_of=as_of,
+            search_mode=validated_mode,
         )

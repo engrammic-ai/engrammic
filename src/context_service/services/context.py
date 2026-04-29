@@ -6,7 +6,7 @@ import hashlib
 import json
 import uuid
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 from primitives.schema.labels import ALL_CITE_LABELS
@@ -23,6 +23,7 @@ from context_service.services.models import (
 
 if TYPE_CHECKING:
     from context_service.embeddings import EmbeddingService
+    from context_service.embeddings.splade import SpladeEncoder
     from context_service.services.context_meta import (
         HistoryResult,
         ProvenanceResult,
@@ -66,11 +67,13 @@ class ContextService:
         qdrant: QdrantClient,
         embedding: EmbeddingService | None = None,
         cache: RedisClient | None = None,
+        splade: SpladeEncoder | None = None,
     ) -> None:
         self._memgraph = memgraph
         self._qdrant = qdrant
         self._embedding = embedding
         self._cache = cache
+        self._splade = splade
 
     async def store(
         self,
@@ -164,11 +167,27 @@ class ContextService:
 
         if content and len(content) >= MIN_CONTENT_FOR_EMBEDDING and self._embedding:
             vector = await self._embedding.embed_single(content)
+
+            sparse_indices: list[int] | None = None
+            sparse_values: list[float] | None = None
+            if self._splade is not None:
+                try:
+                    sparse = await self._splade.encode(content)
+                    sparse_indices, sparse_values = self._splade.to_qdrant(sparse)
+                except Exception as exc:
+                    logger.warning(
+                        "splade_encode_failed_in_store",
+                        node_id=str(node.id),
+                        error=str(exc),
+                    )
+
             await self._qdrant.upsert(
                 node_id=str(node.id),
                 vector=vector,
                 payload={"type": node_type},
                 silo_id=str(silo_id),
+                sparse_indices=sparse_indices,
+                sparse_values=sparse_values,
             )
 
         logger.info("context_stored", node_id=str(node.id), type=node_type, silo_id=str(silo_id))
@@ -804,6 +823,7 @@ class ContextService:
         top_k: int = 10,
         include_superseded: bool = False,
         as_of: datetime | None = None,  # noqa: ARG002
+        search_mode: Literal["hybrid", "dense", "sparse"] = "hybrid",
     ) -> list[QueryResult]:
         """Semantic search with layer filtering.
 
@@ -815,6 +835,9 @@ class ContextService:
             top_k: Maximum results.
             include_superseded: Include superseded nodes.
             as_of: Time-travel point (not yet implemented at store level).
+            search_mode: Vector retrieval mode — ``"hybrid"`` (default),
+                ``"dense"``, or ``"sparse"``. Hybrid requires a SPLADE encoder
+                to be wired in; falls back to dense if not available.
 
         Returns:
             List of QueryResult ordered by relevance.
@@ -825,10 +848,31 @@ class ContextService:
 
         query_vector = await self._embedding.embed_query(query)
 
+        sparse_indices: list[int] | None = None
+        sparse_values: list[float] | None = None
+        effective_mode = search_mode
+        if search_mode in ("hybrid", "sparse") and self._splade is not None:
+            try:
+                sparse = await self._splade.encode_query(query)
+                sparse_indices, sparse_values = self._splade.to_qdrant(sparse)
+            except Exception as exc:
+                logger.warning(
+                    "splade_query_failed",
+                    error=str(exc),
+                    fallback="dense",
+                )
+                effective_mode = "dense"
+        elif search_mode in ("hybrid", "sparse") and self._splade is None:
+            logger.debug("splade_not_configured", fallback="dense")
+            effective_mode = "dense"
+
         search_results = await self._qdrant.search(
             vector=query_vector,
             limit=top_k,
             silo_id=str(scope.silo_id),
+            search_mode=effective_mode,
+            sparse_indices=sparse_indices,
+            sparse_values=sparse_values,
         )
 
         if not search_results:
