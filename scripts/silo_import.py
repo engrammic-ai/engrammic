@@ -31,11 +31,11 @@ _SUPPORTED_SCHEMA_VERSIONS = frozenset([1])
 # ---------------------------------------------------------------------------
 # Cypher helpers
 #
-# MERGE on (elementId, silo_id) would be cleanest, but elementId() from the
-# source env is not valid in the target. Instead we key nodes on their
-# application-layer `id` property (which every silo node carries) plus the
-# target silo_id. If a node record has no `id` property we fall back to
-# `_export_element_id`, a synthetic property written during import.
+# MERGE on (id(), silo_id) would be cleanest, but id() from the source env is
+# not valid in the target. Instead we key nodes on their application-layer
+# `id` property (which every silo node carries) plus the target silo_id. If a
+# node record has no `id` property we fall back to `_export_element_id`, a
+# synthetic property written during import.
 #
 # Labels: Memgraph requires each label to be a literal in Cypher; we can't
 # pass a list as a parameter and have them applied as labels. We build the
@@ -83,7 +83,7 @@ def _build_node_merge(labels: list[str], properties: dict[str, Any]) -> tuple[st
     cypher = f"""
 MERGE (n{label_str} {{id: $node_id, silo_id: $silo_id}})
 {set_clause}
-RETURN elementId(n) AS eid
+RETURN id(n) AS eid
 """
     return cypher.strip(), params
 

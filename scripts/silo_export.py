@@ -31,13 +31,13 @@ _DEFAULT_PAGE_SIZE = 500
 
 # ---------------------------------------------------------------------------
 # Cypher: paginated node fetch
-# Memgraph exposes elementId() for internal IDs. We use it as the opaque
-# record identifier so edges can reference endpoints without depending on
-# application-layer UUIDs.
+# Memgraph uses id() for internal IDs (not elementId() which is Neo4j-specific).
+# We use it as the opaque record identifier so edges can reference endpoints
+# without depending on application-layer UUIDs.
 # ---------------------------------------------------------------------------
 _FETCH_NODES_PAGE = """
 MATCH (n {silo_id: $silo_id})
-WITH n, elementId(n) AS eid
+WITH n, id(n) AS eid
 ORDER BY eid
 SKIP $skip
 LIMIT $limit
@@ -52,11 +52,11 @@ RETURN eid AS id, labels(n) AS labels, properties(n) AS props
 # ---------------------------------------------------------------------------
 _FETCH_EDGES_PAGE = """
 MATCH (a {silo_id: $silo_id})-[r]->(b {silo_id: $silo_id})
-WITH a, r, b, elementId(r) AS reid
+WITH a, r, b, id(r) AS reid
 ORDER BY reid
 SKIP $skip
 LIMIT $limit
-RETURN elementId(a) AS src, elementId(b) AS dst,
+RETURN id(a) AS src, id(b) AS dst,
        type(r) AS rel_type, properties(r) AS props
 """
 
