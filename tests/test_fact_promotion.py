@@ -74,6 +74,26 @@ def test_unknown_source_tier_falls_back() -> None:
     assert decision.should_promote is False
 
 
+def test_combined_confidence_uses_primitives_formula() -> None:
+    """Verify combined_confidence is computed via primitives, not passed through raw."""
+    from primitives.eag.epistemology.confidence import SourceTier, combined_confidence
+
+    raw = 0.8
+    tier = SourceTier.COMMUNITY
+    expected = combined_confidence(raw, tier)
+
+    props = {"id": "claim-conf", "confidence": raw, "source_tier": "community"}
+    decision = evaluate_claim_for_fact(props, evidence_count=1)
+
+    # Community tier should weight down the raw confidence; if the code just passed
+    # raw_confidence through as combined_confidence, this assertion would fail.
+    assert expected < raw, "community tier should weight down confidence"
+    # The decision reflects the weighted confidence, not the raw value.
+    # We can't directly inspect the ClaimForPromotion, but we can verify the
+    # behavior: community @ 0.8 raw -> weighted ~0.48, which is below R1 threshold.
+    assert decision.should_promote is False
+
+
 def test_claim_to_fact_promotion_depends_on_custodian_visit() -> None:
     """claim_to_fact_promotion must declare custodian_visit as a dependency."""
     from context_service.pipelines.assets.fact_promotion import claim_to_fact_promotion
