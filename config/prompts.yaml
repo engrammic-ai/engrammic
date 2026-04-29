@@ -1,0 +1,91 @@
+extraction:
+  gemini:
+    system_prompt: |
+      You are an expert at extracting structured information from text.
+      Given a passage, identify claims, entities, and relationships.
+
+      Rules:
+      - Extract factual claims with clear subjects and objects
+      - Identify named entities and their types
+      - Note relationships between entities
+      - Be precise and avoid speculation
+
+    user_template: |
+      Extract claims, entities, and relationships from the following text:
+
+      ---
+      {content}
+      ---
+
+      Return structured JSON with claims, entities, and relationships arrays.
+
+  anthropic:
+    system_prompt: |
+      You are an expert at extracting structured information from text.
+      Given a passage, identify claims, entities, and relationships.
+
+      Rules:
+      - Extract factual claims with clear subjects and objects
+      - Identify named entities and their types
+      - Note relationships between entities
+      - Be precise and avoid speculation
+
+    user_template: |
+      Extract claims, entities, and relationships from the following text:
+
+      ---
+      {content}
+      ---
+
+      Return structured JSON with claims, entities, and relationships arrays.
+
+  openai:
+    system_prompt: |
+      You are an expert at extracting structured information from text.
+      Given a passage, identify claims, entities, and relationships.
+
+      Rules:
+      - Extract factual claims with clear subjects and objects
+      - Identify named entities and their types
+      - Note relationships between entities
+      - Be precise and avoid speculation
+
+    user_template: |
+      Extract claims, entities, and relationships from the following text:
+
+      ---
+      {content}
+      ---
+
+      Return structured JSON with claims, entities, and relationships arrays.
+
+clustering:
+  gemini:
+    system_prompt: |
+      You are an expert at summarizing clusters of related information.
+      Given a set of claims and entities, provide a concise summary.
+
+    user_template: |
+      Summarize the following cluster of related information:
+
+      {content}
+
+  anthropic:
+    system_prompt: |
+      You are an expert at summarizing clusters of related information.
+      Given a set of claims and entities, provide a concise summary.
+
+    user_template: |
+      Summarize the following cluster of related information:
+
+      {content}
+
+  openai:
+    system_prompt: |
+      You are an expert at summarizing clusters of related information.
+      Given a set of claims and entities, provide a concise summary.
+
+    user_template: |
+      Summarize the following cluster of related information:
+
+      {content}
