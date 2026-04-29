@@ -57,6 +57,10 @@ llm = [
 auth = [
     "workos==6.0.8",
 ]
+splade = [
+    "torch>=2.0",
+    "transformers>=4.40",
+]
 
 [build-system]
 requires = ["hatchling"]

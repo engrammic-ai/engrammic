@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from primitives.eag.epistemology.confidence import SourceTier
+from primitives.eag.epistemology.confidence import SourceTier, combined_confidence
 from primitives.eag.epistemology.promotion import (
     ClaimForPromotion,
     PromotionDecision,
@@ -55,7 +55,7 @@ def evaluate_claim_for_fact(
 
     primary = ClaimForPromotion(
         fingerprint=fingerprint,
-        combined_confidence=raw_confidence,
+        combined_confidence=combined_confidence(raw_confidence, source_tier),
         source_tier=source_tier,
         raw_confidence=raw_confidence,
     )
@@ -72,7 +72,7 @@ def evaluate_claim_for_fact(
             all_claims.append(
                 ClaimForPromotion(
                     fingerprint=str(c.get("fingerprint", c.get("id", ""))),
-                    combined_confidence=c_raw,
+                    combined_confidence=combined_confidence(c_raw, c_tier),
                     source_tier=c_tier,
                     raw_confidence=c_raw,
                 )

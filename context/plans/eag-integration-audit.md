@@ -88,7 +88,7 @@ TODO #2 (was #4) closed by P1 review fixes — see PR #1.
 ### Needs discussion before implementing
 5. **`:Finding` vs `:Fact` naming** — Resolved 2026-04-28 by phase-eag-a-claim-fact-promotion. See architecture/README.md.
 6. **`primitives.eag.epistemology` integration** — Once a `:Claim`→`:Fact` write path exists, `should_promote_r1`/`should_promote_r2` from primitives should replace the current `PromotionPlan`/`execute_promotion` which operates on Finding status flips. These are fundamentally different operations and should not be merged prematurely.
-7. **`RelationshipType.CAUSES` alignment** — `extraction/models.py:RelationshipType` and `primitives.schema.edges.CITEEdgeType` overlap on `CAUSES`. If the extraction pipeline is expected to write EAG semantic edges directly (rather than `:ProposedEdge` nodes), `RelationshipType` could be replaced by `CITEEdgeType`. Currently they serve different purposes (LLM extraction vocabulary vs graph edge type registry).
+7. **`RelationshipType.CAUSES` alignment** — RESOLVED 2026-04-29. Decision: keep enums separate; they serve different purposes (LLM extraction vocabulary vs graph edge type registry). See `context/architecture/enum-registries.md`.
 
 ## Open Questions
 
