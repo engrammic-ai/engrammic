@@ -151,6 +151,8 @@ class ClusteringService:
 
             level_clusters[level.value] = {}
 
+            # Build in-memory cluster objects first so we can reference their IDs below.
+            level_cluster_list: list[tuple[int, list[str], Cluster]] = []
             for community_id, node_ids in communities.items():
                 cluster = Cluster(
                     id=str(uuid.uuid4()),
@@ -160,22 +162,34 @@ class ClusteringService:
                     created_at=now,
                     updated_at=now,
                 )
+                level_cluster_list.append((community_id, node_ids, cluster))
+                all_clusters.append(cluster)
+                level_clusters[level.value][community_id] = cluster
 
-                await self._memgraph.execute_write(
-                    queries.CREATE_CLUSTER,
-                    {
-                        "id": cluster.id,
-                        "silo_id": silo_id,
-                        "level": cluster.level,
-                        "community_id": cluster.community_id,
-                        "summary": None,
-                        "key_topics": json.dumps([]),
-                        "node_count": cluster.node_count,
-                        "created_at": now.isoformat(),
-                        "updated_at": now.isoformat(),
-                    },
-                )
+            if not level_cluster_list:
+                continue
 
+            # R-006: one UNWIND write for all Cluster nodes in this level.
+            await self._memgraph.execute_write(
+                queries.BATCH_CREATE_CLUSTERS,
+                {
+                    "clusters": [
+                        {
+                            "id": cl.id,
+                            "level": cl.level,
+                            "community_id": cl.community_id,
+                            "key_topics": json.dumps([]),
+                            "node_count": cl.node_count,
+                        }
+                        for _, _, cl in level_cluster_list
+                    ],
+                    "silo_id": silo_id,
+                    "created_at": now.isoformat(),
+                    "updated_at": now.isoformat(),
+                },
+            )
+
+            for _community_id, node_ids, cluster in level_cluster_list:
                 try:
                     await self._memgraph.execute_write(
                         queries.BATCH_CREATE_MEMBER_OF,
@@ -194,9 +208,6 @@ class ClusteringService:
                         error=str(e),
                         exc_info=True,
                     )
-
-                all_clusters.append(cluster)
-                level_clusters[level.value][community_id] = cluster
 
         await self._link_hierarchy(silo_id, level_assignments, level_clusters, now)
 
@@ -369,7 +380,7 @@ class ClusteringService:
             batch = with_summary[i : i + batch_size]
             texts = [c.summary for c in batch]
             try:
-                vectors, _usage = await self._embedding.embed(texts)
+                vectors = await self._embedding.embed(texts)
             except Exception as e:
                 logger.warning(
                     "failed to embed cluster summary batch",
@@ -380,23 +391,29 @@ class ClusteringService:
                 )
                 continue
 
-            for cluster, vector in zip(batch, vectors, strict=True):
-                try:
-                    await self._cluster_qdrant.upsert_cluster_embedding(
-                        cluster_id=cluster.id,
-                        vector=vector,
-                        silo_id=silo_id,
-                        level=cluster.level,
-                        node_count=cluster.node_count,
-                    )
-                    total_embedded += 1
-                except Exception as e:
-                    logger.warning(
-                        "failed to upsert cluster embedding",
-                        cluster_id=cluster.id,
-                        error=str(e),
-                        exc_info=True,
-                    )
+            # R-007: one batch upsert call per embedding batch instead of N single calls.
+            upsert_items = [
+                {
+                    "cluster_id": cluster.id,
+                    "vector": vector,
+                    "level": cluster.level,
+                    "node_count": cluster.node_count,
+                }
+                for cluster, vector in zip(batch, vectors, strict=True)
+            ]
+            try:
+                upserted = await self._cluster_qdrant.batch_upsert_cluster_embeddings(
+                    upsert_items, silo_id
+                )
+                total_embedded += upserted
+            except Exception as e:
+                logger.warning(
+                    "failed to batch upsert cluster embeddings",
+                    batch_start=i,
+                    batch_end=i + len(batch),
+                    error=str(e),
+                    exc_info=True,
+                )
 
             if (i + batch_size) % 500 == 0 or i + batch_size >= len(with_summary):
                 logger.info(

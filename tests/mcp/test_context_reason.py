@@ -15,7 +15,10 @@ SILO_ID = str(uuid.uuid5(uuid.NAMESPACE_DNS, "silo:test-org"))
 @pytest.fixture
 def mock_deps():
     with (
-        patch("context_service.mcp.auth.get_mcp_auth") as auth_mock,
+        patch(
+            "context_service.mcp.server.get_mcp_auth_context",
+            new_callable=AsyncMock,
+        ) as auth_mock,
         patch("context_service.mcp.server.get_context_service") as svc_mock,
         patch("context_service.mcp.server.get_silo_service") as silo_svc_mock,
         patch(

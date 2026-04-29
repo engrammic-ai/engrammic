@@ -14,10 +14,10 @@ from datetime import datetime
 from typing import Any
 
 import httpx
-from google.auth.transport.requests import (  # type: ignore[import-untyped]
+from google.auth.transport.requests import (
     Request as GoogleAuthRequest,
 )
-from google.oauth2 import service_account  # type: ignore[import-untyped]
+from google.oauth2 import service_account
 
 from context_service.config import get_settings
 from context_service.config.logging import get_logger
@@ -130,7 +130,7 @@ class VertexGeminiProvider(LLMProvider):
         return self._client
 
     def _load_credentials(self) -> Any:
-        return service_account.Credentials.from_service_account_file(
+        return service_account.Credentials.from_service_account_file(  # type: ignore[no-untyped-call]
             self._credentials_path,
             scopes=_SCOPES,
         )

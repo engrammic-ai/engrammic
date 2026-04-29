@@ -6,6 +6,9 @@ Grouped by persistence layer so the runner can apply subsets during migration.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+import structlog
 from primitives.schema import (  # noqa: E402
     AuditLabel,
     IntelligenceLabel,
@@ -14,6 +17,11 @@ from primitives.schema import (  # noqa: E402
     RegistryLabel,
     WisdomLabel,
 )
+
+if TYPE_CHECKING:
+    from context_service.stores.memgraph import MemgraphClient
+
+logger = structlog.get_logger(__name__)
 
 # --- Cluster layer (not a schema enum label — bare string) ---
 
@@ -114,3 +122,23 @@ ALL_INDEX_QUERIES: tuple[str, ...] = (
     *REGISTRY_INDEX_QUERIES,
     *AUDIT_INDEX_QUERIES,
 )
+
+
+async def apply_all_indexes(client: MemgraphClient) -> None:
+    """Apply every index in :data:`ALL_INDEX_QUERIES` to Memgraph.
+
+    Each ``CREATE INDEX`` is idempotent — Memgraph silently skips indexes
+    that already exist. Errors on individual statements are logged and the
+    runner continues, mirroring :func:`bootstrap_custodian_schema`.
+    """
+    logger.info("applying_indexes", count=len(ALL_INDEX_QUERIES))
+    applied = 0
+    for statement in ALL_INDEX_QUERIES:
+        try:
+            async with client.session() as session:
+                result = await session.run(statement)
+                await result.consume()
+            applied += 1
+        except Exception as exc:
+            logger.debug("index_apply_skipped", statement=statement, error=str(exc))
+    logger.info("indexes_applied", applied=applied, total=len(ALL_INDEX_QUERIES))

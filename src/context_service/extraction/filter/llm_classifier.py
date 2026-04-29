@@ -82,7 +82,7 @@ class LLMClassifierRule:
                 ),
                 timeout=self._rs.llm_timeout_s,
             )
-        except (TimeoutError, Exception) as e:
+        except Exception as e:  # TimeoutError is a subclass; Exception covers both
             await cb.record_failure()
             log.info("llm classifier failed: %s", e)
             return FilterDecision(

@@ -10,6 +10,7 @@ import structlog
 from context_service.services.models import ScopeContext, Silo, derive_silo_id
 
 if TYPE_CHECKING:
+    from context_service.cache.silo_ownership_cache import SiloOwnershipCache
     from context_service.stores import MemgraphClient
 
 logger = structlog.get_logger(__name__)
@@ -18,8 +19,13 @@ logger = structlog.get_logger(__name__)
 class SiloService:
     """Manages organizational containers within a tenant."""
 
-    def __init__(self, memgraph: MemgraphClient) -> None:
+    def __init__(
+        self,
+        memgraph: MemgraphClient,
+        ownership_cache: SiloOwnershipCache | None = None,
+    ) -> None:
         self._memgraph = memgraph
+        self.ownership_cache = ownership_cache
 
     async def get_or_create(
         self,
@@ -143,6 +149,12 @@ async def validate_silo_ownership(
             "message": "Silo does not exist or org_id mismatch.",
         }
 
+    cache = silo_service.ownership_cache
+    if cache is not None:
+        cached = await cache.get(org_id, silo_id)
+        if cached is True:
+            return None
+
     scope = ScopeContext(org_id=org_id, silo_id=expected)
     silo = await silo_service.get_by_id(scope)
     if silo is None:
@@ -152,5 +164,8 @@ async def validate_silo_ownership(
             "silo_id": silo_id,
             "message": "Silo does not exist or org_id mismatch.",
         }
+
+    if cache is not None:
+        await cache.set(org_id, silo_id)
 
     return None

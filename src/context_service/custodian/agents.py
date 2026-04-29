@@ -9,12 +9,11 @@ defines only the Agent instances and their deps contract.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from primitives.eag.agents import DepsProtocol  # noqa: F401  # type: ignore[import-untyped]
-from pydantic_ai import Agent  # type: ignore[import-not-found]
-from pydantic_ai.usage import UsageLimits  # type: ignore[import-not-found]
+from pydantic_ai import Agent
+from pydantic_ai.usage import UsageLimits
 
 from context_service.core.settings import get_settings
 from context_service.custodian.models import (
@@ -32,13 +31,10 @@ if TYPE_CHECKING:
     from context_service.custodian.validators import CitationValidator
     from context_service.stores.memgraph import MemgraphClient
 
-_PROMPTS_DIR = (
-    Path(__file__).resolve().parent.parent.parent.parent.parent / "config" / "prompts" / "custodian"
-)
-FAST_PASS_SYSTEM_PROMPT = load_prompt(_PROMPTS_DIR / "fast_pass.yaml")
-PLAN_SYSTEM_PROMPT = load_prompt(_PROMPTS_DIR / "plan.yaml")
-DEEP_PASS_SYSTEM_PROMPT = load_prompt(_PROMPTS_DIR / "deep_pass.yaml")
-STITCH_SYSTEM_PROMPT = load_prompt(_PROMPTS_DIR / "stitch.yaml")
+FAST_PASS_SYSTEM_PROMPT = load_prompt("prompts/custodian/fast_pass.yaml")
+PLAN_SYSTEM_PROMPT = load_prompt("prompts/custodian/plan.yaml")
+DEEP_PASS_SYSTEM_PROMPT = load_prompt("prompts/custodian/deep_pass.yaml")
+STITCH_SYSTEM_PROMPT = load_prompt("prompts/custodian/stitch.yaml")
 
 
 @dataclass

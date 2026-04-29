@@ -22,8 +22,8 @@ class ConsensusResult(TypedDict, total=False):
 
 
 GET_CHAINS_FOR_COMMITMENT = """
-MATCH (chain:ReasoningChain)-[:CRYSTALLIZED_INTO]->(c {id: $commitment_id})
-WHERE chain.status = 'published'
+MATCH (chain:ReasoningChain)-[:CRYSTALLIZED_INTO]->(c {id: $commitment_id, silo_id: $silo_id})
+WHERE chain.status = 'published' AND chain.silo_id = $silo_id
 RETURN chain.id AS id, chain.produced_by_agent_id AS produced_by_agent_id,
        COALESCE(chain.confidence, 0.5) AS confidence
 """
@@ -43,7 +43,7 @@ async def handle_consensus_task(
     """
     chains = await memgraph.execute_query(
         GET_CHAINS_FOR_COMMITMENT,
-        {"commitment_id": commitment_id},
+        {"commitment_id": commitment_id, "silo_id": silo_id},
     )
 
     if not chains:

@@ -1,15 +1,14 @@
 """Dagster asset: batch :Claim -> :Claim:Fact promotion per silo."""
 
-from __future__ import annotations
-
 import asyncio
+import time
 from typing import Any
 
 import dagster as dg
+from dagster import AssetExecutionContext
 
+from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import MemgraphResource
-
-silo_partitions = dg.DynamicPartitionsDefinition(name="silo_id")
 
 _BATCH_SIZE = 500
 
@@ -20,36 +19,43 @@ RETURN c.id AS id, properties(c) AS props
 LIMIT $batch_size
 """
 
-# Count both edge types: extraction emits REFERENCES, assert_claim emits
-# DERIVED_FROM. Either signals evidence for promotion.
-_COUNT_EVIDENCE = """
-MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})-[:REFERENCES|DERIVED_FROM]->()
-RETURN count(*) AS cnt
+# Batch evidence count for all claim IDs in one RTT.
+# Returns one row per claim: {cid, cnt}.
+_BATCH_COUNT_EVIDENCE = """
+UNWIND $claim_ids AS cid
+MATCH (c:Claim {id: cid, silo_id: $silo_id})-[:REFERENCES|DERIVED_FROM]->()
+RETURN cid, count(*) AS cnt
 """
 
-# Corroborating claims = other :Claim nodes that reference (or derive from) the
-# same evidence node as this claim.
-_FETCH_CORROBORATIONS = """
-MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})-[:REFERENCES|DERIVED_FROM]->(ref)
+# Batch corroborations for all claim IDs in one RTT.
+# Returns one row per (claim, corroborating-claim) pair: {cid, props}.
+# Corroborating claims = other :Claim nodes sharing at least one reference/
+# derived-from target with this claim.
+_BATCH_FETCH_CORROBORATIONS = """
+UNWIND $claim_ids AS cid
+MATCH (c:Claim {id: cid, silo_id: $silo_id})-[:REFERENCES|DERIVED_FROM]->(ref)
 MATCH (other:Claim {silo_id: $silo_id})-[:REFERENCES|DERIVED_FROM]->(ref)
-WHERE other.id <> $claim_id
-RETURN DISTINCT properties(other) AS props
-LIMIT 10
+WHERE other.id <> cid
+RETURN DISTINCT cid, properties(other) AS props
 """
 
 
 @dg.asset(
     name="claim_to_fact_promotion",
     partitions_def=silo_partitions,
-    required_resource_keys={"memgraph"},
+    ins={"custodian_visit": dg.AssetIn("custodian_visit")},
     description="Batch-promote :Claim nodes to :Claim:Fact per silo using EAG R1/R2 rules.",
+    retry_policy=dg.RetryPolicy(max_retries=3, delay=10.0, backoff=dg.Backoff.EXPONENTIAL),
+    tags={"dagster/concurrency_key": "claim_to_fact_promotion"},
 )
 def claim_to_fact_promotion(
-    context: dg.AssetExecutionContext,
+    context: AssetExecutionContext,
     memgraph: MemgraphResource,
+    custodian_visit: dg.Nothing,  # type: ignore[valid-type]  # noqa: ARG001 — Dagster dep marker, runtime sentinel
 ) -> dg.Output[dict[str, Any]]:
     """Scan unpromoted :Claim nodes in the partition's silo and promote eligible ones."""
     silo_id: str = context.partition_key
+    t0 = time.monotonic()
 
     async def _run() -> tuple[int, int]:
         from context_service.custodian.fact_promotion import evaluate_claim_for_fact
@@ -67,21 +73,38 @@ def claim_to_fact_promotion(
         claims_scanned = len(rows)
         claims_promoted = 0
 
-        for row in rows:
-            claim_id: str = str(row["id"])
-            claim_props: dict[str, Any] = dict(row["props"])
+        if not rows:
+            return claims_scanned, claims_promoted
 
-            count_rows = await client.execute_query(
-                _COUNT_EVIDENCE,
-                {"claim_id": claim_id, "silo_id": silo_id},
-            )
-            evidence_count: int = int(count_rows[0]["cnt"]) if count_rows else 0
+        claim_ids: list[str] = [str(r["id"]) for r in rows]
+        props_by_id: dict[str, dict[str, Any]] = {
+            str(r["id"]): dict(r["props"]) for r in rows
+        }
 
-            corr_rows = await client.execute_query(
-                _FETCH_CORROBORATIONS,
-                {"claim_id": claim_id, "silo_id": silo_id},
-            )
-            corroborations: list[dict[str, Any]] = [dict(r["props"]) for r in corr_rows]
+        # Batch RTT 1: evidence counts for all claims.
+        evidence_count_by_id: dict[str, int] = {}
+        count_rows = await client.execute_query(
+            _BATCH_COUNT_EVIDENCE,
+            {"claim_ids": claim_ids, "silo_id": silo_id},
+        )
+        for cr in count_rows:
+            evidence_count_by_id[str(cr["cid"])] = int(cr["cnt"])
+
+        # Batch RTT 2: corroborations for all claims.
+        corroborations_by_id: dict[str, list[dict[str, Any]]] = {
+            cid: [] for cid in claim_ids
+        }
+        corr_rows = await client.execute_query(
+            _BATCH_FETCH_CORROBORATIONS,
+            {"claim_ids": claim_ids, "silo_id": silo_id},
+        )
+        for cr in corr_rows:
+            corroborations_by_id[str(cr["cid"])].append(dict(cr["props"]))
+
+        for claim_id in claim_ids:
+            claim_props: dict[str, Any] = props_by_id[claim_id]
+            evidence_count: int = evidence_count_by_id.get(claim_id, 0)
+            corroborations: list[dict[str, Any]] = corroborations_by_id.get(claim_id, [])
 
             decision = evaluate_claim_for_fact(claim_props, evidence_count, corroborations)
             if not decision.should_promote:
@@ -98,13 +121,22 @@ def claim_to_fact_promotion(
         return claims_scanned, claims_promoted
 
     scanned, promoted = asyncio.run(_run())
-    context.log.info(f"silo {silo_id}: scanned={scanned} promoted={promoted}")
+    duration_s = time.monotonic() - t0
+    context.log.info(
+        f"silo {silo_id}: scanned={scanned} promoted={promoted} duration={duration_s:.2f}s"
+    )
 
     return dg.Output(
-        value={"silo_id": silo_id, "claims_scanned": scanned, "claims_promoted": promoted},
+        value={
+            "silo_id": silo_id,
+            "claims_scanned": scanned,
+            "claims_promoted": promoted,
+            "duration_s": duration_s,
+        },
         metadata={
             "silo_id": dg.MetadataValue.text(silo_id),
             "claims_scanned": dg.MetadataValue.int(scanned),
             "claims_promoted": dg.MetadataValue.int(promoted),
+            "duration_s": dg.MetadataValue.float(duration_s),
         },
     )

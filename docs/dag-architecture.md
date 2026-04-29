@@ -1,145 +1,66 @@
-# DAG Architecture Discussion
+# DAG Architecture
 
-**Status:** draft, needs discussion
-**Date:** 2026-04-26
+**Status:** Shipped (v1-beta)
+**Date:** 2026-04-28
 
-## Current State (contextr)
+## Shipped DAG Shape
 
-The existing Dagster setup has these assets:
-
-```
-ingestion_outbox_sensor
-    └── triggers: ingest_asset
-                      └── triggers: extraction_asset
-                                        └── triggers: clustering_asset
-
-custodian_sensor (separate)
-    └── triggers: custodian_pass_result
-
-heat_sensor (separate)
-    └── triggers: heat_asset
-```
-
-**Problems with current DAG:**
-1. Sensors trigger on outbox tables, not asset completion
-2. Custodian runs independently, not chained to extraction
-3. Heat runs on schedule, disconnected from usage
-4. No clear "document lifecycle" path
-
-## Proposed DAG Structure
-
-### Option A: Linear Pipeline
+The pipeline follows Option B (parallel embed + extract) from the original discussion. Both extraction and embedding run in parallel, sensor-driven, as soon as documents arrive. All assets are partitioned by `silo_id`.
 
 ```
-Document Ingested
-    │
-    ▼
-┌─────────────────┐
-│  chunk_asset    │  Split into passages
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  embed_asset    │  Generate embeddings
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ extract_asset   │  Extract :Claim nodes
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ promote_asset   │  :Claim → :Fact (R1/R2)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ cluster_asset   │  Leiden clustering
-└─────────────────┘
-
-Parallel track (retrieval-driven):
-┌─────────────────┐
-│  heat_asset     │  Compute heat from retrieval events
-└─────────────────┘
+Document Ingested (via MCP context_remember / REST ingest)
+    |
+    |  document_arrival_sensor (polls every 60s per silo)
+    |
+    +-------------------+
+    |                   |
+    v                   v
+extraction          embedding
+(sensor-driven,     (sensor-driven,
+ batched, ~5min)     batched, ~5min)
+    |                   |
+    +--------+----------+
+             |
+             v
+      custodian_visit
+      (scheduled, */15 * * * *)
+             |
+    +--------+----------+
+    |                   |
+    v                   v
+custodian_finalize  claim_to_fact_promotion
+(waits on visit)    (scheduled hourly,
+                     waits on visit)
+    |
+    v
+clustering
+(scheduled daily 04:00 UTC,
+ waits on custodian_finalize)
 ```
 
-**Pros:** Clear, debuggable, each step observable
-**Cons:** Sequential latency, can't parallelize embed+extract
+Note: extraction and embedding run in parallel with no inter-dependency. custodian_visit waits for both to complete before running.
 
-### Option B: Parallel Where Possible
+## Asset Cadences
 
-```
-Document Ingested
-    │
-    ▼
-┌─────────────────┐
-│  chunk_asset    │
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    ▼         ▼
-┌───────┐ ┌───────────┐
-│ embed │ │ extract   │   (parallel)
-└───┬───┘ └─────┬─────┘
-    │           │
-    └─────┬─────┘
-          ▼
-   ┌─────────────────┐
-   │ promote_asset   │   (needs both)
-   └────────┬────────┘
-            │
-            ▼
-   ┌─────────────────┐
-   │ cluster_asset   │
-   └─────────────────┘
-```
+| Asset                    | Trigger                             | Cron / cadence             |
+|--------------------------|-------------------------------------|----------------------------|
+| extraction               | document_arrival_sensor             | Every ~5 min or N docs     |
+| embedding                | document_arrival_sensor             | Every ~5 min (parallel)    |
+| custodian_visit          | custodian_visit_schedule            | `*/15 * * * *` (15 min)    |
+| custodian_finalize       | Depends on custodian_visit          | Follows visit schedule     |
+| claim_to_fact_promotion  | fact_promotion_schedule             | `0 * * * *` (hourly)       |
+| clustering               | clustering_schedule                 | `0 4 * * *` (daily 04 UTC) |
 
-**Pros:** Faster, embed and extract don't depend on each other
-**Cons:** More complex dependency management
+## Concurrency Model
 
-### Option C: Event-Driven (Outbox Pattern)
+- **Per-asset concurrency key**: Each asset has a static `dagster/concurrency_key` tag (e.g. `extraction`, `embedding`, `clustering`). These keys bound concurrent runs of each asset type globally. Configure pool sizes in `dagster.yaml` under `concurrency`.
+- **Per-silo isolation at run-request time**: Both schedules and the document-arrival sensor emit `RunRequest` objects with `tags={"dagster/concurrency_key": silo_id}`. This means a single noisy silo cannot starve runs for other silos. Both tags co-exist on each `RunRequest`.
+- **LLM cap**: Bind `dagster/concurrency_key=llm_calls` in `dagster.yaml` to a small pool (e.g. 4). Assets that call LLMs (extraction, custodian_visit, clustering) respect this through the per-asset key.
 
-Keep the outbox sensor pattern but make it cleaner:
+## Retry Policy
 
-```
-MCP ingest → writes to outbox → sensor picks up → triggers pipeline
+All assets use `RetryPolicy(max_retries=3, delay=10.0, backoff=Backoff.EXPONENTIAL)`. Transient failures (network, timeouts) retry up to three times with exponential backoff starting at 10 seconds. After retries are exhausted the `poison_queue_sensor` fires on `DagsterRunStatus.FAILURE` and writes the run id, step key, and error message to Redis with a 7-day TTL under `dagster:poison:{asset_key}:{run_id}`.
 
-Pipeline is a single job with partitioned assets:
-- Partition by silo_id
-- Each asset checks its upstream completion
-```
+## Real-time vs Batch Split
 
-**Pros:** Decoupled, scales horizontally
-**Cons:** Harder to debug, outbox table management
-
-## Questions to Decide
-
-1. **Linear vs parallel?** (B is probably right)
-
-2. **Where does Custodian fit?**
-   - After clustering (visits clusters)?
-   - Or is it replaced by promote_asset?
-
-3. **Heat — scheduled or event-driven?**
-   - Scheduled: simple, periodic refresh
-   - Event-driven: recompute on retrieval (more accurate, more compute)
-
-4. **Partitioning strategy?**
-   - By silo_id (tenant isolation)
-   - By document_id (fine-grained)
-   - Hybrid?
-
-5. **Backpressure?**
-   - What happens when ingestion outpaces extraction?
-   - Queue depth limits? Rate limiting?
-
-## Recommendation
-
-Start with **Option B** (parallel embed+extract), with:
-- Partition by silo_id
-- Custodian becomes promote_asset (simpler)
-- Heat on 15-min schedule (not event-driven yet)
-- Backpressure via Dagster's built-in concurrency limits
-
-Revisit event-driven heat once retrieval volume justifies it.
+MCP tool writes (`context_remember`, `context_assert`, `context_commit`, `context_reflect`) bypass Dagster entirely — they go through `services/context.py::store()` synchronously. The DAG handles bulk ingest, custodian sweeps, and periodic clustering only.

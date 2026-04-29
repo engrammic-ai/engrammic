@@ -119,6 +119,16 @@ CREATE (child)-[r:PART_OF {created_at: $created_at}]->(parent)
 RETURN r
 """
 
+# R-006: collapse N per-pair CREATE_PART_OF calls into one UNWIND round-trip.
+# Each entry in $pairs must carry {child_id, parent_id}.
+BATCH_CREATE_PART_OF = """
+UNWIND $pairs AS p
+MATCH (child:Cluster {id: p.child_id, silo_id: $silo_id})
+MATCH (parent:Cluster {id: p.parent_id, silo_id: $silo_id})
+MERGE (child)-[:PART_OF {created_at: $created_at}]->(parent)
+RETURN count(*) AS created
+"""
+
 GET_CLUSTER_MEMBERS = """
 MATCH (n)-[r:MEMBER_OF]->(c:Cluster {id: $cluster_id, silo_id: $silo_id})
 RETURN n, labels(n) as node_labels, r.weight as weight
@@ -472,4 +482,59 @@ RETURN
     n.confidence AS confidence,
     n.supersession_reason AS supersession_reason
 LIMIT 50
+"""
+
+# ---------------------------------------------------------------------------
+# Batch claim write-path queries (asset layer — R-003/F-016)
+#
+# The MCP service layer uses single-row per-claim writes (compatible with
+# synchronous tool calls). The extraction asset uses these UNWIND variants to
+# collapse N×4 RTTs to exactly 4 per batch.
+# ---------------------------------------------------------------------------
+
+BATCH_UPSERT_CLAIMS = """
+UNWIND $claims AS c
+MERGE (n:Claim {id: c.claim_id, silo_id: $silo_id})
+ON CREATE SET
+    n.fingerprint = c.fingerprint,
+    n.subject = c.subject,
+    n.predicate = c.predicate,
+    n.object = c.object,
+    n.valid_from = c.valid_from,
+    n.valid_to = c.valid_to,
+    n.source_doc_id = c.source_doc_id,
+    n.source_passage_id = c.source_passage_id,
+    n.confidence = c.confidence,
+    n.created_at = c.created_at,
+    n.committed = true
+RETURN n.id AS id
+"""
+
+BATCH_ATTACH_CLAIMS_TO_DOCUMENT = """
+UNWIND $rows AS r
+MATCH (d:Document {id: r.doc_id, silo_id: $silo_id})
+MATCH (c:Claim {id: r.claim_id, silo_id: $silo_id})
+MERGE (d)<-[:EXTRACTED_FROM]-(c)
+RETURN count(*) AS attached
+"""
+
+BATCH_UPSERT_ENTITY_MENTIONS = """
+UNWIND $rows AS r
+MERGE (e:Entity {id: r.entity_id, silo_id: $silo_id})
+ON CREATE SET
+    e.name = r.name,
+    e.entity_type = r.entity_type,
+    e.created_at = r.created_at
+WITH e, r
+MATCH (c:Claim {id: r.claim_id, silo_id: $silo_id})
+MERGE (c)-[:MENTIONS]->(e)
+RETURN count(*) AS upserted
+"""
+
+BATCH_ATTACH_CLAIM_REFERENCES = """
+UNWIND $rows AS r
+MATCH (c:Claim {id: r.claim_id, silo_id: $silo_id})
+MATCH (d:Document {id: r.ref_doc_id, silo_id: $silo_id})
+MERGE (c)-[:REFERENCES]->(d)
+RETURN count(*) AS attached
 """

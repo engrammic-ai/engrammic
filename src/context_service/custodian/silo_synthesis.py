@@ -10,10 +10,9 @@ with a (:Finding)-[:SUMMARIZES]->(:Silo) edge.
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pydantic_ai import Agent  # type: ignore[import-not-found]
+from pydantic_ai import Agent
 
 from context_service.core.settings import get_settings
 from context_service.custodian.models import FindingOutput, StitchedSummary
@@ -31,10 +30,7 @@ if TYPE_CHECKING:
 # ClusterLevel.COARSE = 3 (resolution_parameter=0.001)
 _COARSE_LEVEL = 3
 
-_PROMPTS_DIR = (
-    Path(__file__).resolve().parent.parent.parent.parent / "config" / "prompts" / "custodian"
-)
-SILO_SYNTHESIS_SYSTEM_PROMPT = load_prompt(_PROMPTS_DIR / "silo_synthesis.yaml")
+SILO_SYNTHESIS_SYSTEM_PROMPT = load_prompt("prompts/custodian/silo_synthesis.yaml")
 
 
 def _build_user_prompt(

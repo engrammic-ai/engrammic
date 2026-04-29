@@ -31,10 +31,9 @@ def register_silo_create(mcp: FastMCP) -> None:
         Returns:
             Dictionary with silo details.
         """
-        from context_service.mcp.auth import get_mcp_auth
-        from context_service.mcp.server import get_silo_service
+        from context_service.mcp.server import get_mcp_auth_context, get_silo_service
 
-        auth = get_mcp_auth()
+        auth = await get_mcp_auth_context()
         silo_svc = get_silo_service()
 
         silo = await silo_svc.get_or_create(
@@ -66,10 +65,9 @@ def register_silo_list(mcp: FastMCP) -> None:
         Returns:
             Dictionary with 'silos' list.
         """
-        from context_service.mcp.auth import get_mcp_auth
-        from context_service.mcp.server import get_silo_service
+        from context_service.mcp.server import get_mcp_auth_context, get_silo_service
 
-        auth = get_mcp_auth()
+        auth = await get_mcp_auth_context()
         silo_svc = get_silo_service()
 
         silos = await silo_svc.list(org_id=auth.org_id)

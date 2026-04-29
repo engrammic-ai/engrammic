@@ -1,0 +1,112 @@
+"""Dagster asset: custodian finalize — promote committed claims to :Finding nodes via R2 consensus."""
+
+import asyncio
+import time
+from typing import Any
+
+import dagster as dg
+from dagster import AssetExecutionContext
+
+from context_service.pipelines.partitions import silo_partitions
+from context_service.pipelines.resources import MemgraphResource
+
+_BATCH_SIZE = 100
+
+_SCAN_PROMOTABLE_COMMITMENTS = """
+MATCH (c:Claim:Commitment {silo_id: $silo_id})
+WHERE NOT EXISTS((c)-[:PROMOTED_TO]->(:Finding))
+RETURN c.id AS commitment_id
+LIMIT $batch_size
+"""
+
+
+@dg.asset(
+    name="custodian_finalize",
+    partitions_def=silo_partitions,
+    ins={"custodian_visit": dg.AssetIn("custodian_visit")},
+    description="Promote :Claim:Commitment nodes to :Finding via R2 consensus per silo.",
+    retry_policy=dg.RetryPolicy(max_retries=3, delay=10.0, backoff=dg.Backoff.EXPONENTIAL),
+    tags={"dagster/concurrency_key": "custodian_finalize"},
+)
+def custodian_finalize(
+    context: AssetExecutionContext,
+    memgraph: MemgraphResource,
+    custodian_visit: dg.Nothing,  # type: ignore[valid-type]  # noqa: ARG001 — Dagster dep marker, runtime sentinel
+) -> dg.Output[dict[str, Any]]:
+    """Scan commitments with R2 consensus chains and promote to :Finding nodes."""
+    silo_id: str = context.partition_key
+    t0 = time.monotonic()
+
+    async def _run() -> tuple[int, int]:
+        from context_service.custodian.consensus_promotion import promote_consensus_to_finding
+        from context_service.custodian.handlers.consensus import (
+            GET_CHAINS_FOR_COMMITMENT,
+        )
+        from context_service.stores import MemgraphClient
+
+        driver = await memgraph.driver()
+        mg_client = MemgraphClient(driver)
+
+        rows = await mg_client.execute_query(
+            _SCAN_PROMOTABLE_COMMITMENTS,
+            {"silo_id": silo_id, "batch_size": _BATCH_SIZE},
+        )
+        if not rows:
+            return 0, 0
+
+        clusters_processed = 0
+        findings_created = 0
+
+        for row in rows:
+            commitment_id = str(row["commitment_id"])
+
+            chain_rows = await mg_client.execute_query(
+                GET_CHAINS_FOR_COMMITMENT,
+                {"commitment_id": commitment_id, "silo_id": silo_id},
+            )
+            if not chain_rows:
+                continue
+
+            distinct_agents = len({c["produced_by_agent_id"] for c in chain_rows})
+            if distinct_agents < 2:
+                continue
+
+            chain_ids = [str(c["id"]) for c in chain_rows]
+            try:
+                await promote_consensus_to_finding(
+                    memgraph=mg_client,
+                    commitment_id=commitment_id,
+                    contributing_chain_ids=chain_ids,
+                    silo_id=silo_id,
+                )
+                findings_created += 1
+                clusters_processed += 1
+            except Exception as exc:
+                context.log.warning(
+                    f"promote_consensus_to_finding failed for commitment={commitment_id}: {exc}"
+                )
+
+        return clusters_processed, findings_created
+
+    clusters_processed, findings_created = asyncio.run(_run())
+    duration_s = time.monotonic() - t0
+
+    context.log.info(
+        f"silo={silo_id} clusters_processed={clusters_processed} "
+        f"findings_created={findings_created} duration={duration_s:.2f}s"
+    )
+
+    return dg.Output(
+        value={
+            "silo_id": silo_id,
+            "clusters_processed": clusters_processed,
+            "findings_created": findings_created,
+            "duration_s": duration_s,
+        },
+        metadata={
+            "silo_id": dg.MetadataValue.text(silo_id),
+            "clusters_processed": dg.MetadataValue.int(clusters_processed),
+            "findings_created": dg.MetadataValue.int(findings_created),
+            "duration_s": dg.MetadataValue.float(duration_s),
+        },
+    )

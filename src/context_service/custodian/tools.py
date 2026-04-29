@@ -25,7 +25,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
-from pydantic_ai import (  # type: ignore[import-not-found]
+from pydantic_ai import (
     RunContext,  # noqa: TC002 -- runtime annotation for @agent.tool
 )
 

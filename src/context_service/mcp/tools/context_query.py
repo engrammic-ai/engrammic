@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
-from context_service.mcp.auth import get_mcp_auth
-from context_service.mcp.server import get_context_service, get_silo_service
+from context_service.mcp.server import get_context_service, get_mcp_auth_context, get_silo_service
 from context_service.models.mcp import Layer, QueryFilters
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
@@ -27,7 +25,7 @@ async def _context_query(
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
 
-    auth = get_mcp_auth()
+    auth = await get_mcp_auth_context()
     ctx_svc = get_context_service()
 
     err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
@@ -43,12 +41,12 @@ async def _context_query(
         except ValueError:
             return {"error": "invalid_layer", "valid": [e.value for e in Layer]}
 
+    if as_of is not None:
+        return {
+            "error": "as_of_not_supported",
+            "message": "Point-in-time retrieval is not yet implemented",
+        }
     as_of_dt = None
-    if as_of:
-        try:
-            as_of_dt = datetime.fromisoformat(as_of)
-        except ValueError:
-            return {"error": "invalid_as_of", "message": "Must be ISO format datetime"}
 
     parsed_filters = None
     if filters:

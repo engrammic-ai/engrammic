@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
-import os
 from typing import TYPE_CHECKING
 
 import dagster as dg
@@ -20,6 +19,9 @@ if TYPE_CHECKING:
     from neo4j import AsyncDriver
     from qdrant_client import AsyncQdrantClient
     from redis.asyncio import Redis
+
+    from context_service.embeddings.base import EmbeddingService
+    from context_service.llm.base import LLMProvider
 
 
 def _close_async(coro: object) -> None:
@@ -51,10 +53,15 @@ class MemgraphResource(dg.ConfigurableResource):  # type: ignore[type-arg]
 
     async def driver(self) -> AsyncDriver:
         if self._driver is None:
-            from context_service.stores.memgraph import create_memgraph_driver
+            from neo4j import AsyncGraphDatabase
 
-            settings = get_settings()
-            self._driver = await create_memgraph_driver(settings)
+            auth = (self.user, self.password) if self.user else None
+            self._driver = AsyncGraphDatabase.driver(
+                self.uri,
+                auth=auth,
+                max_connection_pool_size=50,
+                connection_acquisition_timeout=30.0,
+            )
         return self._driver
 
     def teardown_after_execution(self, _context: dg.InitResourceContext) -> None:
@@ -73,10 +80,15 @@ class RedisResource(dg.ConfigurableResource):  # type: ignore[type-arg]
 
     async def client(self) -> Redis:
         if self._client is None:
-            from context_service.stores.redis import create_redis_pool
+            from redis.asyncio import ConnectionPool
+            from redis.asyncio import Redis as _Redis
 
-            settings = get_settings()
-            self._client = await create_redis_pool(settings)
+            pool = ConnectionPool.from_url(
+                self.url,
+                max_connections=50,
+                decode_responses=False,
+            )
+            self._client = _Redis(connection_pool=pool)
         return self._client
 
     def teardown_after_execution(self, _context: dg.InitResourceContext) -> None:
@@ -111,6 +123,90 @@ class QdrantResource(dg.ConfigurableResource):  # type: ignore[type-arg]
             _close_async(client.close())
 
 
+class LLMResource(dg.ConfigurableResource):  # type: ignore[type-arg]
+    """Dispatches to an LLMProvider implementation based on `provider`.
+
+    Supported values: "anthropic", "gemini", "openai", "vertex_gemini".
+    Defaults to the value of settings.default_llm_model's provider family if
+    not explicitly set; falls back to "gemini".
+    """
+
+    provider: str = "gemini"
+    model: str = ""
+
+    _llm: LLMProvider | None = PrivateAttr(default=None)
+
+    def get_client(self) -> LLMProvider:
+        if self._llm is None:
+            self._llm = _build_llm_provider(self.provider, self.model or None)
+        return self._llm
+
+    def teardown_after_execution(self, _context: dg.InitResourceContext) -> None:
+        if self._llm is not None:
+            llm = self._llm
+            self._llm = None
+            _close_async(llm.close())
+
+
+def _build_llm_provider(provider: str, model: str | None) -> LLMProvider:
+    if provider == "anthropic":
+        from context_service.llm.anthropic import AnthropicProvider
+
+        return AnthropicProvider.from_settings(model)
+    if provider == "openai":
+        from context_service.llm.openai import OpenAIProvider
+
+        return OpenAIProvider.from_settings(model)
+    if provider == "vertex_gemini":
+        from context_service.llm.vertex_gemini import VertexGeminiProvider
+
+        return VertexGeminiProvider.from_settings(model)
+    # default: gemini
+    from context_service.llm.gemini import GeminiProvider
+
+    settings = get_settings()
+    return GeminiProvider(
+        api_key=settings.gemini_api_key,
+        model=model or settings.default_llm_model,
+    )
+
+
+class EmbeddingResource(dg.ConfigurableResource):  # type: ignore[type-arg]
+    """Dispatches to an EmbeddingService implementation based on `provider`.
+
+    Supported values: "jina", "vertex".
+    """
+
+    provider: str = "jina"
+
+    _service: EmbeddingService | None = PrivateAttr(default=None)
+
+    def get_client(self) -> EmbeddingService:
+        if self._service is None:
+            self._service = _build_embedding_service(self.provider)
+        return self._service
+
+    def teardown_after_execution(self, _context: dg.InitResourceContext) -> None:
+        if self._service is not None:
+            svc = self._service
+            self._service = None
+            _close_async(svc.close())
+
+
+def _build_embedding_service(provider: str) -> EmbeddingService:
+    settings = get_settings()
+    if provider == "vertex":
+        from context_service.embeddings.vertex import VertexAIEmbeddingService
+
+        return VertexAIEmbeddingService(
+            project=settings.vertex_project_id,
+            region=settings.vertex_location,
+        )
+    from context_service.embeddings.jina import JinaEmbeddingService
+
+    return JinaEmbeddingService(api_key=settings.jina_api_key)
+
+
 def build_default_resources() -> dict[str, dg.ConfigurableResource]:  # type: ignore[type-arg]
     """Constructs the standard resource dict for Definitions(resources=...).
 
@@ -129,14 +225,28 @@ def build_default_resources() -> dict[str, dg.ConfigurableResource]:  # type: ig
             url=settings.qdrant_url,
             api_key=settings.qdrant_api_key,
         ),
+        "llm": LLMResource(provider=_infer_llm_provider(settings.default_llm_model)),
+        "embedding": EmbeddingResource(
+            provider="jina" if settings.jina_api_key else "vertex"
+        ),
     }
 
 
-def _env(key: str, default: str) -> str:
-    return os.environ.get(key, default)
+def _infer_llm_provider(default_model: str) -> str:
+    """Map a model name to its provider key."""
+    lower = default_model.lower()
+    if lower.startswith("claude"):
+        return "anthropic"
+    if lower.startswith("gpt"):
+        return "openai"
+    if "vertex" in lower:
+        return "vertex_gemini"
+    return "gemini"
 
 
 __all__ = [
+    "EmbeddingResource",
+    "LLMResource",
     "MemgraphResource",
     "QdrantResource",
     "RedisResource",

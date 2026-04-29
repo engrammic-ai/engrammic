@@ -72,3 +72,13 @@ def test_unknown_source_tier_falls_back() -> None:
     decision = evaluate_claim_for_fact(props, evidence_count=1)
     # unknown tier -> treated as UNKNOWN, R1 rejects it
     assert decision.should_promote is False
+
+
+def test_claim_to_fact_promotion_depends_on_custodian_visit() -> None:
+    """claim_to_fact_promotion must declare custodian_visit as a dependency."""
+    from context_service.pipelines.assets.fact_promotion import claim_to_fact_promotion
+
+    assert any(
+        "custodian_visit" in str(v)
+        for v in claim_to_fact_promotion.keys_by_input_name.values()  # type: ignore[attr-defined]
+    ), "claim_to_fact_promotion must depend on custodian_visit"
