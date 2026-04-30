@@ -78,7 +78,7 @@ class JinaEmbeddingService:
             raise ValueError("JINA_API_KEY is required for embedding service")
 
         return cls(
-            api_key=settings.jina_api_key,
+            api_key=settings.jina_api_key.get_secret_value(),
             model=getattr(settings, "jina_model", "jina-embeddings-v4"),
             dimensions=getattr(settings, "jina_dimensions", 1024),
             api_url=getattr(settings, "jina_api_url", "https://api.jina.ai/v1/embeddings"),

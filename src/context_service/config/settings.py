@@ -18,7 +18,6 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # Service
     service_name: str = "context-service"
     environment: str = "development"
     debug: bool = False
@@ -29,7 +28,6 @@ class Settings(BaseSettings):
     port: int = 8000
     reload: bool = False
 
-    # Auth
     auth_enabled: bool = False
     workos_api_key: SecretStr | None = None
     workos_client_id: str | None = None
@@ -54,31 +52,25 @@ class Settings(BaseSettings):
             )
         return self
 
-    # Graph (Memgraph)
     memgraph_uri: str = "bolt://localhost:7687"
     memgraph_user: str = ""
-    memgraph_password: str = ""
+    memgraph_password: SecretStr | None = None
 
-    # Vector (Qdrant)
     qdrant_url: str = "http://localhost:6333"
-    qdrant_api_key: str = ""
+    qdrant_api_key: SecretStr | None = None
 
-    # Redis
     redis_url: str = "redis://localhost:6379"
 
-    # Embeddings
-    jina_api_key: str = ""
+    jina_api_key: SecretStr | None = None
     vertex_project_id: str = ""
     vertex_location: str = "us-central1"
 
-    # LLM Providers
     google_application_credentials: str = ""
-    gemini_api_key: str = ""
-    anthropic_api_key: str = ""
-    openai_api_key: str = ""
+    gemini_api_key: SecretStr | None = None
+    anthropic_api_key: SecretStr | None = None
+    openai_api_key: SecretStr | None = None
     default_llm_model: str = "gemini-2.0-flash"
 
-    # Observability
     otel_endpoint: str = ""
     log_level: str = "INFO"
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 
@@ -39,8 +40,9 @@ class OpenAIProvider(LLMProvider):
     def from_settings(cls, model: str | None = None) -> OpenAIProvider:
         """Create provider from application settings."""
         settings = get_settings()
+        api_key = settings.openai_api_key.get_secret_value() if settings.openai_api_key else ""
         return cls(
-            api_key=settings.openai_api_key,
+            api_key=api_key,
             model=model or "gpt-4o-mini",
         )
 
@@ -54,6 +56,58 @@ class OpenAIProvider(LLMProvider):
                 },
             )
         return self._client
+
+    async def _request_with_backoff(
+        self,
+        client: httpx.AsyncClient,
+        payload: dict[str, Any],
+        timeout: float | None = None,
+    ) -> httpx.Response:
+        """Make API request with exponential backoff on 429/5xx."""
+        max_retries = 3
+        post_kwargs: dict[str, Any] = {}
+        if timeout is not None:
+            post_kwargs["timeout"] = timeout
+
+        for attempt in range(max_retries + 1):
+            try:
+                response = await client.post(self._api_url, json=payload, **post_kwargs)
+                if response.status_code == 429 and attempt < max_retries:
+                    wait = 2**attempt
+                    logger.warning(
+                        "openai_rate_limited",
+                        wait_seconds=wait,
+                        attempt=attempt + 1,
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+                if 500 <= response.status_code < 600 and attempt < max_retries:
+                    wait = 2**attempt
+                    logger.warning(
+                        "openai_server_error",
+                        status_code=response.status_code,
+                        wait_seconds=wait,
+                        attempt=attempt + 1,
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+                response.raise_for_status()
+                return response
+            except httpx.HTTPStatusError:
+                raise
+            except httpx.RequestError as e:
+                if attempt < max_retries:
+                    wait = 2**attempt
+                    logger.warning(
+                        "openai_request_error",
+                        error=str(e),
+                        wait_seconds=wait,
+                        attempt=attempt + 1,
+                    )
+                    await asyncio.sleep(wait)
+                    continue
+                raise
+        raise OpenAIError("Max retries exceeded")
 
     def _extract_usage(self, data: dict[str, Any]) -> Usage:
         usage = data.get("usage") or {}
@@ -79,13 +133,9 @@ class OpenAIProvider(LLMProvider):
         }
         if temperature is not None:
             payload["temperature"] = temperature
-        post_kwargs: dict[str, Any] = {}
-        if timeout is not None:
-            post_kwargs["timeout"] = timeout
         start = time.monotonic()
         try:
-            response = await client.post(self._api_url, json=payload, **post_kwargs)
-            response.raise_for_status()
+            response = await self._request_with_backoff(client, payload, timeout)
         except httpx.HTTPStatusError as e:
             logger.error(
                 "OpenAI API error",
@@ -132,13 +182,9 @@ class OpenAIProvider(LLMProvider):
                 },
             },
         }
-        post_kwargs: dict[str, Any] = {}
-        if timeout is not None:
-            post_kwargs["timeout"] = timeout
         start = time.monotonic()
         try:
-            response = await client.post(self._api_url, json=payload, **post_kwargs)
-            response.raise_for_status()
+            response = await self._request_with_backoff(client, payload, timeout)
         except httpx.HTTPStatusError as e:
             logger.error(
                 "OpenAI API error",

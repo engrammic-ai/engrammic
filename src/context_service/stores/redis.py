@@ -267,6 +267,34 @@ class RedisClient:
             logger.error("redis_set_failed", key=key, error=str(e))
             raise RedisOperationError(f"Failed to set cache value: {e}") from e
 
+    async def set_nx(
+        self,
+        key: str,
+        value: str | bytes,
+        ttl_seconds: int | None = None,
+    ) -> bool:
+        """Set a cache value only if the key does not exist.
+
+        Args:
+            key: Cache key.
+            value: Value to store.
+            ttl_seconds: Optional TTL.
+
+        Returns:
+            True if key was set (did not exist), False if key already exists.
+
+        Raises:
+            RedisOperationError: If the operation fails.
+        """
+        if isinstance(value, str):
+            value = value.encode()
+        try:
+            result = await self._redis.set(key, value, ex=ttl_seconds, nx=True)
+            return result is not None
+        except (RedisConnectionError, RedisError) as e:
+            logger.error("redis_set_nx_failed", key=key, error=str(e))
+            raise RedisOperationError(f"Failed to set_nx cache value: {e}") from e
+
     async def get(self, key: str) -> bytes | None:
         """Get a cache value.
 

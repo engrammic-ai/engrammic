@@ -165,8 +165,9 @@ def _build_llm_provider(provider: str, model: str | None) -> LLMProvider:
     from context_service.llm.gemini import GeminiProvider
 
     settings = get_settings()
+    api_key = settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else ""
     return GeminiProvider(
-        api_key=settings.gemini_api_key,
+        api_key=api_key,
         model=model or settings.default_llm_model,
     )
 
@@ -204,7 +205,8 @@ def _build_embedding_service(provider: str) -> EmbeddingService:
         )
     from context_service.embeddings.jina import JinaEmbeddingService
 
-    return JinaEmbeddingService(api_key=settings.jina_api_key)
+    api_key = settings.jina_api_key.get_secret_value() if settings.jina_api_key else ""
+    return JinaEmbeddingService(api_key=api_key)
 
 
 def build_default_resources() -> dict[str, dg.ConfigurableResource]:  # type: ignore[type-arg]
@@ -214,16 +216,19 @@ def build_default_resources() -> dict[str, dg.ConfigurableResource]:  # type: ig
     """
     settings: Settings = get_settings()
 
+    memgraph_password = settings.memgraph_password.get_secret_value() if settings.memgraph_password else ""
+    qdrant_api_key = settings.qdrant_api_key.get_secret_value() if settings.qdrant_api_key else ""
+
     return {
         "memgraph": MemgraphResource(
             uri=settings.memgraph_uri,
             user=settings.memgraph_user,
-            password=settings.memgraph_password,
+            password=memgraph_password,
         ),
         "redis": RedisResource(url=settings.redis_url),
         "qdrant": QdrantResource(
             url=settings.qdrant_url,
-            api_key=settings.qdrant_api_key,
+            api_key=qdrant_api_key,
         ),
         "llm": LLMResource(provider=_infer_llm_provider(settings.default_llm_model)),
         "embedding": EmbeddingResource(

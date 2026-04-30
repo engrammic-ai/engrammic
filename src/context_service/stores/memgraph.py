@@ -79,8 +79,8 @@ async def create_memgraph_driver(settings: Settings | None = None) -> AsyncDrive
         settings = get_settings()
 
     auth = None
-    if settings.memgraph_user:
-        auth = (settings.memgraph_user, settings.memgraph_password)
+    if settings.memgraph_user and settings.memgraph_password:
+        auth = (settings.memgraph_user, settings.memgraph_password.get_secret_value())
 
     return AsyncGraphDatabase.driver(
         settings.memgraph_uri,

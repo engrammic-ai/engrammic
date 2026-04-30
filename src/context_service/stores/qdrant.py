@@ -65,10 +65,10 @@ class QdrantClient:
         Returns:
             Configured QdrantClient.
         """
-        api_key = settings.qdrant_api_key or None
+        api_key = settings.qdrant_api_key.get_secret_value() if settings.qdrant_api_key else None
         return cls(
             url=settings.qdrant_url,
-            api_key=api_key if api_key else None,
+            api_key=api_key,
             vector_size=1024,  # Default Jina dimensions
         )
 

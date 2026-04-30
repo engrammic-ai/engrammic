@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import uuid
@@ -107,9 +108,11 @@ class ContextService:
             )
 
         silo_id = scope.silo_id
+        cache_key = f"idempotency:{silo_id}:{idempotency_key}" if idempotency_key else None
 
-        if idempotency_key and self._cache:
-            cache_key = f"idempotency:{silo_id}:{idempotency_key}"
+        # Atomic idempotency: reserve the key with SET NX before any DB writes.
+        # If another request wins the race, fetch its result instead.
+        if cache_key and self._cache:
             existing_id = await self._cache.get(cache_key)
             if existing_id:
                 existing = await self.get(uuid.UUID(existing_id.decode()), silo_id)
@@ -126,6 +129,20 @@ class ContextService:
             source_uri=source_uri,
             content_hash=hashlib.sha256(content.encode()).hexdigest()[:16],
         )
+
+        # Try to claim the idempotency key atomically BEFORE writing to DB.
+        # If set_nx returns False, another concurrent request won — fetch its result.
+        if cache_key and self._cache:
+            claimed = await self._cache.set_nx(cache_key, str(node.id), ttl_seconds=86400)
+            if not claimed:
+                # Another request won the race — wait briefly for it to complete
+                await asyncio.sleep(0.05)
+                winner_id = await self._cache.get(cache_key)
+                if winner_id:
+                    winner = await self.get(uuid.UUID(winner_id.decode()), silo_id)
+                    if winner:
+                        logger.debug("store_idempotent_race_lost", key=idempotency_key)
+                        return winner
 
         # node_type is validated against _ALLOWED_NODE_TYPES above — f-string is safe.
         extra_props = {k: v for k, v in (properties or {}).items() if k not in _CREATE_PROPS}
@@ -154,16 +171,6 @@ class ContextService:
             params["extra_props"] = extra_props
 
         await self._memgraph.execute_write(create_query, params)
-
-        # Idempotency cache is written BEFORE Qdrant so a Qdrant failure does
-        # not cause the next retry to mint a fresh node id (which would leave
-        # an orphan Memgraph node behind). Trade-off: a successful Memgraph +
-        # Redis write followed by a Qdrant failure leaves a node without a
-        # vector — invisible to semantic search but recoverable by a
-        # reconciliation worker. Duplicate nodes are not. (N-009)
-        if idempotency_key and self._cache:
-            cache_key = f"idempotency:{silo_id}:{idempotency_key}"
-            await self._cache.set(cache_key, str(node.id).encode(), ttl_seconds=86400)
 
         if content and len(content) >= MIN_CONTENT_FOR_EMBEDDING and self._embedding:
             vector = await self._embedding.embed_single(content)
