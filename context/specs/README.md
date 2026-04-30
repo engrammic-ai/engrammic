@@ -6,7 +6,10 @@ Service-level specifications for the context-service. These cover implementation
 
 | Spec | Status | Contents |
 |------|--------|----------|
-| (none yet) | — | First specs to be added as service-layer features stabilise |
+| [auth-per-request.md](auth-per-request.md) | Stable (v1-β1) | Per-request auth resolution + silo-ownership enforcement |
+| [mcp-tool-surface.md](mcp-tool-surface.md) | Stable | MCP tool contracts |
+| [silo-portability.md](silo-portability.md) | Stable (v1-β4) | Silo export/import JSONL format |
+| [signals-port.md](signals-port.md) | Draft 2026-04-30 | Heat / freshness / priority port from contextr (phased) |
 
 ## Relationship to primitives docs
 
