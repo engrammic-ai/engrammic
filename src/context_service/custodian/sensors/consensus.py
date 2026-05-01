@@ -15,6 +15,11 @@ if TYPE_CHECKING:
     from context_service.stores.memgraph import MemgraphClient
 
 
+# Prefetch cap: Cypher returns up to PREFETCH_MULTIPLIER * limit rows so the
+# Python-side priority sort sees enough candidates to rank meaningfully without
+# pulling unbounded result sets from Memgraph.
+PREFETCH_MULTIPLIER = 10
+
 FIND_CONSENSUS_CANDIDATES = """
 MATCH (chain:ReasoningChain)-[:CRYSTALLIZED_INTO]->(target)
 WHERE (target:Claim OR target:Commitment)
@@ -30,6 +35,7 @@ RETURN target.id AS commitment_id,
        chain_count,
        distinct_agents,
        avg_chain_confidence
+LIMIT $prefetch_limit
 """
 
 
@@ -54,6 +60,7 @@ async def find_consensus_candidates(
             "silo_id": silo_id,
             "min_chain_count": min_chain_count,
             "min_distinct_agents": min_distinct_agents,
+            "prefetch_limit": limit * PREFETCH_MULTIPLIER,
         },
     )
 
@@ -83,4 +90,4 @@ async def find_consensus_candidates(
     return candidates[:limit]
 
 
-__all__ = ["FIND_CONSENSUS_CANDIDATES", "find_consensus_candidates"]
+__all__ = ["FIND_CONSENSUS_CANDIDATES", "PREFETCH_MULTIPLIER", "find_consensus_candidates"]

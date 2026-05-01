@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -81,9 +82,10 @@ async def _context_query(
     elapsed_ms = int((time.perf_counter() - start) * 1000)
 
     redis = get_redis()
-    if redis is not None:
-        for r in results:
-            await emit_access_event(redis, silo_id, str(r.node_id))
+    if redis is not None and results:
+        await asyncio.gather(
+            *(emit_access_event(redis, silo_id, str(r.node_id)) for r in results)
+        )
 
     return {
         "results": [

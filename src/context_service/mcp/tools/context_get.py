@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import TYPE_CHECKING, Any
 
@@ -108,9 +109,12 @@ def register(mcp: FastMCP) -> None:
 
         redis = get_redis()
         if redis is not None:
-            for n in nodes_out:
-                node_id = n.get("node_id")
-                if node_id is not None:
-                    await emit_access_event(redis, str(resolved_silo_id), node_id)
+            emits = [
+                emit_access_event(redis, str(resolved_silo_id), n["node_id"])
+                for n in nodes_out
+                if n.get("node_id") is not None
+            ]
+            if emits:
+                await asyncio.gather(*emits)
 
         return {"nodes": nodes_out}

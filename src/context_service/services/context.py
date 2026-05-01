@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import structlog
 from primitives.schema.labels import ALL_CITE_LABELS
 
+from context_service.config.settings import get_settings
 from context_service.services.models import (
     GraphResult,
     LookupResult,
@@ -21,6 +22,7 @@ from context_service.services.models import (
     ScoredNode,
     derive_silo_id,
 )
+from context_service.signals import compute_freshness
 
 if TYPE_CHECKING:
     from context_service.embeddings import EmbeddingService
@@ -904,9 +906,6 @@ class ContextService:
             min_confidence = getattr(filters, "min_confidence", None)
             tags_filter = getattr(filters, "tags", None)
 
-        from context_service.config.settings import get_settings
-        from context_service.signals import compute_freshness
-
         settings = get_settings()
         freshness_weight = settings.freshness_weight
         sigma_days = settings.freshness_sigma_days
@@ -953,6 +952,10 @@ class ContextService:
                 )
             )
 
+        # Re-sort: freshness multiplier mutates relevance_score, so the original
+        # Qdrant order no longer reflects final ranking. Callers see freshness-
+        # adjusted ordering when freshness_weight > 0; identical to Qdrant order
+        # when freshness_weight == 0.
         results.sort(key=lambda r: r.relevance_score, reverse=True)
 
         logger.info(

@@ -39,11 +39,13 @@ async def emit_access_event(
     Failures are logged and swallowed — never raised — so callers in MCP read
     paths don't need a try/except around every emit.
     """
+    from context_service.config.settings import get_settings
+
     try:
         await redis.xadd(
             access_stream_key(silo_id),
             {"node_id": str(node_id)},
-            maxlen=ACCESS_STREAM_MAXLEN,
+            maxlen=get_settings().access_stream_maxlen,
             approximate=True,
         )
     except Exception as exc:
