@@ -54,9 +54,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await qdrant_client.ensure_collection()
         logger.info("qdrant_connected")
 
-        registry.register("memgraph", memgraph_client)
-        registry.register("redis", redis_client)
-        registry.register("qdrant", qdrant_client)
+        async def rebuild_memgraph() -> MemgraphClient:
+            driver = await create_memgraph_driver(settings)
+            return MemgraphClient(driver)
+
+        async def rebuild_redis() -> RedisClient:
+            pool = await create_redis_pool(settings)
+            return RedisClient(pool)
+
+        async def rebuild_qdrant() -> QdrantClient:
+            client = QdrantClient.from_settings(settings)
+            await client.ensure_collection()
+            return client
+
+        registry.register("memgraph", memgraph_client, factory=rebuild_memgraph)
+        registry.register("redis", redis_client, factory=rebuild_redis)
+        registry.register("qdrant", qdrant_client, factory=rebuild_qdrant)
         registry.start()
 
         app.state.memgraph = memgraph_client

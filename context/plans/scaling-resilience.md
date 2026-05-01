@@ -89,10 +89,6 @@ Access event emission uses bare `asyncio.gather(*emits)` with no timeout or erro
 - [ ] Kill Memgraph, confirm service recovers on reconnect within 60s
 - [ ] Hot-reload settings under concurrent requests, confirm no partial state
 
-## Follow-up
-
-- **Rebuild factories not wired:** ServiceRegistry accepts rebuild factories but stores need driver/pool recreation logic factored out before auto-rebuild works. Currently logs unhealthy state only.
-
 ## Not in Scope
 
 - Performance optimizations (batching, orjson) - separate plan
