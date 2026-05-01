@@ -65,9 +65,9 @@ async def test_silo_isolation_quality(
     report = await silo_isolation_dataset.evaluate(task)
     report.print()
 
-    for case_result in report.case_results:
+    for case_result in report.cases:
         output = case_result.output
-        assert output is not None, f"Case {case_result.case.name}: no output"
+        assert output is not None, f"Case {case_result.name}: no output"
         assert not output.get("found"), (
-            f"Case {case_result.case.name}: data from silo A leaked into silo B query"
+            f"Case {case_result.name}: data from silo A leaked into silo B query"
         )

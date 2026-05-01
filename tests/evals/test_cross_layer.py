@@ -60,9 +60,9 @@ async def test_cross_layer_quality(
     report = await cross_layer_dataset.evaluate(task)
     report.print()
 
-    for case_result in report.case_results:
+    for case_result in report.cases:
         output = case_result.output
-        assert output is not None, f"Case {case_result.case.name}: no output"
+        assert output is not None, f"Case {case_result.name}: no output"
         assert output.get("linked"), (
-            f"Case {case_result.case.name}: memory node not linked to claim in graph"
+            f"Case {case_result.name}: memory node not linked to claim in graph"
         )

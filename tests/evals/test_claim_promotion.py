@@ -55,10 +55,10 @@ async def test_claim_promotion_quality(
     report = await claim_promotion_dataset.evaluate(task)
     report.print()
 
-    for case_result in report.case_results:
-        expected_promoted = case_result.case.expected_output.get("promoted")
+    for case_result in report.cases:
+        expected_promoted = case_result.expected_output.get("promoted")
         actual_promoted = case_result.output.get("promoted") if case_result.output else False
         assert actual_promoted == expected_promoted, (
-            f"Case {case_result.case.name}: expected promoted={expected_promoted}, "
+            f"Case {case_result.name}: expected promoted={expected_promoted}, "
             f"got {actual_promoted}"
         )

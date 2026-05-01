@@ -53,13 +53,13 @@ async def test_reflection_quality(
     report = await reflection_dataset.evaluate(task)
     report.print()
 
-    for case_result in report.case_results:
+    for case_result in report.cases:
         output = case_result.output
-        assert output is not None, f"Case {case_result.case.name}: no output"
+        assert output is not None, f"Case {case_result.name}: no output"
         reflections = output.get("reflections", [])
         assert len(reflections) >= 1, (
-            f"Case {case_result.case.name}: expected at least 1 reflection, got {len(reflections)}"
+            f"Case {case_result.name}: expected at least 1 reflection, got {len(reflections)}"
         )
         assert reflections[0].get("observation"), (
-            f"Case {case_result.case.name}: reflection missing observation content"
+            f"Case {case_result.name}: reflection missing observation content"
         )

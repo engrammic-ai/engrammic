@@ -51,11 +51,11 @@ async def test_provenance_quality(
     report = await provenance_dataset.evaluate(task)
     report.print()
 
-    for case_result in report.case_results:
+    for case_result in report.cases:
         output = case_result.output
-        assert output is not None, f"Case {case_result.case.name}: no output"
-        assert output.get("chain"), f"Case {case_result.case.name}: empty chain"
+        assert output is not None, f"Case {case_result.name}: no output"
+        assert output.get("chain"), f"Case {case_result.name}: empty chain"
         assert output.get("root_id") == output.get("expected_root"), (
-            f"Case {case_result.case.name}: root mismatch - "
+            f"Case {case_result.name}: root mismatch - "
             f"expected {output.get('expected_root')}, got {output.get('root_id')}"
         )
