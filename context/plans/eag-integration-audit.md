@@ -2,7 +2,7 @@
 
 ## Provenance
 
-This audit was produced during the port session on 2026-04-26 that moved ~150 files from the `contextr` prototype (`NovusEdge/CTXR`, private) into this repo. The port session itself brought the codebase to 0 lint/type errors. This document records the remaining EAG integration gaps that were deferred — items that required design decisions beyond mechanical porting.
+This audit was produced during the port session on 2026-04-26 that moved ~150 files from the `prototype` prototype (`NovusEdge/CTXR`, private) into this repo. The port session itself brought the codebase to 0 lint/type errors. This document records the remaining EAG integration gaps that were deferred — items that required design decisions beyond mechanical porting.
 
 ## Current State (What Was Inconsistent)
 

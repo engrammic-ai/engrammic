@@ -1,6 +1,6 @@
 """Data store clients.
 
-Ported from contextr: app/db/memgraph.py, app/db/qdrant.py, app/db/redis.py
+Ported from prototype: app/db/memgraph.py, app/db/qdrant.py, app/db/redis.py
 """
 
 from context_service.stores.memgraph import (

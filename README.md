@@ -4,15 +4,15 @@ Delta Prime production backend. Private repo.
 
 ## Provenance
 
-Ported from [NovusEdge/CTXR](https://github.com/NovusEdge/CTXR) (the `contextr` research prototype) on 2026-04-26 in a single session (~150 files, 0 lint/type errors on completion). The port moved architecture docs, EAG specs, RAG-era specs, and all service source into the `delta-prime` monorepo structure. `primitives` was separated into its own package during this session.
+Ported from [NovusEdge/CTXR](https://github.com/NovusEdge/CTXR) (the `prototype` research prototype) on 2026-04-26 in a single session (~150 files, 0 lint/type errors on completion). The port moved architecture docs, EAG specs, RAG-era specs, and all service source into the `delta-prime` monorepo structure. `primitives` was separated into its own package during this session.
 
-Original contextr repo retains the full RAG-era development history (phases 1–8, brainstorms, benchmarks). This repo is the forward-moving production codebase.
+Original prototype repo retains the full RAG-era development history (phases 1–8, brainstorms, benchmarks). This repo is the forward-moving production codebase.
 
 ## Structure
 
 ```
 src/context_service/
-├── config/        # Settings, logging (ported from contextr)
+├── config/        # Settings, logging (ported from prototype)
 ├── signals/       # Heat, freshness, priority (proprietary)
 ├── embeddings/    # Jina, Vertex, SPLADE clients
 ├── stores/        # Memgraph, Qdrant, Redis clients
@@ -45,7 +45,7 @@ just test
 
 ## Port status
 
-Port from contextr completed 2026-04-26. The checklist below is retained for reference; all items are done.
+Port from prototype completed 2026-04-26. The checklist below is retained for reference; all items are done.
 
 1. config/ - settings, logging — done
 2. stores/ - Memgraph, Qdrant, Redis clients — done

@@ -1,6 +1,6 @@
 """Application settings.
 
-Ported pattern from contextr/app/core/settings.py.
+Ported pattern from prototype/app/core/settings.py.
 """
 
 from functools import lru_cache
