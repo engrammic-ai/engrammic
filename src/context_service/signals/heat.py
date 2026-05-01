@@ -25,7 +25,7 @@ _STUB_LOG_GUARD: set[str] = set()
 
 async def get_heat(
     memgraph: MemgraphClient,  # noqa: ARG001  -- Phase 2 will use this
-    node_id: str,
+    node_id: str,  # noqa: ARG001  -- Phase 2 will use this
     silo_id: str,
 ) -> float:
     """Return the heat score for a node.

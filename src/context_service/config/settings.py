@@ -71,6 +71,11 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
     default_llm_model: str = "gemini-2.0-flash"
 
+    # Signals (heat / freshness / priority).
+    freshness_weight: float = 0.3
+    freshness_sigma_days: int = 30
+    access_stream_maxlen: int = 100_000
+
     otel_endpoint: str = ""
     log_level: str = "INFO"
 
