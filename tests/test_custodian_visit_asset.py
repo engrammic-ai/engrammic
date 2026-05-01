@@ -32,7 +32,9 @@ def test_custodian_visit_output_has_required_metadata_keys() -> None:
 
     with patch("context_service.pipelines.assets.custodian_visit.asyncio.run") as mock_run:
         mock_run.return_value = (3, 5, 12, 0.02)
-        result = _visit_fn(ctx, memgraph=memgraph_res, redis=redis_res, extraction=None, embedding=None)
+        result = _visit_fn(
+            ctx, memgraph=memgraph_res, redis=redis_res, extraction=None, embedding=None
+        )
 
     assert isinstance(result, dg.Output)
     meta = result.metadata
@@ -47,7 +49,9 @@ def test_custodian_visit_output_value_matches_run_result() -> None:
 
     with patch("context_service.pipelines.assets.custodian_visit.asyncio.run") as mock_run:
         mock_run.return_value = (4, 7, 20, 0.05)
-        result = _visit_fn(ctx, memgraph=memgraph_res, redis=redis_res, extraction=None, embedding=None)
+        result = _visit_fn(
+            ctx, memgraph=memgraph_res, redis=redis_res, extraction=None, embedding=None
+        )
 
     val = result.value
     assert val["silo_id"] == "silo-xyz"
@@ -64,7 +68,9 @@ def test_custodian_visit_returns_zeros_when_no_clusters() -> None:
 
     with patch("context_service.pipelines.assets.custodian_visit.asyncio.run") as mock_run:
         mock_run.return_value = (0, 0, 0, 0.0)
-        result = _visit_fn(ctx, memgraph=memgraph_res, redis=redis_res, extraction=None, embedding=None)
+        result = _visit_fn(
+            ctx, memgraph=memgraph_res, redis=redis_res, extraction=None, embedding=None
+        )
 
     assert result.value["visits"] == 0
     assert result.value["commitments_created"] == 0

@@ -573,6 +573,24 @@ DETACH DELETE he
 RETURN count(he) AS deleted
 """
 
+UPSERT_HYPEREDGE_WITH_PARTICIPANTS = f"""
+MERGE (he:HyperEdge {{id: $id, silo_id: $silo_id}})
+ON CREATE SET
+    he.type = $type,
+    he.properties = $properties,
+    he.created_at = timestamp()
+ON MATCH SET
+    he.type = $type,
+    he.properties = $properties
+WITH he
+OPTIONAL MATCH (he)-[old:PARTICIPANT]->()
+DELETE old
+WITH he
+UNWIND $participants AS p
+MATCH (n) WHERE {content_union_predicate("n")} AND n.id = p.node_id AND n.silo_id = $silo_id
+CREATE (n)<-[:PARTICIPANT {{role: p.role}}]-(he)
+"""
+
 # --- Graph Traversal Queries ---
 
 # NEIGHBORHOOD is retrieval-facing — committed filter on both start and other.

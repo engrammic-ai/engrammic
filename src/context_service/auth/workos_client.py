@@ -23,7 +23,7 @@ async def verify_session(token: str) -> AuthContext:
 
     Raises ValueError on an invalid, expired, or unauthenticated session.
     """
-    import workos  # lazy: heavy import only when verify_session is actually called
+    import workos  # type: ignore[import-not-found]  # lazy: optional dep
 
     settings = get_settings()
     api_key = settings.workos_api_key.get_secret_value() if settings.workos_api_key else None

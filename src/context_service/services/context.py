@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
@@ -23,6 +22,7 @@ from context_service.services.models import (
     derive_silo_id,
 )
 from context_service.signals import compute_freshness
+from context_service.utils.json import dumps, loads
 
 if TYPE_CHECKING:
     from context_service.embeddings import EmbeddingService
@@ -221,7 +221,7 @@ class ContextService:
             cache_key = f"node:{silo_id}:{node_id}"
             cached = await self._cache.get(cache_key)
             if cached:
-                data = json.loads(cached)
+                data = loads(cached)
                 return Node(
                     id=uuid.UUID(data["id"]),
                     type=data["type"],
@@ -265,7 +265,7 @@ class ContextService:
                 "source_uri": node.source_uri,
                 "content_hash": node.content_hash,
             }
-            await self._cache.set(cache_key, json.dumps(cache_data).encode())
+            await self._cache.set(cache_key, dumps(cache_data).encode())
 
         return node
 
@@ -283,7 +283,7 @@ class ContextService:
             for nid, raw in zip(node_ids, raw_values, strict=True):
                 if raw is not None:
                     try:
-                        data = json.loads(raw)
+                        data = loads(raw)
                         result[nid] = Node(
                             id=uuid.UUID(data["id"]),
                             type=data["type"],
@@ -331,7 +331,7 @@ class ContextService:
                         "source_uri": node.source_uri,
                         "content_hash": node.content_hash,
                     }
-                    await self._cache.set(cache_key, json.dumps(cache_data).encode())
+                    await self._cache.set(cache_key, dumps(cache_data).encode())
 
         return result
 
@@ -531,7 +531,7 @@ class ContextService:
         props: dict[str, Any] = {
             "layer": "intelligence",
             "session_id": session_id,
-            "steps": json.dumps(steps_data),
+            "steps": dumps(steps_data),
             "steps_count": len(steps),
         }
         if conclusion:
@@ -566,7 +566,7 @@ class ContextService:
                 "silo_id": silo_id,
                 "content": content,
                 "session_id": session_id,
-                "steps": json.dumps(steps_data),
+                "steps": dumps(steps_data),
                 "steps_count": len(steps),
             },
         )

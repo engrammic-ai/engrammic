@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     freshness_sigma_days: int = 30
     access_stream_maxlen: int = 100_000
 
+    llm_max_concurrency: int = 20
+
     otel_endpoint: str = ""
     log_level: str = "INFO"
 

@@ -33,7 +33,9 @@ def _make_node(node_id: str, created_at: datetime, content: str) -> Node:
 
 
 @pytest.mark.asyncio
-async def test_fresher_candidate_outranks_stale_when_scores_tied(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_fresher_candidate_outranks_stale_when_scores_tied(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     fresh_id = "11111111-1111-1111-1111-111111111111"
     stale_id = "22222222-2222-2222-2222-222222222222"
     fresh_node = _make_node(fresh_id, NOW - timedelta(days=1), "fresh")

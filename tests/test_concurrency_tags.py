@@ -48,9 +48,7 @@ def test_concurrency_key_tag_nonempty(asset: dg.AssetsDefinition) -> None:
 @pytest.mark.parametrize("asset", _ALL_ASSETS, ids=lambda a: a.key.to_user_string())
 def test_retry_policy_present(asset: dg.AssetsDefinition) -> None:
     retry = asset.op.retry_policy
-    assert retry is not None, (
-        f"{asset.key.to_user_string()} has no retry_policy"
-    )
+    assert retry is not None, f"{asset.key.to_user_string()} has no retry_policy"
 
 
 @pytest.mark.parametrize("asset", _ALL_ASSETS, ids=lambda a: a.key.to_user_string())

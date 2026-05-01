@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import math
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from context_service.signals.freshness import compute_freshness
 
-
-NOW = datetime(2026, 5, 1, tzinfo=timezone.utc)
+NOW = datetime(2026, 5, 1, tzinfo=UTC)
 
 
 def test_t_zero_returns_one() -> None:

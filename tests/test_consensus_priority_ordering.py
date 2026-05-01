@@ -15,9 +15,19 @@ async def test_candidates_ranked_by_priority(monkeypatch: pytest.MonkeyPatch) ->
     """High-confidence candidates rank below low-confidence ones at equal heat / agents."""
     cypher_rows = [
         # high confidence -> low priority despite many agents
-        {"commitment_id": "cm-high", "chain_count": 5, "distinct_agents": 5, "avg_chain_confidence": 0.95},
+        {
+            "commitment_id": "cm-high",
+            "chain_count": 5,
+            "distinct_agents": 5,
+            "avg_chain_confidence": 0.95,
+        },
         # low confidence -> high priority even with fewer agents
-        {"commitment_id": "cm-low", "chain_count": 2, "distinct_agents": 2, "avg_chain_confidence": 0.10},
+        {
+            "commitment_id": "cm-low",
+            "chain_count": 2,
+            "distinct_agents": 2,
+            "avg_chain_confidence": 0.10,
+        },
     ]
     memgraph = AsyncMock()
     memgraph.execute_query = AsyncMock(return_value=cypher_rows)
@@ -44,7 +54,12 @@ async def test_candidates_ranked_by_priority(monkeypatch: pytest.MonkeyPatch) ->
 @pytest.mark.asyncio
 async def test_limit_applied_after_priority_sort(monkeypatch: pytest.MonkeyPatch) -> None:
     cypher_rows = [
-        {"commitment_id": f"cm-{i}", "chain_count": 2, "distinct_agents": 2, "avg_chain_confidence": c}
+        {
+            "commitment_id": f"cm-{i}",
+            "chain_count": 2,
+            "distinct_agents": 2,
+            "avg_chain_confidence": c,
+        }
         for i, c in enumerate([0.9, 0.1, 0.5, 0.2])
     ]
     memgraph = AsyncMock()

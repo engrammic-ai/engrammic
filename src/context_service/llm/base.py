@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import abc
-import json
 from typing import Any
 
 from context_service.config.logging import get_logger
+from context_service.utils.json import JSONDecodeError, loads
 
 logger = get_logger(__name__)
 
@@ -42,8 +42,8 @@ def robust_json_loads(text: str) -> Any:
     Tries standard json.loads first, falls back to json_repair on failure.
     """
     try:
-        return json.loads(text)
-    except (json.JSONDecodeError, ValueError):
+        return loads(text)
+    except (JSONDecodeError, ValueError):
         import json_repair  # type: ignore[import-not-found]
 
         logger.debug("Standard JSON parse failed, attempting repair")

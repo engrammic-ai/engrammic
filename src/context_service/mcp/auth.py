@@ -103,9 +103,7 @@ async def validate_mcp_request(authorization: str | None) -> MCPAuthContext:
         # ``Settings._validate_auth`` so a missing MCP_API_KEY can never
         # silently grant admin access in production.
         if get_settings().environment == "production":
-            raise MCPAuthError(
-                "MCP_API_KEY must be set when ENVIRONMENT=production"
-            )
+            raise MCPAuthError("MCP_API_KEY must be set when ENVIRONMENT=production")
         logger.debug("MCP running in dev mode (no MCP_API_KEY)")
         return MCPAuthContext(
             org_id=DEV_ORG_ID,

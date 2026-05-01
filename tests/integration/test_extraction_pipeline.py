@@ -157,9 +157,7 @@ class TestExtractionPipeline:
         ctx.partition_key = silo_id
         ctx.log = MagicMock()
 
-        result = _extraction_fn(
-            ctx, memgraph=memgraph_resource_factory(), llm=mock_llm_resource
-        )
+        result = _extraction_fn(ctx, memgraph=memgraph_resource_factory(), llm=mock_llm_resource)
 
         assert isinstance(result, dg.Output)
         assert result.value["docs_processed"] == len(seeded_docs)
@@ -250,12 +248,8 @@ class TestExtractionPipeline:
         count_first = _sync_run(_count())
 
         # Second run: no pending docs remain (all have EXTRACTED_FROM edges now).
-        result2 = _extraction_fn(
-            ctx, memgraph=memgraph_resource_factory(), llm=mock_llm_resource
-        )
+        result2 = _extraction_fn(ctx, memgraph=memgraph_resource_factory(), llm=mock_llm_resource)
         assert result2.value["docs_processed"] == 0
 
         count_second = _sync_run(_count())
-        assert (
-            count_second == count_first
-        ), "Second run must not create additional :Claim nodes"
+        assert count_second == count_first, "Second run must not create additional :Claim nodes"

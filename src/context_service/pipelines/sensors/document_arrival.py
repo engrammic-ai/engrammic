@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import dagster as dg
 
 from context_service.pipelines.resources import MemgraphResource
+from context_service.utils.json import JSONDecodeError, dumps, loads
 
 _PENDING_DOC_COUNT = """
 MATCH (d:Document {silo_id: $silo_id})
@@ -30,9 +30,9 @@ def _parse_cursor(cursor: str | None) -> dict[str, str]:
     if not cursor:
         return {}
     try:
-        data: dict[str, str] = json.loads(cursor)
+        data: dict[str, str] = loads(cursor)
         return data
-    except json.JSONDecodeError:
+    except JSONDecodeError:
         return {}
 
 
@@ -69,9 +69,7 @@ def document_arrival_sensor(
         cursor_data = _parse_cursor(context.cursor)
 
         for silo_id in silo_ids:
-            count_rows = await client.execute_query(
-                _PENDING_DOC_COUNT, {"silo_id": silo_id}
-            )
+            count_rows = await client.execute_query(_PENDING_DOC_COUNT, {"silo_id": silo_id})
             pending = int(count_rows[0]["pending"]) if count_rows else 0
 
             last_run = _parse_iso_datetime(cursor_data.get(silo_id, ""))
@@ -100,6 +98,8 @@ def document_arrival_sensor(
             )
         )
         cursor_data[silo_id] = t["now"]
-        context.log.info(f"triggering extraction+embedding for silo={silo_id} pending={t['pending']}")
+        context.log.info(
+            f"triggering extraction+embedding for silo={silo_id} pending={t['pending']}"
+        )
 
-    return dg.SensorResult(run_requests=run_requests, cursor=json.dumps(cursor_data))
+    return dg.SensorResult(run_requests=run_requests, cursor=dumps(cursor_data))

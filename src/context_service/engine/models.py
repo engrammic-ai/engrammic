@@ -8,6 +8,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from context_service.utils.json import dumps
+
 IngestClass = Literal["ephemeral", "standard", "durable", "permanent"]
 
 
@@ -54,9 +56,7 @@ class Node(BaseModel):
     @field_validator("properties")
     @classmethod
     def validate_properties_size(cls, v: dict[str, Any]) -> dict[str, Any]:
-        import json
-
-        if len(json.dumps(v).encode("utf-8")) > 51_200:
+        if len(dumps(v).encode("utf-8")) > 51_200:
             msg = "properties exceeds 50KB limit"
             raise ValueError(msg)
         return v

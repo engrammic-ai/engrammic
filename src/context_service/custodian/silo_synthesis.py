@@ -9,7 +9,6 @@ with a (:Finding)-[:SUMMARIZES]->(:Silo) edge.
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any
 
 from pydantic_ai import Agent
@@ -22,6 +21,7 @@ from context_service.db.custodian_queries import (
     fetch_coarse_findings_for_silo,
     fetch_top_entities_by_citation,
 )
+from context_service.utils.json import JSONDecodeError, loads
 
 if TYPE_CHECKING:
     from context_service.custodian.write_path import WritePathResult
@@ -50,8 +50,8 @@ def _build_user_prompt(
         summary = f.get("summary") or "(no summary)"
         claims_raw = f.get("claims_json") or "[]"
         try:
-            claims = json.loads(claims_raw) if isinstance(claims_raw, str) else claims_raw
-        except (json.JSONDecodeError, TypeError):
+            claims = loads(claims_raw) if isinstance(claims_raw, str) else claims_raw
+        except (JSONDecodeError, TypeError):
             claims = []
 
         parts.append(f"\n### Finding {finding_id} (cluster {cluster_id})\n")

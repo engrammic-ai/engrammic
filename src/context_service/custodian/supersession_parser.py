@@ -7,13 +7,13 @@ parses the LLM's JSON response into :class:`SupersessionPair` records.
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
 from context_service.custodian.prompt_loader import load_prompt
+from context_service.utils.json import JSONDecodeError, loads
 
 _SUPERSESSION_PROMPT_PATH = "prompts/custodian/supersession.yaml"
 
@@ -57,8 +57,8 @@ def parse_supersession_response(response: str) -> list[SupersessionPair]:
 
     cleaned = _FENCE_RE.sub("", response).strip()
     try:
-        data = json.loads(cleaned)
-    except (json.JSONDecodeError, ValueError):
+        data = loads(cleaned)
+    except (JSONDecodeError, ValueError):
         return []
 
     if not isinstance(data, dict) or "supersessions" not in data:

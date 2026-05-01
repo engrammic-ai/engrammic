@@ -1,10 +1,10 @@
 """Poison queue for failed Dagster runs that have exhausted their retry budget."""
 
 import contextlib
-import json
 from typing import Any
 
 from context_service.config.logging import get_logger
+from context_service.utils.json import JSONDecodeError, dumps, loads
 
 logger = get_logger(__name__)
 
@@ -35,7 +35,7 @@ class PoisonQueue:
         ttl_seconds: int = 7 * 24 * 3600,
     ) -> None:
         """Record a failed run in the poison queue with a TTL."""
-        payload = json.dumps(
+        payload = dumps(
             {
                 "run_id": run_id,
                 "asset_key": asset_key,
@@ -62,8 +62,8 @@ class PoisonQueue:
                 for key in keys:
                     raw: bytes | None = await self._redis.get(key)
                     if raw is not None:
-                        with contextlib.suppress(json.JSONDecodeError, TypeError):
-                            results.append(json.loads(raw))
+                        with contextlib.suppress(JSONDecodeError, TypeError):
+                            results.append(loads(raw))
                     if len(results) >= limit:
                         return results
                 if cursor == 0:

@@ -35,6 +35,8 @@ dependencies = [
     # Config
     "pyyaml>=6.0",
     "python-dotenv>=1.0",
+    # JSON
+    "orjson>=3.9",
 ]
 
 [dependency-groups]
