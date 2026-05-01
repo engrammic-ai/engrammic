@@ -109,7 +109,9 @@ class TestExtractionPipeline:
             return MemgraphResource(
                 uri=str(settings.memgraph_uri),
                 user=settings.memgraph_user,
-                password=settings.memgraph_password.get_secret_value() if settings.memgraph_password else "",
+                password=settings.memgraph_password.get_secret_value()
+                if settings.memgraph_password
+                else "",
             )
 
         return _factory

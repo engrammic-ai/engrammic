@@ -157,6 +157,28 @@ release-pr:
 release-tag:
     npx release-please github-release --repo-url=. --token=fake
 
+# --- Quality evals ---
+
+# Run HIL quality evals
+evals:
+    uv run python scripts/run_evals.py
+
+# Run evals with LLM agent mode
+evals-llm:
+    uv run python scripts/run_evals.py --with-llm
+
+# Run evals with verbose output
+evals-verbose:
+    uv run python scripts/run_evals.py -v
+
+# Run a single eval scenario by keyword (e.g. just evals-scenario recall)
+evals-scenario scenario:
+    uv run python scripts/run_evals.py --scenario {{scenario}} -v
+
+# Run evals and write results to evals-output.json
+evals-output:
+    uv run python scripts/run_evals.py --output evals-output.json -v
+
 # --- Cleanup ---
 
 # Remove cache and build artifacts

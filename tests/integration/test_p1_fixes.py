@@ -266,7 +266,9 @@ class TestResourceTeardown:
         resource = MemgraphResource(
             uri=settings.memgraph_uri,
             user=settings.memgraph_user,
-            password=settings.memgraph_password.get_secret_value() if settings.memgraph_password else "",
+            password=settings.memgraph_password.get_secret_value()
+            if settings.memgraph_password
+            else "",
         )
 
         driver = await resource.driver()
@@ -287,7 +289,9 @@ class TestResourceTeardown:
         resource = MemgraphResource(
             uri=settings.memgraph_uri,
             user=settings.memgraph_user,
-            password=settings.memgraph_password.get_secret_value() if settings.memgraph_password else "",
+            password=settings.memgraph_password.get_secret_value()
+            if settings.memgraph_password
+            else "",
         )
 
         driver = asyncio.run(resource.driver())
@@ -308,7 +312,9 @@ class TestResourceTeardown:
             mr = MemgraphResource(
                 uri=settings.memgraph_uri,
                 user=settings.memgraph_user,
-                password=settings.memgraph_password.get_secret_value() if settings.memgraph_password else "",
+                password=settings.memgraph_password.get_secret_value()
+                if settings.memgraph_password
+                else "",
             )
             await mr.driver()
             mr.teardown_after_execution(None)  # type: ignore[arg-type]
