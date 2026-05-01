@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 450" fill="none" stroke="#000" stroke-width="1.5">
+  <!-- Flowchart style: boxes with arrows -->
+
+  <!-- Memory box -->
+  <g id="memory">
+    <rect x="50" y="180" width="120" height="60" rx="4" />
+    <text x="110" y="215" font-family="sans-serif" font-size="14" fill="#000" stroke="none" text-anchor="middle">Memory</text>
+  </g>
+
+  <!-- Knowledge box -->
+  <g id="knowledge">
+    <rect x="240" y="180" width="120" height="60" rx="4" />
+    <text x="300" y="215" font-family="sans-serif" font-size="14" fill="#000" stroke="none" text-anchor="middle">Knowledge</text>
+  </g>
+
+  <!-- Wisdom box -->
+  <g id="wisdom">
+    <rect x="430" y="180" width="120" height="60" rx="4" />
+    <text x="490" y="215" font-family="sans-serif" font-size="14" fill="#000" stroke="none" text-anchor="middle">Wisdom</text>
+  </g>
+
+  <!-- Intelligence box (top center) -->
+  <g id="intelligence">
+    <rect x="240" y="50" width="120" height="60" rx="4" />
+    <text x="300" y="85" font-family="sans-serif" font-size="14" fill="#000" stroke="none" text-anchor="middle">Intelligence</text>
+  </g>
+
+  <!-- Arrows with labels -->
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#666" />
+    </marker>
+  </defs>
+
+  <g stroke="#666" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <!-- Memory -> Knowledge: extract -->
+    <path d="M170 210 L230 210" />
+
+    <!-- Knowledge -> Wisdom: synthesize -->
+    <path d="M360 210 L420 210" />
+
+    <!-- Intelligence -> Knowledge: consensus -->
+    <path d="M300 110 L300 170" />
+
+    <!-- Intelligence -> Memory: trace -->
+    <path d="M240 80 L130 80 L130 170" />
+
+    <!-- Intelligence -> Wisdom: commit -->
+    <path d="M360 80 L470 80 L470 170" />
+  </g>
+
+  <!-- Self-loops -->
+  <g stroke="#666" stroke-width="2" fill="none">
+    <!-- Knowledge supersede (self-loop) -->
+    <path d="M300 180 Q 300 150 330 150 Q 360 150 360 180" marker-end="url(#arrow)" />
+
+    <!-- Wisdom revise (self-loop) -->
+    <path d="M490 180 Q 490 150 520 150 Q 550 150 550 180" marker-end="url(#arrow)" />
+  </g>
+
+  <!-- Transition labels -->
+  <g font-family="sans-serif" font-size="11" fill="#666" stroke="none">
+    <text x="195" y="200">extract</text>
+    <text x="380" y="200">synthesize</text>
+    <text x="310" y="145">consensus</text>
+    <text x="70" y="70">trace</text>
+    <text x="480" y="70">commit</text>
+    <text x="310" y="145" dy="-30">supersede</text>
+    <text x="555" y="165">revise</text>
+  </g>
+
+  <!-- Input arrow at bottom -->
+  <g stroke="#666" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <path d="M110 320 L110 250" />
+  </g>
+  <text x="110" y="340" font-family="sans-serif" font-size="11" fill="#666" stroke="none" text-anchor="middle">input</text>
+
+  <!-- Decay arrow from Memory -->
+  <g stroke="#666" stroke-width="2" fill="none" marker-end="url(#arrow)">
+    <path d="M50 210 L20 210" />
+  </g>
+  <text x="35" y="230" font-family="sans-serif" font-size="11" fill="#666" stroke="none" text-anchor="middle">decay</text>
+</svg>

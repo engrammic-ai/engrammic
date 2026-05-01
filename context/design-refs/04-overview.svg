@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500" fill="none" stroke="#000" stroke-width="1.5">
+  <!-- Section labels -->
+  <g font-family="sans-serif" font-size="14" font-weight="bold" fill="#000" stroke="none">
+    <text x="60" y="30">INPUTS</text>
+    <text x="320" y="30">LAYER STACK</text>
+    <text x="620" y="30">CONSUMERS</text>
+  </g>
+
+  <!-- Input blocks (left side) -->
+  <g id="inputs" transform="translate(30, 80)">
+    <!-- Documents -->
+    <path d="M20 60 L55 80 L90 60 L55 40 Z" />
+    <path d="M20 60 L20 80 L55 100 L55 80 Z" />
+    <path d="M55 80 L55 100 L90 80 L90 60 Z" />
+
+    <!-- Conversations -->
+    <path d="M20 140 L55 160 L90 140 L55 120 Z" />
+    <path d="M20 140 L20 160 L55 180 L55 160 Z" />
+    <path d="M55 160 L55 180 L90 160 L90 140 Z" />
+
+    <!-- Actions -->
+    <path d="M20 220 L55 240 L90 220 L55 200 Z" />
+    <path d="M20 220 L20 240 L55 260 L55 240 Z" />
+    <path d="M55 240 L55 260 L90 240 L90 220 Z" />
+  </g>
+
+  <!-- Input labels -->
+  <g font-family="sans-serif" font-size="10" fill="#000" stroke="none" text-anchor="middle">
+    <text x="85" y="105">Docs</text>
+    <text x="85" y="185">Convos</text>
+    <text x="85" y="265">Actions</text>
+  </g>
+
+  <!-- Center: 2x2 grid on base platform -->
+  <g id="stack" transform="translate(280, 60)">
+    <!-- Base platform (Company Context) -->
+    <path d="M20 320 L130 380 L240 320 L130 260 Z" />
+    <path d="M20 320 L20 345 L130 405 L130 380 Z" />
+    <path d="M130 380 L130 405 L240 345 L240 320 Z" />
+
+    <!-- Back-left: Memory -->
+    <path d="M40 220 L95 255 L150 220 L95 185 Z" />
+    <path d="M40 220 L40 245 L95 280 L95 255 Z" />
+    <path d="M95 255 L95 280 L150 245 L150 220 Z" />
+
+    <!-- Back-right: Knowledge -->
+    <path d="M110 220 L165 255 L220 220 L165 185 Z" />
+    <path d="M110 220 L110 245 L165 280 L165 255 Z" />
+    <path d="M165 255 L165 280 L220 245 L220 220 Z" />
+
+    <!-- Front-left: Wisdom -->
+    <path d="M40 150 L95 185 L150 150 L95 115 Z" />
+    <path d="M40 150 L40 175 L95 210 L95 185 Z" />
+    <path d="M95 185 L95 210 L150 175 L150 150 Z" />
+
+    <!-- Front-right: Intelligence -->
+    <path d="M110 150 L165 185 L220 150 L165 115 Z" />
+    <path d="M110 150 L110 175 L165 210 L165 185 Z" />
+    <path d="M165 185 L165 210 L220 175 L220 150 Z" />
+  </g>
+
+  <!-- Layer labels -->
+  <g font-family="sans-serif" font-size="10" fill="#000" stroke="none" text-anchor="middle">
+    <text x="375" y="295">Memory</text>
+    <text x="445" y="295">Knowledge</text>
+    <text x="375" y="225">Wisdom</text>
+    <text x="445" y="225">Intelligence</text>
+    <text x="410" y="420" font-size="12" font-weight="bold">Company Context</text>
+  </g>
+
+  <!-- Consumer blocks (right side) -->
+  <g id="consumers" transform="translate(600, 100)">
+    <!-- Agent A -->
+    <path d="M30 80 L80 110 L130 80 L80 50 Z" />
+    <path d="M30 80 L30 115 L80 145 L80 110 Z" />
+    <path d="M80 110 L80 145 L130 115 L130 80 Z" />
+
+    <!-- Agent B -->
+    <path d="M30 200 L80 230 L130 200 L80 170 Z" />
+    <path d="M30 200 L30 235 L80 265 L80 230 Z" />
+    <path d="M80 230 L80 265 L130 235 L130 200 Z" />
+  </g>
+
+  <!-- Consumer labels -->
+  <g font-family="sans-serif" font-size="11" fill="#000" stroke="none" text-anchor="middle">
+    <text x="680" y="150">Agent A</text>
+    <text x="680" y="270">Agent B</text>
+  </g>
+
+  <!-- Input to stack wires -->
+  <g stroke="#666" stroke-width="2" fill="none">
+    <path d="M120 140 Q 200 180 300 260" />
+    <path d="M120 220 Q 200 240 300 280" />
+    <path d="M120 300 Q 200 310 300 320" />
+  </g>
+
+  <!-- Stack to consumer wires -->
+  <g stroke="#666" stroke-width="2" fill="none">
+    <path d="M520 220 Q 560 200 630 180" />
+    <path d="M520 300 Q 560 290 630 300" />
+  </g>
+</svg>

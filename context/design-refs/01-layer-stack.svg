@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 400" fill="none" stroke="#000" stroke-width="1.5">
+  <!-- Base platform: Company Context -->
+  <g id="base">
+    <!-- Large isometric platform -->
+    <path d="M50 300 L250 400 L450 300 L250 200 Z" /> <!-- top face -->
+    <path d="M50 300 L50 330 L250 430 L250 400 Z" /> <!-- left face -->
+    <path d="M250 400 L250 430 L450 330 L450 300 Z" /> <!-- right face -->
+  </g>
+
+  <!-- 2x2 grid of layers on top of base -->
+  <!-- Back-left: Memory -->
+  <g id="memory">
+    <path d="M100 200 L175 240 L250 200 L175 160 Z" /> <!-- top -->
+    <path d="M100 200 L100 230 L175 270 L175 240 Z" /> <!-- left -->
+    <path d="M175 240 L175 270 L250 230 L250 200 Z" /> <!-- right -->
+  </g>
+
+  <!-- Back-right: Knowledge -->
+  <g id="knowledge">
+    <path d="M250 200 L325 240 L400 200 L325 160 Z" /> <!-- top -->
+    <path d="M250 200 L250 230 L325 270 L325 240 Z" /> <!-- left -->
+    <path d="M325 240 L325 270 L400 230 L400 200 Z" /> <!-- right -->
+  </g>
+
+  <!-- Front-left: Wisdom -->
+  <g id="wisdom">
+    <path d="M100 120 L175 160 L250 120 L175 80 Z" /> <!-- top -->
+    <path d="M100 120 L100 150 L175 190 L175 160 Z" /> <!-- left -->
+    <path d="M175 160 L175 190 L250 150 L250 120 Z" /> <!-- right -->
+  </g>
+
+  <!-- Front-right: Intelligence -->
+  <g id="intelligence">
+    <path d="M250 120 L325 160 L400 120 L325 80 Z" /> <!-- top -->
+    <path d="M250 120 L250 150 L325 190 L325 160 Z" /> <!-- left -->
+    <path d="M325 160 L325 190 L400 150 L400 120 Z" /> <!-- right -->
+  </g>
+
+  <!-- Labels -->
+  <g font-family="sans-serif" font-size="12" fill="#000" stroke="none" text-anchor="middle">
+    <text x="175" y="215">Memory</text>
+    <text x="325" y="215">Knowledge</text>
+    <text x="175" y="135">Wisdom</text>
+    <text x="325" y="135">Intelligence</text>
+    <text x="250" y="365" font-size="14" font-weight="bold">Company Context</text>
+  </g>
+</svg>
