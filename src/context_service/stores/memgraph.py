@@ -85,8 +85,8 @@ async def create_memgraph_driver(settings: Settings | None = None) -> AsyncDrive
     return AsyncGraphDatabase.driver(
         settings.memgraph_uri,
         auth=auth,
-        max_connection_pool_size=50,
-        connection_acquisition_timeout=30.0,
+        max_connection_pool_size=settings.memgraph_pool_size,
+        connection_acquisition_timeout=settings.memgraph_pool_timeout,
     )
 
 
@@ -108,7 +108,13 @@ class MemgraphClient:
         Yields:
             AsyncSession for executing queries.
         """
-        session = self._driver.session()
+        try:
+            session = self._driver.session()
+        except ClientError as e:
+            code: str = getattr(e, "code", "") or ""
+            if "ConnectionAcquisitionTimeout" in code:
+                logger.error("memgraph_pool_acquisition_timeout", error=str(e))
+            raise
         try:
             yield session
         finally:

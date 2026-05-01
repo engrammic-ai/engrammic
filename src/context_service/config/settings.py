@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     memgraph_uri: str = "bolt://localhost:7687"
     memgraph_user: str = ""
     memgraph_password: SecretStr | None = None
+    memgraph_pool_size: int = 50
+    memgraph_pool_timeout: float = 30.0
 
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: SecretStr | None = None

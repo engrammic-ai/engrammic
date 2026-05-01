@@ -11,6 +11,7 @@ from context_service import __version__
 from context_service.api.routes import health
 from context_service.config.logging import configure_logging, get_logger
 from context_service.config.settings import get_settings
+from context_service.core.service_registry import ServiceRegistry
 from context_service.stores import (
     MemgraphClient,
     QdrantClient,
@@ -30,6 +31,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.start_time = time.monotonic()
 
     logger.info("creating_database_connections")
+
+    registry = ServiceRegistry()
 
     try:
         memgraph_driver = await create_memgraph_driver(settings)
@@ -51,9 +54,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await qdrant_client.ensure_collection()
         logger.info("qdrant_connected")
 
+        registry.register("memgraph", memgraph_client)
+        registry.register("redis", redis_client)
+        registry.register("qdrant", qdrant_client)
+        registry.start()
+
         app.state.memgraph = memgraph_client
         app.state.redis = redis_client
         app.state.qdrant = qdrant_client
+        app.state.registry = registry
 
         from context_service.cache.embedding_cache import EmbeddingCache
         from context_service.embeddings.base import EmbeddingService
@@ -96,6 +105,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
     logger.info("closing_database_connections")
+
+    await registry.stop()
 
     if hasattr(app.state, "memgraph"):
         await app.state.memgraph.close()

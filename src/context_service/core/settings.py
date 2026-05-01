@@ -12,16 +12,14 @@ Settings precedence:
 
 from __future__ import annotations
 
-from functools import lru_cache
-from typing import TYPE_CHECKING, Any
+import contextvars
+from pathlib import Path
+from typing import Any
 
 import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 # Load .env file before any settings classes are instantiated
 # override=False ensures docker-compose/runtime env vars take precedence over .env file
@@ -393,6 +391,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
         env_ignore_empty=True,
         extra="ignore",
+        frozen=True,
     )
 
     # Nested sub-configs
@@ -690,17 +689,34 @@ class Settings(BaseSettings):
         data: dict[str, Any] = yaml.safe_load(path.read_text()) or {}
         return cls(**data)
 
-    def reload_from_yaml(self, path: Path) -> None:
-        """Mutate this Settings in place from YAML so cached callers see the change."""
-        fresh = Settings.from_yaml(path)
-        for field_name in type(self).model_fields:
-            object.__setattr__(self, field_name, getattr(fresh, field_name))
+
+# ContextVar holds the active Settings snapshot. Setting it is atomic at the
+# interpreter level, so concurrent requests that call get_settings() mid-reload
+# always see a fully-constructed, immutable instance — never a partially-updated one.
+_settings_var: contextvars.ContextVar[Settings | None] = contextvars.ContextVar(
+    "settings", default=None
+)
 
 
-@lru_cache
 def get_settings() -> Settings:
-    """Get cached settings instance (singleton)."""
-    return Settings()
+    """Return the active Settings snapshot, creating one on first call."""
+    instance = _settings_var.get()
+    if instance is None:
+        instance = Settings()
+        _settings_var.set(instance)
+    return instance
+
+
+def reload_settings(path: Path | None = None) -> Settings:
+    """Replace the active Settings snapshot atomically.
+
+    Callers within the same request that already hold a reference to the old
+    snapshot are unaffected; subsequent calls to get_settings() return the new
+    instance. Pass *path* to overlay YAML values on top of env vars.
+    """
+    fresh = Settings.from_yaml(path) if path is not None else Settings()
+    _settings_var.set(fresh)
+    return fresh
 
 
 settings = get_settings()
