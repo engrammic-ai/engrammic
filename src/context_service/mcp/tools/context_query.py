@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import TYPE_CHECKING, Any, Literal
 
-from context_service.mcp.server import get_context_service, get_mcp_auth_context, get_silo_service
+from context_service.mcp.server import (
+    get_context_service,
+    get_mcp_auth_context,
+    get_redis,
+    get_silo_service,
+)
 from context_service.models.mcp import Layer, QueryFilters
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
+from context_service.signals import emit_access_event
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -73,6 +80,12 @@ async def _context_query(
         search_mode=search_mode,
     )
     elapsed_ms = int((time.perf_counter() - start) * 1000)
+
+    redis = get_redis()
+    if redis is not None and results:
+        await asyncio.gather(
+            *(emit_access_event(redis, silo_id, str(r.node_id)) for r in results)
+        )
 
     return {
         "results": [

@@ -42,8 +42,9 @@ class GeminiProvider(LLMProvider):
     def from_settings(cls, model: str | None = None) -> GeminiProvider:
         """Create provider from application settings."""
         settings = get_settings()
+        api_key = settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else ""
         return cls(
-            api_key=settings.gemini_api_key,
+            api_key=api_key,
             model=model or settings.default_llm_model,
         )
 

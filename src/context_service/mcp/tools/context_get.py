@@ -3,16 +3,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import TYPE_CHECKING, Any
 
 from context_service.mcp.server import (
     get_context_service,
     get_mcp_auth_context,
+    get_redis,
     get_silo_service,
 )
 from context_service.services.models import derive_silo_id
 from context_service.services.silo import validate_silo_ownership
+from context_service.signals import emit_access_event
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -103,5 +106,15 @@ def register(mcp: FastMCP) -> None:
                         "created_at": (node.created_at.isoformat() if node.created_at else None),
                     }
                 )
+
+        redis = get_redis()
+        if redis is not None:
+            emits = [
+                emit_access_event(redis, str(resolved_silo_id), n["node_id"])
+                for n in nodes_out
+                if n.get("node_id") is not None
+            ]
+            if emits:
+                await asyncio.gather(*emits)
 
         return {"nodes": nodes_out}

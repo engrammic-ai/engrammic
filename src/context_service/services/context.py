@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 from primitives.schema.labels import ALL_CITE_LABELS
 
+from context_service.config.settings import get_settings
 from context_service.services.models import (
     GraphResult,
     LookupResult,
@@ -20,6 +22,7 @@ from context_service.services.models import (
     ScoredNode,
     derive_silo_id,
 )
+from context_service.signals import compute_freshness
 
 if TYPE_CHECKING:
     from context_service.embeddings import EmbeddingService
@@ -51,6 +54,11 @@ _CONTENT_TYPE_TO_LABEL: dict[str, str] = {
 _CREATE_PROPS: frozenset[str] = frozenset(
     {"id", "type", "content", "silo_id", "source_uri", "content_hash", "created_at"}
 )
+
+
+def _now_utc() -> datetime:
+    """Indirection for testability — patched in tests to pin a fixed reference time."""
+    return datetime.now(UTC)
 
 
 class ContextService:
@@ -107,9 +115,11 @@ class ContextService:
             )
 
         silo_id = scope.silo_id
+        cache_key = f"idempotency:{silo_id}:{idempotency_key}" if idempotency_key else None
 
-        if idempotency_key and self._cache:
-            cache_key = f"idempotency:{silo_id}:{idempotency_key}"
+        # Atomic idempotency: reserve the key with SET NX before any DB writes.
+        # If another request wins the race, fetch its result instead.
+        if cache_key and self._cache:
             existing_id = await self._cache.get(cache_key)
             if existing_id:
                 existing = await self.get(uuid.UUID(existing_id.decode()), silo_id)
@@ -126,6 +136,20 @@ class ContextService:
             source_uri=source_uri,
             content_hash=hashlib.sha256(content.encode()).hexdigest()[:16],
         )
+
+        # Try to claim the idempotency key atomically BEFORE writing to DB.
+        # If set_nx returns False, another concurrent request won — fetch its result.
+        if cache_key and self._cache:
+            claimed = await self._cache.set_nx(cache_key, str(node.id), ttl_seconds=86400)
+            if not claimed:
+                # Another request won the race — wait briefly for it to complete
+                await asyncio.sleep(0.05)
+                winner_id = await self._cache.get(cache_key)
+                if winner_id:
+                    winner = await self.get(uuid.UUID(winner_id.decode()), silo_id)
+                    if winner:
+                        logger.debug("store_idempotent_race_lost", key=idempotency_key)
+                        return winner
 
         # node_type is validated against _ALLOWED_NODE_TYPES above — f-string is safe.
         extra_props = {k: v for k, v in (properties or {}).items() if k not in _CREATE_PROPS}
@@ -154,16 +178,6 @@ class ContextService:
             params["extra_props"] = extra_props
 
         await self._memgraph.execute_write(create_query, params)
-
-        # Idempotency cache is written BEFORE Qdrant so a Qdrant failure does
-        # not cause the next retry to mint a fresh node id (which would leave
-        # an orphan Memgraph node behind). Trade-off: a successful Memgraph +
-        # Redis write followed by a Qdrant failure leaves a node without a
-        # vector — invisible to semantic search but recoverable by a
-        # reconciliation worker. Duplicate nodes are not. (N-009)
-        if idempotency_key and self._cache:
-            cache_key = f"idempotency:{silo_id}:{idempotency_key}"
-            await self._cache.set(cache_key, str(node.id).encode(), ttl_seconds=86400)
 
         if content and len(content) >= MIN_CONTENT_FOR_EMBEDDING and self._embedding:
             vector = await self._embedding.embed_single(content)
@@ -892,6 +906,11 @@ class ContextService:
             min_confidence = getattr(filters, "min_confidence", None)
             tags_filter = getattr(filters, "tags", None)
 
+        settings = get_settings()
+        freshness_weight = settings.freshness_weight
+        sigma_days = settings.freshness_sigma_days
+        now = _now_utc()
+
         results: list[QueryResult] = []
         for node_id_str in result_ids:
             node = node_map.get(node_id_str)
@@ -915,18 +934,29 @@ class ContextService:
             if not include_superseded and props.get("superseded_by"):
                 continue
 
+            relevance = score_map[node_id_str]
+            if freshness_weight > 0 and node.created_at is not None:
+                fresh = compute_freshness(node.created_at, now, sigma_days=sigma_days)
+                relevance = relevance * ((1.0 - freshness_weight) + freshness_weight * fresh)
+
             results.append(
                 QueryResult(
                     node_id=node.id,
                     layer=node_layer,
                     content=node.content,
                     confidence=node_confidence,
-                    relevance_score=score_map[node_id_str],
+                    relevance_score=relevance,
                     summary=props.get("summary"),
                     tags=node_tags or None,
                     created_at=node.created_at,
                 )
             )
+
+        # Re-sort: freshness multiplier mutates relevance_score, so the original
+        # Qdrant order no longer reflects final ranking. Callers see freshness-
+        # adjusted ordering when freshness_weight > 0; identical to Qdrant order
+        # when freshness_weight == 0.
+        results.sort(key=lambda r: r.relevance_score, reverse=True)
 
         logger.info(
             "query_complete",

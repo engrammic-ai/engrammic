@@ -529,6 +529,12 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr | None = Field(default=None)
     llm_model: str = Field(default="")
     llm_api_url: str | None = Field(default=None)
+    default_llm_model: str = Field(default="gemini-2.0-flash")
+
+    # Per-provider API keys (used by llm/ providers)
+    anthropic_api_key: SecretStr | None = Field(default=None)
+    openai_api_key: SecretStr | None = Field(default=None)
+    gemini_api_key: SecretStr | None = Field(default=None)
 
     # =========================================================================
     # WorkOS Auth Settings

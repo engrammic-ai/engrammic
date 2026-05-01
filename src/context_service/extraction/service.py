@@ -479,13 +479,22 @@ class ExtractionService:
     ) -> list[str]:
         """Write Claim/Entity nodes + edges, attaching each Claim to a Document.
 
-        Mirrors :meth:`apply_claims_to_graph` but uses ATTACH_CLAIM_TO_DOCUMENT
-        (EXTRACTED_FROM -> Document) instead of ATTACH_CLAIM_TO_PASSAGE.
+        Uses UNWIND batch queries to collapse N×4 RTTs to 4 total.
         Per A3 decision (plan 2026-04-20), extraction runs per-Document and
         the walker treats Document/Passage uniformly via the content-union.
         """
+        if not triples:
+            return []
+
         now = datetime.now(UTC).isoformat()
+
+        # Build batch data structures
+        claim_rows: list[dict[str, Any]] = []
+        attach_rows: list[dict[str, str]] = []
+        mention_rows: list[dict[str, Any]] = []
+        reference_rows: list[dict[str, str]] = []
         written_ids: list[str] = []
+
         for triple in triples:
             fingerprint = make_claim_id(
                 triple.subject,
@@ -496,56 +505,79 @@ class ExtractionService:
                 triple.source_doc_id,
             )
             cid = fingerprint
+
+            claim_rows.append({
+                "claim_id": cid,
+                "fingerprint": fingerprint,
+                "subject": triple.subject,
+                "predicate": triple.predicate,
+                "object": triple.object,
+                "valid_from": triple.valid_from,
+                "valid_to": triple.valid_to,
+                "source_doc_id": triple.source_doc_id,
+                "source_passage_id": triple.source_passage_id,
+                "confidence": triple.confidence,
+                "created_at": now,
+            })
+
+            attach_rows.append({
+                "doc_id": doc_id,
+                "claim_id": cid,
+            })
+
+            for mention in triple.entity_mentions:
+                mention_rows.append({
+                    "entity_id": mention.entity_id,
+                    "name": mention.name,
+                    "entity_type": mention.entity_type,
+                    "created_at": now,
+                    "claim_id": cid,
+                })
+
+            if triple.ref_doc_id:
+                reference_rows.append({
+                    "claim_id": cid,
+                    "ref_doc_id": triple.ref_doc_id,
+                })
+
+            written_ids.append(cid)
+
+        # Execute batch queries (4 total instead of N×4)
+        try:
+            await self._memgraph.execute_write(
+                queries.BATCH_UPSERT_CLAIMS,
+                {"claims": claim_rows, "silo_id": silo_id},
+            )
+        except Exception as e:
+            logger.error("batch_upsert_claims_failed", error=str(e), count=len(claim_rows))
+            return []
+
+        try:
+            await self._memgraph.execute_write(
+                queries.BATCH_ATTACH_CLAIMS_TO_DOCUMENT,
+                {"rows": attach_rows, "silo_id": silo_id},
+            )
+        except Exception as e:
+            logger.warning("batch_attach_claims_failed", error=str(e), count=len(attach_rows))
+
+        if mention_rows:
             try:
                 await self._memgraph.execute_write(
-                    queries.UPSERT_CLAIM,
-                    {
-                        "claim_id": cid,
-                        "silo_id": silo_id,
-                        "fingerprint": fingerprint,
-                        "subject": triple.subject,
-                        "predicate": triple.predicate,
-                        "object": triple.object,
-                        "valid_from": triple.valid_from,
-                        "valid_to": triple.valid_to,
-                        "source_doc_id": triple.source_doc_id,
-                        "source_passage_id": triple.source_passage_id,
-                        "confidence": triple.confidence,
-                        "created_at": now,
-                    },
+                    queries.BATCH_UPSERT_ENTITY_MENTIONS,
+                    {"rows": mention_rows, "silo_id": silo_id},
                 )
-                await self._memgraph.execute_write(
-                    queries.ATTACH_CLAIM_TO_DOCUMENT,
-                    {
-                        "doc_id": doc_id,
-                        "claim_id": cid,
-                        "silo_id": silo_id,
-                    },
-                )
-                for mention in triple.entity_mentions:
-                    await self._memgraph.execute_write(
-                        queries.UPSERT_ENTITY_MENTION,
-                        {
-                            "entity_id": mention.entity_id,
-                            "silo_id": silo_id,
-                            "name": mention.name,
-                            "entity_type": mention.entity_type,
-                            "created_at": now,
-                            "claim_id": cid,
-                        },
-                    )
-                if triple.ref_doc_id:
-                    await self._memgraph.execute_write(
-                        queries.ATTACH_CLAIM_REFERENCES_DOC,
-                        {
-                            "claim_id": cid,
-                            "silo_id": silo_id,
-                            "ref_doc_id": triple.ref_doc_id,
-                        },
-                    )
-                written_ids.append(cid)
             except Exception as e:
-                logger.warning(f"Failed to write claim {cid!r}: {e}", exc_info=True)
+                logger.warning("batch_upsert_mentions_failed", error=str(e), count=len(mention_rows))
+
+        if reference_rows:
+            try:
+                await self._memgraph.execute_write(
+                    queries.BATCH_ATTACH_CLAIM_REFERENCES,
+                    {"rows": reference_rows, "silo_id": silo_id},
+                )
+            except Exception as e:
+                logger.warning("batch_attach_references_failed", error=str(e), count=len(reference_rows))
+
         return written_ids
 
     async def apply_contradicts_to_graph(
