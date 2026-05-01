@@ -121,27 +121,27 @@ docker-prod-logs:
 
 # Run lint via dagger
 dagger-lint:
-    dagger call lint --source=.
+    dagger call lint --source=. --primitives=../primitives
 
 # Run typecheck via dagger
 dagger-typecheck:
-    dagger call typecheck --source=.
+    dagger call typecheck --source=. --primitives=../primitives
 
 # Run unit tests via dagger
 dagger-test:
-    dagger call test --source=.
+    dagger call test --source=. --primitives=../primitives
 
 # Run integration tests via dagger (spins up services)
 dagger-test-integration:
-    dagger call test-integration --source=.
+    dagger call test-integration --source=. --primitives=../primitives
 
 # Run lint + typecheck via dagger
 dagger-check:
-    dagger call check --source=.
+    dagger call check --source=. --primitives=../primitives
 
 # Run full pipeline via dagger
 dagger-all:
-    dagger call all --source=.
+    dagger call all --source=. --primitives=../primitives
 
 # --- Release ---
 
