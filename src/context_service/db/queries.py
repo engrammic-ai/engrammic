@@ -267,9 +267,21 @@ MERGE (c)-[:REFERENCES]->(refd)
 
 PROMOTE_CLAIM_TO_FACT = """
 MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
-WHERE NOT c:Fact
-SET c:Fact, c.promoted_at = datetime(), c.promotion_rule = $rule
-RETURN properties(c) AS props
+WHERE NOT exists((c)<-[:PROMOTED_FROM]-(:Fact))
+CREATE (f:Fact {
+    id: $fact_id,
+    silo_id: c.silo_id,
+    content: c.content,
+    confidence: c.confidence,
+    fingerprint: c.fingerprint,
+    source_tier: c.source_tier,
+    promoted_at: datetime(),
+    promotion_rule: $rule,
+    valid_from: datetime(),
+    created_at: datetime()
+})
+CREATE (f)-[:PROMOTED_FROM]->(c)
+RETURN f.id AS fact_id, properties(f) AS props
 """
 
 CREATE_CONTRADICTS_EDGE = """
@@ -416,7 +428,7 @@ HEALTH_CHECK = "RETURN 1 as health"
 # Traverses DERIVED_FROM / PROMOTED_FROM / SYNTHESIZED_FROM edges from a
 # given node back to its Memory-layer sources (leaves with no outbound edges).
 PROVENANCE_CHAIN = """
-MATCH path = (start {id: $node_id, silo_id: $silo_id})-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM*1..10]->(source)
+MATCH path = (start {id: $node_id, silo_id: $silo_id})-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM|REFERENCES*1..10]->(source)
 WITH path, nodes(path) AS ns, relationships(path) AS rs
 UNWIND range(0, size(ns) - 1) AS i
 WITH
@@ -431,8 +443,8 @@ ORDER BY depth
 
 # Leaf sources: nodes in the provenance chain with no further outbound edges
 PROVENANCE_ROOT_SOURCES = """
-MATCH path = (start {id: $node_id, silo_id: $silo_id})-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM*1..10]->(source)
-WHERE NOT (source)-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM]->()
+MATCH path = (start {id: $node_id, silo_id: $silo_id})-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM|REFERENCES*1..10]->(source)
+WHERE NOT (source)-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM|REFERENCES]->()
 RETURN DISTINCT
     source.id AS node_id,
     labels(source)[0] AS layer,
@@ -453,6 +465,21 @@ RETURN
     ancestor.confidence AS confidence,
     ancestor.supersession_reason AS supersession_reason
 ORDER BY depth DESC
+"""
+
+# Meta-memory: reflections about a node
+# Returns MetaObservations linked via ABOUT edge to the target node.
+GET_REFLECTIONS_FOR_NODE = """
+MATCH (obs:MetaObservation)-[:ABOUT]->(n {id: $node_id, silo_id: $silo_id})
+WHERE obs.silo_id = $silo_id
+RETURN
+    obs.id AS node_id,
+    obs.content AS content,
+    obs.observation_type AS observation_type,
+    obs.confidence AS confidence,
+    obs.agent_id AS agent_id,
+    obs.created_at AS created_at
+ORDER BY obs.created_at DESC
 """
 
 BELIEF_HISTORY_CURRENT = """

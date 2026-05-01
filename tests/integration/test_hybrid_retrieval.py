@@ -11,6 +11,7 @@ Test strategy:
 
 from __future__ import annotations
 
+import contextlib
 import socket
 import uuid
 from typing import Any
@@ -18,7 +19,7 @@ from typing import Any
 import pytest
 
 from context_service.embeddings.splade import SpladeEncoder
-from context_service.stores.qdrant import COLLECTION_NAME, QdrantClient
+from context_service.stores.qdrant import QdrantClient
 
 
 def _check_qdrant_available() -> bool:
@@ -49,7 +50,10 @@ _CORPUS = [
     ("doc-splade-002", "SPLADE uses sparse lexical activations from masked language models."),
     ("doc-memgraph-003", "Memgraph is a graph database optimised for real-time analytics."),
     ("doc-qdrant-004", "Qdrant stores both dense and sparse named vectors in the same collection."),
-    ("doc-rrf-005", "Reciprocal Rank Fusion combines ranked lists from multiple retrieval systems."),
+    (
+        "doc-rrf-005",
+        "Reciprocal Rank Fusion combines ranked lists from multiple retrieval systems.",
+    ),
 ]
 
 # Rare-term queries that should surface a specific document.
@@ -97,10 +101,8 @@ class TestHybridRetrieval:
         raw_client = await qdrant_client._get_client()
 
         # Delete and recreate to ensure hybrid mode is enabled
-        try:
+        with contextlib.suppress(Exception):
             await raw_client.delete_collection(test_collection)
-        except Exception:
-            pass  # Collection may not exist
 
         from qdrant_client.models import (
             Distance,
@@ -133,10 +135,8 @@ class TestHybridRetrieval:
         yield (silo_id, test_collection)
 
         # Cleanup: delete test collection
-        try:
+        with contextlib.suppress(Exception):
             await raw_client.delete_collection(test_collection)
-        except Exception:
-            pass
 
     async def _run_search(
         self,
@@ -156,16 +156,13 @@ class TestHybridRetrieval:
             FusionQuery,
             MatchValue,
             Prefetch,
-            Query,
             SparseVector,
         )
 
         raw_client = await qdrant_client._get_client()
 
         # Build filter for silo_id
-        silo_filter = Filter(
-            must=[FieldCondition(key="silo_id", match=MatchValue(value=silo_id))]
-        )
+        silo_filter = Filter(must=[FieldCondition(key="silo_id", match=MatchValue(value=silo_id))])
 
         if search_mode == "dense":
             results = await raw_client.query_points(

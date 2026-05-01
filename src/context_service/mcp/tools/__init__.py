@@ -12,11 +12,14 @@ if TYPE_CHECKING:
 from context_service.mcp.tools.context_assert import register as register_assert
 from context_service.mcp.tools.context_commit import register as register_commit
 from context_service.mcp.tools.context_get import register as register_get
+
+# Meta-memory tools
+from context_service.mcp.tools.context_get_reflections import (
+    register as register_get_reflections,
+)
 from context_service.mcp.tools.context_graph import register as register_graph
 from context_service.mcp.tools.context_history import register as register_history
 from context_service.mcp.tools.context_link import register as register_link
-
-# Meta-memory tools
 from context_service.mcp.tools.context_provenance import register as register_provenance
 
 # Read tools
@@ -47,6 +50,7 @@ def register_all(mcp: FastMCP) -> None:
 
     # Meta-memory tools
     register_provenance(mcp)
+    register_get_reflections(mcp)
     register_history(mcp)
 
     # Intelligence tools
@@ -68,6 +72,7 @@ __all__ = [
     "register_get",
     "register_graph",
     "register_provenance",
+    "register_get_reflections",
     "register_history",
     "register_reason",
     "register_silo_create",

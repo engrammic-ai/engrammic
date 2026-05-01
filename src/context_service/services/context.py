@@ -692,19 +692,16 @@ class ContextService:
         evidence_count: int | None = None,
         corroborations: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any] | None:
-        """Promote a :Claim to :Claim:Fact when the epistemology agrees.
+        """Promote a :Claim to :Fact by creating a separate Fact node.
 
-        Returns the updated node properties dict on promotion, or None if the
-        promotion was skipped (decision said no, or claim was already a :Fact).
-        Best-effort — DB errors are logged and re-raised for the caller to
-        decide.
+        Creates a new :Fact node with PROMOTED_FROM edge to the source :Claim.
+        Returns the new Fact node properties on promotion, or None if the
+        promotion was skipped (decision said no, or claim already has a Fact).
         """
         from context_service.custodian.fact_promotion import evaluate_claim_for_fact
         from context_service.db.queries import PROMOTE_CLAIM_TO_FACT
 
         if evidence_count is None:
-            # Count both edge types: extraction emits REFERENCES, assert_claim
-            # emits DERIVED_FROM. Either signals evidence for promotion.
             count_rows = await self._memgraph.execute_query(
                 "MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})"
                 "-[:REFERENCES|DERIVED_FROM]->() RETURN count(*) AS cnt",
@@ -726,15 +723,23 @@ class ContextService:
             return None
 
         rule_value: str = decision.rule.value if decision.rule is not None else ""
+        fact_id = str(uuid.uuid4())
+
         promoted_rows = await self._memgraph.execute_write(
             PROMOTE_CLAIM_TO_FACT,
-            {"claim_id": claim_id, "silo_id": silo_id, "rule": rule_value},
+            {
+                "claim_id": claim_id,
+                "silo_id": silo_id,
+                "rule": rule_value,
+                "fact_id": fact_id,
+            },
         )
 
         if not promoted_rows:
-            # WHERE NOT c:Fact filtered it out — already promoted
+            # WHERE clause filtered it out — already has a Fact
             already_rows = await self._memgraph.execute_query(
-                "MATCH (c:Claim:Fact {id: $claim_id, silo_id: $silo_id}) RETURN properties(c) AS props",
+                "MATCH (f:Fact)-[:PROMOTED_FROM]->(c:Claim {id: $claim_id, silo_id: $silo_id}) "
+                "RETURN properties(f) AS props",
                 {"claim_id": claim_id, "silo_id": silo_id},
             )
             return dict(already_rows[0]["props"]) if already_rows else None
@@ -742,6 +747,7 @@ class ContextService:
         logger.info(
             "claim_promoted_to_fact",
             claim_id=claim_id,
+            fact_id=fact_id,
             silo_id=silo_id,
             rule=rule_value,
             evidence_count=evidence_count,
@@ -826,6 +832,42 @@ class ContextService:
             node_type="MetaObservation",
             properties=props,
         )
+
+    async def get_reflections(
+        self,
+        silo_id: str,
+        node_id: str,
+    ) -> list[dict[str, Any]]:
+        """Get MetaObservations about a node.
+
+        Args:
+            silo_id: Silo UUID.
+            node_id: Target node ID.
+
+        Returns:
+            List of reflection dicts with node_id, content, observation_type,
+            confidence, agent_id, created_at.
+        """
+        from context_service.db.queries import GET_REFLECTIONS_FOR_NODE
+
+        async with self._memgraph.session() as session:
+            result = await session.run(
+                GET_REFLECTIONS_FOR_NODE,
+                {"node_id": node_id, "silo_id": silo_id},
+            )
+            records = await result.data()
+
+        return [
+            {
+                "node_id": r["node_id"],
+                "content": r["content"],
+                "observation_type": r["observation_type"],
+                "confidence": r["confidence"],
+                "agent_id": r["agent_id"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+            for r in records
+        ]
 
     async def query(
         self,

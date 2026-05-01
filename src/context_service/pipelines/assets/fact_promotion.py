@@ -1,7 +1,8 @@
-"""Dagster asset: batch :Claim -> :Claim:Fact promotion per silo."""
+"""Dagster asset: batch :Claim -> :Fact promotion per silo."""
 
 import asyncio
 import time
+import uuid
 from typing import Any
 
 import dagster as dg
@@ -44,7 +45,7 @@ RETURN DISTINCT cid, properties(other) AS props
     name="claim_to_fact_promotion",
     partitions_def=silo_partitions,
     ins={"custodian_visit": dg.AssetIn("custodian_visit")},
-    description="Batch-promote :Claim nodes to :Claim:Fact per silo using EAG R1/R2 rules.",
+    description="Batch-promote :Claim nodes to :Fact per silo using EAG R1/R2 rules.",
     retry_policy=dg.RetryPolicy(max_retries=3, delay=10.0, backoff=dg.Backoff.EXPONENTIAL),
     tags={"dagster/concurrency_key": "claim_to_fact_promotion"},
 )
@@ -77,9 +78,7 @@ def claim_to_fact_promotion(
             return claims_scanned, claims_promoted
 
         claim_ids: list[str] = [str(r["id"]) for r in rows]
-        props_by_id: dict[str, dict[str, Any]] = {
-            str(r["id"]): dict(r["props"]) for r in rows
-        }
+        props_by_id: dict[str, dict[str, Any]] = {str(r["id"]): dict(r["props"]) for r in rows}
 
         # Batch RTT 1: evidence counts for all claims.
         evidence_count_by_id: dict[str, int] = {}
@@ -91,9 +90,7 @@ def claim_to_fact_promotion(
             evidence_count_by_id[str(cr["cid"])] = int(cr["cnt"])
 
         # Batch RTT 2: corroborations for all claims.
-        corroborations_by_id: dict[str, list[dict[str, Any]]] = {
-            cid: [] for cid in claim_ids
-        }
+        corroborations_by_id: dict[str, list[dict[str, Any]]] = {cid: [] for cid in claim_ids}
         corr_rows = await client.execute_query(
             _BATCH_FETCH_CORROBORATIONS,
             {"claim_ids": claim_ids, "silo_id": silo_id},
@@ -111,12 +108,18 @@ def claim_to_fact_promotion(
                 continue
 
             rule_value: str = decision.rule.value if decision.rule is not None else ""
+            fact_id = str(uuid.uuid4())
             await client.execute_write(
                 PROMOTE_CLAIM_TO_FACT,
-                {"claim_id": claim_id, "silo_id": silo_id, "rule": rule_value},
+                {
+                    "claim_id": claim_id,
+                    "silo_id": silo_id,
+                    "rule": rule_value,
+                    "fact_id": fact_id,
+                },
             )
             claims_promoted += 1
-            context.log.info(f"promoted claim {claim_id} via {rule_value}")
+            context.log.info(f"promoted claim {claim_id} -> fact {fact_id} via {rule_value}")
 
         return claims_scanned, claims_promoted
 
