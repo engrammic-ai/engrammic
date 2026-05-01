@@ -1,7 +1,8 @@
 # Scaling and Resilience Fixes
 
-**Status:** Draft  
+**Status:** Complete  
 **Created:** 2026-05-01  
+**Completed:** 2026-05-01  
 **Priority:** High (pre-production)
 
 ## Context
@@ -81,12 +82,16 @@ Access event emission uses bare `asyncio.gather(*emits)` with no timeout or erro
 
 ---
 
-## Verification
+## Verification (manual testing)
 
 - [ ] Load test clustering with 500+ clusters, confirm memory stable
 - [ ] Kill Redis mid-request, confirm graceful degradation (logged warning, no hang)
 - [ ] Kill Memgraph, confirm service recovers on reconnect within 60s
 - [ ] Hot-reload settings under concurrent requests, confirm no partial state
+
+## Follow-up
+
+- **Rebuild factories not wired:** ServiceRegistry accepts rebuild factories but stores need driver/pool recreation logic factored out before auto-rebuild works. Currently logs unhealthy state only.
 
 ## Not in Scope
 

@@ -1,7 +1,8 @@
 # Critical Performance Fixes
 
-**Status:** Draft  
+**Status:** Complete  
 **Created:** 2026-05-01  
+**Completed:** 2026-05-01  
 **Priority:** Critical (blocks p95 targets)
 
 ## Context
