@@ -635,8 +635,7 @@ class MemgraphStore(EAGKnowledgeStore):
                 "properties": dumps(edge.properties),
                 "silo_id": silo_id,
                 "participants": [
-                    {"node_id": str(p.node_id), "role": p.role}
-                    for p in edge.participants
+                    {"node_id": str(p.node_id), "role": p.role} for p in edge.participants
                 ],
             },
         )

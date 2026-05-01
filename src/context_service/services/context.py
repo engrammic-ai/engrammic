@@ -826,12 +826,26 @@ class ContextService:
         if agent_id:
             props["agent_id"] = agent_id
 
-        return await self.store(
+        node = await self.store(
             scope=scope,
             content=observation,
             node_type="MetaObservation",
             properties=props,
         )
+
+        # Create ABOUT edges to referenced nodes
+        silo_id = str(scope.silo_id)
+        for target_id in about:
+            await self._memgraph.execute_write(
+                """
+                MATCH (obs:MetaObservation {id: $obs_id, silo_id: $silo_id})
+                MATCH (target {id: $target_id, silo_id: $silo_id})
+                MERGE (obs)-[:ABOUT]->(target)
+                """,
+                {"obs_id": str(node.id), "target_id": target_id, "silo_id": silo_id},
+            )
+
+        return node
 
     async def get_reflections(
         self,
@@ -857,6 +871,16 @@ class ContextService:
             )
             records = await result.data()
 
+        def _format_timestamp(ts: Any) -> str | None:
+            if ts is None:
+                return None
+            if hasattr(ts, "isoformat"):
+                return ts.isoformat()
+            if isinstance(ts, (int, float)):
+                # Memgraph timestamp() returns microseconds since epoch
+                return datetime.fromtimestamp(ts / 1_000_000, tz=UTC).isoformat()
+            return str(ts)
+
         return [
             {
                 "node_id": r["node_id"],
@@ -864,7 +888,7 @@ class ContextService:
                 "observation_type": r["observation_type"],
                 "confidence": r["confidence"],
                 "agent_id": r["agent_id"],
-                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                "created_at": _format_timestamp(r["created_at"]),
             }
             for r in records
         ]

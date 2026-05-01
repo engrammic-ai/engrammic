@@ -89,7 +89,9 @@ async def _context_query(
     if redis is not None and results:
         try:
             await asyncio.wait_for(
-                asyncio.gather(*(emit_access_event(redis, silo_id, str(r.node_id)) for r in results)),
+                asyncio.gather(
+                    *(emit_access_event(redis, silo_id, str(r.node_id)) for r in results)
+                ),
                 timeout=2.0,
             )
         except TimeoutError:
