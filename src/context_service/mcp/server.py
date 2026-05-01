@@ -47,6 +47,7 @@ def configure_services(
     ownership_cache = SiloOwnershipCache(redis) if redis is not None else None
     _services["silo"] = SiloService(memgraph=memgraph, ownership_cache=ownership_cache)
     _services["evidence"] = EvidenceValidator(memgraph=memgraph)
+    _services["redis"] = redis
     logger.info("MCP services configured")
 
 
@@ -77,6 +78,11 @@ def get_silo_service() -> SiloService:
     from context_service.services.silo import SiloService as _SS
 
     return cast(_SS, _services["silo"])
+
+
+def get_redis() -> RedisClient | None:
+    """Return the registered Redis client, or None if Redis is not wired."""
+    return _services.get("redis")
 
 
 async def get_mcp_auth_context() -> AuthContext:
@@ -112,9 +118,7 @@ async def get_mcp_auth_context() -> AuthContext:
 
     settings = get_settings()
     if settings.auth_enabled:
-        raise MCPAuthError(
-            "Missing Authorization header on authenticated MCP transport"
-        )
+        raise MCPAuthError("Missing Authorization header on authenticated MCP transport")
     return AuthContext(
         org_id=settings.dev_org_id,
         user_id=settings.dev_user_id,

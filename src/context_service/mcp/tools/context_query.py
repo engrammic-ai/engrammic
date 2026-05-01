@@ -5,7 +5,8 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any, Literal
 
-from context_service.mcp.server import get_context_service, get_mcp_auth_context, get_silo_service
+from context_service.mcp.server import get_context_service, get_mcp_auth_context, get_redis, get_silo_service
+from context_service.signals import emit_access_event
 from context_service.models.mcp import Layer, QueryFilters
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
@@ -73,6 +74,11 @@ async def _context_query(
         search_mode=search_mode,
     )
     elapsed_ms = int((time.perf_counter() - start) * 1000)
+
+    redis = get_redis()
+    if redis is not None:
+        for r in results:
+            await emit_access_event(redis, silo_id, str(r.node_id))
 
     return {
         "results": [

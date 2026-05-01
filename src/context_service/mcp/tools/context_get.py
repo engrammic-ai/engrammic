@@ -9,8 +9,10 @@ from typing import TYPE_CHECKING, Any
 from context_service.mcp.server import (
     get_context_service,
     get_mcp_auth_context,
+    get_redis,
     get_silo_service,
 )
+from context_service.signals import emit_access_event
 from context_service.services.models import derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 
@@ -103,5 +105,12 @@ def register(mcp: FastMCP) -> None:
                         "created_at": (node.created_at.isoformat() if node.created_at else None),
                     }
                 )
+
+        redis = get_redis()
+        if redis is not None:
+            for n in nodes_out:
+                node_id = n.get("node_id")
+                if node_id is not None:
+                    await emit_access_event(redis, str(resolved_silo_id), node_id)
 
         return {"nodes": nodes_out}
