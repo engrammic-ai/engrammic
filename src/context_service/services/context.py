@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 import json
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
@@ -52,6 +52,11 @@ _CONTENT_TYPE_TO_LABEL: dict[str, str] = {
 _CREATE_PROPS: frozenset[str] = frozenset(
     {"id", "type", "content", "silo_id", "source_uri", "content_hash", "created_at"}
 )
+
+
+def _now_utc() -> datetime:
+    """Indirection for testability — patched in tests to pin a fixed reference time."""
+    return datetime.now(UTC)
 
 
 class ContextService:
@@ -899,6 +904,14 @@ class ContextService:
             min_confidence = getattr(filters, "min_confidence", None)
             tags_filter = getattr(filters, "tags", None)
 
+        from context_service.config.settings import get_settings
+        from context_service.signals import compute_freshness
+
+        settings = get_settings()
+        freshness_weight = settings.freshness_weight
+        sigma_days = settings.freshness_sigma_days
+        now = _now_utc()
+
         results: list[QueryResult] = []
         for node_id_str in result_ids:
             node = node_map.get(node_id_str)
@@ -922,18 +935,25 @@ class ContextService:
             if not include_superseded and props.get("superseded_by"):
                 continue
 
+            relevance = score_map[node_id_str]
+            if freshness_weight > 0 and node.created_at is not None:
+                fresh = compute_freshness(node.created_at, now, sigma_days=sigma_days)
+                relevance = relevance * ((1.0 - freshness_weight) + freshness_weight * fresh)
+
             results.append(
                 QueryResult(
                     node_id=node.id,
                     layer=node_layer,
                     content=node.content,
                     confidence=node_confidence,
-                    relevance_score=score_map[node_id_str],
+                    relevance_score=relevance,
                     summary=props.get("summary"),
                     tags=node_tags or None,
                     created_at=node.created_at,
                 )
             )
+
+        results.sort(key=lambda r: r.relevance_score, reverse=True)
 
         logger.info(
             "query_complete",
