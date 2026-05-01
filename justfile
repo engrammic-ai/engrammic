@@ -117,6 +117,20 @@ docker-prod-down:
 docker-prod-logs:
     {{dc}} -f docker-compose.yml -f docker-compose.prod.yml logs -f
 
+# --- Release ---
+
+# Preview next release (dry run)
+release-preview:
+    npx release-please release-pr --dry-run --repo-url=. --token=fake
+
+# Create release PR locally (inspect CHANGELOG before committing)
+release-pr:
+    npx release-please release-pr --repo-url=. --token=fake
+
+# Tag release after PR merge
+release-tag:
+    npx release-please github-release --repo-url=. --token=fake
+
 # --- Cleanup ---
 
 # Remove cache and build artifacts
