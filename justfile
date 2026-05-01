@@ -117,6 +117,32 @@ docker-prod-down:
 docker-prod-logs:
     {{dc}} -f docker-compose.yml -f docker-compose.prod.yml logs -f
 
+# --- Dagger CI ---
+
+# Run lint via dagger
+dagger-lint:
+    dagger call lint --source=.
+
+# Run typecheck via dagger
+dagger-typecheck:
+    dagger call typecheck --source=.
+
+# Run unit tests via dagger
+dagger-test:
+    dagger call test --source=.
+
+# Run integration tests via dagger (spins up services)
+dagger-test-integration:
+    dagger call test-integration --source=.
+
+# Run lint + typecheck via dagger
+dagger-check:
+    dagger call check --source=.
+
+# Run full pipeline via dagger
+dagger-all:
+    dagger call all --source=.
+
 # --- Release ---
 
 # Preview next release (dry run)

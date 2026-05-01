@@ -29,7 +29,7 @@ def _make_service(memgraph_client: MemgraphClient) -> ContextService:
 @docker_available
 @pytest.mark.integration
 class TestAssertToFact:
-    """Verify that assert_claim + promote_claim_to_fact writes :Claim:Fact label."""
+    """Verify that assert_claim + promote_claim_to_fact creates :Fact with PROMOTED_FROM edge."""
 
     async def test_authoritative_claim_promotes_to_fact(
         self,
@@ -38,7 +38,7 @@ class TestAssertToFact:
         unique_silo_id: uuid.UUID,
         cleanup_silo: None,
     ) -> None:
-        """assert_claim with authoritative source_tier + high confidence yields :Claim:Fact."""
+        """assert_claim with authoritative source_tier + high confidence yields separate :Fact."""
         scope = ScopeContext(org_id=unique_org_id, silo_id=unique_silo_id)
         silo_id_str = str(unique_silo_id)
         service = _make_service(memgraph_client)
@@ -62,10 +62,11 @@ class TestAssertToFact:
         assert promoted is not None, "Expected promotion for authoritative high-confidence claim"
 
         rows = await memgraph_client.execute_query(
-            "MATCH (c:Claim:Fact {id: $claim_id, silo_id: $silo_id}) RETURN properties(c) AS props",
+            "MATCH (f:Fact)-[:PROMOTED_FROM]->(c:Claim {id: $claim_id, silo_id: $silo_id}) "
+            "RETURN properties(f) AS props",
             {"claim_id": claim_id, "silo_id": silo_id_str},
         )
-        assert rows, "Node must carry both :Claim and :Fact labels"
+        assert rows, "Fact node must exist with PROMOTED_FROM edge to Claim"
 
         props = dict(rows[0]["props"])
         assert "promoted_at" in props
@@ -151,10 +152,10 @@ class TestAssertToFact:
         assert result is not None, "Auto-count must include DERIVED_FROM edges"
 
         rows = await memgraph_client.execute_query(
-            "MATCH (c:Claim:Fact {id: $claim_id, silo_id: $silo_id}) RETURN c",
+            "MATCH (f:Fact)-[:PROMOTED_FROM]->(c:Claim {id: $claim_id, silo_id: $silo_id}) RETURN f",
             {"claim_id": claim_id, "silo_id": silo_id_str},
         )
-        assert rows, ":Fact label must be present after auto-counted promotion"
+        assert rows, "Fact node must exist after auto-counted promotion"
 
     async def test_promote_is_idempotent(
         self,
