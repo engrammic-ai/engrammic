@@ -12,9 +12,9 @@ from context_service.mcp.server import (
     get_redis,
     get_silo_service,
 )
-from context_service.signals import emit_access_event
 from context_service.services.models import derive_silo_id
 from context_service.services.silo import validate_silo_ownership
+from context_service.signals import emit_access_event
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
