@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 from json import JSONDecodeError
-from typing import Any
+from typing import Any, cast
 
 from redis.asyncio import ConnectionPool, Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
@@ -351,6 +351,48 @@ class RedisClient:
         except (RedisConnectionError, RedisError) as e:
             logger.error("redis_delete_failed", key=key, error=str(e))
             raise RedisOperationError(f"Failed to delete cache value: {e}") from e
+
+    async def xadd(
+        self,
+        stream_key: str,
+        fields: dict[str, str | bytes],
+        *,
+        maxlen: int | None = None,
+        approximate: bool = True,
+    ) -> str | None:
+        """Append an entry to a Redis stream.
+
+        Best-effort: connection / Redis errors are logged and swallowed,
+        returning None so callers in hot paths never raise.
+
+        Args:
+            stream_key: Stream key (e.g. ``silo:{silo_id}:access_events``).
+            fields: Field name -> value pairs. Strings are encoded as UTF-8.
+            maxlen: Optional cap on stream length.
+            approximate: When True, uses ``MAXLEN ~`` (cheap, slightly fuzzy cap).
+
+        Returns:
+            The generated entry ID on success, or None on failure.
+        """
+        _RedisFields = dict[bytes | bytearray | memoryview | str | int | float, bytes | bytearray | memoryview | str | int | float]
+        encoded: _RedisFields = cast(
+            _RedisFields,
+            {
+                (k.encode() if isinstance(k, str) else k): (v.encode() if isinstance(v, str) else v)
+                for k, v in fields.items()
+            },
+        )
+        try:
+            if maxlen is not None:
+                entry_id = await self._redis.xadd(
+                    stream_key, encoded, maxlen=maxlen, approximate=approximate
+                )
+            else:
+                entry_id = await self._redis.xadd(stream_key, encoded)
+            return entry_id.decode() if isinstance(entry_id, bytes) else entry_id
+        except (RedisConnectionError, RedisError) as e:
+            logger.warning("redis_xadd_failed", stream_key=stream_key, error=str(e))
+            return None
 
     async def close(self) -> None:
         """Close the Redis connection pool."""
