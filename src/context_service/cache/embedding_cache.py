@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from typing import TYPE_CHECKING
 
 from context_service.config.logging import get_logger
+from context_service.utils.json import dumps, loads
 
 if TYPE_CHECKING:
     from context_service.stores.redis import RedisClient
@@ -36,7 +36,7 @@ class EmbeddingCache:
             data = await self._redis.get(self._key(text, task))
             if data is None:
                 return None
-            result: list[float] = json.loads(data)
+            result: list[float] = loads(data)
             return result
         except Exception as e:
             logger.debug("embedding_cache_get_error", error=str(e))
@@ -45,7 +45,7 @@ class EmbeddingCache:
     async def set(self, text: str, task: str, vector: list[float]) -> None:
         """Cache an embedding vector. Fire-and-forget on error."""
         try:
-            data = json.dumps(vector)
+            data = dumps(vector)
             await self._redis.set(self._key(text, task), data, ttl_seconds=self._ttl)
         except Exception as e:
             logger.debug("embedding_cache_set_error", error=str(e))

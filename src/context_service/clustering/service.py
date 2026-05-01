@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -23,6 +22,7 @@ from context_service.clustering.prompts import (
     get_clustering_user_template,
 )
 from context_service.config.logging import get_logger
+from context_service.utils.json import dumps
 
 if TYPE_CHECKING:
     from context_service.clustering.job_store import ClusteringJobStore
@@ -178,7 +178,7 @@ class ClusteringService:
                             "id": cl.id,
                             "level": cl.level,
                             "community_id": cl.community_id,
-                            "key_topics": json.dumps([]),
+                            "key_topics": dumps([]),
                             "node_count": cl.node_count,
                         }
                         for _, _, cl in level_cluster_list
@@ -285,6 +285,8 @@ class ClusteringService:
         """Generate LLM summaries for each cluster (parallelized with semaphore)."""
         import asyncio
 
+        from context_service.llm.concurrency import with_llm_limit
+
         sem = asyncio.Semaphore(5)
 
         async def _summarize(cluster: Cluster) -> None:
@@ -316,8 +318,8 @@ class ClusteringService:
                         },
                     ]
 
-                    raw, _usage = await self._llm.extract_structured(
-                        messages, CLUSTER_SUMMARY_SCHEMA
+                    raw, _usage = await with_llm_limit(
+                        self._llm.extract_structured(messages, CLUSTER_SUMMARY_SCHEMA)
                     )
                     cluster.summary = raw.get("summary", "")
                     cluster.key_topics = raw.get("key_topics", [])
@@ -328,7 +330,7 @@ class ClusteringService:
                             "id": cluster.id,
                             "silo_id": silo_id,
                             "summary": cluster.summary,
-                            "key_topics": json.dumps(cluster.key_topics),
+                            "key_topics": dumps(cluster.key_topics),
                             "updated_at": datetime.now(UTC).isoformat(),
                         },
                     )
@@ -500,7 +502,7 @@ class ClusteringService:
                         level=cluster.level,
                         community_id=cluster.community_id,
                         summary=None,
-                        key_topics=json.dumps([]),
+                        key_topics=dumps([]),
                         node_count=cluster.node_count,
                         created_at=now.isoformat(),
                         updated_at=now.isoformat(),

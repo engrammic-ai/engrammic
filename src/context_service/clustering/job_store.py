@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
 
 from context_service.clustering.models import ClusteringJob
 from context_service.config.logging import get_logger
+from context_service.utils.json import JSONDecodeError, dumps, loads
 
 if TYPE_CHECKING:
     from context_service.stores.redis import RedisClient
@@ -33,7 +33,7 @@ class ClusteringJobStore:
     async def save(self, job: ClusteringJob) -> None:
         """Save or update a clustering job."""
         key = self._make_key(job.silo_id, job.id)
-        data = json.dumps(job.to_dict())
+        data = dumps(job.to_dict())
         await self._redis.set(key, data, ttl_seconds=self.JOB_TTL)
         logger.debug("saved clustering job", job_id=job.id, status=job.status.value)
 
@@ -52,12 +52,12 @@ class ClusteringJobStore:
         if data is None:
             return None
         try:
-            parsed = json.loads(data.decode())
+            parsed = loads(data.decode())
             if parsed.get("silo_id") != silo_id:
                 logger.warning("silo mismatch for clustering job", job_id=job_id)
                 return None
             return ClusteringJob.from_dict(parsed)
-        except (json.JSONDecodeError, KeyError) as e:
+        except (JSONDecodeError, KeyError) as e:
             logger.error("failed to parse clustering job", job_id=job_id, error=str(e))
             return None
 
@@ -81,10 +81,10 @@ class ClusteringJobStore:
                     data = await self._redis._redis.get(key)
                     if data is not None:
                         try:
-                            parsed = json.loads(data.decode())
+                            parsed = loads(data.decode())
                             if parsed.get("silo_id") == silo_id:
                                 jobs.append(ClusteringJob.from_dict(parsed))
-                        except (json.JSONDecodeError, KeyError):
+                        except (JSONDecodeError, KeyError):
                             continue
                     if len(jobs) >= limit:
                         break

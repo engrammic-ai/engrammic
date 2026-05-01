@@ -110,9 +110,11 @@ class TestEncodeBatch:
     async def test_encode_error_raises_splade_error(self) -> None:
         encoder = _make_encoder()
 
-        with patch.object(encoder, "_ensure_loaded", new_callable=AsyncMock), patch.object(
-            encoder, "_encode_batch_sync", side_effect=RuntimeError("boom")
-        ), pytest.raises(SpladeEncoderError, match="Sparse encoding failed"):
+        with (
+            patch.object(encoder, "_ensure_loaded", new_callable=AsyncMock),
+            patch.object(encoder, "_encode_batch_sync", side_effect=RuntimeError("boom")),
+            pytest.raises(SpladeEncoderError, match="Sparse encoding failed"),
+        ):
             await encoder.encode_batch(["x"])
 
     async def test_sparse_vector_keys_are_ints_values_are_floats(self) -> None:

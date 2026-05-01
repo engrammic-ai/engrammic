@@ -25,7 +25,6 @@ distinguish "committed empty" from "skipped".
 from __future__ import annotations
 
 import hashlib
-import json
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -45,6 +44,7 @@ from context_service.db.custodian_queries import (
     PROPOSED_EDGE_MERGE,
     fetch_current_finding,
 )
+from context_service.utils.json import dumps
 
 if TYPE_CHECKING:
     from context_service.custodian.models import Claim, FindingOutput, ProposedEdge
@@ -115,7 +115,7 @@ def _serialize_claims(claims: list[Claim]) -> str:
     in :FindingHistory so identical claim buffers hash to the same value
     regardless of attribute insertion order.
     """
-    return json.dumps(
+    return dumps(
         [claim.model_dump() for claim in claims],
         sort_keys=True,
         separators=(",", ":"),
@@ -123,7 +123,7 @@ def _serialize_claims(claims: list[Claim]) -> str:
 
 
 def _serialize_edges(edges: list[ProposedEdge]) -> str:
-    return json.dumps(
+    return dumps(
         [edge.model_dump() for edge in edges],
         sort_keys=True,
         separators=(",", ":"),
@@ -132,8 +132,8 @@ def _serialize_edges(edges: list[ProposedEdge]) -> str:
 
 def _serialize_summary(finding: FindingOutput) -> str:
     if finding.summary is None:
-        return json.dumps(None)
-    return json.dumps(finding.summary.model_dump(), sort_keys=True, separators=(",", ":"))
+        return dumps(None)
+    return dumps(finding.summary.model_dump(), sort_keys=True, separators=(",", ":"))
 
 
 def _hash_claims(claims: list[Claim]) -> str:
@@ -301,7 +301,7 @@ class WritePath:
                 # 4b. Snapshot prior body to :FindingHistory.
                 prior_claims_str = prior.get("claims") or "[]"
                 prior_claims_hash = hashlib.sha256(prior_claims_str.encode("utf-8")).hexdigest()
-                prior_summary = prior.get("summary") or json.dumps(None)
+                prior_summary = prior.get("summary") or dumps(None)
                 prior_pass_id = prior.get("pass_id") or pass_id
 
                 await tx.run(

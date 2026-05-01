@@ -128,32 +128,40 @@ def extraction(
 
             for t in triples:
                 cid = make_claim_id(
-                    t.subject, t.predicate, t.object,
-                    t.valid_from, t.valid_to, t.source_doc_id,
+                    t.subject,
+                    t.predicate,
+                    t.object,
+                    t.valid_from,
+                    t.valid_to,
+                    t.source_doc_id,
                 )
-                all_claim_rows.append({
-                    "claim_id": cid,
-                    "fingerprint": cid,
-                    "subject": t.subject,
-                    "predicate": t.predicate,
-                    "object": t.object,
-                    "valid_from": t.valid_from,
-                    "valid_to": t.valid_to,
-                    "source_doc_id": t.source_doc_id,
-                    "source_passage_id": t.source_passage_id,
-                    "confidence": t.confidence,
-                    "created_at": now,
-                })
+                all_claim_rows.append(
+                    {
+                        "claim_id": cid,
+                        "fingerprint": cid,
+                        "subject": t.subject,
+                        "predicate": t.predicate,
+                        "object": t.object,
+                        "valid_from": t.valid_from,
+                        "valid_to": t.valid_to,
+                        "source_doc_id": t.source_doc_id,
+                        "source_passage_id": t.source_passage_id,
+                        "confidence": t.confidence,
+                        "created_at": now,
+                    }
+                )
                 all_attach_rows.append({"doc_id": doc_id, "claim_id": cid})
                 for m in t.entity_mentions:
-                    all_mention_rows.append({
-                        "entity_id": m.entity_id,
-                        "silo_id": silo_id,
-                        "name": m.name,
-                        "entity_type": m.entity_type,
-                        "created_at": now,
-                        "claim_id": cid,
-                    })
+                    all_mention_rows.append(
+                        {
+                            "entity_id": m.entity_id,
+                            "silo_id": silo_id,
+                            "name": m.name,
+                            "entity_type": m.entity_type,
+                            "created_at": now,
+                            "claim_id": cid,
+                        }
+                    )
                 if t.ref_doc_id:
                     all_ref_rows.append({"claim_id": cid, "ref_doc_id": t.ref_doc_id})
 

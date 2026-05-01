@@ -216,7 +216,9 @@ def build_default_resources() -> dict[str, dg.ConfigurableResource]:  # type: ig
     """
     settings: Settings = get_settings()
 
-    memgraph_password = settings.memgraph_password.get_secret_value() if settings.memgraph_password else ""
+    memgraph_password = (
+        settings.memgraph_password.get_secret_value() if settings.memgraph_password else ""
+    )
     qdrant_api_key = settings.qdrant_api_key.get_secret_value() if settings.qdrant_api_key else ""
 
     return {
@@ -231,9 +233,7 @@ def build_default_resources() -> dict[str, dg.ConfigurableResource]:  # type: ig
             api_key=qdrant_api_key,
         ),
         "llm": LLMResource(provider=_infer_llm_provider(settings.default_llm_model)),
-        "embedding": EmbeddingResource(
-            provider="jina" if settings.jina_api_key else "vertex"
-        ),
+        "embedding": EmbeddingResource(provider="jina" if settings.jina_api_key else "vertex"),
     }
 
 

@@ -1,6 +1,6 @@
 """Application settings.
 
-Ported pattern from contextr/app/core/settings.py.
+Ported pattern from prototype/app/core/settings.py.
 """
 
 from functools import lru_cache
@@ -55,6 +55,8 @@ class Settings(BaseSettings):
     memgraph_uri: str = "bolt://localhost:7687"
     memgraph_user: str = ""
     memgraph_password: SecretStr | None = None
+    memgraph_pool_size: int = 50
+    memgraph_pool_timeout: float = 30.0
 
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: SecretStr | None = None
@@ -75,6 +77,8 @@ class Settings(BaseSettings):
     freshness_weight: float = 0.3
     freshness_sigma_days: int = 30
     access_stream_maxlen: int = 100_000
+
+    llm_max_concurrency: int = 20
 
     otel_endpoint: str = ""
     log_level: str = "INFO"

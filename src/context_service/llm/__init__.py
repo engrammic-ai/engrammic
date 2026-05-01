@@ -1,6 +1,6 @@
 """LLM provider services.
 
-Ported from contextr/app/llm/.
+Ported from prototype/app/llm/.
 """
 
 from context_service.llm.anthropic import AnthropicError, AnthropicProvider

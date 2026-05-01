@@ -26,23 +26,19 @@ This is not a 5th layer. It's infrastructure that makes the four layers introspe
 
 ## Phases
 
-### Phase 1: Provenance Queries (Low effort, High value)
+### Phase 1: Provenance Queries (Low effort, High value) — COMPLETE 2026-05-01
 
 **Goal**: Answer "Why do I believe X?"
 
 **Scope**:
-- New MCP tool: `context_provenance(node_id)`
-- Traverses REFERENCES edges from Claim/Fact back to source Document
+- MCP tool: `context_provenance(node_id)`
+- Traverses REFERENCES, DERIVED_FROM, PROMOTED_FROM, SYNTHESIZED_FROM edges
 - Returns citation chain with confidence scores
 
-**Already have**:
-- REFERENCES edges (Claim → Document)
-- Source metadata on nodes
-
-**Need to build**:
-- Graph traversal query
-- MCP tool wrapper
-- Response schema
+**Completed**:
+- `db/queries.py:PROVENANCE_CHAIN` and `PROVENANCE_ROOT_SOURCES` now include REFERENCES
+- `context_provenance` MCP tool wired in `mcp/tools/context_provenance.py`
+- `context_get_reflections` MCP tool added for Phase 4 retrieval
 
 **Spec**: [phase-1-provenance.md](./meta-memory/phase-1-provenance.md)
 
@@ -101,14 +97,15 @@ This is not a 5th layer. It's infrastructure that makes the four layers introspe
 - New MCP tool: `context_get_reflections(node_id)`
 - Agent can record "I noticed my belief changed" or "I was wrong about X"
 
-**Already have**:
-- Nothing — this is new capability
+**Completed 2026-05-01**:
+- `context_reflect` MCP tool (stores MetaObservation + ABOUT edges)
+- `context_get_reflections` MCP tool (retrieves by ABOUT edge)
+- `services/context.py:reflect()` and `get_reflections()` methods
 
-**Need to build**:
-- MetaObservation node schema
-- ABOUT edge type
-- Storage and retrieval queries
-- MCP tools
+**Remaining**:
+- Formalize MetaObservation in `primitives.schema.labels`
+- Add ABOUT edge to `CITEEdgeType`
+- Add indexes on `:MetaObservation`
 
 **Spec**: [phase-4-reflection.md](./meta-memory/phase-4-reflection.md)
 

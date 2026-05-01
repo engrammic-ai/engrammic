@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -10,6 +9,7 @@ from typing import TYPE_CHECKING
 import context_service.extraction.filter.circuit_breaker as cb_module
 from context_service.extraction.filter.circuit_breaker import CircuitBreaker
 from context_service.extraction.filter.models import FilterDecision, FilterRuleSet, RuleFired
+from context_service.utils.json import dumps, loads
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -131,7 +131,7 @@ class WikidataRule:
         try:
             cached = await self._redis.get(key)
             if cached is not None:
-                entry = json.loads(cached)
+                entry = loads(cached)
                 return self._decision_from_present(entry.get("present", False))
         except Exception as e:  # cache failures are non-fatal
             log.warning("wikidata cache read failed: %s", e)
@@ -151,7 +151,7 @@ class WikidataRule:
             await cb.record_success()
             entry = {"present": present, "checked_at": datetime.now(UTC).isoformat()}
             try:
-                await self._redis.set(key, json.dumps(entry), ttl_seconds=self._ttl_s)
+                await self._redis.set(key, dumps(entry), ttl_seconds=self._ttl_s)
             except Exception as e:
                 log.warning("wikidata cache write failed: %s", e)
             return self._decision_from_present(present)

@@ -92,9 +92,11 @@ class ExtractionService:
             {"role": "user", "content": get_extraction_user_template().format(content=content)},
         ]
 
+        from context_service.llm.concurrency import with_llm_limit
+
         try:
-            raw, usage = await self._llm.extract_structured(
-                messages, EXTRACTION_SCHEMA, timeout=90.0
+            raw, usage = await with_llm_limit(
+                self._llm.extract_structured(messages, EXTRACTION_SCHEMA, timeout=90.0)
             )
         except Exception as e:
             logger.error(f"LLM extraction failed: {e}", exc_info=True)
@@ -341,16 +343,24 @@ class ExtractionService:
     ) -> int:
         """Write Stage-5 Claim/Entity nodes and typed edges.
 
-        For each triple:
-        1. MERGE :Claim (deterministic ID, committed=true)
-        2. MERGE Passage<-[:EXTRACTED_FROM]-Claim
-        3. MERGE :Entity + Claim-[:MENTIONS]->Entity for each mention
-        4. MERGE Claim-[:REFERENCES]->Document when ref_doc_id is set
+        Batches all four write operations into single UNWIND round-trips:
+        1. BATCH_UPSERT_CLAIMS
+        2. ATTACH_CLAIM_TO_PASSAGE (per-claim; no batch variant — passage_id varies per claim)
+        3. BATCH_UPSERT_ENTITY_MENTIONS
+        4. BATCH_ATTACH_CLAIM_REFERENCES
 
         Returns the number of claims written.
         """
+        if not triples:
+            return 0
+
         now = datetime.now(UTC).isoformat()
-        claims_written = 0
+
+        claims_batch: list[dict[str, object]] = []
+        passage_rows: list[dict[str, object]] = []
+        mention_rows: list[dict[str, object]] = []
+        ref_rows: list[dict[str, object]] = []
+
         for triple in triples:
             fingerprint = make_claim_id(
                 triple.subject,
@@ -362,58 +372,72 @@ class ExtractionService:
             )
             cid = fingerprint  # fingerprint == id per spec O-12
 
-            try:
-                await self._memgraph.execute_write(
-                    queries.UPSERT_CLAIM,
+            claims_batch.append(
+                {
+                    "claim_id": cid,
+                    "fingerprint": fingerprint,
+                    "subject": triple.subject,
+                    "predicate": triple.predicate,
+                    "object": triple.object,
+                    "valid_from": triple.valid_from,
+                    "valid_to": triple.valid_to,
+                    "source_doc_id": triple.source_doc_id,
+                    "source_passage_id": triple.source_passage_id,
+                    "confidence": triple.confidence,
+                    "created_at": now,
+                }
+            )
+            passage_rows.append({"passage_id": triple.source_passage_id, "claim_id": cid})
+            for mention in triple.entity_mentions:
+                mention_rows.append(
                     {
-                        "claim_id": cid,
-                        "silo_id": silo_id,
-                        "fingerprint": fingerprint,
-                        "subject": triple.subject,
-                        "predicate": triple.predicate,
-                        "object": triple.object,
-                        "valid_from": triple.valid_from,
-                        "valid_to": triple.valid_to,
-                        "source_doc_id": triple.source_doc_id,
-                        "source_passage_id": triple.source_passage_id,
-                        "confidence": triple.confidence,
+                        "entity_id": mention.entity_id,
+                        "name": mention.name,
+                        "entity_type": mention.entity_type,
                         "created_at": now,
-                    },
-                )
-                await self._memgraph.execute_write(
-                    queries.ATTACH_CLAIM_TO_PASSAGE,
-                    {
-                        "passage_id": triple.source_passage_id,
                         "claim_id": cid,
-                        "silo_id": silo_id,
-                    },
+                    }
                 )
-                for mention in triple.entity_mentions:
-                    await self._memgraph.execute_write(
-                        queries.UPSERT_ENTITY_MENTION,
-                        {
-                            "entity_id": mention.entity_id,
-                            "silo_id": silo_id,
-                            "name": mention.name,
-                            "entity_type": mention.entity_type,
-                            "created_at": now,
-                            "claim_id": cid,
-                        },
-                    )
-                if triple.ref_doc_id:
-                    await self._memgraph.execute_write(
-                        queries.ATTACH_CLAIM_REFERENCES_DOC,
-                        {
-                            "claim_id": cid,
-                            "silo_id": silo_id,
-                            "ref_doc_id": triple.ref_doc_id,
-                        },
-                    )
-                claims_written += 1
-            except Exception as e:
-                logger.warning(f"Failed to write claim {cid!r}: {e}", exc_info=True)
+            if triple.ref_doc_id:
+                ref_rows.append({"claim_id": cid, "ref_doc_id": triple.ref_doc_id})
 
-        return claims_written
+        # Batch query for claim upserts uses UNWIND; passage attachment reuses
+        # ATTACH_CLAIM_TO_PASSAGE via an inline UNWIND wrapper since passage_id
+        # is per-claim and no dedicated batch variant exists.
+        BATCH_ATTACH_CLAIMS_TO_PASSAGE = """
+UNWIND $rows AS r
+MATCH (ps:Passage {id: r.passage_id, silo_id: $silo_id})
+MATCH (c:Claim {id: r.claim_id, silo_id: $silo_id})
+MERGE (ps)<-[:EXTRACTED_FROM]-(c)
+"""
+
+        try:
+            await self._memgraph.execute_write(
+                queries.BATCH_UPSERT_CLAIMS,
+                {"claims": claims_batch, "silo_id": silo_id},
+            )
+            await self._memgraph.execute_write(
+                BATCH_ATTACH_CLAIMS_TO_PASSAGE,
+                {"rows": passage_rows, "silo_id": silo_id},
+            )
+            if mention_rows:
+                await self._memgraph.execute_write(
+                    queries.BATCH_UPSERT_ENTITY_MENTIONS,
+                    {"rows": mention_rows, "silo_id": silo_id},
+                )
+            if ref_rows:
+                await self._memgraph.execute_write(
+                    queries.BATCH_ATTACH_CLAIM_REFERENCES,
+                    {"rows": ref_rows, "silo_id": silo_id},
+                )
+        except Exception as e:
+            logger.warning(
+                f"Batch claim write failed for silo {silo_id!r} ({len(triples)} claims): {e}",
+                exc_info=True,
+            )
+            return 0
+
+        return len(triples)
 
     def _synthesize_claim_triples(
         self,
@@ -506,39 +530,47 @@ class ExtractionService:
             )
             cid = fingerprint
 
-            claim_rows.append({
-                "claim_id": cid,
-                "fingerprint": fingerprint,
-                "subject": triple.subject,
-                "predicate": triple.predicate,
-                "object": triple.object,
-                "valid_from": triple.valid_from,
-                "valid_to": triple.valid_to,
-                "source_doc_id": triple.source_doc_id,
-                "source_passage_id": triple.source_passage_id,
-                "confidence": triple.confidence,
-                "created_at": now,
-            })
+            claim_rows.append(
+                {
+                    "claim_id": cid,
+                    "fingerprint": fingerprint,
+                    "subject": triple.subject,
+                    "predicate": triple.predicate,
+                    "object": triple.object,
+                    "valid_from": triple.valid_from,
+                    "valid_to": triple.valid_to,
+                    "source_doc_id": triple.source_doc_id,
+                    "source_passage_id": triple.source_passage_id,
+                    "confidence": triple.confidence,
+                    "created_at": now,
+                }
+            )
 
-            attach_rows.append({
-                "doc_id": doc_id,
-                "claim_id": cid,
-            })
+            attach_rows.append(
+                {
+                    "doc_id": doc_id,
+                    "claim_id": cid,
+                }
+            )
 
             for mention in triple.entity_mentions:
-                mention_rows.append({
-                    "entity_id": mention.entity_id,
-                    "name": mention.name,
-                    "entity_type": mention.entity_type,
-                    "created_at": now,
-                    "claim_id": cid,
-                })
+                mention_rows.append(
+                    {
+                        "entity_id": mention.entity_id,
+                        "name": mention.name,
+                        "entity_type": mention.entity_type,
+                        "created_at": now,
+                        "claim_id": cid,
+                    }
+                )
 
             if triple.ref_doc_id:
-                reference_rows.append({
-                    "claim_id": cid,
-                    "ref_doc_id": triple.ref_doc_id,
-                })
+                reference_rows.append(
+                    {
+                        "claim_id": cid,
+                        "ref_doc_id": triple.ref_doc_id,
+                    }
+                )
 
             written_ids.append(cid)
 
@@ -567,7 +599,9 @@ class ExtractionService:
                     {"rows": mention_rows, "silo_id": silo_id},
                 )
             except Exception as e:
-                logger.warning("batch_upsert_mentions_failed", error=str(e), count=len(mention_rows))
+                logger.warning(
+                    "batch_upsert_mentions_failed", error=str(e), count=len(mention_rows)
+                )
 
         if reference_rows:
             try:
@@ -576,7 +610,9 @@ class ExtractionService:
                     {"rows": reference_rows, "silo_id": silo_id},
                 )
             except Exception as e:
-                logger.warning("batch_attach_references_failed", error=str(e), count=len(reference_rows))
+                logger.warning(
+                    "batch_attach_references_failed", error=str(e), count=len(reference_rows)
+                )
 
         return written_ids
 

@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Port heat / freshness / priority signal subsystems from `contextr` into `src/context_service/signals/`, ship Phase 1 (stubbed heat + real freshness/priority + live access-event emitters + priority-ranked consensus) this week, defer Phase 2 (real heat Dagster asset + cursor + schedule) until after partner talks.
+**Goal:** Port heat / freshness / priority signal subsystems from `prototype` into `src/context_service/signals/`, ship Phase 1 (stubbed heat + real freshness/priority + live access-event emitters + priority-ranked consensus) this week, defer Phase 2 (real heat Dagster asset + cursor + schedule) until after partner talks.
 
-**Architecture:** Phase 1 introduces `signals/` as the single home for heat lookup, freshness scoring, priority math, and access-event emission. Heat is stubbed at 0.5 with a stable signature so callers don't refactor when Phase 2 flips it to a real Memgraph read. Freshness is wired into `services/context.py::query` as a multiplicative score adjustment; priority replaces the consensus sensor's simple `(distinct_agents, chain_count)` ordering with a Python-side ranking that pulls heat for each candidate. Access-event emission is best-effort XADD on a per-silo Redis stream, fired from each MCP read tool. Phase 2 ports the contextr Dagster heat asset wholesale, substituting a Memgraph singleton `:HeatCursor` for contextr's Postgres cursor table.
+**Architecture:** Phase 1 introduces `signals/` as the single home for heat lookup, freshness scoring, priority math, and access-event emission. Heat is stubbed at 0.5 with a stable signature so callers don't refactor when Phase 2 flips it to a real Memgraph read. Freshness is wired into `services/context.py::query` as a multiplicative score adjustment; priority replaces the consensus sensor's simple `(distinct_agents, chain_count)` ordering with a Python-side ranking that pulls heat for each candidate. Access-event emission is best-effort XADD on a per-silo Redis stream, fired from each MCP read tool. Phase 2 ports the prototype Dagster heat asset wholesale, substituting a Memgraph singleton `:HeatCursor` for prototype's Postgres cursor table.
 
 **Tech Stack:** Python 3.12, asyncio, Pydantic v2 (`pydantic-settings`), structlog, redis.asyncio (XADD streams), neo4j async driver (Memgraph bolt), pytest + pytest-asyncio, Dagster (Phase 2 only).
 
@@ -46,7 +46,7 @@ Phase 2 creates / modifies:
 |---|---|---|
 | `src/context_service/signals/cursor.py` | create | `fetch_or_init_heat_cursor`, `advance_heat_cursor` against `:HeatCursor` singleton. |
 | `src/context_service/signals/heat.py` | modify | Flip stub → real Memgraph read; remove `heat.stub_active` log. |
-| `src/context_service/pipelines/assets/heat.py` | create | Direct port of contextr asset, substituting Memgraph cursor for Postgres. |
+| `src/context_service/pipelines/assets/heat.py` | create | Direct port of prototype asset, substituting Memgraph cursor for Postgres. |
 | `src/context_service/pipelines/schedules.py` | modify | Add hourly per-silo heat schedule. |
 | `src/context_service/db/indexes.py` | modify | Add `:HeatCursor(silo_id)` and `:Cluster(tier)` indexes. |
 | `src/context_service/custodian/sensors/consensus.py` | modify | Replace per-candidate heat fetch with batched `UNWIND` query. |
@@ -1299,7 +1299,7 @@ git push -u origin phase-signals-port
 - Create: `src/context_service/pipelines/assets/heat.py`
 - Test: `tests/test_pipelines_heat_asset.py`
 
-- [ ] **Step 1:** Copy the asset from `contextr/pipelines/assets/heat.py` and substitute:
+- [ ] **Step 1:** Copy the asset from `prototype/pipelines/assets/heat.py` and substitute:
   - Postgres cursor calls → `signals.cursor.fetch_or_init_heat_cursor` / `advance_heat_cursor` running inside `session.execute_write`.
   - `silo_partitions = dg.DynamicPartitionsDefinition(name="silo")` → reuse the existing partitions def in `pipelines/partitions.py`.
   - Resources `MemgraphResource` and `RedisResource` → existing wirings in `pipelines/resources.py`.
@@ -1376,7 +1376,7 @@ git push -u origin phase-signals-port
 | `freshness_weight` | 0.3 | `config/settings.py` |
 | `freshness_sigma_days` | 30 | `config/settings.py` |
 | `access_stream_maxlen` | 100_000 | `config/settings.py` (override of module default) |
-| `HEAT_HALF_LIFE` | 7 days | Phase 2: `pipelines/assets/heat.py` (verbatim from contextr) |
+| `HEAT_HALF_LIFE` | 7 days | Phase 2: `pipelines/assets/heat.py` (verbatim from prototype) |
 | `TIER_THRESHOLDS` | HOT ≥ 0.66, WARM ≥ 0.33 | Phase 2: `pipelines/assets/heat.py` |
 | `XREAD_COUNT` | 10_000 / asset run | Phase 2: `pipelines/assets/heat.py` |
 

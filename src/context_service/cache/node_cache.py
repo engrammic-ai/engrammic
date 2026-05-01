@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import contextlib
-import json
 from typing import TYPE_CHECKING, Any
 
 from context_service.config.logging import get_logger
+from context_service.utils.json import JSONDecodeError, loads
 
 if TYPE_CHECKING:
     from context_service.stores.redis import RedisClient
@@ -46,7 +46,7 @@ class NodeCache:
                 data = await self._redis.get(self._key(key_or_silo, node_id))
                 if data is None:
                     return None
-                result: dict[str, Any] = json.loads(data)
+                result: dict[str, Any] = loads(data)
                 return result
             return await self._redis.get(key_or_silo)
         except Exception as e:
@@ -107,8 +107,8 @@ class NodeCache:
             result: dict[str, dict[str, Any]] = {}
             for nid, val in zip(node_ids, values, strict=True):
                 if val is not None:
-                    with contextlib.suppress(json.JSONDecodeError, TypeError):
-                        result[nid] = json.loads(val)
+                    with contextlib.suppress(JSONDecodeError, TypeError):
+                        result[nid] = loads(val)
             return result
         except Exception as e:
             logger.debug("node_cache_batch_get_error", error=str(e))

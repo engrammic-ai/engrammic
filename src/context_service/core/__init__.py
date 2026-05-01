@@ -11,12 +11,14 @@ from context_service.core.settings import (
     RetrievalTuning,
     Settings,
     get_settings,
+    reload_settings,
     settings,
 )
 
 __all__ = [
     "Settings",
     "get_settings",
+    "reload_settings",
     "settings",
     "CustodianSettings",
     "RetrievalTuning",

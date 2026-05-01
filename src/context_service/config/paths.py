@@ -32,9 +32,7 @@ def repo_root() -> Path:
     for candidate in (start, *start.parents):
         if (candidate / _MARKER_FILE).is_file():
             return candidate
-    raise RuntimeError(
-        f"Could not find {_MARKER_FILE} above {start}; repo root is undiscoverable"
-    )
+    raise RuntimeError(f"Could not find {_MARKER_FILE} above {start}; repo root is undiscoverable")
 
 
 def config_dir() -> Path:

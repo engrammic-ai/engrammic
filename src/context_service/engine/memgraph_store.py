@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import uuid
 import uuid as uuid_mod
 from datetime import UTC, datetime
@@ -23,6 +22,7 @@ from context_service.engine import queries
 from context_service.engine.exceptions import StaleVersionError
 from context_service.engine.models import BinaryEdge, HyperEdge, Node, Participant, Silo, SubGraph
 from context_service.services.models import ScopeContext  # noqa: TC001
+from context_service.utils.json import dumps, loads
 
 if TYPE_CHECKING:
     from context_service.stores.memgraph import MemgraphClient
@@ -156,7 +156,7 @@ class MemgraphStore(EAGKnowledgeStore):
         n = record["n"]
         props = n.get("properties", "{}")
         if isinstance(props, str):
-            props = json.loads(props)
+            props = loads(props)
         supersedes_raw = n.get("supersedes_id")
         # Prefer record-level _labels (set by queries that do `labels(n) AS _labels`);
         # neo4j's result.data() flattens Node values to property dicts, so labels
@@ -256,7 +256,7 @@ class MemgraphStore(EAGKnowledgeStore):
         s = record["s"]
         meta = s.get("metadata", "{}")
         if isinstance(meta, str):
-            meta = json.loads(meta)
+            meta = loads(meta)
         return Silo(
             id=uuid.UUID(s["id"]),
             name=s["name"],
@@ -273,7 +273,7 @@ class MemgraphStore(EAGKnowledgeStore):
         e = record["e"]
         props = e.get("properties", "{}")
         if isinstance(props, str):
-            props = json.loads(props)
+            props = loads(props)
         # source_id and target_id come from the matched nodes
         return BinaryEdge(
             id=uuid.UUID(e["id"]),
@@ -289,7 +289,7 @@ class MemgraphStore(EAGKnowledgeStore):
         he = record["he"]
         props = he.get("properties", "{}")
         if isinstance(props, str):
-            props = json.loads(props)
+            props = loads(props)
         participants_raw = record.get("participants", [])
         participants = [
             Participant(node_id=uuid.UUID(p["node_id"]), role=p["role"])
@@ -315,7 +315,7 @@ class MemgraphStore(EAGKnowledgeStore):
             "id": str(node.id),
             "type": node.type,
             "content": node.content,
-            "properties": json.dumps(node.properties),
+            "properties": dumps(node.properties),
             "silo_id": str(node.silo_id),
             "source_uri": node.source_uri,
             "content_hash": node.content_hash,
@@ -549,7 +549,7 @@ class MemgraphStore(EAGKnowledgeStore):
                 "type": edge.type,
                 "source_id": str(edge.source_id),
                 "target_id": str(edge.target_id),
-                "properties": json.dumps(edge.properties),
+                "properties": dumps(edge.properties),
                 "silo_id": silo_id,
             },
         )
@@ -627,32 +627,19 @@ class MemgraphStore(EAGKnowledgeStore):
     # --- HyperEdge CRUD ---
 
     async def upsert_hyperedge(self, edge: HyperEdge, silo_id: str) -> None:
-        # Create or update HyperEdge node
         await self._client.execute_write(
-            queries.CREATE_HYPEREDGE_NODE,
+            queries.UPSERT_HYPEREDGE_WITH_PARTICIPANTS,
             {
                 "id": str(edge.id),
                 "type": edge.type,
-                "properties": json.dumps(edge.properties),
+                "properties": dumps(edge.properties),
                 "silo_id": silo_id,
+                "participants": [
+                    {"node_id": str(p.node_id), "role": p.role}
+                    for p in edge.participants
+                ],
             },
         )
-        # Delete old participants (for upsert)
-        await self._client.execute_write(
-            queries.DELETE_PARTICIPANTS,
-            {"edge_id": str(edge.id), "silo_id": silo_id},
-        )
-        # Create new participants
-        for participant in edge.participants:
-            await self._client.execute_write(
-                queries.CREATE_PARTICIPANT,
-                {
-                    "edge_id": str(edge.id),
-                    "node_id": str(participant.node_id),
-                    "role": participant.role,
-                    "silo_id": silo_id,
-                },
-            )
 
     async def get_hyperedge(self, edge_id: uuid.UUID, silo_id: str) -> HyperEdge | None:
         result = await self._client.execute_query(
@@ -707,7 +694,7 @@ class MemgraphStore(EAGKnowledgeStore):
                 "description": silo.description,
                 "org_id": silo.org_id,
                 "dissolvability": silo.dissolvability,
-                "metadata": json.dumps(silo.metadata),
+                "metadata": dumps(silo.metadata),
             },
         )
 
@@ -736,7 +723,7 @@ class MemgraphStore(EAGKnowledgeStore):
                 "name": silo.name,
                 "description": silo.description,
                 "dissolvability": silo.dissolvability,
-                "metadata": json.dumps(silo.metadata),
+                "metadata": dumps(silo.metadata),
             },
         )
 
@@ -807,7 +794,7 @@ class MemgraphStore(EAGKnowledgeStore):
             for r in edge_result:
                 props = r.get("properties", "{}")
                 if isinstance(props, str):
-                    props = json.loads(props)
+                    props = loads(props)
                 binary_edges.append(
                     BinaryEdge(
                         id=uuid.UUID(r["id"]),
@@ -890,7 +877,7 @@ class MemgraphStore(EAGKnowledgeStore):
         for r in result:
             props = r.get("properties", "{}")
             if isinstance(props, str):
-                props = json.loads(props)
+                props = loads(props)
             edges.append(
                 BinaryEdge(
                     id=uuid.UUID(r["id"]),
@@ -933,7 +920,7 @@ class MemgraphStore(EAGKnowledgeStore):
                 "type": edge.type,
                 "source_id": str(edge.source_id),
                 "target_id": str(edge.target_id),
-                "properties": json.dumps(edge.properties),
+                "properties": dumps(edge.properties),
                 "silo_id": silo_id,
             }
             for edge in edges

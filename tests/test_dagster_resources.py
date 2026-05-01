@@ -45,7 +45,9 @@ class _FakeLLM:
     async def complete(self, messages: Any, **kwargs: Any) -> tuple[str, Any]:
         return ("ok", None)
 
-    async def extract_structured(self, messages: Any, schema: Any, **kwargs: Any) -> tuple[Any, Any]:
+    async def extract_structured(
+        self, messages: Any, schema: Any, **kwargs: Any
+    ) -> tuple[Any, Any]:
         return ({}, None)
 
     async def close(self) -> None:

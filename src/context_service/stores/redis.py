@@ -5,8 +5,6 @@ Uses redis.asyncio with hiredis for performance.
 
 from __future__ import annotations
 
-import json
-from json import JSONDecodeError
 from typing import Any, cast
 
 from redis.asyncio import ConnectionPool, Redis
@@ -15,6 +13,7 @@ from redis.exceptions import RedisError
 
 from context_service.config.logging import get_logger
 from context_service.config.settings import Settings, get_settings
+from context_service.utils.json import JSONDecodeError, dumps, loads
 
 logger = get_logger(__name__)
 
@@ -106,7 +105,7 @@ class RedisClient:
         """
         key = self._session_key(silo_id, session_id)
         try:
-            await self._redis.set(key, json.dumps(data).encode(), ex=ttl_seconds)
+            await self._redis.set(key, dumps(data).encode(), ex=ttl_seconds)
             return True
         except (RedisConnectionError, RedisError) as e:
             logger.error("redis_set_session_failed", session_id=session_id, error=str(e))
@@ -127,7 +126,7 @@ class RedisClient:
             data: bytes | None = await self._redis.get(key)
             if data is None:
                 return None
-            parsed: dict[str, Any] = json.loads(data.decode())
+            parsed: dict[str, Any] = loads(data.decode())
             return parsed
         except JSONDecodeError as e:
             logger.error("redis_session_corrupted", session_id=session_id, error=str(e))
@@ -374,7 +373,10 @@ class RedisClient:
         Returns:
             The generated entry ID on success, or None on failure.
         """
-        _RedisFields = dict[bytes | bytearray | memoryview | str | int | float, bytes | bytearray | memoryview | str | int | float]
+        _RedisFields = dict[
+            bytes | bytearray | memoryview | str | int | float,
+            bytes | bytearray | memoryview | str | int | float,
+        ]
         encoded: _RedisFields = cast(
             _RedisFields,
             {

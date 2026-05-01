@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from typing import TYPE_CHECKING, Any
 
 from context_service.config.logging import get_logger
+from context_service.utils.json import dumps, loads
 
 if TYPE_CHECKING:
     from context_service.stores.redis import RedisClient
@@ -29,7 +29,7 @@ class LookupCache:
 
     @staticmethod
     def _hash_query(query: str, filters: dict[str, Any]) -> str:
-        raw = json.dumps({"q": query, "f": filters}, sort_keys=True)
+        raw = dumps({"q": query, "f": filters}, sort_keys=True)
         return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
     def _key(self, silo_id: str, query: str, filters: dict[str, Any]) -> str:
@@ -43,7 +43,7 @@ class LookupCache:
             data = await self._redis.get(self._key(silo_id, query, filters))
             if data is None:
                 return None
-            result: list[dict[str, Any]] = json.loads(data)
+            result: list[dict[str, Any]] = loads(data)
             return result
         except Exception as e:
             logger.debug("lookup_cache_get_error", error=str(e))
@@ -58,7 +58,7 @@ class LookupCache:
     ) -> None:
         """Cache lookup results. Fire-and-forget on error."""
         try:
-            data = json.dumps(results)
+            data = dumps(results)
             await self._redis.set(self._key(silo_id, query, filters), data, ttl_seconds=self._ttl)
         except Exception as e:
             logger.debug("lookup_cache_set_error", error=str(e))

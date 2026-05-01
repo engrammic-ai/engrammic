@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from context_service.extraction.filter.models import FilterRuleSet
+from context_service.utils.json import dumps
 
 # Silo override keys that would *add to* base rules — disallowed.
 TIGHTENING_KEYS = {
@@ -26,7 +26,7 @@ def _lower_triple(t: list[str]) -> tuple[str, str, str]:
 
 
 def _silo_hash(override: dict[str, Any]) -> str:
-    canonical = json.dumps(override, sort_keys=True).encode()
+    canonical = dumps(override, sort_keys=True).encode()
     return hashlib.sha256(canonical).hexdigest()[:16]
 
 

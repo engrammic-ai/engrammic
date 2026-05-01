@@ -6,6 +6,8 @@ import asyncio
 import time
 from typing import TYPE_CHECKING, Any, Literal
 
+import structlog
+
 from context_service.mcp.server import (
     get_context_service,
     get_mcp_auth_context,
@@ -20,6 +22,8 @@ from context_service.signals import emit_access_event
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
+
+logger = structlog.get_logger(__name__)
 
 _VALID_SEARCH_MODES = frozenset({"hybrid", "dense", "sparse"})
 
@@ -83,9 +87,15 @@ async def _context_query(
 
     redis = get_redis()
     if redis is not None and results:
-        await asyncio.gather(
-            *(emit_access_event(redis, silo_id, str(r.node_id)) for r in results)
-        )
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(*(emit_access_event(redis, silo_id, str(r.node_id)) for r in results)),
+                timeout=2.0,
+            )
+        except TimeoutError:
+            logger.warning("access_event_emit_timeout", silo_id=silo_id, result_count=len(results))
+        except Exception as exc:
+            logger.warning("access_event_emit_failed", silo_id=silo_id, error=str(exc))
 
     return {
         "results": [

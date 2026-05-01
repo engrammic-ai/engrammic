@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
 
 from context_service.config.logging import get_logger
 from context_service.extraction.models import ExtractionJob
+from context_service.utils.json import JSONDecodeError, dumps, loads
 
 if TYPE_CHECKING:
     from context_service.stores.redis import RedisClient
@@ -33,7 +33,7 @@ class ExtractionJobStore:
     async def save(self, job: ExtractionJob) -> None:
         """Save or update an extraction job."""
         key = self._make_key(job.silo_id, job.id)
-        data = json.dumps(job.to_dict())
+        data = dumps(job.to_dict())
         await self._redis.set(key, data, ttl_seconds=self.JOB_TTL)
         logger.debug(f"Saved extraction job: {job.id} (status={job.status.value})")
 
@@ -44,13 +44,13 @@ class ExtractionJobStore:
         if data is None:
             return None
         try:
-            parsed = json.loads(data.decode())
+            parsed = loads(data.decode())
             # Verify silo_id matches (defense in depth)
             if parsed.get("silo_id") != silo_id:
                 logger.warning(f"Silo mismatch for job {job_id}")
                 return None
             return ExtractionJob.from_dict(parsed)
-        except (json.JSONDecodeError, KeyError) as e:
+        except (JSONDecodeError, KeyError) as e:
             logger.error(f"Failed to parse extraction job {job_id}: {e}")
             return None
 
@@ -71,11 +71,11 @@ class ExtractionJobStore:
                     data = await self._redis._redis.get(key)
                     if data is not None:
                         try:
-                            parsed = json.loads(data.decode())
+                            parsed = loads(data.decode())
                             # Verify silo_id matches
                             if parsed.get("silo_id") == silo_id:
                                 jobs.append(ExtractionJob.from_dict(parsed))
-                        except (json.JSONDecodeError, KeyError):
+                        except (JSONDecodeError, KeyError):
                             continue
                     if len(jobs) >= limit:
                         break

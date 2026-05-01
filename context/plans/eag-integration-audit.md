@@ -2,7 +2,7 @@
 
 ## Provenance
 
-This audit was produced during the port session on 2026-04-26 that moved ~150 files from the `contextr` prototype (`NovusEdge/CTXR`, private) into this repo. The port session itself brought the codebase to 0 lint/type errors. This document records the remaining EAG integration gaps that were deferred — items that required design decisions beyond mechanical porting.
+This audit was produced during the port session on 2026-04-26 that moved ~150 files from the `prototype` prototype (`NovusEdge/CTXR`, private) into this repo. The port session itself brought the codebase to 0 lint/type errors. This document records the remaining EAG integration gaps that were deferred — items that required design decisions beyond mechanical porting.
 
 ## Current State (What Was Inconsistent)
 
@@ -87,7 +87,7 @@ TODO #2 (was #4) closed by P1 review fixes — see PR #1.
 
 ### Needs discussion before implementing
 5. **`:Finding` vs `:Fact` naming** — Resolved 2026-04-28 by phase-eag-a-claim-fact-promotion. See architecture/README.md.
-6. **`primitives.eag.epistemology` integration** — Once a `:Claim`→`:Fact` write path exists, `should_promote_r1`/`should_promote_r2` from primitives should replace the current `PromotionPlan`/`execute_promotion` which operates on Finding status flips. These are fundamentally different operations and should not be merged prematurely.
+6. **`primitives.eag.epistemology` integration** — RESOLVED 2026-05-01. Claim→Fact write path now creates separate `:Fact` nodes with `PROMOTED_FROM` edges (consistent with Finding pattern). The `evaluate_claim_for_fact()` adapter in `custodian/fact_promotion.py` wraps `should_promote_r1`/`should_promote_r2` from primitives. See `db/queries.py:PROMOTE_CLAIM_TO_FACT`.
 7. **`RelationshipType.CAUSES` alignment** — RESOLVED 2026-04-29. Decision: keep enums separate; they serve different purposes (LLM extraction vocabulary vs graph edge type registry). See `context/architecture/enum-registries.md`.
 
 ## Open Questions

@@ -68,7 +68,7 @@ Major progress since 2026-04-28: **all 5 prior P0s are resolved** (auth split-br
 | ID | Location | Issue | Category | Fix | Effort | Verify Exists | Verify Fixed |
 |----|----------|-------|----------|-----|--------|---------------|--------------|
 | R-003 | `extraction/service.py:489-548` | N+1 in `apply_document_claims` — 2-4 `execute_write` per triple in loop. This is the active code path (`run_extraction_job` → `apply_document_claims`). 20 triples = 60+ round trips. | Perf | Collect all claim rows, single UNWIND for UPSERT_CLAIM, single for ATTACH_CLAIM_TO_PASSAGE. | L | `grep -n "execute_write" extraction/service.py` lines 489-548 | `pytest tests/test_extraction.py -v` + confirm single UNWIND per query type |
-| L-001 | `signals/__init__.py:7` | Entire signals module is unimplemented stub. `# TODO: Port heat, freshness, priority from contextr`. Any code importing signal scores gets nothing. | Logic | Port heat/freshness/priority from contextr phase-3. | XL | `cat src/context_service/signals/__init__.py` | Module exports `Heat`, `Freshness`, `Priority` classes |
+| L-001 | `signals/__init__.py:7` | Entire signals module is unimplemented stub. `# TODO: Port heat, freshness, priority from prototype`. Any code importing signal scores gets nothing. | Logic | Port heat/freshness/priority from prototype phase-3. | XL | `cat src/context_service/signals/__init__.py` | Module exports `Heat`, `Freshness`, `Priority` classes |
 
 ### P1 — High (11)
 
@@ -127,7 +127,7 @@ Major progress since 2026-04-28: **all 5 prior P0s are resolved** (auth split-br
 
 1. **R-003 (P0)**: Batch extraction writes in `apply_document_claims` with UNWIND queries — this is the active hot path.
 
-2. **L-001 (P0)**: Port signals module from contextr — heat/freshness/priority unimplemented.
+2. **L-001 (P0)**: Port signals module from prototype — heat/freshness/priority unimplemented.
 
 3. **S-007 (P1)**: Change all API key fields in `config/settings.py` to `SecretStr`.
 

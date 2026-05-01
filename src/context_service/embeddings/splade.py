@@ -116,7 +116,10 @@ class SpladeEncoder:
             indices = row.nonzero(as_tuple=False).squeeze(dim=1)
             values = row[indices]
             results.append(
-                {int(idx): float(val) for idx, val in zip(indices.tolist(), values.tolist(), strict=False)}
+                {
+                    int(idx): float(val)
+                    for idx, val in zip(indices.tolist(), values.tolist(), strict=False)
+                }
             )
         return results
 

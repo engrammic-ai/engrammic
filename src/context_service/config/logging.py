@@ -1,6 +1,6 @@
 """Logging configuration.
 
-Ported pattern from contextr/app/core/logging.py.
+Ported pattern from prototype/app/core/logging.py.
 Uses structlog for structured JSON logging.
 """
 

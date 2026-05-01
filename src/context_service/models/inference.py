@@ -15,7 +15,7 @@ from primitives.schema.labels import IntelligenceLabel, KnowledgeLabel
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ---------------------------------------------------------------------------
-# Commitment predicate registry (ported from contextr predicate_registry)
+# Commitment predicate registry (ported from prototype predicate_registry)
 # ---------------------------------------------------------------------------
 
 COMMITMENT_PREDICATES_V1: Final[frozenset[str]] = frozenset(
@@ -41,7 +41,7 @@ def _is_valid_commitment_predicate(predicate: str, *, version: str = "v1") -> bo
 
 
 # ---------------------------------------------------------------------------
-# Claim ID computation (ported from contextr engine.queries.compute_claim_id)
+# Claim ID computation (ported from prototype engine.queries.compute_claim_id)
 # ---------------------------------------------------------------------------
 
 

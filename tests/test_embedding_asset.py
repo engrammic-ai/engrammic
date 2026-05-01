@@ -64,7 +64,14 @@ def test_embedding_asset_output_has_required_metadata_keys() -> None:
     mats = result.asset_materializations_for_node("embedding")
     assert mats
     metadata = mats[0].metadata
-    for key in ("silo_id", "nodes_processed", "vectors_upserted", "tokens_used", "cost_usd", "duration_s"):
+    for key in (
+        "silo_id",
+        "nodes_processed",
+        "vectors_upserted",
+        "tokens_used",
+        "cost_usd",
+        "duration_s",
+    ):
         assert key in metadata, f"missing metadata key: {key}"
 
 

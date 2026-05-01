@@ -35,13 +35,25 @@ def test_clustering_output_has_required_metadata_keys() -> None:
     with patch("context_service.pipelines.assets.clustering.asyncio.run") as mock_run:
         mock_run.return_value = (12, 3, 10, 0.05)
         result = _clustering_fn(
-            ctx, memgraph=memgraph_res, qdrant=qdrant_res, redis=redis_res,
-            llm=llm_res, embedding=embedding_res, custodian_finalize=None
+            ctx,
+            memgraph=memgraph_res,
+            qdrant=qdrant_res,
+            redis=redis_res,
+            llm=llm_res,
+            embedding=embedding_res,
+            custodian_finalize=None,
         )
 
     assert isinstance(result, dg.Output)
     meta = result.metadata
-    for key in ("silo_id", "clusters_created", "hierarchy_levels", "embeddings_upserted", "cost_usd", "duration_s"):
+    for key in (
+        "silo_id",
+        "clusters_created",
+        "hierarchy_levels",
+        "embeddings_upserted",
+        "cost_usd",
+        "duration_s",
+    ):
         assert key in meta, f"missing metadata key: {key}"
 
 
@@ -56,8 +68,13 @@ def test_clustering_output_value_matches_run_result() -> None:
     with patch("context_service.pipelines.assets.clustering.asyncio.run") as mock_run:
         mock_run.return_value = (7, 2, 5, 0.02)
         result = _clustering_fn(
-            ctx, memgraph=memgraph_res, qdrant=qdrant_res, redis=redis_res,
-            llm=llm_res, embedding=embedding_res, custodian_finalize=None
+            ctx,
+            memgraph=memgraph_res,
+            qdrant=qdrant_res,
+            redis=redis_res,
+            llm=llm_res,
+            embedding=embedding_res,
+            custodian_finalize=None,
         )
 
     val = result.value
@@ -80,8 +97,13 @@ def test_clustering_returns_zeros_when_no_clusters() -> None:
     with patch("context_service.pipelines.assets.clustering.asyncio.run") as mock_run:
         mock_run.return_value = (0, 0, 0, 0.0)
         result = _clustering_fn(
-            ctx, memgraph=memgraph_res, qdrant=qdrant_res, redis=redis_res,
-            llm=llm_res, embedding=embedding_res, custodian_finalize=None
+            ctx,
+            memgraph=memgraph_res,
+            qdrant=qdrant_res,
+            redis=redis_res,
+            llm=llm_res,
+            embedding=embedding_res,
+            custodian_finalize=None,
         )
 
     assert result.value["clusters_created"] == 0

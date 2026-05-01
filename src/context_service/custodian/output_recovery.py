@@ -22,7 +22,6 @@ and delegate straight to ``orig`` without attempting recovery again.
 
 from __future__ import annotations
 
-import json
 from contextvars import ContextVar
 from typing import Any
 
@@ -30,6 +29,7 @@ from pydantic import BaseModel, ValidationError
 
 from context_service.config.logging import get_logger
 from context_service.llm.base import robust_json_loads
+from context_service.utils.json import JSONDecodeError
 
 logger = get_logger(__name__)
 
@@ -65,7 +65,7 @@ def _recover_inner[M: BaseModel](raw: Any, output_type: type[M]) -> M | None:
     if isinstance(raw, str):
         try:
             raw = robust_json_loads(raw)
-        except (ValueError, json.JSONDecodeError) as exc:
+        except (ValueError, JSONDecodeError) as exc:
             logger.debug(f"recover_output: robust_loads failed: {exc}")
             return None
 

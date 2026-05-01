@@ -6,18 +6,18 @@
 
 ## Why
 
-`src/context_service/signals/__init__.py` has been a one-line TODO since the 2026-04-26 port from `contextr`. The custodian visits nodes without priority weighting (LLM cost is uncontrolled), and the demo story for partners — "the system gets sharper on what you actually use" — has no implementation behind it. v1-β master plan never scoped signals; they fell through the gap. Time to close it.
+`src/context_service/signals/__init__.py` has been a one-line TODO since the 2026-04-26 port from `prototype`. The custodian visits nodes without priority weighting (LLM cost is uncontrolled), and the demo story for partners — "the system gets sharper on what you actually use" — has no implementation behind it. v1-β master plan never scoped signals; they fell through the gap. Time to close it.
 
-## What was already in contextr
+## What was already in prototype
 
 - **Heat** (`pipelines/assets/heat.py`): hourly Dagster asset per silo. `XREAD` `silo:{silo_id}:access_events` from a Postgres-backed cursor, aggregate per-node deltas, exp-decay each `n.heat_score` with `t_½ = 7 days`, and assign `:Cluster.tier` ∈ {HOT, WARM, COLD} by quantile (≥0.66 / ≥0.33).
 - **Freshness** (`app/services/context.py:2136`): retrieval-time Gaussian. `fresh_score = max(0.25, exp(-0.5 * (t/σ)**2))` where `t` is age-in-days. Multiplicative on the retrieval score, gated by `freshness_weight`.
 - **Priority** (`app/custodian/priority.py`): `(1 - avg_confidence) * avg_heat * log(min(distinct_agents, 5) + 1)`. Already mechanically ported into this repo at `custodian/priority.py` but never wired to a consumer.
 - **Access-event emitters** (`app/services/access_events.py`, called from `app/mcp/tools/context_get.py` + `context_lookup.py`): fire-and-forget XADD on user-facing reads.
 
-## Deltas vs the contextr environment
+## Deltas vs the prototype environment
 
-| Concern | contextr | context-service |
+| Concern | prototype | context-service |
 |---|---|---|
 | Heat cursor | Postgres | (no Postgres) — needs substitute |
 | Cluster tier index | implicit | needs `:Cluster(tier)` index added |
@@ -47,8 +47,8 @@
 
 ### Defaults baked in
 - Stub heat returns **0.5**, not 0.0 (zero would multiply through the priority formula and kill all consensus tasks during the stub week). Logged once per silo per asset run as `heat.stub_active` so the stub is grep-able post-hoc.
-- Tier thresholds: 0.66 / 0.33 (contextr).
-- Half-life: 7 days (contextr).
+- Tier thresholds: 0.66 / 0.33 (prototype).
+- Half-life: 7 days (prototype).
 - Freshness σ = 30 days, `freshness_weight = 0.3` (gentle nudge, not a gate).
 - Access-event stream MAXLEN ≈ 100k per silo (~3 days at 1 event/sec heavy usage; well past one heat-asset run).
 - Access-event payload: `node_id` only. No access type / agent. Redis stream IDs already carry timestamps.
@@ -61,7 +61,7 @@
 ## Punted (not in scope here)
 
 - Memgraph DR / snapshots (separate concern; raise after fundraise).
-- Cost tracking — separate brainstorm/spec, next-up. Note: `app/cost/emitter.py` + `app/telemetry/cost_drain.py` exist in contextr (XADD per-event with a single drain writing to `cost_ledger_hot`); cost-tracking is a known-shape port, not greenfield.
+- Cost tracking — separate brainstorm/spec, next-up. Note: `app/cost/emitter.py` + `app/telemetry/cost_drain.py` exist in prototype (XADD per-event with a single drain writing to `cost_ledger_hot`); cost-tracking is a known-shape port, not greenfield.
 - Dashboard / admin UI to surface heat scores and cluster tiers. UI deferred to v1.0+.
 - Per-silo configurability of any signal constant.
 - Validator refactor Phase C/D (already deferred elsewhere).

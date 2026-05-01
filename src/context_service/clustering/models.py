@@ -89,11 +89,11 @@ class Cluster:
 
         key_topics = data.get("key_topics", [])
         if isinstance(key_topics, str):
-            import json
+            from context_service.utils.json import JSONDecodeError, loads
 
             try:
-                key_topics = json.loads(key_topics)
-            except (json.JSONDecodeError, TypeError):
+                key_topics = loads(key_topics)
+            except (JSONDecodeError, TypeError):
                 key_topics = []
 
         last_custodian_run_at = data.get("last_custodian_run_at")

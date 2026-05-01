@@ -92,8 +92,7 @@ def embedding_asset(
             vectors_upserted = 0
 
             eligible = [
-                r for r in rows
-                if r.get("content") and len(str(r["content"])) >= _MIN_CONTENT_LEN
+                r for r in rows if r.get("content") and len(str(r["content"])) >= _MIN_CONTENT_LEN
             ]
 
             for batch_start in range(0, len(eligible), _BATCH_SIZE):

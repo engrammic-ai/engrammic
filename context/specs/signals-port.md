@@ -6,7 +6,7 @@
 
 ## Goal
 
-Port the three signal subsystems from `contextr` (`pipelines/assets/heat.py`, `app/services/access_events.py`, retrieval-time freshness in `app/services/context.py`, `app/custodian/priority.py`) into `context-service/src/context_service/signals/`. The custodian must visit hot-and-uncertain content first (cost control); retrieval must penalise stale content; the demo must be able to show "the system gets sharper on what you actually use."
+Port the three signal subsystems from `prototype` (`pipelines/assets/heat.py`, `app/services/access_events.py`, retrieval-time freshness in `app/services/context.py`, `app/custodian/priority.py`) into `context-service/src/context_service/signals/`. The custodian must visit hot-and-uncertain content first (cost control); retrieval must penalise stale content; the demo must be able to show "the system gets sharper on what you actually use."
 
 ## Non-goals
 
@@ -108,7 +108,7 @@ Index added in `db/indexes.py`: `CREATE INDEX ON :HeatCursor(silo_id)`.
 
 ### 2.2 Heat asset
 
-`pipelines/assets/heat.py` — direct port of contextr's asset, with substitutions:
+`pipelines/assets/heat.py` — direct port of prototype's asset, with substitutions:
 
 | Contextr | Replacement |
 |---|---|
@@ -152,9 +152,9 @@ Remove `heat.stub_active` log line. Update the consensus-sensor batch fetch to r
 
 | Constant | Value | Source |
 |---|---|---|
-| `HEAT_HALF_LIFE` | 7 days | contextr |
-| `TIER_THRESHOLDS` | HOT ≥ 0.66, WARM ≥ 0.33 | contextr |
-| `XREAD_COUNT` | 10 000 per asset run | contextr |
+| `HEAT_HALF_LIFE` | 7 days | prototype |
+| `TIER_THRESHOLDS` | HOT ≥ 0.66, WARM ≥ 0.33 | prototype |
+| `XREAD_COUNT` | 10 000 per asset run | prototype |
 | `ACCESS_STREAM_MAXLEN` | 100 000 (approximate) | new |
 | `freshness_sigma_days` | 30 | port |
 | `freshness_weight` | 0.3 | port |

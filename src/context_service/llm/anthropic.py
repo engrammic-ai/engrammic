@@ -40,7 +40,9 @@ class AnthropicProvider(LLMProvider):
     def from_settings(cls, model: str | None = None) -> AnthropicProvider:
         """Create provider from application settings."""
         settings = get_settings()
-        api_key = settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else ""
+        api_key = (
+            settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else ""
+        )
         return cls(
             api_key=api_key,
             model=model or "claude-sonnet-4-5-20250929",

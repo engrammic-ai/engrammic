@@ -12,6 +12,12 @@ if TYPE_CHECKING:
     from context_service.services.models import ScopeContext
 
 
+class HealthCheckable(Protocol):
+    """Protocol for backing stores that can report liveness."""
+
+    async def health_check(self) -> bool: ...
+
+
 class HyperGraphStore(Protocol):
     """Domain-agnostic graph storage interface.
 

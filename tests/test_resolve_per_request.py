@@ -56,9 +56,7 @@ async def test_missing_header_raises_when_auth_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(server, "get_http_headers", lambda **_kw: {})
-    monkeypatch.setattr(
-        "context_service.config.settings.get_settings", lambda: _AUTH_ON
-    )
+    monkeypatch.setattr("context_service.config.settings.get_settings", lambda: _AUTH_ON)
     with pytest.raises(MCPAuthError, match="Missing Authorization header"):
         await server.get_mcp_auth_context()
 
@@ -68,9 +66,7 @@ async def test_missing_header_returns_dev_when_auth_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(server, "get_http_headers", lambda **_kw: {})
-    monkeypatch.setattr(
-        "context_service.config.settings.get_settings", lambda: _AUTH_OFF
-    )
+    monkeypatch.setattr("context_service.config.settings.get_settings", lambda: _AUTH_OFF)
     ctx = await server.get_mcp_auth_context()
 
     assert ctx.is_dev is True
@@ -80,8 +76,6 @@ async def test_missing_header_returns_dev_when_auth_disabled(
 
 @pytest.mark.asyncio
 async def test_empty_bearer_token_raises(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        server, "get_http_headers", lambda **_kw: {"authorization": "Bearer    "}
-    )
+    monkeypatch.setattr(server, "get_http_headers", lambda **_kw: {"authorization": "Bearer    "})
     with pytest.raises(MCPAuthError, match="Empty bearer token"):
         await server.get_mcp_auth_context()
