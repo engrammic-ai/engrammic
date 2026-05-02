@@ -290,6 +290,23 @@ MATCH (b:Claim {id: $claim_id_b, silo_id: $silo_id})
 MERGE (a)-[r:CONTRADICTS {id: $edge_id}]->(b)
 """
 
+# Causal edge: written between any two silo nodes (Claims, Facts, Beliefs, etc.)
+# Parameters: source_id, target_id, silo_id, confidence (float), mechanism (str|null),
+#             extracted_from (str — source doc or claim id).
+CREATE_CAUSES_EDGE = """
+MATCH (a {id: $source_id, silo_id: $silo_id})
+MATCH (b {id: $target_id, silo_id: $silo_id})
+CREATE (a)-[:CAUSES {confidence: $confidence, mechanism: $mechanism, created_at: datetime(), extracted_from: $extracted_from}]->(b)
+"""
+
+# Corroboration edge: a supports / confirms b.
+# Parameters: source_id, target_id, silo_id, strength (float), extracted_from (str).
+CREATE_CORROBORATES_EDGE = """
+MATCH (a {id: $source_id, silo_id: $silo_id})
+MATCH (b {id: $target_id, silo_id: $silo_id})
+CREATE (a)-[:CORROBORATES {strength: $strength, created_at: datetime(), extracted_from: $extracted_from}]->(b)
+"""
+
 
 def build_batch_entity_rel_query(rel_type: str) -> str:
     """Build a batch CREATE entity relationship query with a real edge label.
