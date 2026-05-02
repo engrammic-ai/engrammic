@@ -29,7 +29,7 @@ v1-β closes those gaps. Nothing fancy, nothing speculative.
 ```
 β1 Auth completion + Silo ownership   ──►  COMPLETE
 β2 Dagster asset migration            ──►  COMPLETE (all assets, schedules, sensors wired)
-β3 SPLADE hybrid retrieval            ──►  BUILT, NOT WIRED — two lines needed (see v1b-splade.md)
+β3 SPLADE hybrid retrieval            ──►  COMPLETE (wired 2026-05-02, set HYBRID_SEARCH_ENABLED=true)
 β4 Migration tooling                  ──►  COMPLETE
 β5 Integration test pack              ──►  ~68% — 3 missing failure-mode tests + unified E2E
 β6 Paradigm completion + hygiene      ──►  COMPLETE (claim_rejections alias deferred to Q3)
