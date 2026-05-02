@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any
 from context_service.signals import compute_consensus_priority, get_heat
 
 if TYPE_CHECKING:
-    from context_service.stores.memgraph import MemgraphClient
+    from context_service.engine.protocols import HyperGraphStore
 
 
 # Prefetch cap: Cypher returns up to PREFETCH_MULTIPLIER * limit rows so the
@@ -41,7 +41,7 @@ LIMIT $prefetch_limit
 
 async def find_consensus_candidates(
     *,
-    memgraph: MemgraphClient,
+    memgraph: HyperGraphStore,
     silo_id: str,
     min_chain_count: int = 2,
     min_distinct_agents: int = 2,

@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic_ai import Agent
 
-from context_service.core.settings import get_settings
+from context_service.config.settings import get_settings
 from context_service.custodian.models import FindingOutput, StitchedSummary
 from context_service.custodian.prompt_loader import load_prompt
 from context_service.custodian.validators import CitationValidator
@@ -25,7 +25,7 @@ from context_service.utils.json import JSONDecodeError, loads
 
 if TYPE_CHECKING:
     from context_service.custodian.write_path import WritePathResult
-    from context_service.stores.memgraph import MemgraphClient
+    from context_service.engine.protocols import HyperGraphStore
 
 # ClusterLevel.COARSE = 3 (resolution_parameter=0.001)
 _COARSE_LEVEL = 3
@@ -71,7 +71,7 @@ async def run_silo_synthesis(
     org_id: str,
     pass_id: str,
     silo_description: str | None,
-    memgraph_client: MemgraphClient,
+    memgraph_client: HyperGraphStore,
 ) -> WritePathResult:
     """Run silo synthesis: fetch coarse findings, call Pro agent, write result.
 

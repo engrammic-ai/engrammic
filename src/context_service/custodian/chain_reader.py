@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from context_service.stores.memgraph import MemgraphClient
+    from context_service.engine.protocols import HyperGraphStore
 
 
 READ_REASONING_CHAINS = """
@@ -27,7 +27,7 @@ LIMIT $limit
 
 async def read_reasoning_chains(
     *,
-    memgraph: MemgraphClient,
+    memgraph: HyperGraphStore,
     cluster_id: str,
     include_drafts: bool = False,
     limit: int = 50,
@@ -45,7 +45,7 @@ async def read_reasoning_chains(
 
 async def read_commitments_in_cluster(
     *,
-    memgraph: MemgraphClient,
+    memgraph: HyperGraphStore,
     cluster_id: str,
     include_drafts: bool = False,
     limit: int = 50,

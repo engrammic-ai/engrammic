@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 from context_service.db.schema import content_union_predicate
 
 if TYPE_CHECKING:
+    from context_service.engine.protocols import HyperGraphStore
     from context_service.stores.memgraph import MemgraphClient
 
 _cup = content_union_predicate
@@ -291,7 +292,7 @@ async def fetch_lower_findings(
 
 
 async def fetch_cluster_member_ids(
-    client: MemgraphClient,
+    client: MemgraphClient | HyperGraphStore,
     *,
     cluster_id: str,
     silo_id: str,

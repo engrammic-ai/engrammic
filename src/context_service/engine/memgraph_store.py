@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 import uuid as uuid_mod
+from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -944,3 +945,29 @@ class MemgraphStore(EAGKnowledgeStore):
                 await self._client.execute_query(query)
             except Exception:
                 logger.debug(f"Index may already exist: {query[:60]}...")
+
+    # --- Raw Cypher escape hatches ---
+
+    async def execute_query(
+        self,
+        cypher: str,
+        params: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Delegate a read-only Cypher query to the underlying MemgraphClient."""
+        return await self._client.execute_query(cypher, params)
+
+    async def execute_write(
+        self,
+        cypher: str,
+        params: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Delegate a write Cypher query to the underlying MemgraphClient."""
+        return await self._client.execute_write(cypher, params)
+
+    def session(self) -> AbstractAsyncContextManager[Any]:
+        """Return an async context manager yielding a MemgraphClient session."""
+        return self._client.session()
+
+    def transaction(self) -> AbstractAsyncContextManager[Any]:
+        """Return an async context manager yielding an explicit transaction."""
+        return self._client.transaction()

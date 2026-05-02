@@ -11,12 +11,12 @@ from context_service.engine.queries import (
 )
 
 if TYPE_CHECKING:
-    from context_service.stores.memgraph import MemgraphClient
+    from context_service.engine.protocols import HyperGraphStore
 
 
 async def promote_consensus_to_finding(
     *,
-    memgraph: MemgraphClient,
+    memgraph: HyperGraphStore,
     commitment_id: str,
     contributing_chain_ids: list[str],
     silo_id: str,

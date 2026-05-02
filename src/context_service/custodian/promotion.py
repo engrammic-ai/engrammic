@@ -22,7 +22,7 @@ from context_service.db.schema import content_union_predicate
 from context_service.extraction.models import RelationshipType
 
 if TYPE_CHECKING:
-    from context_service.stores.memgraph import MemgraphClient
+    from context_service.engine.protocols import HyperGraphStore
 
 
 # ---------------------------------------------------------------------------
@@ -130,7 +130,7 @@ class PromotionResult:
 
 
 async def plan_promotion(
-    memgraph_client: MemgraphClient,
+    memgraph_client: HyperGraphStore,
     *,
     pass_id: str | None = None,
     finding_id: str | None = None,
@@ -243,7 +243,7 @@ async def plan_promotion(
 
 
 async def execute_promotion(
-    memgraph_client: MemgraphClient,
+    memgraph_client: HyperGraphStore,
     plan: PromotionPlan,
 ) -> PromotionResult:
     """Execute a :class:`PromotionPlan` atomically.
@@ -253,7 +253,7 @@ async def execute_promotion(
     changes land.
 
     Args:
-        memgraph_client: Live Memgraph connection.
+        memgraph_client: Live graph store connection.
         plan: The plan returned by :func:`plan_promotion`.
 
     Returns:

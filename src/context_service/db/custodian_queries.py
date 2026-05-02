@@ -124,6 +124,7 @@ from context_service.db.schema import content_union_predicate
 if TYPE_CHECKING:
     from neo4j import AsyncTransaction
 
+    from context_service.engine.protocols import HyperGraphStore
     from context_service.stores.memgraph import MemgraphClient
 
 logger = get_logger(__name__)
@@ -568,7 +569,7 @@ RETURN n.id AS node_id, n.content AS content, cite_count
 
 
 async def fetch_coarse_findings_for_silo(
-    client: MemgraphClient,
+    client: MemgraphClient | HyperGraphStore,
     *,
     silo_id: str,
     coarse_level: int,
@@ -581,7 +582,7 @@ async def fetch_coarse_findings_for_silo(
 
 
 async def fetch_top_entities_by_citation(
-    client: MemgraphClient,
+    client: MemgraphClient | HyperGraphStore,
     *,
     silo_id: str,
 ) -> list[dict[str, Any]]:

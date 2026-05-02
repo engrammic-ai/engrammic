@@ -50,7 +50,7 @@ from context_service.utils.json import dumps
 if TYPE_CHECKING:
     from context_service.custodian.models import Claim, FindingOutput, ProposedEdge
     from context_service.custodian.validators import CitationValidator, RejectionMetrics
-    from context_service.stores.memgraph import MemgraphClient
+    from context_service.engine.protocols import HyperGraphStore
 
 _default_business_validator = BusinessRuleValidator()
 
@@ -192,7 +192,7 @@ class WritePath:
 
     def __init__(
         self,
-        memgraph_client: MemgraphClient,
+        memgraph_client: HyperGraphStore,
         citation_validator: CitationValidator,
         metrics: RejectionMetrics | None = None,
         business_validator: BusinessRuleValidator | None = None,
