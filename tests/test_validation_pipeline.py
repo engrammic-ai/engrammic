@@ -84,7 +84,7 @@ async def test_run_validation_business_rejects_when_all_claims_fail_citation() -
     assert result.passed is False
     assert result.failed_at == "business"
     assert result.citation is not None
-    assert result.citation.claims_rejected >= 0
+    assert result.citation.claims_rejected == 1
     biz.evaluate.assert_called_once()
 
 

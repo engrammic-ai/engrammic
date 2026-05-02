@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from context_service.custodian.business_rules import BusinessRuleValidator
-    from context_service.custodian.models import FindingOutput
+    from context_service.custodian.business_rules import BusinessRuleResult, BusinessRuleValidator
+    from context_service.custodian.models import Claim, FindingOutput, ProposedEdge
     from context_service.custodian.validators import CitationValidator
 
 
@@ -16,8 +16,8 @@ class CitationStageResult:
     """Outcome of the citation validation stage."""
 
     passed: bool
-    surviving_claims: list[Any] = field(default_factory=list)
-    surviving_edges: list[Any] = field(default_factory=list)
+    surviving_claims: list[Claim] = field(default_factory=list)
+    surviving_edges: list[ProposedEdge] = field(default_factory=list)
     claims_rejected: int = 0
     edges_rejected: int = 0
 
@@ -26,7 +26,7 @@ class CitationStageResult:
 class PipelineResult:
     """Structured outcome of the full validation pipeline.
 
-    ``failed_at`` is ``None`` on success, ``"citation"`` or ``"business"`` on failure.
+    ``failed_at`` is ``None`` on success, ``"business"`` on failure.
     ``citation`` is always populated after the citation stage runs.
     ``business`` is ``None`` when the citation stage short-circuited.
     """
@@ -34,7 +34,7 @@ class PipelineResult:
     passed: bool
     failed_at: str | None = None
     citation: CitationStageResult | None = None
-    business: Any | None = None  # BusinessRuleResult when populated
+    business: BusinessRuleResult | None = None
 
 
 async def run_validation(
@@ -47,7 +47,7 @@ async def run_validation(
     """Run citation then business rule validation, returning a structured PipelineResult."""
     claim_results, edge_results = await citation_validator.validate_finding(finding, seen_node_ids)
 
-    surviving_claims: list[Any] = []
+    surviving_claims: list[Claim] = []
     claims_rejected = 0
     for claim, result in zip(finding.claims, claim_results, strict=True):
         if result.accepted:
@@ -55,7 +55,7 @@ async def run_validation(
         else:
             claims_rejected += 1
 
-    surviving_edges: list[Any] = []
+    surviving_edges: list[ProposedEdge] = []
     edges_rejected = 0
     for edge, edge_result in zip(finding.inferred_relations, edge_results, strict=True):
         if edge_result.accepted:

@@ -237,7 +237,8 @@ class WritePath:
             business_validator=self._business,
             cluster_size=cluster_size,
         )
-        assert pipeline_result.citation is not None
+        if pipeline_result.citation is None:
+            raise RuntimeError("citation stage unexpectedly None after success")
         surviving_claims = pipeline_result.citation.surviving_claims
         surviving_edges = pipeline_result.citation.surviving_edges
         claims_rejected = pipeline_result.citation.claims_rejected
@@ -259,7 +260,8 @@ class WritePath:
         # Step 3: use quality score from business rule result.
         # ------------------------------------------------------------------
         biz = pipeline_result.business
-        assert biz is not None
+        if biz is None:
+            raise RuntimeError("business stage unexpectedly None after success")
         survivor_finding = finding.model_copy(
             update={
                 "claims": surviving_claims,
