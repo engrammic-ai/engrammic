@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic_ai.exceptions import UsageLimitExceeded
 
 from context_service.config.logging import get_logger
-from context_service.core.settings import CustodianSettings, get_settings
+from context_service.config.settings import CustodianSettings, get_settings
 from context_service.core.trace_context import trace_scope
 from context_service.custodian.agents import (
     VisitDeps,

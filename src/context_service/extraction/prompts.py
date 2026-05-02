@@ -9,7 +9,7 @@ from typing import Any
 import yaml
 
 from context_service.config.config_loader import CONFIG_DIR, load_config
-from context_service.core.settings import get_settings
+from context_service.config.settings import get_settings
 
 _DEFAULT_PRESET = "gemini"
 

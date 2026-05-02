@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic_ai import Agent
 
-from context_service.core.settings import get_settings
+from context_service.config.settings import get_settings
 from context_service.custodian.models import FindingOutput, StitchedSummary
 from context_service.custodian.prompt_loader import load_prompt
 from context_service.custodian.validators import CitationValidator

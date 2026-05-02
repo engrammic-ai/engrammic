@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
 
-from context_service.core.settings import get_settings
+from context_service.config.settings import get_settings
 from context_service.custodian.rejection_reasons import (
     BusinessRejection,
     CitationRejection,
