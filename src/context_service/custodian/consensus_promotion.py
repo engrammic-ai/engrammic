@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 from typing import TYPE_CHECKING, Any
 
@@ -36,31 +35,24 @@ async def promote_consensus_to_finding(
         digest_size=16,
     ).hexdigest()
 
-    async with memgraph.session() as session:
-        tx = await session.begin_transaction()
-        try:
-            result_cursor = await tx.run(
-                CREATE_FINDING_FROM_COMMITMENT,
-                commitment_id=commitment_id,
-                silo_id=silo_id,
-                finding_id=finding_id,
-            )
-            rows: list[dict[str, Any]] = await result_cursor.data()
-            if not rows:
-                raise ValueError(f"Failed to create finding for commitment {commitment_id}")
+    async with memgraph.transaction() as tx:
+        result_cursor = await tx.run(
+            CREATE_FINDING_FROM_COMMITMENT,
+            commitment_id=commitment_id,
+            silo_id=silo_id,
+            finding_id=finding_id,
+        )
+        rows: list[dict[str, Any]] = await result_cursor.data()
+        if not rows:
+            raise ValueError(f"Failed to create finding for commitment {commitment_id}")
 
-            # R-005: batch all PROMOTED_FROM edges in one UNWIND round-trip instead
-            # of one tx.run() per chain.
-            await tx.run(
-                BATCH_CREATE_PROMOTED_FROM_EDGES,
-                finding_id=finding_id,
-                chain_ids=contributing_chain_ids,
-            )
-            await tx.commit()
-        except Exception:
-            with contextlib.suppress(Exception):
-                await tx.rollback()
-            raise
+        # R-005: batch all PROMOTED_FROM edges in one UNWIND round-trip instead
+        # of one tx.run() per chain.
+        await tx.run(
+            BATCH_CREATE_PROMOTED_FROM_EDGES,
+            finding_id=finding_id,
+            chain_ids=contributing_chain_ids,
+        )
 
     return finding_id
 

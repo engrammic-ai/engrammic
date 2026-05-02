@@ -214,3 +214,11 @@ class HyperGraphStore(Protocol):
     def session(self) -> AbstractAsyncContextManager[Any]:
         """Return an async context manager yielding a database session for transaction scope."""
         ...
+
+    def transaction(self) -> AbstractAsyncContextManager[Any]:
+        """Return an async context manager yielding an explicit transaction.
+
+        The transaction is committed on clean exit and rolled back if the body raises.
+        Prefer this over session() + begin_transaction() for atomic writes.
+        """
+        ...

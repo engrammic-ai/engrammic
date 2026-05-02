@@ -967,3 +967,7 @@ class MemgraphStore(EAGKnowledgeStore):
     def session(self) -> AbstractAsyncContextManager[Any]:
         """Return an async context manager yielding a MemgraphClient session."""
         return self._client.session()
+
+    def transaction(self) -> AbstractAsyncContextManager[Any]:
+        """Return an async context manager yielding an explicit transaction."""
+        return self._client.transaction()

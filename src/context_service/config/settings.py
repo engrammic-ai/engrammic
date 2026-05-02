@@ -11,7 +11,6 @@ Settings precedence:
 
 from __future__ import annotations
 
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -740,23 +739,25 @@ class Settings(BaseSettings):
         return cls(**data)
 
 
-@lru_cache
+_settings_cache: Settings | None = None
+
+
 def get_settings() -> Settings:
     """Return the cached Settings singleton."""
-    return Settings()
+    global _settings_cache
+    if _settings_cache is None:
+        _settings_cache = Settings()
+    return _settings_cache
 
 
 def reload_settings(path: Path | None = None) -> Settings:
     """Replace the cached Settings singleton.
 
-    Clears the lru_cache and returns a fresh instance. Pass *path* to load
-    values from a YAML file on top of env vars.
+    Pass *path* to load values from a YAML file on top of env vars.
     """
-    get_settings.cache_clear()
-    fresh = Settings.from_yaml(path) if path is not None else Settings()
-    # Re-prime the cache so subsequent get_settings() calls return this instance.
-    get_settings()
-    return fresh
+    global _settings_cache
+    _settings_cache = Settings.from_yaml(path) if path is not None else Settings()
+    return _settings_cache
 
 
 settings = get_settings()

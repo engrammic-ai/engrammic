@@ -15,7 +15,6 @@ transaction -- partial failure rolls back the entire promotion.
 
 from __future__ import annotations
 
-import contextlib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -262,45 +261,37 @@ async def execute_promotion(
     """
     result = PromotionResult()
 
-    async with memgraph_client.session() as session:
-        tx = await session.begin_transaction()
-        try:
-            # Promote findings
-            for f in plan.findings:
-                row = await tx.run(_PROMOTE_FINDING, id=f["finding_id"])
-                record = await row.single()
-                if record is not None:
-                    result.findings_promoted += 1
-                else:
-                    result.errors.append(
-                        f"finding {f['finding_id']} not found or already published"
-                    )
+    async with memgraph_client.transaction() as tx:
+        # Promote findings
+        for f in plan.findings:
+            row = await tx.run(_PROMOTE_FINDING, id=f["finding_id"])
+            record = await row.single()
+            if record is not None:
+                result.findings_promoted += 1
+            else:
+                result.errors.append(
+                    f"finding {f['finding_id']} not found or already published"
+                )
 
-            # Promote proposed edges via 9-way dispatch
-            for edge in plan.proposed_edges:
-                edge_type_str = edge["type"]
-                try:
-                    rel_type = RelationshipType(edge_type_str)
-                except ValueError:
-                    result.errors.append(
-                        f"edge {edge['edge_id']}: unknown relationship type {edge_type_str!r}"
-                    )
-                    continue
+        # Promote proposed edges via 9-way dispatch
+        for edge in plan.proposed_edges:
+            edge_type_str = edge["type"]
+            try:
+                rel_type = RelationshipType(edge_type_str)
+            except ValueError:
+                result.errors.append(
+                    f"edge {edge['edge_id']}: unknown relationship type {edge_type_str!r}"
+                )
+                continue
 
-                cypher = PROMOTE_CYPHER_BY_TYPE[rel_type]
-                row = await tx.run(cypher, id=edge["edge_id"])
-                record = await row.single()
-                if record is not None:
-                    result.edges_promoted += 1
-                else:
-                    result.errors.append(
-                        f"edge {edge['edge_id']} ({edge_type_str}): source/target nodes not found"
-                    )
-
-            await tx.commit()
-        except Exception:
-            with contextlib.suppress(Exception):
-                await tx.rollback()
-            raise
+            cypher = PROMOTE_CYPHER_BY_TYPE[rel_type]
+            row = await tx.run(cypher, id=edge["edge_id"])
+            record = await row.single()
+            if record is not None:
+                result.edges_promoted += 1
+            else:
+                result.errors.append(
+                    f"edge {edge['edge_id']} ({edge_type_str}): source/target nodes not found"
+                )
 
     return result
