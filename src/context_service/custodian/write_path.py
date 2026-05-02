@@ -33,6 +33,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from pydantic import BaseModel
 
 from context_service.custodian.business_rules import BusinessRuleValidator
+from context_service.custodian.pipeline import run_validation
 from context_service.db.custodian_queries import (
     CITES_EDGE_CREATE_NODE,
     CLUSTER_LAST_CUSTODIAN_UPDATE,
@@ -227,31 +228,21 @@ class WritePath:
            (cluster-scope only).
         """
         # ------------------------------------------------------------------
-        # Step 1: validate claims and edges; drop rejected items.
+        # Steps 1+2: citation validation then business rule gate via pipeline.
         # ------------------------------------------------------------------
-        claim_results, edge_results = await self._validator.validate_finding(finding, seen_node_ids)
-
-        surviving_claims: list[Claim] = []
-        claims_rejected = 0
-        for claim, claim_result in zip(finding.claims, claim_results, strict=True):
-            if claim_result.accepted:
-                surviving_claims.append(claim)
-            else:
-                claims_rejected += 1
-
-        surviving_edges: list[ProposedEdge] = []
-        edges_rejected = 0
-        for edge, edge_result in zip(finding.inferred_relations, edge_results, strict=True):
-            if edge_result.accepted:
-                surviving_edges.append(edge)
-            else:
-                edges_rejected += 1
-
-        # ------------------------------------------------------------------
-        # Step 2: business rule gate (all-claims-rejected skip + quality score).
-        # ------------------------------------------------------------------
-        biz = self._business.evaluate(finding, surviving_claims, surviving_edges, cluster_size)
-        if not biz.accepted:
+        pipeline_result = await run_validation(
+            finding=finding,
+            seen_node_ids=seen_node_ids,
+            citation_validator=self._validator,
+            business_validator=self._business,
+            cluster_size=cluster_size,
+        )
+        assert pipeline_result.citation is not None
+        surviving_claims = pipeline_result.citation.surviving_claims
+        surviving_edges = pipeline_result.citation.surviving_edges
+        claims_rejected = pipeline_result.citation.claims_rejected
+        edges_rejected = pipeline_result.citation.edges_rejected
+        if pipeline_result.failed_at is not None:
             return WritePathResult(
                 finding_id="",
                 version=0,
@@ -267,6 +258,8 @@ class WritePath:
         # ------------------------------------------------------------------
         # Step 3: use quality score from business rule result.
         # ------------------------------------------------------------------
+        biz = pipeline_result.business
+        assert biz is not None
         survivor_finding = finding.model_copy(
             update={
                 "claims": surviving_claims,
