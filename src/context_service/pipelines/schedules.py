@@ -96,10 +96,32 @@ def custodian_visit_schedule(
         )
 
 
+@dg.schedule(
+    cron_schedule="0 * * * *",
+    name="heat_schedule",
+    target=dg.AssetSelection.assets("heat"),
+    description="Hourly heat scoring per active silo.",
+    execution_timezone="UTC",
+)
+def heat_schedule(
+    context: ScheduleEvaluationContext,
+    memgraph: MemgraphResource,
+) -> Iterator[dg.RunRequest]:
+    """Yield one heat RunRequest per active silo."""
+    silo_ids = _fetch_silo_ids(memgraph)
+    for silo_id in silo_ids:
+        yield dg.RunRequest(
+            run_key=f"heat:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            partition_key=silo_id,
+            tags={"dagster/concurrency_key": silo_id},
+        )
+
+
 all_schedules: list[Any] = [
     clustering_schedule,
     fact_promotion_schedule,
     custodian_visit_schedule,
+    heat_schedule,
 ]
 
 __all__ = [
@@ -107,4 +129,5 @@ __all__ = [
     "clustering_schedule",
     "fact_promotion_schedule",
     "custodian_visit_schedule",
+    "heat_schedule",
 ]

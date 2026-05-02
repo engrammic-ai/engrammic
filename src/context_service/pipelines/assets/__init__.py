@@ -8,6 +8,7 @@ from context_service.pipelines.assets.custodian_visit import custodian_visit
 from context_service.pipelines.assets.embedding import embedding_asset as embedding
 from context_service.pipelines.assets.extraction import extraction
 from context_service.pipelines.assets.fact_promotion import claim_to_fact_promotion
+from context_service.pipelines.assets.heat import heat_asset
 
 all_assets: list[Any] = [
     extraction,
@@ -16,4 +17,5 @@ all_assets: list[Any] = [
     custodian_finalize,
     claim_to_fact_promotion,
     clustering,
+    heat_asset,
 ]

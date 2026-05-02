@@ -29,6 +29,13 @@ CLUSTER_INDEX_QUERIES: tuple[str, ...] = (
     "CREATE INDEX ON :Cluster(id);",
     "CREATE INDEX ON :Cluster(level);",
     "CREATE INDEX ON :Cluster(silo_id);",
+    "CREATE INDEX ON :Cluster(tier);",
+)
+
+# --- Heat cursor (signals phase 2) ---
+
+HEAT_CURSOR_INDEX_QUERIES: tuple[str, ...] = (
+    "CREATE INDEX ON :HeatCursor(silo_id);",
 )
 
 # --- Memory layer ---
@@ -124,6 +131,7 @@ META_MEMORY_INDEX_QUERIES: tuple[str, ...] = (
 
 ALL_INDEX_QUERIES: tuple[str, ...] = (
     *CLUSTER_INDEX_QUERIES,
+    *HEAT_CURSOR_INDEX_QUERIES,
     *MEMORY_INDEX_QUERIES,
     *KNOWLEDGE_INDEX_QUERIES,
     *WISDOM_INDEX_QUERIES,
