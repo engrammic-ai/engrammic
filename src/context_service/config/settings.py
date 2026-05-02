@@ -78,6 +78,18 @@ class Settings(BaseSettings):
     freshness_sigma_days: int = 30
     access_stream_maxlen: int = 100_000
 
+    # Signals enhancement (v1d) - all default OFF for safe rollout
+    heat_ranking_enabled: bool = False
+    unified_decay_enabled: bool = False
+    write_events_enabled: bool = False
+
+    # Heat ranking tuning
+    heat_weight: float = 0.1
+    heat_half_life_days: int = 7
+    heat_read_weight: float = 1.0
+    heat_write_weight: float = 0.5
+    heat_dedup_window_seconds: int = 300
+
     hybrid_search_enabled: bool = False
 
     llm_max_concurrency: int = 20

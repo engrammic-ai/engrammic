@@ -23,6 +23,13 @@ Active implementation plans for context-service. Each plan lives in its own file
 - [v1b-architecture-cleanup.md](./v1b-architecture-cleanup.md) — phase β6+ (parallel). Storage protocol adoption (NF-003/006/009) + Settings consolidation (B2). Deferred from β0 review-cleanup.
 - [v1b-review-cleanup.md](./v1b-review-cleanup.md) — phase β0. Orphan findings from the 2026-04-28 codebase review not owned by another β phase.
 
+### v1-d — signals enhancement (active)
+- [v1d-signals-enhancement.md](./v1d-signals-enhancement.md) — query-time heat ranking, unified decay model, write-side access events. Four phases behind feature flags.
+- Spec: [signals-port.md](../specs/signals-port.md) (v1d section at bottom)
+
+### v1-c — signals port (complete 2026-05-02)
+- [v1c-signals-port.md](./archive/v1c-signals-port.md) — heat scoring (Dagster asset), freshness (query ranking), priority (custodian), access events (MCP reads). Fully wired.
+
 ### v1-α — close paradigm gaps (complete 2026-04-28)
 - [v1a-claim-fact-promotion.md](./v1a-claim-fact-promotion.md) — wire `:Claim` → `:Fact` promotion via `primitives.eag.epistemology`; keep `:Finding` semantics intact.
 - [v1a-edge-migration.md](./v1a-edge-migration.md) — migrate legacy `BELONGS_TO` edges to `MEMBER_OF`; drop dual-read; close stale audit TODOs.
