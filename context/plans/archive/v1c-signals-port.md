@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Status:** COMPLETE (Phase 1 shipped PR #16, Phase 2 shipped 2026-05-02)
+
 **Goal:** Port heat / freshness / priority signal subsystems from `prototype` into `src/context_service/signals/`, ship Phase 1 (stubbed heat + real freshness/priority + live access-event emitters + priority-ranked consensus) this week, defer Phase 2 (real heat Dagster asset + cursor + schedule) until after partner talks.
 
 **Architecture:** Phase 1 introduces `signals/` as the single home for heat lookup, freshness scoring, priority math, and access-event emission. Heat is stubbed at 0.5 with a stable signature so callers don't refactor when Phase 2 flips it to a real Memgraph read. Freshness is wired into `services/context.py::query` as a multiplicative score adjustment; priority replaces the consensus sensor's simple `(distinct_agents, chain_count)` ordering with a Python-side ranking that pulls heat for each candidate. Access-event emission is best-effort XADD on a per-silo Redis stream, fired from each MCP read tool. Phase 2 ports the prototype Dagster heat asset wholesale, substituting a Memgraph singleton `:HeatCursor` for prototype's Postgres cursor table.
