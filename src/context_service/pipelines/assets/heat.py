@@ -12,13 +12,11 @@ Tier thresholds (verbatim from prototype):
   COLD  < 0.33
 """
 
-from __future__ import annotations
-
 import asyncio
 import math
 import time
 from collections import defaultdict
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any
 
 import dagster as dg
@@ -95,8 +93,6 @@ def heat_asset(
     t0 = time.monotonic()
 
     async def _run() -> tuple[int, int, str]:
-        from datetime import datetime
-
         from context_service.signals.cursor import (
             advance_heat_cursor,
             fetch_or_init_heat_cursor,
@@ -147,7 +143,7 @@ def heat_asset(
         # entry IDs (millisecond timestamps) for finer-grained decay.
         updates: list[dict[str, Any]] = []
         for node_id, count in raw_counts.items():
-            # Normalise: log(1 + count) * decay(0) = log(1+count)
+            # Normalise: log(1 + count) / log(1 + XREAD_COUNT)
             heat = min(1.0, math.log1p(count) / math.log1p(XREAD_COUNT))
             updates.append({"node_id": node_id, "heat_score": heat, "tier": _tier(heat)})
 

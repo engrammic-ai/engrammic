@@ -45,8 +45,8 @@ def test_custodian_visit_schedule_cron() -> None:
     assert custodian_visit_schedule.cron_schedule == "*/15 * * * *"
 
 
-def test_all_schedules_has_three_entries() -> None:
-    assert len(all_schedules) == 3
+def test_all_schedules_has_four_entries() -> None:
+    assert len(all_schedules) == 4
 
 
 def test_schedule_names_in_all_schedules() -> None:
@@ -54,3 +54,4 @@ def test_schedule_names_in_all_schedules() -> None:
     assert "clustering_schedule" in names
     assert "fact_promotion_schedule" in names
     assert "custodian_visit_schedule" in names
+    assert "heat_schedule" in names

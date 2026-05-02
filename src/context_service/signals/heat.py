@@ -1,42 +1,64 @@
 """Heat lookup.
 
-Phase 1 (this file) is a stub returning a neutral 0.5 so the priority formula
-remains well-defined while the real heat asset is deferred to Phase 2.
-The function signature is the Phase 2 signature so callers don't refactor
-when the stub flips to a Memgraph read.
+Reads ``n.heat_score`` from Memgraph, falling back to a neutral 0.5 when the
+property is absent (i.e. the heat asset has not yet run for this node).
+
+Phase 1 shipped a stub that returned 0.5 unconditionally; that stub is gone.
+If you see heat scores that look uniformly neutral, check that the heat Dagster
+asset is scheduled and has completed at least one run for the silo.
 """
 
 from __future__ import annotations
 
-import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+import structlog
 
 if TYPE_CHECKING:
-    from context_service.stores import MemgraphClient
+    from context_service.stores.memgraph import MemgraphClient
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger(__name__)
 
-STUB_HEAT_VALUE = 0.5
+DEFAULT_HEAT = 0.5
 
-# Process-local set: silo_ids for which we have already emitted the
-# heat.stub_active log line. Cleared in tests via fixture.
-_STUB_LOG_GUARD: set[str] = set()
+_GET_HEAT_QUERY = (
+    "MATCH (n {id: $id, silo_id: $silo_id}) "
+    "RETURN coalesce(n.heat_score, 0.5) AS h"
+)
 
 
 async def get_heat(
-    memgraph: MemgraphClient,  # noqa: ARG001  -- Phase 2 will use this
-    node_id: str,  # noqa: ARG001  -- Phase 2 will use this
+    memgraph: MemgraphClient,
+    node_id: str,
     silo_id: str,
 ) -> float:
     """Return the heat score for a node.
 
-    Phase 1: returns ``STUB_HEAT_VALUE`` (0.5) without touching Memgraph.
-    Phase 2: reads ``n.heat_score`` from Memgraph; falls back to 0.5 if absent.
+    Queries Memgraph for ``n.heat_score`` and falls back to ``DEFAULT_HEAT``
+    (0.5) when the property is absent or the node is not found.
+
+    Args:
+        memgraph: Live Memgraph client.
+        node_id: Node ID (string form of the UUID).
+        silo_id: Silo the node belongs to.
+
+    Returns:
+        Float heat score in [0.0, 1.0] (typically).
     """
-    if silo_id not in _STUB_LOG_GUARD:
-        _STUB_LOG_GUARD.add(silo_id)
-        logger.info("heat.stub_active", extra={"silo_id": silo_id})
-    return STUB_HEAT_VALUE
+    try:
+        rows: list[dict[str, Any]] = await memgraph.execute_query(
+            _GET_HEAT_QUERY,
+            {"id": str(node_id), "silo_id": silo_id},
+        )
+        return float(rows[0]["h"]) if rows else DEFAULT_HEAT
+    except Exception as exc:
+        logger.warning(
+            "heat_lookup_failed",
+            node_id=node_id,
+            silo_id=silo_id,
+            error=str(exc),
+        )
+        return DEFAULT_HEAT
 
 
-__all__ = ["STUB_HEAT_VALUE", "get_heat"]
+__all__ = ["DEFAULT_HEAT", "get_heat"]
