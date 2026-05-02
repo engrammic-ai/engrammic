@@ -41,6 +41,12 @@ Three focused PRs, each independently shippable.
 - Keep stdlib for non-perf paths (config loading, one-time serialization, tests)
 - Add `orjson` to dependencies
 
+Migration gotchas:
+- `datetime`: use `orjson.OPT_NAIVE_UTC` or serialize to ISO string before encoding
+- No `default=` function: pre-convert non-native types (UUID, Enum, dataclass)
+- Returns `bytes` not `str`: use `.decode()` where string needed, or keep bytes for HTTP responses
+- `orjson.dumps()` options via bitwise OR: `OPT_SERIALIZE_NUMPY | OPT_NAIVE_UTC`
+
 **Done:** ~67 call sites migrated, benchmarks show improvement on serialization-heavy paths.
 
 ### 3. N+1 Batching
@@ -65,6 +71,10 @@ Migrate `services/context.py` and `custodian/` to depend on `engine/protocols.py
 3. Migrate `services/context.py` (~19 inline Cypher queries) to protocol, method by method, green at each commit
 4. Migrate `custodian/` (19 files) to protocol, grouped by subsystem (validators, write_path, promotion, etc.)
 5. Add in-memory protocol fake in `tests/fakes/memgraph_fake.py`
+   - Dict-backed node/edge storage
+   - Transaction support (begin/commit/rollback with snapshot isolation)
+   - Basic Cypher subset: MATCH, CREATE, MERGE, DELETE, SET, WHERE, RETURN
+   - No query optimizer or index semantics (tests should not depend on perf)
 6. Migrate one integration test to use fake as demo
 7. Add CI check: fail on direct `MemgraphClient` imports outside `engine/`, `stores/`, `db/`
 
@@ -87,36 +97,54 @@ Core endpoints (mirror MCP tools):
 - `GET /v1/context/{id}` - context_get
 - `POST /v1/context/query` - context_query
 - `POST /v1/context/graph` - context_graph
+- `GET /v1/context/{id}/history` - context_history (time-travel)
+- `GET /v1/context/{id}/provenance` - context_provenance (lineage)
 - `POST /v1/context/remember` - context_remember
 - `POST /v1/context/assert` - context_assert
 - `POST /v1/context/commit` - context_commit
+- `POST /v1/context/reason` - context_reason (multi-step chains)
 - `POST /v1/context/reflect` - context_reflect
 - `POST /v1/context/link` - context_link
 
 Bulk endpoints:
 - `POST /v1/ingest` - batch document/memory ingestion, returns job ID
-- `GET /v1/ingest/{job_id}` - poll job status
+- `GET /v1/ingest/{job_id}` - poll job status (includes per-item success/failure)
 - `POST /v1/query/bulk` - multiple queries in one request
+
+Bulk ingest error semantics:
+- Partial success model: each item processed independently, failures don't block others
+- Response includes `succeeded: []`, `failed: [{index, error}]` arrays
+- Caller decides whether to retry failed items
+- No atomic rollback (too expensive at scale; use single-item endpoint if atomicity needed)
 
 Webhooks:
 - `POST /v1/webhooks` - register callback URL + event filter
+- `GET /v1/webhooks` - list registered webhooks
 - `DELETE /v1/webhooks/{id}` - unregister
 - Events: `context.created`, `context.updated`, `claim.promoted`, `cluster.updated`
 
+Webhook delivery contract:
+- Signed payloads: HMAC-SHA256 signature in `X-Delta-Signature` header, secret set at registration
+- Retry policy: exponential backoff (1s, 5s, 30s, 5m, 30m), max 5 attempts
+- Dead letter: failed webhooks after retries logged to `webhook_failures` table, surfaced via `GET /v1/webhooks/{id}/failures`
+- Timeout: 10s per delivery attempt
+
 Silo management:
 - `POST /v1/silos` - create silo
-- `GET /v1/silos` - list silos for org
+- `GET /v1/silos` - list silos for org (includes archived if `?include_archived=true`)
 - `GET /v1/silos/{id}` - silo details + stats
-- `DELETE /v1/silos/{id}` - archive/delete silo
-- `POST /v1/silos/{id}/export` - trigger export job
-- `POST /v1/silos/import` - import from JSONL
+- `DELETE /v1/silos/{id}` - soft delete (sets `archived_at`, data retained 30 days)
+- `DELETE /v1/silos/{id}?hard=true` - hard delete (immediate purge, requires admin role)
+- `POST /v1/silos/{id}/restore` - restore archived silo (within 30-day window)
+- `POST /v1/silos/{id}/export` - trigger export job (uses existing beta4 JSONL format)
+- `POST /v1/silos/import` - import from JSONL (beta4 format, with schema version check)
 
-Org/User management:
-- `GET /v1/org` - current org details
-- `GET /v1/org/members` - list users in org
-- `POST /v1/org/members` - invite user
-- `DELETE /v1/org/members/{id}` - remove user
-- `PATCH /v1/org/members/{id}` - update role
+Org management (metadata layer over WorkOS):
+- `GET /v1/org` - current org details (synced from WorkOS + local settings)
+- `GET /v1/org/members` - list users in org (reads from WorkOS, enriches with local roles)
+- `PATCH /v1/org/members/{id}` - update Delta Prime role (admin/member/viewer, stored locally)
+
+User lifecycle (invite/remove) handled via WorkOS dashboard or their API directly. We store only role assignments and preferences, not user records.
 
 Usage/Stats:
 - `GET /v1/org/usage` - node counts, query volume, storage
