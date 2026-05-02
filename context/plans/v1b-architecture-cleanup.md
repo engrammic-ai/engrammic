@@ -1,8 +1,19 @@
 # Plan: Architecture Cleanup — Protocol Adoption + Settings Consolidation
 
-**Status:** Draft 2026-04-28
-**Branch:** `phase-eag-arch-cleanup` (when work starts)
+**Status:** Complete 2026-05-03
+**Branch:** `phase-eag-arch-cleanup-workstream-b` (Workstream B merged), `phase-eag-arch-cleanup-workstream-a` (this PR)
 **Workstream:** v1-β phase 6+ (parallel to `v1b-eag-completion.md`; opportunistic)
+
+## Completion Summary
+
+**Workstream B (Settings Consolidation):** Merged 2026-05-03. `core/settings.py` is now a deprecated shim re-exporting from `config/settings.py`.
+
+**Workstream A (Protocol Adoption):** Complete 2026-05-03.
+- Added escape hatch methods to `HyperGraphStore` protocol (`execute_query`, `execute_write`, `session`, `transaction`)
+- Migrated `services/context.py` and all 10 custodian files to depend on protocol
+- Created `FakeGraphStore` in-memory test double
+- Added CI boundary test to prevent regression
+- 8 known violations documented (signals, clustering, extraction, api wiring) for future cleanup
 
 ## Goal
 
