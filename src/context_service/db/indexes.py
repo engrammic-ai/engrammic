@@ -79,6 +79,8 @@ WISDOM_INDEX_QUERIES: tuple[str, ...] = (
     f"CREATE INDEX ON :{WisdomLabel.BELIEF}(silo_id);",
     f"CREATE INDEX ON :{WisdomLabel.PATTERN}(id);",
     f"CREATE INDEX ON :{WisdomLabel.PATTERN}(silo_id);",
+    f"CREATE INDEX ON :{WisdomLabel.PATTERN}(pattern_type);",
+    f"CREATE INDEX ON :{WisdomLabel.PATTERN}(silo_id, pattern_type);",
 )
 
 
