@@ -1,6 +1,6 @@
 """Core application utilities: settings."""
 
-from context_service.core.settings import (
+from context_service.config.settings import (
     CacheConfig,
     CustodianSettings,
     EmbeddingConfig,

@@ -25,7 +25,7 @@ from pydantic import (
     model_validator,
 )
 
-from context_service.core.settings import get_settings
+from context_service.config.settings import get_settings
 from context_service.extraction.models import EXTRACTION_SCHEMA, RelationshipType
 
 _MIN_EDGE_CONFIDENCE: float = get_settings().custodian.min_edge_confidence

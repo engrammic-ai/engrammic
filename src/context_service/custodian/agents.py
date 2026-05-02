@@ -15,7 +15,7 @@ from primitives.eag.agents import DepsProtocol  # noqa: F401  # type: ignore[imp
 from pydantic_ai import Agent
 from pydantic_ai.usage import UsageLimits
 
-from context_service.core.settings import get_settings
+from context_service.config.settings import get_settings
 from context_service.custodian.models import (
     BudgetStatus,
     Claim,
