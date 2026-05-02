@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 from typing import TYPE_CHECKING, Any
 
@@ -57,7 +58,8 @@ async def promote_consensus_to_finding(
             )
             await tx.commit()
         except Exception:
-            await tx.rollback()
+            with contextlib.suppress(Exception):
+                await tx.rollback()
             raise
 
     return finding_id

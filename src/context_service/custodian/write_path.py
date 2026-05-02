@@ -24,6 +24,7 @@ distinguish "committed empty" from "skipped".
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import uuid
 from datetime import UTC, datetime
@@ -280,8 +281,8 @@ class WritePath:
 
         history_created = False
 
-        async with self._client.session() as _session:
-            tx = await _session.begin_transaction()
+        async with self._client.session() as session:
+            tx = await session.begin_transaction()
             try:
                 # 4a. Look up prior finding inside the same transaction.
                 prior = await fetch_current_finding(
@@ -412,7 +413,8 @@ class WritePath:
 
                 await tx.commit()
             except Exception:
-                await tx.rollback()
+                with contextlib.suppress(Exception):
+                    await tx.rollback()
                 raise
 
         return WritePathResult(

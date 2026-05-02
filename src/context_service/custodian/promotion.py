@@ -15,6 +15,7 @@ transaction -- partial failure rolls back the entire promotion.
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -298,7 +299,8 @@ async def execute_promotion(
 
             await tx.commit()
         except Exception:
-            await tx.rollback()
+            with contextlib.suppress(Exception):
+                await tx.rollback()
             raise
 
     return result
