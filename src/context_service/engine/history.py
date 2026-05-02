@@ -90,6 +90,7 @@ def build_belief_timeline(subject_id: str, rows: list[dict[str, Any]]) -> Belief
             )
         )
 
+    states.sort(key=lambda s: (s.valid_from is None, s.valid_from))
     confidences = [s.confidence for s in states]
     trend = compute_confidence_trend(confidences)
 
