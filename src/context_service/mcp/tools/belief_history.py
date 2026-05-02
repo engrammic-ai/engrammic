@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
-from context_service.engine.history import get_belief_history
 from context_service.mcp.server import get_context_service, get_mcp_auth_context, get_silo_service
 from context_service.services.silo import validate_silo_ownership
 
@@ -28,17 +27,24 @@ async def _context_belief_history(
         return err
 
     ctx_svc = get_context_service()
-    history = await get_belief_history(
-        memgraph=ctx_svc._memgraph,
+    history = await ctx_svc.belief_history(
         silo_id=silo_id,
-        start_id=node_id,
+        node_id=node_id,
         limit=limit,
     )
 
+    timeline = history.timeline
+    first_belief = timeline[0].valid_from.isoformat() if timeline and timeline[0].valid_from else None
+    last_change = timeline[-1].valid_from.isoformat() if timeline and timeline[-1].valid_from else None
+
     return {
         "subject": history.subject,
-        "total_versions": history.total_versions,
-        "confidence_trend": history.confidence_trend,
+        "summary": {
+            "total_versions": history.total_versions,
+            "confidence_trend": history.confidence_trend,
+            "first_belief": first_belief,
+            "last_change": last_change,
+        },
         "timeline": [
             {
                 "node_id": s.node_id,
@@ -49,7 +55,7 @@ async def _context_belief_history(
                 "status": s.status,
                 "superseded_by": s.superseded_by,
             }
-            for s in history.timeline
+            for s in timeline
         ],
     }
 
