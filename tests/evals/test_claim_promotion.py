@@ -59,6 +59,5 @@ async def test_claim_promotion_quality(
         expected_promoted = case_result.expected_output.get("promoted")
         actual_promoted = case_result.output.get("promoted") if case_result.output else False
         assert actual_promoted == expected_promoted, (
-            f"Case {case_result.name}: expected promoted={expected_promoted}, "
-            f"got {actual_promoted}"
+            f"Case {case_result.name}: expected promoted={expected_promoted}, got {actual_promoted}"
         )

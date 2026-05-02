@@ -1,6 +1,6 @@
 # Plan: Auth Completion + Silo Ownership Enforcement
 
-**Status:** Draft 2026-04-28
+**Status:** Complete 2026-05-02 (verified by audit)
 **Branch:** `phase-eag-d-auth-finish`
 **Workstream:** v1-β phase 1
 

@@ -1,6 +1,6 @@
 # Plan: SPLADE Hybrid Retrieval
 
-**Status:** Draft 2026-04-28
+**Status:** Built, not wired (verified 2026-05-02). All components implemented. Two lines needed to activate at runtime — see Critical Gap below.
 **Branch:** `phase-splade`
 **Workstream:** v1-β phase 3
 
@@ -61,6 +61,18 @@ The repo already references SPLADE in plans but has no implementation. Adding it
 - Per-query learned fusion weights (simple RRF + configurable static weights only).
 - Late-interaction models.
 - Adapting to query intent (no query-classification → mode-switching).
+
+## Critical gap (2026-05-02 audit)
+
+All tasks 1–8 are complete. The feature is not running because `SpladeEncoder` is never
+instantiated and `ContextService` never receives it. Two fixes required:
+
+1. `mcp/server.py` — instantiate `SpladeEncoder` when `settings.hybrid_search_enabled` and pass
+   as `splade=` to `ContextService(...)`.
+2. `api/app.py` — pass `hybrid=settings.hybrid_search_enabled` to
+   `qdrant_client.ensure_collection()` so sparse vector config is provisioned.
+
+Once these land, the done criteria below are satisfied.
 
 ## Done criteria
 

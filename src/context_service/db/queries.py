@@ -587,8 +587,8 @@ TEMPORAL_QUERY = (
 
 GET_SUPERSESSION_CHAIN = (
     "MATCH (start {id: $start_id, silo_id: $silo_id}) "
-    "OPTIONAL MATCH path = (start)-[:SUPERSEDES*0..20]-(related) "
-    "WHERE related.silo_id = $silo_id "
+    "OPTIONAL MATCH path = (start)-[:SUPERSEDES*0..20]->(related) "
+    "WHERE ALL(x IN nodes(path) WHERE x.silo_id = $silo_id) "
     "WITH collect(DISTINCT related) + [start] AS all_nodes "
     "UNWIND all_nodes AS n "
     "WITH DISTINCT n "
@@ -597,6 +597,6 @@ GET_SUPERSESSION_CHAIN = (
     "       n.confidence AS confidence, "
     "       n.valid_from AS valid_from, n.valid_to AS valid_to, "
     "       superseded_by_node.id AS superseded_by "
-    "ORDER BY n.valid_from ASC "
+    "ORDER BY n.valid_from DESC "
     "LIMIT $limit"
 )

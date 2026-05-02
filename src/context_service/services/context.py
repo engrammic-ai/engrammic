@@ -1051,11 +1051,21 @@ class ContextService:
             TEMPORAL_QUERY,
             {
                 "silo_id": silo_id,
-                "as_of": as_of,
+                "as_of": as_of.isoformat(),
                 "type_filter": type_filter,
                 "limit": top_k,
             },
         )
+
+        def _format_timestamp(ts: Any) -> str | None:
+            if ts is None:
+                return None
+            if hasattr(ts, "isoformat"):
+                return str(ts.isoformat())
+            if isinstance(ts, (int, float)):
+                # Memgraph timestamp() returns microseconds since epoch
+                return datetime.fromtimestamp(ts / 1_000_000, tz=UTC).isoformat()
+            return str(ts)
 
         results = []
         for row in rows:
@@ -1065,9 +1075,9 @@ class ContextService:
                     "content": row["content"],
                     "labels": row["labels"],
                     "confidence": row.get("confidence"),
-                    "valid_from": row.get("valid_from"),
-                    "valid_to": row.get("valid_to"),
-                    "created_at": row.get("created_at"),
+                    "valid_from": _format_timestamp(row.get("valid_from")),
+                    "valid_to": _format_timestamp(row.get("valid_to")),
+                    "created_at": _format_timestamp(row.get("created_at")),
                 }
             )
         return results

@@ -1,6 +1,6 @@
 # Plan: Integration Test Pack
 
-**Status:** Draft 2026-04-28
+**Status:** ~68% complete (verified 2026-05-02). See audit notes below each task.
 **Branch:** `phase-integration-test-pack` (or weave into β2 branches)
 **Workstream:** v1-β phase 5 (runs alongside β2)
 
@@ -24,7 +24,7 @@ The current integration suite has ~10 tests (auth, migrations, fact-promotion, p
 
 ## Tasks (priority order)
 
-1. **E2E ingest → query test.** `tests/integration/test_e2e_ingest_query.py`.
+1. **E2E ingest → query test.** `tests/integration/test_e2e_ingest_query.py`. ⚠️ MISSING — individual operations covered across multiple files but no single unified ingest→query→provenance test exists.
    - Start the full Dagster graph in test mode (after β2c lands) — or in pre-β2 form, drive the asset chain manually via service calls.
    - Ingest 3-5 small docs into a fresh silo with known content (e.g. "Paris is the capital of France", "Berlin is in Germany").
    - Wait for the pipeline to settle (poll for `:Finding` nodes, or hook into Dagster's run-status API).
@@ -32,23 +32,23 @@ The current integration suite has ~10 tests (auth, migrations, fact-promotion, p
    - Run `context_provenance(claim_id)` and assert it traces back to the seed doc.
    - Run `context_get(claim_id)` and assert metadata is populated.
 
-2. **Cross-silo isolation test.** `tests/integration/test_cross_silo_isolation.py`. (Pinned by β1 implementation.)
+2. **Cross-silo isolation test.** `tests/integration/test_cross_silo_isolation.py`. ✓ DONE — `test_silo_ownership.py` covers owning org access and foreign org rejection.
    - Assert a claim in silo A as org X.
    - Attempt `context_query` in silo A as org Y → expect `SiloAccessError`.
    - Attempt `context_query` in silo B as org X (different silo, same org) → returns no results from silo A.
    - Pins the silo-ownership boundary added in β1.
 
-3. **Auth flow test (live).** `tests/integration/test_auth_flow.py`.
+3. **Auth flow test (live).** `tests/integration/test_auth_flow.py`. ⚠️ PARTIAL — invalid/missing token paths covered in `test_auth_workos.py`. Missing: dev bypass + prod fail-closed (AUTH_ENABLED=false in production env) tested together in one suite.
    - Boot the full FastAPI app with `AUTH_ENABLED=false`; hit a protected route, assert dev `AuthContext`.
    - Boot with `AUTH_ENABLED=true` + valid `WORKOS_*` env (use mocked WorkOS via the existing `tests/integration/test_auth_workos.py` pattern); hit the route, assert real auth.
    - Boot with `ENVIRONMENT=production AUTH_ENABLED=false` → assert app refuses to start (the boot-time prod-guard).
 
-4. **Failure-mode tests.** `tests/integration/test_failure_modes.py`.
+4. **Failure-mode tests.** `tests/integration/test_failure_modes.py`. ⚠️ PARTIAL — Qdrant failure propagation and circuit breaker behaviour covered in `test_p1_fixes.py`. Missing: extraction LLM unavailable scenario; Memgraph transient ServiceUnavailable with recovery assertion.
    - **Extraction LLM unavailable**: mock the LLM client to raise; run an extraction asset. Assert: asset fails with retry, eventually lands in poison queue (β2c).
    - **Qdrant down**: stop the docker qdrant container mid-test (via fixture); attempt a `context_query`. Assert graceful degradation (returns dense-only or empty with a clear error, depending on β3 fusion config).
    - **Memgraph transient `ServiceUnavailable`**: inject one transient failure via monkey-patching the driver; assert the existing retry policy in `stores/memgraph.py:230-260` recovers.
 
-5. **Asset graph integration tests** (one per asset family in β2).
+5. **Asset graph integration tests** (one per asset family in β2). ✓ DONE — `test_extraction_pipeline.py`, `test_hybrid_retrieval.py`, `test_silo_portability.py`, `test_provenance_e2e.py`, `test_assert_to_fact.py`, `test_reflection_e2e.py` all present.
    - `tests/integration/test_extraction_asset.py` — seed docs, run the asset, assert claims land.
    - `tests/integration/test_embedding_asset.py` — seed nodes without vectors, run the asset, assert Qdrant points exist.
    - `tests/integration/test_custodian_assets.py` — seed claims, run visit + finalize, assert findings emerge.

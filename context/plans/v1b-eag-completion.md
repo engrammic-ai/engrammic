@@ -1,6 +1,6 @@
 # Plan: Paradigm Completion + Hygiene
 
-**Status:** Draft 2026-04-28
+**Status:** Complete 2026-05-02 (verified by audit). One item deferred: deprecated claim_rejections counter removal, Q3 target, replacement counters already live.
 **Branch:** `phase-eag-completion`
 **Workstream:** v1-β phase 6 (opportunistic; pick items off as time allows)
 
