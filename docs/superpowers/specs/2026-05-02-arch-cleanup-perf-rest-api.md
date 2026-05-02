@@ -99,6 +99,7 @@ Core endpoints (mirror MCP tools):
 - `POST /v1/context/graph` - context_graph
 - `GET /v1/context/{id}/history` - context_history (time-travel)
 - `GET /v1/context/{id}/provenance` - context_provenance (lineage)
+- `GET /v1/context/{id}/beliefs` - context_belief_history (supersession chains)
 - `POST /v1/context/remember` - context_remember
 - `POST /v1/context/assert` - context_assert
 - `POST /v1/context/commit` - context_commit
@@ -152,8 +153,47 @@ Usage/Stats:
 
 **Design decisions:**
 - Auth: WorkOS flow, Bearer tokens (same as MCP)
-- Versioning: `/v1/` prefix, additive changes only
+- Versioning: `/v1/` prefix, additive changes only; v2 warranted only for breaking schema changes
 - Silo ID derived from auth context (same as MCP)
+- Query vs Graph: `context_query` = semantic/keyword search with filters; `context_graph` = explicit traversal from seed nodes
+
+**Pagination (all list endpoints):**
+- Cursor-based: `?cursor=<opaque>&limit=100` (default 50, max 100)
+- Response includes `next_cursor` (null if no more pages)
+- Applies to: `GET /v1/silos`, `/webhooks`, `/org/members`, `/ingest/{job_id}` items
+
+**Rate limiting:**
+- Global: 1000 req/min per org (429 with `Retry-After` header)
+- Bulk endpoints: 10 req/min per org (expensive operations)
+- Webhooks registration: 100/hour per org
+- Tunable per partner via config; defaults above are starting points
+
+**Error response format:**
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Human-readable description",
+    "details": {"field": "silo_id", "reason": "not found"}
+  }
+}
+```
+Standard codes: `VALIDATION_ERROR`, `NOT_FOUND`, `FORBIDDEN`, `RATE_LIMITED`, `INTERNAL_ERROR`
+
+**Webhook event payload schema:**
+```json
+{
+  "event_type": "context.created",
+  "event_id": "uuid",
+  "timestamp": "ISO8601",
+  "silo_id": "uuid",
+  "data": {
+    "node_id": "uuid",
+    "layer": "memory|knowledge|wisdom|intelligence",
+    "content_preview": "first 200 chars..."
+  }
+}
+```
 
 ## Phase 2: REST API Implementation
 
