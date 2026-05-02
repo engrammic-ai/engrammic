@@ -1,6 +1,6 @@
 # Plan: Auth Completion + Silo Ownership Enforcement
 
-**Status:** Complete 2026-05-02 (verified by audit)
+**Status:** Complete 2026-05-02 (verified by audit; per-request auth limitation documented 2026-05-02)
 **Branch:** `phase-eag-d-auth-finish`
 **Workstream:** v1-β phase 1
 
@@ -53,7 +53,7 @@ v1-α shipped boot-time prod-guard + fail-closed resolver paths, but the MCP sur
 
 - Every MCP tool entry that takes a `silo_id` calls `validate_silo_ownership` before any service call.
 - `validate_silo_ownership` cached via Redis (positive results only, short TTL).
-- MCP tool calls under `AUTH_ENABLED=true` resolve auth per-request (or the limitation is precisely documented and the dev path remains for dev only).
+- MCP tool calls under `AUTH_ENABLED=true` resolve auth per-request via ``get_mcp_auth_context()`` (``get_http_headers`` on every tool call). ``MCPAuthMiddleware`` is not mounted -- this limitation is documented in ``mcp/auth.py`` and ``mcp/server.py`` with the rationale (no stable Starlette mount point on FastMCP) and the deferred-to-future-version note.
 - WorkOS verify call works against a real tenant or the API is documented as-is with a verified SDK version pin.
 - Cross-org silo access raises and the regression test pins it.
 - `just check` and `just test` green.

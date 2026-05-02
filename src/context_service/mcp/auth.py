@@ -1,12 +1,19 @@
 # context_service/mcp/auth.py
-"""MCP authentication — simplified API key auth.
+"""MCP authentication -- simplified API key auth.
 
-Do not import ``get_mcp_auth`` directly from here. The ContextVar it reads is
-populated only when ``MCPAuthMiddleware`` is mounted, which it currently is not
-(see review finding S-001). Tool callsites should use
-``context_service.mcp.server.get_mcp_auth_context()`` instead, which returns the
-startup-resolved ``AuthContext``. This module is kept in place because v1-β
-phase 1 (``v1b-auth-finish.md``) will rebuild per-request auth around it.
+Known limitation: ``MCPAuthMiddleware`` is not mounted.
+FastMCP does not expose a standard Starlette ``app`` object at construction
+time, so there is no stable hook to attach this middleware.  As a result the
+``ContextVar`` ``_mcp_auth_context`` is never populated, and calling
+``get_mcp_auth()`` from tool code will always raise ``RuntimeError``.
+
+Tool callsites must use
+``context_service.mcp.server.get_mcp_auth_context()`` instead, which reads
+the Authorization header via FastMCP's ``get_http_headers`` dependency on
+every tool invocation (genuine per-request resolution).
+
+This module is kept in place for the future version that will wire the
+middleware path once a stable Starlette mount point is available.
 """
 
 from __future__ import annotations
