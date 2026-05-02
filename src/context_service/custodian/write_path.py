@@ -295,9 +295,7 @@ class WritePath:
                 created_at = None  # MERGE ON CREATE won't fire; existing row
                 # 4b. Snapshot prior body to :FindingHistory.
                 prior_claims_str = prior.get("claims") or "[]"
-                prior_claims_hash = hashlib.sha256(
-                    prior_claims_str.encode("utf-8")
-                ).hexdigest()
+                prior_claims_hash = hashlib.sha256(prior_claims_str.encode("utf-8")).hexdigest()
                 prior_summary = prior.get("summary") or dumps(None)
                 prior_pass_id = prior.get("pass_id") or pass_id
 

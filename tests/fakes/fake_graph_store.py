@@ -42,7 +42,9 @@ class _FakeSession:
     def __init__(self, store: FakeGraphStore) -> None:
         self._store = store
 
-    async def run(self, statement: str, parameters: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    async def run(
+        self, statement: str, parameters: dict[str, Any] | None = None
+    ) -> list[dict[str, Any]]:
         self._store._write_log.append((statement, parameters or {}))
         return self._store._next_write_results.pop(0) if self._store._next_write_results else []
 

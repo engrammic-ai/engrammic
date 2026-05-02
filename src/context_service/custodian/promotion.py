@@ -269,9 +269,7 @@ async def execute_promotion(
             if record is not None:
                 result.findings_promoted += 1
             else:
-                result.errors.append(
-                    f"finding {f['finding_id']} not found or already published"
-                )
+                result.errors.append(f"finding {f['finding_id']} not found or already published")
 
         # Promote proposed edges via 9-way dispatch
         for edge in plan.proposed_edges:
