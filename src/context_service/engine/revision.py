@@ -29,12 +29,17 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from context_service.config.settings import get_settings
 from context_service.db.queries import (
     CREATE_BELIEF_FROM_FACTS,
     CREATE_BELIEF_SUPERSEDES,
     GET_FACTS_IN_CLUSTER,
     MARK_BELIEF_STALE,
     UPDATE_BELIEF_CENTROID,
+)
+from context_service.engine.auto_reflection import (
+    create_auto_reflection,
+    make_revision_content,
 )
 from context_service.engine.synthesis import (
     _SYNTHESIS_SYSTEM_PROMPT,
@@ -364,5 +369,26 @@ async def revise_belief(
         revision_count=revision_count,
         confidence=confidence,
     )
+
+    # Auto-reflection hook: record the revision as a system-generated observation.
+    # Errors are caught inside create_auto_reflection and only logged.
+    _settings = get_settings()
+    if _settings.auto_reflect.enabled and _settings.auto_reflect.on_revision:
+        old_content = str(old_belief.get("content") or old_belief_id)
+        # distance is not re-computed here; callers use check_belief_revision first.
+        # We report 0.0 as a placeholder — the observation is still useful for
+        # tracing that a revision occurred.
+        magnitude_pct = 0.0
+        obs_content = make_revision_content(
+            subject=old_content,
+            magnitude_pct=magnitude_pct,
+        )
+        await create_auto_reflection(
+            store=store,
+            observation_type="belief_change",
+            content=obs_content,
+            about_node_ids=[old_belief_id, new_belief_id],
+            silo_id=silo_id,
+        )
 
     return new_belief_id

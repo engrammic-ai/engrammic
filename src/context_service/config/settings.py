@@ -304,6 +304,20 @@ class PromptsConfig(BaseModel):
     mcp_preset: str | None = None
 
 
+class AutoReflectConfig(BaseModel):
+    """Feature flags for automatic MetaObservation generation."""
+
+    model_config = {"extra": "ignore"}
+
+    enabled: bool = Field(default=False, description="Master gate for auto-reflection")
+    on_supersession: bool = Field(
+        default=True, description="Generate observation on fact supersession"
+    )
+    on_revision: bool = Field(
+        default=True, description="Generate observation on belief revision"
+    )
+
+
 class FeaturesConfig(BaseModel):
     model_config = {"extra": "ignore"}
 
@@ -406,6 +420,7 @@ class Settings(BaseSettings):
     stripe: StripeConfig = Field(default_factory=StripeConfig)
     custodian: CustodianSettings = Field(default_factory=CustodianSettings)
     retrieval_tuning: RetrievalTuning = Field(default_factory=RetrievalTuning)
+    auto_reflect: AutoReflectConfig = Field(default_factory=AutoReflectConfig)
 
     # =========================================================================
     # Application Meta

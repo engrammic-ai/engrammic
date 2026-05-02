@@ -29,9 +29,14 @@ from primitives.eag.epistemology.supersession import (
 )
 
 from context_service.config.logging import get_logger
+from context_service.config.settings import get_settings
 from context_service.custodian.supersession_parser import (
     build_supersession_prompt,
     parse_supersession_response,
+)
+from context_service.engine.auto_reflection import (
+    create_auto_reflection,
+    make_supersession_content,
 )
 
 logger = get_logger(__name__)
@@ -277,6 +282,28 @@ async def run_supersession_pass(
         )
         if written:
             edges_written += 1
+
+    # Auto-reflection hook: fire-and-forget per supersession edge written.
+    # Errors are caught inside create_auto_reflection and only logged.
+    _settings = get_settings()
+    if _settings.auto_reflect.enabled and _settings.auto_reflect.on_supersession:
+        for pair in list(structured_pairs) + list(llm_pairs):
+            from_node = node_map.get(pair.superseding_id)
+            to_node = node_map.get(pair.superseded_id)
+            if not from_node or not to_node:
+                continue
+            content = make_supersession_content(
+                old_content=str(to_node.content),
+                new_content=str(from_node.content),
+                reason=pair.reason,
+            )
+            await create_auto_reflection(
+                store=store,
+                observation_type="belief_change",
+                content=content,
+                about_node_ids=[pair.superseding_id, pair.superseded_id],
+                silo_id=silo_id,
+            )
 
     total_pairs = len(structured_pairs) + len(llm_pairs)
     return SupersessionPassResult(
