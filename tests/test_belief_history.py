@@ -75,6 +75,37 @@ def test_linear_supersession_chain() -> None:
     assert history.confidence_trend == "increasing"
 
 
+def test_branching_supersession() -> None:
+    """Node A superseded by both B and C (branching chain).
+
+    In a branching supersession, two independent successors both mark the same
+    ancestor node as superseded (e.g., two competing revisions). The rows
+    returned by the Cypher query include all three nodes. build_belief_timeline
+    includes all rows, marking any node with a valid_to or superseded_by pointer
+    as "superseded" and the rest as "current".
+    """
+    rows = _make_rows(
+        # fact-a is the anchor; both fact-b and fact-c supersede it
+        ("fact-a", 0.6, "2026-01-01T00:00:00+00:00", "2026-02-01T00:00:00+00:00", "fact-b"),
+        ("fact-b", 0.8, "2026-02-01T00:00:00+00:00", None, None),
+        ("fact-c", 0.9, "2026-02-01T00:00:00+00:00", None, None),
+    )
+    history = build_belief_timeline("fact-a", rows)
+    ids_in_timeline = [entry.node_id for entry in history.timeline]
+    # All three nodes must be present in the timeline
+    assert "fact-a" in ids_in_timeline
+    assert "fact-b" in ids_in_timeline
+    assert "fact-c" in ids_in_timeline
+    assert history.total_versions == 3
+    # fact-a has both valid_to and superseded_by set, so it is superseded
+    fact_a_state = next(s for s in history.timeline if s.node_id == "fact-a")
+    assert fact_a_state.status == "superseded"
+    # fact-b and fact-c have neither valid_to nor superseded_by, so they are current
+    for nid in ("fact-b", "fact-c"):
+        state = next(s for s in history.timeline if s.node_id == nid)
+        assert state.status == "current"
+
+
 def test_cycle_guard() -> None:
     """Rows with a cycle (a->b->a) must not cause infinite loop."""
     rows = _make_rows(

@@ -175,7 +175,10 @@ def register(mcp: FastMCP) -> None:
             filters: QueryFilters: tags, source_type, min_confidence, created_after, created_before.
             top_k: Maximum results (default 10).
             include_superseded: Include superseded nodes (default False).
-            as_of: ISO 8601 datetime for time-travel (not yet implemented at store level).
+            as_of: ISO 8601 datetime for time-travel. When provided, returns only nodes
+                whose validity window covers this timestamp (valid_from <= as_of and
+                valid_to is null or valid_to > as_of). Enables point-in-time queries
+                against the Memgraph store.
             search_mode: Retrieval mode — "hybrid" (dense+sparse RRF, default),
                 "dense" (dense-only), or "sparse" (SPLADE-only).
 
