@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from context_service.engine.synthesis import (
+    _SYNTHESIS_SYSTEM_PROMPT,
     MIN_FACTS_FOR_BELIEF,
     InsufficientEvidenceError,
     _average_confidence,
@@ -113,9 +114,11 @@ async def test_synthesize_belief_creates_belief_node() -> None:
 
     assert belief_id == _make_belief_id("cluster-1", "silo-1")
 
-    # Verify LLM was called with the facts embedded in the user message
+    # Verify LLM was called with a system message and facts in the user message
     call_args = llm.complete.call_args
     messages = call_args.kwargs["messages"] if call_args.kwargs else call_args[0][0]
+    assert messages[0]["role"] == "system"
+    assert messages[0]["content"] == _SYNTHESIS_SYSTEM_PROMPT
     assert any("Fact content" in m["content"] for m in messages)
 
 
@@ -131,7 +134,7 @@ async def test_synthesize_belief_write_params() -> None:
     await synthesize_belief(store, "c-1", "s-1", llm)
 
     cypher, params = store.write_log[0]
-    assert "CREATE (b:Belief" in cypher
+    assert "Belief" in cypher
     assert params["silo_id"] == "s-1"
     assert params["evidence_count"] == 3
     assert abs(params["confidence"] - 0.75) < 1e-9

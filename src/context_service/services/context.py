@@ -85,6 +85,11 @@ class ContextService:
         self._cache = cache
         self._splade = splade
 
+    @property
+    def graph_store(self) -> HyperGraphStore:
+        """Expose the underlying HyperGraphStore for callers that need raw graph access."""
+        return self._memgraph
+
     async def store(
         self,
         scope: ScopeContext,

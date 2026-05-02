@@ -17,6 +17,7 @@ batch_compact_chains(store, silo_id, statuses, limit) -> list[str]
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -144,13 +145,8 @@ async def compact_reasoning_chain(
 
     if raw_steps:
         # Hot form: steps is a list of dicts (serialised from ChainStep)
-        if isinstance(raw_steps, list):
-            steps = raw_steps
-        else:
-            # Memgraph may return steps as a JSON string
-            import json
-
-            steps = json.loads(raw_steps)
+        # Memgraph may return steps as a JSON string rather than a list.
+        steps = raw_steps if isinstance(raw_steps, list) else json.loads(raw_steps)
         content = _summarise_steps(steps)
         step_count = len(steps)
     elif compact_summary:
@@ -165,29 +161,30 @@ async def compact_reasoning_chain(
     now = datetime.now(UTC)
     event_id = _make_event_id(chain_id, silo_id)
 
-    await store.execute_write(
-        CREATE_REASONING_TRACE_EVENT,
-        {
-            "event_id": event_id,
-            "chain_id": chain_id,
-            "silo_id": silo_id,
-            "agent_id": agent_id,
-            "content": content,
-            "created_at": now.isoformat(),
-            "step_count": step_count,
-            "outcome": outcome,
-        },
-    )
+    async with store.transaction():
+        await store.execute_write(
+            CREATE_REASONING_TRACE_EVENT,
+            {
+                "event_id": event_id,
+                "chain_id": chain_id,
+                "silo_id": silo_id,
+                "agent_id": agent_id,
+                "content": content,
+                "created_at": now.isoformat(),
+                "step_count": step_count,
+                "outcome": outcome,
+            },
+        )
 
-    await store.execute_write(
-        TOMBSTONE_REASONING_CHAIN,
-        {
-            "chain_id": chain_id,
-            "silo_id": silo_id,
-            "event_id": event_id,
-            "compacted_at": now.isoformat(),
-        },
-    )
+        await store.execute_write(
+            TOMBSTONE_REASONING_CHAIN,
+            {
+                "chain_id": chain_id,
+                "silo_id": silo_id,
+                "event_id": event_id,
+                "compacted_at": now.isoformat(),
+            },
+        )
 
     logger.info(
         "chain_compacted",

@@ -608,18 +608,16 @@ TEMPORAL_QUERY = (
 
 CREATE_REASONING_TRACE_EVENT = """
 MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})
-CREATE (e:Event {
-    id: $event_id,
-    event_type: "reasoning_trace",
-    content: $content,
-    silo_id: $silo_id,
-    agent_id: $agent_id,
-    created_at: $created_at,
-    source_chain_id: $chain_id,
-    step_count: $step_count,
-    outcome: $outcome
-})
-CREATE (e)-[:DERIVED_FROM]->(chain)
+MERGE (e:Event {id: $event_id, silo_id: $silo_id})
+ON CREATE SET
+    e.event_type = "reasoning_trace",
+    e.content = $content,
+    e.agent_id = $agent_id,
+    e.created_at = $created_at,
+    e.source_chain_id = $chain_id,
+    e.step_count = $step_count,
+    e.outcome = $outcome
+MERGE (e)-[:DERIVED_FROM]->(chain)
 RETURN e.id AS event_id
 """
 
@@ -647,7 +645,7 @@ GET_COMPACTABLE_CHAINS = """
 MATCH (chain:ReasoningChain {silo_id: $silo_id})
 WHERE coalesce(chain.compacted, false) = false
   AND chain.status IN $statuses
-RETURN chain.id AS id
+RETURN chain.id AS id, chain.status AS status
 ORDER BY chain.created_at ASC
 LIMIT $limit
 """
@@ -672,20 +670,18 @@ ORDER BY coalesce(f.confidence, 1.0) DESC
 # Create a :Belief node and attach SYNTHESIZED_FROM edges to all source facts
 # in a single write.  $fact_ids is a list of fact id strings.
 CREATE_BELIEF_FROM_FACTS = """
-CREATE (b:Belief {
-    id: $belief_id,
-    silo_id: $silo_id,
-    content: $content,
-    confidence: $confidence,
-    evidence_count: $evidence_count,
-    created_at: $created_at,
-    valid_from: $valid_from,
-    valid_to: null
-})
+MERGE (b:Belief {id: $belief_id, silo_id: $silo_id})
+ON CREATE SET
+    b.content = $content,
+    b.confidence = $confidence,
+    b.evidence_count = $evidence_count,
+    b.created_at = $created_at,
+    b.valid_from = $valid_from,
+    b.valid_to = null
 WITH b
 UNWIND $fact_ids AS fid
 MATCH (f:Fact {id: fid, silo_id: $silo_id})
-CREATE (b)-[:SYNTHESIZED_FROM]->(f)
+MERGE (b)-[:SYNTHESIZED_FROM]->(f)
 RETURN b.id AS belief_id, count(f) AS edges_created
 """
 
@@ -698,6 +694,40 @@ WHERE toLower(b.content) CONTAINS toLower($subject)
   AND (b.valid_to IS NULL OR b.valid_to > $as_of)
 RETURN b.id AS belief_id, b.content AS content, b.confidence AS confidence
 LIMIT 1
+"""
+
+# Store the cluster centroid embedding on a :Belief node.
+# Parameters: belief_id, silo_id, centroid_embedding (list[float]),
+#             last_revision_check (ISO datetime str), revision_count (int).
+UPDATE_BELIEF_CENTROID = """
+MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
+SET b.centroid_embedding = $centroid_embedding,
+    b.last_revision_check = $last_revision_check,
+    b.revision_count = $revision_count,
+    b.wisdom_status = coalesce(b.wisdom_status, 'active')
+RETURN b.id AS belief_id
+"""
+
+# Create a :SUPERSEDES edge from a new :Belief to the one it replaces.
+# Parameters: new_belief_id, old_belief_id, silo_id, reason (str),
+#             created_at (ISO datetime str).
+CREATE_BELIEF_SUPERSEDES = """
+MATCH (newer:Belief {id: $new_belief_id, silo_id: $silo_id})
+MATCH (older:Belief {id: $old_belief_id, silo_id: $silo_id})
+MERGE (newer)-[r:SUPERSEDES {
+    reason: $reason,
+    created_at: $created_at
+}]->(older)
+RETURN r.reason AS reason
+"""
+
+# Mark a :Belief as stale after it has been superseded.
+# Parameters: belief_id, silo_id, valid_to (ISO datetime str).
+MARK_BELIEF_STALE = """
+MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
+SET b.wisdom_status = 'stale',
+    b.valid_to = $valid_to
+RETURN b.id AS belief_id
 """
 
 GET_SUPERSESSION_CHAIN = (

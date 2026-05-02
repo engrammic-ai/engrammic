@@ -68,7 +68,7 @@ async def _context_commit(
             from context_service.engine.compaction import compact_reasoning_chain
 
             event_id = await compact_reasoning_chain(
-                ctx_svc._memgraph,
+                ctx_svc.graph_store,
                 chain_id=chain_id,
                 silo_id=str(expected_silo_id),
                 outcome="committed",
