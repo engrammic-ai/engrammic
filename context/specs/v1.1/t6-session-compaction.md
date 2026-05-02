@@ -53,8 +53,10 @@ After compaction:
 ## Summarization
 
 The `content` field is a condensed version of the chain's steps:
-- If chain has <= 5 steps: inline all step summaries
-- If chain has > 5 steps: LLM summarization of the reasoning arc
+- If chain has <= 5 steps: inline all step conclusions
+- If chain has > 5 steps: truncation (first 2 + last 2 steps with elided count)
+
+Note: LLM summarization was considered but deferred to avoid latency/cost. The truncation approach preserves key reasoning milestones while keeping compaction fast and deterministic.
 
 ## Provenance Edge
 

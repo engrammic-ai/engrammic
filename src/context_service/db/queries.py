@@ -585,6 +585,58 @@ TEMPORAL_QUERY = (
 
 # --- Supersession chain traversal (belief history) ---
 
+# ---------------------------------------------------------------------------
+# Session compaction: ReasoningChain -> Event (Memory layer trace)
+# ---------------------------------------------------------------------------
+
+CREATE_REASONING_TRACE_EVENT = """
+MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+CREATE (e:Event {
+    id: $event_id,
+    event_type: "reasoning_trace",
+    content: $content,
+    silo_id: $silo_id,
+    agent_id: $agent_id,
+    created_at: $created_at,
+    source_chain_id: $chain_id,
+    step_count: $step_count,
+    outcome: $outcome
+})
+CREATE (e)-[:DERIVED_FROM]->(chain)
+RETURN e.id AS event_id
+"""
+
+TOMBSTONE_REASONING_CHAIN = """
+MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+SET chain.compacted = true,
+    chain.compacted_at = $compacted_at,
+    chain.compact_event_id = $event_id
+RETURN chain.id AS chain_id
+"""
+
+GET_REASONING_CHAIN_FOR_COMPACTION = """
+MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+RETURN
+    chain.id AS id,
+    chain.steps AS steps,
+    chain.compact_summary AS compact_summary,
+    chain.produced_by_agent_id AS agent_id,
+    chain.tier AS tier,
+    chain.status AS status,
+    coalesce(chain.compacted, false) AS compacted
+"""
+
+GET_COMPACTABLE_CHAINS = """
+MATCH (chain:ReasoningChain {silo_id: $silo_id})
+WHERE coalesce(chain.compacted, false) = false
+  AND chain.status IN $statuses
+RETURN chain.id AS id
+ORDER BY chain.created_at ASC
+LIMIT $limit
+"""
+
+# --- Supersession chain traversal (belief history) ---
+
 GET_SUPERSESSION_CHAIN = (
     "MATCH (start {id: $start_id, silo_id: $silo_id}) "
     "OPTIONAL MATCH path = (start)-[:SUPERSEDES*0..20]->(related) "

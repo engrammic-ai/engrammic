@@ -51,6 +51,8 @@ MEMORY_INDEX_QUERIES: tuple[str, ...] = (
     f"CREATE INDEX ON :{MemoryLabel.UTTERANCE}(silo_id);",
     f"CREATE INDEX ON :{MemoryLabel.EVENT}(id);",
     f"CREATE INDEX ON :{MemoryLabel.EVENT}(silo_id);",
+    f"CREATE INDEX ON :{MemoryLabel.EVENT}(event_type);",
+    f"CREATE INDEX ON :{MemoryLabel.EVENT}(source_chain_id);",
 )
 
 
