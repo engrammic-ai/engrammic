@@ -170,16 +170,20 @@ async def test_query_invalid_filters(mock_deps):
 
 
 @pytest.mark.asyncio
-async def test_query_rejects_as_of(mock_deps):
+async def test_query_as_of_uses_temporal_path(mock_deps):
     from context_service.mcp.tools.context_query import _context_query
 
+    mock_deps["svc"].temporal_query = AsyncMock(return_value=[])
     result = await _context_query(
         silo_id=str(uuid.uuid5(uuid.NAMESPACE_DNS, "silo:test-org")),
         query="test",
         as_of="2026-01-01T00:00:00",
     )
 
-    assert result["error"] == "as_of_not_supported"
+    assert result.get("historical_query") is True
+    assert result.get("as_of") == "2026-01-01T00:00:00"
+    mock_deps["svc"].temporal_query.assert_called_once()
+    mock_deps["svc"].query.assert_not_called()
 
 
 @pytest.mark.asyncio

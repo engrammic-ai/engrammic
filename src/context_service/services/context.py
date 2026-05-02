@@ -1032,6 +1032,46 @@ class ContextService:
         )
         return results
 
+    async def temporal_query(
+        self,
+        silo_id: str,
+        as_of: datetime,
+        query: str,  # noqa: ARG002
+        top_k: int = 10,
+        type_filter: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Memgraph-only temporal query: return nodes valid at as_of timestamp.
+
+        Bypasses Qdrant entirely — no vector ranking, no split-brain risk.
+        Results are ordered by valid_from DESC (most recently valid first).
+        """
+        from context_service.db.queries import TEMPORAL_QUERY
+
+        rows = await self._memgraph.execute_query(
+            TEMPORAL_QUERY,
+            {
+                "silo_id": silo_id,
+                "as_of": as_of,
+                "type_filter": type_filter,
+                "limit": top_k,
+            },
+        )
+
+        results = []
+        for row in rows:
+            results.append(
+                {
+                    "node_id": row["id"],
+                    "content": row["content"],
+                    "labels": row["labels"],
+                    "confidence": row.get("confidence"),
+                    "valid_from": row.get("valid_from"),
+                    "valid_to": row.get("valid_to"),
+                    "created_at": row.get("created_at"),
+                }
+            )
+        return results
+
     async def link(
         self,
         silo_id: str,

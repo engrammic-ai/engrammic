@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
@@ -56,12 +57,16 @@ async def _context_query(
         except ValueError:
             return {"error": "invalid_layer", "valid": [e.value for e in Layer]}
 
+    as_of_dt: datetime | None = None
     if as_of is not None:
-        return {
-            "error": "as_of_not_supported",
-            "message": "Point-in-time retrieval is not yet implemented",
-        }
-    as_of_dt = None
+        try:
+            parsed = datetime.fromisoformat(as_of.replace("Z", "+00:00"))
+            as_of_dt = parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+        except ValueError:
+            return {
+                "error": "invalid_as_of_format",
+                "message": "as_of must be an ISO 8601 datetime string (e.g. 2026-04-01T00:00:00Z)",
+            }
 
     parsed_filters = None
     if filters:
@@ -73,6 +78,27 @@ async def _context_query(
     scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
 
     start = time.perf_counter()
+
+    if as_of_dt is not None:
+        is_future = as_of_dt > datetime.now(UTC)
+        temporal_results = await ctx_svc.temporal_query(
+            silo_id=silo_id,
+            as_of=as_of_dt,
+            query=query,
+            top_k=top_k,
+        )
+        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        response: dict[str, Any] = {
+            "results": temporal_results,
+            "total_candidates": len(temporal_results),
+            "search_time_ms": elapsed_ms,
+            "historical_query": True,
+            "as_of": as_of,
+        }
+        if is_future:
+            response["warning"] = "as_of is in the future; returning current state"
+        return response
+
     results = await ctx_svc.query(
         scope=scope,
         query=query,
@@ -80,7 +106,7 @@ async def _context_query(
         filters=parsed_filters,
         top_k=top_k,
         include_superseded=include_superseded,
-        as_of=as_of_dt,
+        as_of=None,
         search_mode=search_mode,
     )
     elapsed_ms = int((time.perf_counter() - start) * 1000)

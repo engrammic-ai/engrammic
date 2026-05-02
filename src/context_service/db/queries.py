@@ -565,3 +565,38 @@ MATCH (d:Document {id: r.ref_doc_id, silo_id: $silo_id})
 MERGE (c)-[:REFERENCES]->(d)
 RETURN count(*) AS attached
 """
+
+
+# --- Temporal query (time-travel) ---
+
+TEMPORAL_QUERY = (
+    "MATCH (n) "
+    "WHERE n.silo_id = $silo_id "
+    "  AND ($type_filter IS NULL OR any(label IN labels(n) WHERE label = $type_filter)) "
+    "  AND n.valid_from <= $as_of "
+    "  AND (n.valid_to IS NULL OR n.valid_to > $as_of) "
+    "  AND n.content IS NOT NULL "
+    "RETURN n.id AS id, n.content AS content, labels(n) AS labels, "
+    "       n.confidence AS confidence, n.valid_from AS valid_from, "
+    "       n.valid_to AS valid_to, n.created_at AS created_at "
+    "ORDER BY n.valid_from DESC "
+    "LIMIT $limit"
+)
+
+# --- Supersession chain traversal (belief history) ---
+
+GET_SUPERSESSION_CHAIN = (
+    "MATCH (start {id: $start_id, silo_id: $silo_id}) "
+    "OPTIONAL MATCH path = (start)-[:SUPERSEDES*0..20]-(related) "
+    "WHERE related.silo_id = $silo_id "
+    "WITH collect(DISTINCT related) + [start] AS all_nodes "
+    "UNWIND all_nodes AS n "
+    "WITH DISTINCT n "
+    "OPTIONAL MATCH (n)-[:SUPERSEDES]->(superseded_by_node) "
+    "RETURN n.id AS id, n.content AS content, "
+    "       n.confidence AS confidence, "
+    "       n.valid_from AS valid_from, n.valid_to AS valid_to, "
+    "       superseded_by_node.id AS superseded_by "
+    "ORDER BY n.valid_from ASC "
+    "LIMIT $limit"
+)
