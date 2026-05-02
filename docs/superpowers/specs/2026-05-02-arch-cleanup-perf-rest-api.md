@@ -118,6 +118,12 @@ Bulk ingest error semantics:
 - Caller decides whether to retry failed items
 - No atomic rollback (too expensive at scale; use single-item endpoint if atomicity needed)
 
+Bulk ingest limits:
+- Max items per request: 10,000
+- Max payload size: 50MB
+- Max per-item size: 1MB (larger documents should use chunked upload or pre-processing)
+- Exceeding limits returns 413 PAYLOAD_TOO_LARGE before processing starts
+
 Webhooks:
 - `POST /v1/webhooks` - register callback URL + event filter
 - `GET /v1/webhooks` - list registered webhooks
@@ -125,10 +131,27 @@ Webhooks:
 - Events: `context.created`, `context.updated`, `claim.promoted`, `cluster.updated`
 
 Webhook delivery contract:
-- Signed payloads: HMAC-SHA256 signature in `X-Delta-Signature` header, secret set at registration
+- Signed payloads: HMAC-SHA256 in `X-Delta-Signature` header, format: `t=<timestamp>,v1=<signature>`
+- Replay protection: signature includes timestamp; reject if timestamp > 5 minutes old
+- Secret rotation: `POST /v1/webhooks/{id}/rotate-secret` generates new secret, old valid for 24h overlap
 - Retry policy: exponential backoff (1s, 5s, 30s, 5m, 30m), max 5 attempts
+- Idempotency: `event_id` is unique; receivers should dedupe on this field (documented in integration guide)
 - Dead letter: failed webhooks after retries logged to `webhook_failures` table, surfaced via `GET /v1/webhooks/{id}/failures`
 - Timeout: 10s per delivery attempt
+
+Webhook event filter schema (at registration):
+```json
+{
+  "url": "https://...",
+  "secret": "auto-generated-if-omitted",
+  "filters": {
+    "event_types": ["context.created", "context.updated"],
+    "silo_ids": ["uuid", "uuid"],
+    "layers": ["memory", "knowledge"]
+  }
+}
+```
+All filter fields optional; omit for wildcard. Filters are AND-ed.
 
 Silo management:
 - `POST /v1/silos` - create silo
@@ -152,21 +175,49 @@ Usage/Stats:
 - `GET /v1/silos/{id}/stats` - per-silo metrics
 
 **Design decisions:**
-- Auth: WorkOS flow, Bearer tokens (same as MCP)
 - Versioning: `/v1/` prefix, additive changes only; v2 warranted only for breaking schema changes
-- Silo ID derived from auth context (same as MCP)
 - Query vs Graph: `context_query` = semantic/keyword search with filters; `context_graph` = explicit traversal from seed nodes
+- Deprecation policy: 6-month minimum support after notice; `Sunset` header on deprecated endpoints; changelog entry required
+
+**Authentication and Authorization:**
+- Bearer tokens: `Authorization: Bearer <token>` header on all requests
+- Token validation: `workos.verify_session()` per request (cached 60s in Redis)
+- Org binding: token contains `org_id`; all operations scoped to that org automatically
+- Silo ownership: `assert_silo_belongs_to_org(silo_id, auth_ctx.org_id)` before every silo operation; returns 403 on mismatch
+- Role enforcement:
+  - `viewer`: GET endpoints only
+  - `member`: GET + POST (context operations, ingest, webhooks)
+  - `admin`: all endpoints including hard delete, org management, role changes
+- Future: scoped API keys (`read:context`, `write:context`, `admin:silo`)
+
+**Audit logging (compliance):**
+- All write/delete operations logged to immutable `audit_log` table
+- Fields: `timestamp`, `org_id`, `user_id`, `action`, `resource_type`, `resource_id`, `request_id`, `details`
+- Hard delete blocked until audit entry written
+- Retention: 7 years default (configurable per compliance tier)
+- Queryable via `GET /v1/org/audit` (admin only, paginated)
 
 **Pagination (all list endpoints):**
 - Cursor-based: `?cursor=<opaque>&limit=100` (default 50, max 100)
 - Response includes `next_cursor` (null if no more pages)
+- Cursor encoding: base64(JSON({offset, sort_key, org_id})), signed with HMAC to prevent tampering/enumeration
+- Invalid/expired cursor returns 400 VALIDATION_ERROR (client should restart from first page)
 - Applies to: `GET /v1/silos`, `/webhooks`, `/org/members`, `/ingest/{job_id}` items
 
 **Rate limiting:**
-- Global: 1000 req/min per org (429 with `Retry-After` header)
-- Bulk endpoints: 10 req/min per org (expensive operations)
+- Algorithm: sliding window with burst allowance (token bucket)
+- Global: 1000 req/min per org, burst up to 100 concurrent
+- Bulk endpoints: 10 req/min per org, burst up to 3
 - Webhooks registration: 100/hour per org
+- Response headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+- Exceeded: 429 with `Retry-After` header (seconds until next allowed request)
 - Tunable per partner via config; defaults above are starting points
+
+**Operational endpoints:**
+- `GET /health` - basic liveness (returns 200 if process running)
+- `GET /ready` - readiness (checks Memgraph, Qdrant, Redis connectivity)
+- `GET /metrics` - Prometheus metrics (existing, already implemented)
+- No auth required on health/ready (for k8s probes); metrics optionally protected
 
 **Error response format:**
 ```json
@@ -178,7 +229,22 @@ Usage/Stats:
   }
 }
 ```
-Standard codes: `VALIDATION_ERROR`, `NOT_FOUND`, `FORBIDDEN`, `RATE_LIMITED`, `INTERNAL_ERROR`
+Standard codes:
+- `VALIDATION_ERROR` (400) - malformed request, missing fields, invalid values
+- `UNAUTHORIZED` (401) - missing or invalid auth token
+- `FORBIDDEN` (403) - valid auth but insufficient permissions (wrong org, wrong role)
+- `NOT_FOUND` (404) - resource doesn't exist
+- `CONFLICT` (409) - concurrent write conflict, optimistic lock failure
+- `PAYLOAD_TOO_LARGE` (413) - bulk request exceeds size limits
+- `RATE_LIMITED` (429) - rate limit exceeded
+- `INTERNAL_ERROR` (500) - unexpected server error
+- `SERVICE_UNAVAILABLE` (503) - downstream dependency unavailable (graceful degradation)
+
+**Request tracing:**
+- All requests assigned `X-Request-ID` (use client-provided if present, else generate UUID)
+- Request ID propagated to all downstream calls (Memgraph, Qdrant, Redis, webhooks)
+- Included in all log entries and error responses
+- Enables cross-service debugging via log correlation
 
 **Webhook event payload schema:**
 ```json
