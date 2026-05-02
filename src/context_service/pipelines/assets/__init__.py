@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from context_service.pipelines.assets.belief_synthesis import belief_synthesis_asset
 from context_service.pipelines.assets.clustering import clustering
 from context_service.pipelines.assets.compaction import reasoning_compaction
 from context_service.pipelines.assets.custodian_finalize import custodian_finalize
@@ -20,4 +21,5 @@ all_assets: list[Any] = [
     clustering,
     heat_asset,
     reasoning_compaction,
+    belief_synthesis_asset,
 ]
