@@ -29,9 +29,11 @@ from context_service.db.queries import (
     CHECK_BELIEF_COVERAGE,
     CREATE_BELIEF_FROM_FACTS,
     GET_FACTS_IN_CLUSTER,
+    UPDATE_BELIEF_CENTROID,
 )
 
 if TYPE_CHECKING:
+    from context_service.embeddings.base import EmbeddingService
     from context_service.engine.protocols import HyperGraphStore
     from context_service.llm.base import LLMProvider
 
@@ -55,9 +57,7 @@ class InsufficientEvidenceError(ValueError):
 
 def _make_belief_id(cluster_id: str, silo_id: str) -> str:
     """Deterministic belief id derived from cluster + silo."""
-    return hashlib.blake2b(
-        f"belief:{silo_id}:{cluster_id}".encode(), digest_size=32
-    ).hexdigest()
+    return hashlib.blake2b(f"belief:{silo_id}:{cluster_id}".encode(), digest_size=32).hexdigest()
 
 
 def _build_synthesis_prompt(facts: list[dict[str, Any]]) -> str:
@@ -77,11 +77,25 @@ def _average_confidence(facts: list[dict[str, Any]]) -> float:
     return total / len(facts)
 
 
+def _centroid(embeddings: list[list[float]]) -> list[float]:
+    """Compute the element-wise mean of a list of embeddings."""
+    if not embeddings:
+        return []
+    dim = len(embeddings[0])
+    total = [0.0] * dim
+    for vec in embeddings:
+        for i, v in enumerate(vec):
+            total[i] += v
+    n = len(embeddings)
+    return [v / n for v in total]
+
+
 async def synthesize_belief(
     store: HyperGraphStore,
     cluster_id: str,
     silo_id: str,
     llm_client: LLMProvider,
+    embedding_client: EmbeddingService | None = None,
 ) -> str:
     """Synthesise a :Belief node from the facts in a cluster.
 
@@ -146,6 +160,21 @@ async def synthesize_belief(
             "fact_ids": fact_ids,
         },
     )
+
+    if embedding_client is not None:
+        contents = [row.get("content", "") for row in fact_rows if row.get("content")]
+        embeddings = await embedding_client.embed(contents)
+        centroid = _centroid(embeddings)
+        await store.execute_write(
+            UPDATE_BELIEF_CENTROID,
+            {
+                "belief_id": belief_id,
+                "silo_id": silo_id,
+                "centroid_embedding": centroid,
+                "last_revision_check": now.isoformat(),
+                "revision_count": 0,
+            },
+        )
 
     edges_created = rows[0].get("edges_created", 0) if rows else 0
     logger.info(

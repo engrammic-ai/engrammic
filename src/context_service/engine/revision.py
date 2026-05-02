@@ -37,6 +37,7 @@ from context_service.db.queries import (
     UPDATE_BELIEF_CENTROID,
 )
 from context_service.engine.synthesis import (
+    _SYNTHESIS_SYSTEM_PROMPT,
     MIN_FACTS_FOR_BELIEF,
     InsufficientEvidenceError,
     _average_confidence,
@@ -81,14 +82,6 @@ RETURN f.id AS fact_id, f.content AS content,
        f.valid_from AS valid_from
 ORDER BY coalesce(f.confidence, 1.0) DESC
 """
-
-_SYNTHESIS_SYSTEM_PROMPT = (
-    "You are a knowledge synthesis agent. Given a list of verified facts, "
-    "produce a single concise belief statement (one or two sentences) that "
-    "captures the key insight shared across those facts. Do not speculate "
-    "beyond what the facts support. Return only the belief statement — no "
-    "preamble, no bullet points, no explanation."
-)
 
 
 def _cosine_distance(a: list[float], b: list[float]) -> float:
@@ -283,9 +276,7 @@ async def revise_belief(
         {"belief_id": old_belief_id, "silo_id": silo_id},
     )
     if not cluster_rows:
-        raise ValueError(
-            f"No cluster found for belief {old_belief_id!r} in silo {silo_id!r}."
-        )
+        raise ValueError(f"No cluster found for belief {old_belief_id!r} in silo {silo_id!r}.")
     cluster_id: str = cluster_rows[0]["cluster_id"]
 
     fact_rows = await store.execute_query(
@@ -318,50 +309,51 @@ async def revise_belief(
     now = datetime.now(UTC)
     new_belief_id = _make_revised_belief_id(old_belief_id, revision_count)
 
-    await store.execute_write(
-        CREATE_BELIEF_FROM_FACTS,
-        {
-            "belief_id": new_belief_id,
-            "silo_id": silo_id,
-            "content": belief_text,
-            "confidence": confidence,
-            "evidence_count": len(fact_ids),
-            "created_at": now.isoformat(),
-            "valid_from": now.isoformat(),
-            "fact_ids": fact_ids,
-        },
-    )
+    async with store.transaction():
+        await store.execute_write(
+            CREATE_BELIEF_FROM_FACTS,
+            {
+                "belief_id": new_belief_id,
+                "silo_id": silo_id,
+                "content": belief_text,
+                "confidence": confidence,
+                "evidence_count": len(fact_ids),
+                "created_at": now.isoformat(),
+                "valid_from": now.isoformat(),
+                "fact_ids": fact_ids,
+            },
+        )
 
-    await store.execute_write(
-        UPDATE_BELIEF_CENTROID,
-        {
-            "belief_id": new_belief_id,
-            "silo_id": silo_id,
-            "centroid_embedding": new_centroid,
-            "last_revision_check": now.isoformat(),
-            "revision_count": revision_count,
-        },
-    )
+        await store.execute_write(
+            UPDATE_BELIEF_CENTROID,
+            {
+                "belief_id": new_belief_id,
+                "silo_id": silo_id,
+                "centroid_embedding": new_centroid,
+                "last_revision_check": now.isoformat(),
+                "revision_count": revision_count,
+            },
+        )
 
-    await store.execute_write(
-        CREATE_BELIEF_SUPERSEDES,
-        {
-            "new_belief_id": new_belief_id,
-            "old_belief_id": old_belief_id,
-            "silo_id": silo_id,
-            "reason": "evidence_shift",
-            "created_at": now.isoformat(),
-        },
-    )
+        await store.execute_write(
+            CREATE_BELIEF_SUPERSEDES,
+            {
+                "new_belief_id": new_belief_id,
+                "old_belief_id": old_belief_id,
+                "silo_id": silo_id,
+                "reason": "evidence_shift",
+                "created_at": now.isoformat(),
+            },
+        )
 
-    await store.execute_write(
-        MARK_BELIEF_STALE,
-        {
-            "belief_id": old_belief_id,
-            "silo_id": silo_id,
-            "valid_to": now.isoformat(),
-        },
-    )
+        await store.execute_write(
+            MARK_BELIEF_STALE,
+            {
+                "belief_id": old_belief_id,
+                "silo_id": silo_id,
+                "valid_to": now.isoformat(),
+            },
+        )
 
     logger.info(
         "belief_revised",

@@ -343,7 +343,9 @@ async def test_revise_belief_increments_revision_count() -> None:
         store.seed_write_result([])
 
     vecs = [[0.5, 0.5]] * 3
-    new_id = await revise_belief(store, "b-orig", "silo-1", _make_llm(), _make_embedding_client(vecs))
+    new_id = await revise_belief(
+        store, "b-orig", "silo-1", _make_llm(), _make_embedding_client(vecs)
+    )
 
     # revision_count should be old (2) + 1 = 3
     assert new_id == _make_revised_belief_id("b-orig", 3)

@@ -781,7 +781,7 @@ MATCH (a:Fact {silo_id: $silo_id}), (b:Fact {silo_id: $silo_id})
 WHERE id(a) < id(b)
   AND a.valid_from IS NOT NULL
   AND b.valid_from IS NOT NULL
-  AND abs(duration.between(a.valid_from, b.valid_from).seconds) <= $window_seconds
+  AND abs(duration.inSeconds(a.valid_from, b.valid_from)) <= $window_seconds
 RETURN a.id AS fact_id_a, b.id AS fact_id_b,
        a.content AS content_a, b.content AS content_b,
        a.valid_from AS valid_from_a, b.valid_from AS valid_from_b

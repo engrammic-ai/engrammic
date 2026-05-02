@@ -99,9 +99,9 @@ async def test_compact_hot_chain_creates_event() -> None:
 
     assert event_id == _make_event_id("chain-1", "silo-1")
 
-    # First write: CREATE_REASONING_TRACE_EVENT
+    # First write: CREATE_REASONING_TRACE_EVENT (uses MERGE for idempotency)
     first_write_cypher, first_write_params = store.write_log[0]
-    assert "CREATE (e:Event" in first_write_cypher
+    assert "MERGE (e:Event" in first_write_cypher
     assert first_write_params["chain_id"] == "chain-1"
     assert first_write_params["silo_id"] == "silo-1"
     assert first_write_params["agent_id"] == "agent-x"

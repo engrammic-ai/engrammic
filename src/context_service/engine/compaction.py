@@ -154,9 +154,7 @@ async def compact_reasoning_chain(
         content = compact_summary
         step_count = 0
     else:
-        raise ValueError(
-            f"ReasoningChain {chain_id!r} has neither steps nor compact_summary"
-        )
+        raise ValueError(f"ReasoningChain {chain_id!r} has neither steps nor compact_summary")
 
     now = datetime.now(UTC)
     event_id = _make_event_id(chain_id, silo_id)
@@ -222,9 +220,7 @@ async def batch_compact_chains(
     for row in chain_rows:
         chain_id = row["id"]
         # Default outcome for batch compaction: published -> committed, else expired
-        outcome: OutcomeT = (
-            "committed" if row.get("status") == "published" else "expired"
-        )
+        outcome: OutcomeT = "committed" if row.get("status") == "published" else "expired"
         try:
             eid = await compact_reasoning_chain(store, chain_id, silo_id, outcome)
             event_ids.append(eid)
