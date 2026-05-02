@@ -21,6 +21,9 @@ Active implementation plans for context-service. Each plan lives in its own file
 - [v1a-validator-phase-b-finish.md](./v1a-validator-phase-b-finish.md) — split rejection metric into three counters; consolidate quality score in `BusinessRuleValidator`.
 - [v1a-auth-toggle.md](./v1a-auth-toggle.md) — wire WorkOS auth behind an `AUTH_ENABLED` toggle; dev bypass with prod-guard.
 
+### Spikes / evaluation
+- [clustering-algo-eval.md](./clustering-algo-eval.md) — evaluate LPA / Louvain / HDBSCAN as replacements for Leiden; goal is incremental runs and dropping the igraph dependency.
+
 ### Background / design
 - [eag-integration-audit.md](./eag-integration-audit.md) — port-day audit; some TODOs are addressed by v1-α plans above.
 - [validator-refactor.md](./validator-refactor.md) — full 4-phase design; Phase A+B finishing in v1-α, C+D deferred.

@@ -27,6 +27,7 @@ from context_service.utils.json import dumps, loads
 if TYPE_CHECKING:
     from context_service.embeddings import EmbeddingService
     from context_service.embeddings.splade import SpladeEncoder
+    from context_service.engine.history import BeliefHistory
     from context_service.services.context_meta import (
         HistoryResult,
         ProvenanceResult,
@@ -875,7 +876,7 @@ class ContextService:
             if ts is None:
                 return None
             if hasattr(ts, "isoformat"):
-                return ts.isoformat()
+                return str(ts.isoformat())
             if isinstance(ts, (int, float)):
                 # Memgraph timestamp() returns microseconds since epoch
                 return datetime.fromtimestamp(ts / 1_000_000, tz=UTC).isoformat()
@@ -1030,6 +1031,61 @@ class ContextService:
             result_count=len(results),
             silo_id=str(scope.silo_id),
         )
+        return results
+
+    async def temporal_query(
+        self,
+        silo_id: str,
+        as_of: datetime,
+        query: str,  # noqa: ARG002
+        top_k: int = 10,
+        type_filter: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Memgraph-only temporal query: return nodes valid at as_of timestamp.
+
+        Bypasses Qdrant entirely — no vector ranking, no split-brain risk.
+        Results are ordered by valid_from DESC (most recently valid first).
+
+        Note: the ``query`` parameter is currently unused. Results are recency-
+        ordered, not relevance-ranked. Semantic filtering against ``query`` is
+        not yet implemented.
+        # TODO(v1.1): implement semantic filtering with context_snapshot
+        """
+        from context_service.db.queries import TEMPORAL_QUERY
+
+        rows = await self._memgraph.execute_query(
+            TEMPORAL_QUERY,
+            {
+                "silo_id": silo_id,
+                "as_of": as_of.isoformat(),
+                "type_filter": type_filter,
+                "limit": top_k,
+            },
+        )
+
+        def _format_timestamp(ts: Any) -> str | None:
+            if ts is None:
+                return None
+            if hasattr(ts, "isoformat"):
+                return str(ts.isoformat())
+            if isinstance(ts, (int, float)):
+                # Memgraph timestamp() returns microseconds since epoch
+                return datetime.fromtimestamp(ts / 1_000_000, tz=UTC).isoformat()
+            return str(ts)
+
+        results = []
+        for row in rows:
+            results.append(
+                {
+                    "node_id": row["id"],
+                    "content": row["content"],
+                    "labels": row["labels"],
+                    "confidence": row.get("confidence"),
+                    "valid_from": _format_timestamp(row.get("valid_from")),
+                    "valid_to": _format_timestamp(row.get("valid_to")),
+                    "created_at": _format_timestamp(row.get("created_at")),
+                }
+            )
         return results
 
     async def link(
@@ -1212,4 +1268,32 @@ class ContextService:
             depth_reached=max_depth,
             nodes_visited=len(nodes_out),
             edges_traversed=len(edges_out),
+        )
+
+    async def belief_history(
+        self,
+        silo_id: str,
+        node_id: str,
+        limit: int = 20,
+    ) -> BeliefHistory:
+        """Return the supersession chain for a fact node.
+
+        Wraps ``engine.history.get_belief_history`` so callers use the service
+        protocol rather than accessing ``_memgraph`` directly.
+
+        Args:
+            silo_id: Silo UUID string for scoping.
+            node_id: Starting fact node ID.
+            limit: Maximum chain length to traverse.
+
+        Returns:
+            BeliefHistory dataclass.
+        """
+        from context_service.engine.history import get_belief_history
+
+        return await get_belief_history(
+            memgraph=self._memgraph,
+            silo_id=silo_id,
+            start_id=node_id,
+            limit=limit,
         )

@@ -1,6 +1,6 @@
 # v1-β Master Plan
 
-**Status:** Draft 2026-04-28
+**Status:** In progress. Audit completed 2026-05-02. See per-phase status below.
 **Track scope:** production hardening + paradigm completion. UI (admin REST/dashboard) and billing are explicitly deferred to v1.0+.
 **Track question:** does the engine work correctly under production conditions, and are silos portable enough for design-partner onboarding?
 
@@ -27,12 +27,12 @@ v1-β closes those gaps. Nothing fancy, nothing speculative.
 ## Phase map
 
 ```
-β1 Auth completion + Silo ownership   ──►  unblocks β2, β3, β4 properly
-β2 Dagster asset migration            ──►  β2a → β2b → β2c (sequential)
-β3 SPLADE hybrid retrieval            ──►  parallel with β2 (no overlap)
-β4 Migration tooling                  ──►  parallel with β2 (no overlap)
-β5 Integration test pack              ──►  runs alongside β2 as each asset lands
-β6 Paradigm completion + hygiene      ──►  opportunistic; pick off as time allows
+β1 Auth completion + Silo ownership   ──►  COMPLETE
+β2 Dagster asset migration            ──►  COMPLETE (all assets, schedules, sensors wired)
+β3 SPLADE hybrid retrieval            ──►  BUILT, NOT WIRED — two lines needed (see v1b-splade.md)
+β4 Migration tooling                  ──►  COMPLETE
+β5 Integration test pack              ──►  ~68% — 3 missing failure-mode tests + unified E2E
+β6 Paradigm completion + hygiene      ──►  COMPLETE (claim_rejections alias deferred to Q3)
 ```
 
 Suggested kickoff order: **β1 → (β2a + β3 + β4) in parallel → β2b → β2c → β6**. β5 weaves through β2.

@@ -1,6 +1,6 @@
 # Plan: Dagster Asset Migration (the spine of v1-β)
 
-**Status:** Draft 2026-04-28
+**Status:** Complete 2026-05-02 (verified by audit)
 **Branches:** `phase-dagster-a-resources-extraction`, `phase-dagster-b-embedding-custodian`, `phase-dagster-c-clustering-scheduling`
 **Workstream:** v1-β phase 2 (sub-phased a/b/c)
 
