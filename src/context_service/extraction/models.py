@@ -32,6 +32,7 @@ class RelationshipType(StrEnum):
     SPECIALIZES = "SPECIALIZES"  # X is a kind / refinement of Y
     INSTANTIATES = "INSTANTIATES"  # X is an instance of type Y
     CAUSES = "CAUSES"  # X triggers / leads to Y
+    CORROBORATES = "CORROBORATES"  # X supports / confirms Y
     CONTRADICTS = "CONTRADICTS"  # X opposes / supersedes Y (symmetric)
     REFERENCES = "REFERENCES"  # X mentions / describes Y
     RELATED_TO = "RELATED_TO"  # fallback, unclear but related (symmetric)
@@ -40,7 +41,7 @@ class RelationshipType(StrEnum):
 class ExtractionSchema:
     """Source of truth for allowed ``(source_type, edge_label, target_type)`` tuples.
 
-    The 9-vocab :class:`RelationshipType` enum defines the closed set of edge labels.
+    The 10-vocab :class:`RelationshipType` enum defines the closed set of edge labels.
     The extraction prompt describes the semantics of each label but does **not** encode
     which node-type pairings are allowed per label — ``entity_type`` is a free-form
     noun chosen by the LLM ("person", "module", "decision", "metric", ...), so there

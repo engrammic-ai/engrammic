@@ -290,6 +290,23 @@ MATCH (b:Claim {id: $claim_id_b, silo_id: $silo_id})
 MERGE (a)-[r:CONTRADICTS {id: $edge_id}]->(b)
 """
 
+# Causal edge: written between any two silo nodes (Claims, Facts, Beliefs, etc.)
+# Parameters: source_id, target_id, silo_id, confidence (float), mechanism (str|null),
+#             extracted_from (str — source doc or claim id).
+CREATE_CAUSES_EDGE = """
+MATCH (a {id: $source_id, silo_id: $silo_id})
+MATCH (b {id: $target_id, silo_id: $silo_id})
+CREATE (a)-[:CAUSES {confidence: $confidence, mechanism: $mechanism, created_at: datetime(), extracted_from: $extracted_from}]->(b)
+"""
+
+# Corroboration edge: a supports / confirms b.
+# Parameters: source_id, target_id, silo_id, strength (float), extracted_from (str).
+CREATE_CORROBORATES_EDGE = """
+MATCH (a {id: $source_id, silo_id: $silo_id})
+MATCH (b {id: $target_id, silo_id: $silo_id})
+CREATE (a)-[:CORROBORATES {strength: $strength, created_at: datetime(), extracted_from: $extracted_from}]->(b)
+"""
+
 
 def build_batch_entity_rel_query(rel_type: str) -> str:
     """Build a batch CREATE entity relationship query with a real edge label.
@@ -584,6 +601,193 @@ TEMPORAL_QUERY = (
 )
 
 # --- Supersession chain traversal (belief history) ---
+
+# ---------------------------------------------------------------------------
+# Session compaction: ReasoningChain -> Event (Memory layer trace)
+# ---------------------------------------------------------------------------
+
+CREATE_REASONING_TRACE_EVENT = """
+MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+MERGE (e:Event {id: $event_id, silo_id: $silo_id})
+ON CREATE SET
+    e.event_type = "reasoning_trace",
+    e.content = $content,
+    e.agent_id = $agent_id,
+    e.created_at = $created_at,
+    e.source_chain_id = $chain_id,
+    e.step_count = $step_count,
+    e.outcome = $outcome
+MERGE (e)-[:DERIVED_FROM]->(chain)
+RETURN e.id AS event_id
+"""
+
+TOMBSTONE_REASONING_CHAIN = """
+MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+SET chain.compacted = true,
+    chain.compacted_at = $compacted_at,
+    chain.compact_event_id = $event_id
+RETURN chain.id AS chain_id
+"""
+
+GET_REASONING_CHAIN_FOR_COMPACTION = """
+MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+RETURN
+    chain.id AS id,
+    chain.steps AS steps,
+    chain.compact_summary AS compact_summary,
+    chain.produced_by_agent_id AS agent_id,
+    chain.tier AS tier,
+    chain.status AS status,
+    coalesce(chain.compacted, false) AS compacted
+"""
+
+GET_COMPACTABLE_CHAINS = """
+MATCH (chain:ReasoningChain {silo_id: $silo_id})
+WHERE coalesce(chain.compacted, false) = false
+  AND chain.status IN $statuses
+RETURN chain.id AS id, chain.status AS status
+ORDER BY chain.created_at ASC
+LIMIT $limit
+"""
+
+# --- Supersession chain traversal (belief history) ---
+
+# ---------------------------------------------------------------------------
+# Belief synthesis queries (Wisdom layer)
+# ---------------------------------------------------------------------------
+
+# Fetch all :Fact nodes that are members of a given cluster (via MEMBER_OF).
+# Returns fact_id, content, confidence, and valid_from for each fact so the
+# synthesis function can build the LLM prompt without a second round-trip.
+GET_FACTS_IN_CLUSTER = """
+MATCH (f:Fact)-[:MEMBER_OF]->(c:Cluster {id: $cluster_id, silo_id: $silo_id})
+RETURN f.id AS fact_id, f.content AS content,
+       coalesce(f.confidence, 1.0) AS confidence,
+       f.valid_from AS valid_from
+ORDER BY coalesce(f.confidence, 1.0) DESC
+"""
+
+# Create a :Belief node and attach SYNTHESIZED_FROM edges to all source facts
+# in a single write.  $fact_ids is a list of fact id strings.
+CREATE_BELIEF_FROM_FACTS = """
+MERGE (b:Belief {id: $belief_id, silo_id: $silo_id})
+ON CREATE SET
+    b.content = $content,
+    b.confidence = $confidence,
+    b.evidence_count = $evidence_count,
+    b.created_at = $created_at,
+    b.valid_from = $valid_from,
+    b.valid_to = null
+WITH b
+UNWIND $fact_ids AS fid
+MATCH (f:Fact {id: fid, silo_id: $silo_id})
+MERGE (b)-[:SYNTHESIZED_FROM]->(f)
+RETURN b.id AS belief_id, count(f) AS edges_created
+"""
+
+# Check whether a :Belief already exists whose content covers the subject
+# (case-insensitive substring match).  Used before synthesis to skip
+# redundant work.
+CHECK_BELIEF_COVERAGE = """
+MATCH (b:Belief {silo_id: $silo_id})
+WHERE toLower(b.content) CONTAINS toLower($subject)
+  AND (b.valid_to IS NULL OR b.valid_to > $as_of)
+RETURN b.id AS belief_id, b.content AS content, b.confidence AS confidence
+LIMIT 1
+"""
+
+# Store the cluster centroid embedding on a :Belief node.
+# Parameters: belief_id, silo_id, centroid_embedding (list[float]),
+#             last_revision_check (ISO datetime str), revision_count (int).
+UPDATE_BELIEF_CENTROID = """
+MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
+SET b.centroid_embedding = $centroid_embedding,
+    b.last_revision_check = $last_revision_check,
+    b.revision_count = $revision_count,
+    b.wisdom_status = coalesce(b.wisdom_status, 'active')
+RETURN b.id AS belief_id
+"""
+
+# Create a :SUPERSEDES edge from a new :Belief to the one it replaces.
+# Parameters: new_belief_id, old_belief_id, silo_id, reason (str),
+#             created_at (ISO datetime str).
+CREATE_BELIEF_SUPERSEDES = """
+MATCH (newer:Belief {id: $new_belief_id, silo_id: $silo_id})
+MATCH (older:Belief {id: $old_belief_id, silo_id: $silo_id})
+MERGE (newer)-[r:SUPERSEDES {
+    reason: $reason,
+    created_at: $created_at
+}]->(older)
+RETURN r.reason AS reason
+"""
+
+# Mark a :Belief as stale after it has been superseded.
+# Parameters: belief_id, silo_id, valid_to (ISO datetime str).
+MARK_BELIEF_STALE = """
+MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
+SET b.wisdom_status = 'stale',
+    b.valid_to = $valid_to
+RETURN b.id AS belief_id
+"""
+
+# ---------------------------------------------------------------------------
+# Pattern queries (Wisdom layer)
+# ---------------------------------------------------------------------------
+
+# Create a :Pattern node and attach OBSERVED_IN edges to each observed node.
+# $observed_node_ids is a list of node id strings (Fact, Belief, or Event).
+CREATE_PATTERN = """
+MERGE (p:Pattern {id: $pattern_id, silo_id: $silo_id})
+ON CREATE SET
+    p.pattern_type = $pattern_type,
+    p.description = $description,
+    p.frequency = $frequency,
+    p.confidence = $confidence,
+    p.first_observed = $first_observed,
+    p.last_observed = $last_observed,
+    p.created_at = $created_at
+WITH p
+UNWIND $observed_node_ids AS nid
+MATCH (n {id: nid, silo_id: $silo_id})
+MERGE (p)-[:OBSERVED_IN]->(n)
+RETURN p.id AS pattern_id, count(n) AS edges_created
+"""
+
+# Increment frequency and update last_observed timestamp.
+UPDATE_PATTERN_FREQUENCY = """
+MATCH (p:Pattern {id: $pattern_id, silo_id: $silo_id})
+SET p.frequency = p.frequency + 1,
+    p.last_observed = $last_observed
+RETURN p.id AS pattern_id, p.frequency AS frequency
+"""
+
+# Look up an existing pattern by type and subject description substring.
+GET_PATTERN_BY_TYPE_AND_SUBJECT = """
+MATCH (p:Pattern {silo_id: $silo_id, pattern_type: $pattern_type})
+WHERE toLower(p.description) CONTAINS toLower($subject)
+  AND (p.valid_to IS NULL OR p.valid_to > $as_of)
+RETURN p.id AS pattern_id, p.description AS description,
+       p.frequency AS frequency, p.confidence AS confidence,
+       p.first_observed AS first_observed, p.last_observed AS last_observed
+LIMIT 1
+"""
+
+# Detect temporal correlations: pairs of :Fact nodes in the same silo whose
+# valid_from timestamps fall within $window_seconds of each other.  Returns
+# up to $limit distinct unordered pairs so the caller can decide which to
+# materialise as a :Pattern.
+DETECT_TEMPORAL_CORRELATIONS = """
+MATCH (a:Fact {silo_id: $silo_id}), (b:Fact {silo_id: $silo_id})
+WHERE id(a) < id(b)
+  AND a.valid_from IS NOT NULL
+  AND b.valid_from IS NOT NULL
+  AND abs(duration.inSeconds(a.valid_from, b.valid_from)) <= $window_seconds
+RETURN a.id AS fact_id_a, b.id AS fact_id_b,
+       a.content AS content_a, b.content AS content_b,
+       a.valid_from AS valid_from_a, b.valid_from AS valid_from_b
+ORDER BY a.valid_from DESC
+LIMIT $limit
+"""
 
 GET_SUPERSESSION_CHAIN = (
     "MATCH (start {id: $start_id, silo_id: $silo_id}) "

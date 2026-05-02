@@ -46,6 +46,8 @@ class RelationshipType(StrEnum):
     CONTRADICTS = "CONTRADICTS"
     DERIVED_FROM = "DERIVED_FROM"
     RELATED_TO = "RELATED_TO"
+    CAUSES = "CAUSES"
+    CORROBORATES = "CORROBORATES"
 
 
 class Layer(StrEnum):

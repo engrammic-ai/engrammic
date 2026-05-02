@@ -117,11 +117,33 @@ def heat_schedule(
         )
 
 
+@dg.schedule(
+    cron_schedule="0 * * * *",
+    name="reasoning_compaction_schedule",
+    target=dg.AssetSelection.assets("reasoning_compaction"),
+    description="Hourly reasoning-chain compaction per active silo.",
+    execution_timezone="UTC",
+)
+def reasoning_compaction_schedule(
+    context: ScheduleEvaluationContext,
+    memgraph: MemgraphResource,
+) -> Iterator[dg.RunRequest]:
+    """Yield one compaction RunRequest per active silo."""
+    silo_ids = _fetch_silo_ids(memgraph)
+    for silo_id in silo_ids:
+        yield dg.RunRequest(
+            run_key=f"reasoning_compaction:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            partition_key=silo_id,
+            tags={"dagster/concurrency_key": silo_id},
+        )
+
+
 all_schedules: list[Any] = [
     clustering_schedule,
     fact_promotion_schedule,
     custodian_visit_schedule,
     heat_schedule,
+    reasoning_compaction_schedule,
 ]
 
 __all__ = [
@@ -130,4 +152,5 @@ __all__ = [
     "fact_promotion_schedule",
     "custodian_visit_schedule",
     "heat_schedule",
+    "reasoning_compaction_schedule",
 ]

@@ -2,7 +2,9 @@
 
 from typing import Any
 
+from context_service.pipelines.assets.belief_synthesis import belief_synthesis_asset
 from context_service.pipelines.assets.clustering import clustering
+from context_service.pipelines.assets.compaction import reasoning_compaction
 from context_service.pipelines.assets.custodian_finalize import custodian_finalize
 from context_service.pipelines.assets.custodian_visit import custodian_visit
 from context_service.pipelines.assets.embedding import embedding_asset as embedding
@@ -18,4 +20,6 @@ all_assets: list[Any] = [
     claim_to_fact_promotion,
     clustering,
     heat_asset,
+    reasoning_compaction,
+    belief_synthesis_asset,
 ]

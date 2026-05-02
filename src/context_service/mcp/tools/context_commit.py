@@ -5,12 +5,16 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+import structlog
+
 from context_service.mcp.server import get_context_service, get_mcp_auth_context, get_silo_service
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
+
+logger = structlog.get_logger(__name__)
 
 
 async def _context_commit(
@@ -21,6 +25,7 @@ async def _context_commit(
     reasoning: str | None = None,
     metadata: dict[str, Any] | None = None,
     tags: list[str] | None = None,
+    chain_id: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation."""
     auth = await get_mcp_auth_context()
@@ -49,13 +54,36 @@ async def _context_commit(
         agent_id=agent_id,
     )
 
-    return {
+    result: dict[str, Any] = {
         "node_id": str(node.id),
         "layer": "wisdom",
         "declared_by": agent_id,
         "about_nodes": about,
         "created_at": datetime.now(UTC).isoformat(),
     }
+
+    # Compact the source reasoning chain (if provided) now that it has been committed.
+    if chain_id is not None:
+        try:
+            from context_service.engine.compaction import compact_reasoning_chain
+
+            event_id = await compact_reasoning_chain(
+                ctx_svc.graph_store,
+                chain_id=chain_id,
+                silo_id=str(expected_silo_id),
+                outcome="committed",
+            )
+            result["compacted_chain_id"] = chain_id
+            result["compaction_event_id"] = event_id
+        except ValueError as exc:
+            # Chain not found or already compacted — not a fatal error.
+            logger.warning(
+                "context_commit_compaction_skip",
+                chain_id=chain_id,
+                reason=str(exc),
+            )
+
+    return result
 
 
 def register(mcp: FastMCP) -> None:

@@ -120,6 +120,10 @@ class FakeGraphStore:
 
         return _ctx()
 
+    def transaction(self) -> AbstractAsyncContextManager[_FakeSession]:
+        """Fake transaction context - same as session for test purposes."""
+        return self.session()
+
     # --- Unimplemented protocol stubs ---
     # Raise NotImplementedError so tests fail clearly if they hit these.
 
