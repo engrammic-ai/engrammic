@@ -25,6 +25,7 @@ EXPECTED_TOOLS = {
     "context_provenance",
     "context_get_reflections",
     "context_history",
+    "context_belief_history",
     "context_reason",
     "silo_create",
     "silo_list",

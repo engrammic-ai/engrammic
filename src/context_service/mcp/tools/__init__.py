@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
+from context_service.mcp.tools.belief_history import register as register_belief_history
+
 # Write tools (intent verbs)
 from context_service.mcp.tools.context_assert import register as register_assert
 from context_service.mcp.tools.context_commit import register as register_commit
@@ -52,6 +54,7 @@ def register_all(mcp: FastMCP) -> None:
     register_provenance(mcp)
     register_get_reflections(mcp)
     register_history(mcp)
+    register_belief_history(mcp)
 
     # Intelligence tools
     register_reason(mcp)
@@ -63,6 +66,7 @@ def register_all(mcp: FastMCP) -> None:
 
 __all__ = [
     "register_all",
+    "register_belief_history",
     "register_remember",
     "register_assert",
     "register_commit",
