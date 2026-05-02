@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import asyncio
+import time
 import uuid
 from typing import TYPE_CHECKING, Any
 
+from context_service.api.metrics import CONTEXT_GET_LATENCY
 from context_service.mcp.server import (
     get_context_service,
     get_mcp_auth_context,
@@ -54,6 +56,7 @@ def register(mcp: FastMCP) -> None:
                 "message": "Point-in-time retrieval is not yet implemented",
             }
 
+        _start = time.perf_counter()
         auth = await get_mcp_auth_context()
         ctx_svc = get_context_service()
 
@@ -117,4 +120,5 @@ def register(mcp: FastMCP) -> None:
             if emits:
                 await asyncio.gather(*emits)
 
+        CONTEXT_GET_LATENCY.observe(time.perf_counter() - _start)
         return {"nodes": nodes_out}

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 
+from context_service.api.metrics import CONTEXT_QUERY_LATENCY
 from context_service.mcp.server import (
     get_context_service,
     get_mcp_auth_context,
@@ -87,7 +88,9 @@ async def _context_query(
             query=query,
             top_k=top_k,
         )
-        elapsed_ms = int((time.perf_counter() - start) * 1000)
+        elapsed_s = time.perf_counter() - start
+        CONTEXT_QUERY_LATENCY.observe(elapsed_s)
+        elapsed_ms = int(elapsed_s * 1000)
         response: dict[str, Any] = {
             "results": temporal_results,
             "total_candidates": len(temporal_results),
@@ -109,7 +112,9 @@ async def _context_query(
         as_of=None,
         search_mode=search_mode,
     )
-    elapsed_ms = int((time.perf_counter() - start) * 1000)
+    elapsed_s = time.perf_counter() - start
+    CONTEXT_QUERY_LATENCY.observe(elapsed_s)
+    elapsed_ms = int(elapsed_s * 1000)
 
     redis = get_redis()
     if redis is not None and results:

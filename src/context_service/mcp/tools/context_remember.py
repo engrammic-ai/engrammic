@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from context_service.api.metrics import CONTEXT_STORE_LATENCY
 from context_service.mcp.server import get_context_service, get_mcp_auth_context, get_silo_service
 from context_service.models.mcp import DecayClass
 from context_service.services.models import ScopeContext, derive_silo_id
@@ -42,6 +44,7 @@ async def _context_remember(
 
     ctx_svc = get_context_service()
     scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
+    _start = time.perf_counter()
     node = await ctx_svc.remember(
         scope=scope,
         content=content,
@@ -52,6 +55,7 @@ async def _context_remember(
         observed_from=observed_from,
         agent_id=getattr(auth, "agent_id", None),
     )
+    CONTEXT_STORE_LATENCY.labels(tool="context_remember").observe(time.perf_counter() - _start)
 
     return {
         "node_id": str(node.id),
