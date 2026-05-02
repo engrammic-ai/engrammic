@@ -41,10 +41,10 @@ logger = structlog.get_logger(__name__)
 MIN_FACTS_FOR_BELIEF: int = 3
 
 _SYNTHESIS_SYSTEM_PROMPT = (
-    "You are a knowledge synthesis agent.  Given a list of verified facts, "
+    "You are a knowledge synthesis agent. Given a list of verified facts, "
     "produce a single concise belief statement (one or two sentences) that "
-    "captures the key insight shared across those facts.  Do not speculate "
-    "beyond what the facts support.  Return only the belief statement — no "
+    "captures the key insight shared across those facts. Do not speculate "
+    "beyond what the facts support. Return only the belief statement — no "
     "preamble, no bullet points, no explanation."
 )
 
@@ -123,6 +123,7 @@ async def synthesize_belief(
 
     belief_text, _usage = await llm_client.complete(
         messages=[
+            {"role": "system", "content": _SYNTHESIS_SYSTEM_PROMPT},
             {"role": "user", "content": prompt},
         ],
         temperature=0.2,
