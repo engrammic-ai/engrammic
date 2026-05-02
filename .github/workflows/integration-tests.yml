@@ -1,0 +1,63 @@
+name: Integration Tests
+
+on:
+  pull_request:
+    paths:
+      - "src/context_service/pipelines/**"
+      - "src/context_service/engine/**"
+      - "src/context_service/services/**"
+      - "src/context_service/stores/**"
+      - "tests/integration/**"
+      - "docker-compose.yml"
+      - "pyproject.toml"
+      - "justfile"
+
+jobs:
+  integration:
+    name: Run integration tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out primitives sibling
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/primitives
+          path: ../primitives
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Install dependencies
+        run: just install-dev
+
+      - name: Start docker-compose stack
+        run: |
+          docker compose up -d memgraph qdrant redis
+          echo "Waiting for services to be ready..."
+          timeout 60 bash -c 'until docker compose exec -T memgraph echo ok 2>/dev/null; do sleep 2; done'
+          timeout 60 bash -c 'until curl -sf http://localhost:6333/readyz > /dev/null 2>&1; do sleep 2; done'
+          timeout 30 bash -c 'until docker compose exec -T redis redis-cli ping 2>/dev/null | grep -q PONG; do sleep 2; done'
+
+      - name: Run integration tests
+        run: just test-integration
+        env:
+          MEMGRAPH_HOST: localhost
+          MEMGRAPH_PORT: 7687
+          QDRANT_HOST: localhost
+          QDRANT_PORT: 6333
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          ENVIRONMENT: test
+          AUTH_ENABLED: "false"
+
+      - name: Stop docker-compose stack
+        if: always()
+        run: docker compose down -v
