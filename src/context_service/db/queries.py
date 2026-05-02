@@ -637,6 +637,52 @@ LIMIT $limit
 
 # --- Supersession chain traversal (belief history) ---
 
+# ---------------------------------------------------------------------------
+# Belief synthesis queries (Wisdom layer)
+# ---------------------------------------------------------------------------
+
+# Fetch all :Fact nodes that are members of a given cluster (via MEMBER_OF).
+# Returns fact_id, content, confidence, and valid_from for each fact so the
+# synthesis function can build the LLM prompt without a second round-trip.
+GET_FACTS_IN_CLUSTER = """
+MATCH (f:Fact)-[:MEMBER_OF]->(c:Cluster {id: $cluster_id, silo_id: $silo_id})
+RETURN f.id AS fact_id, f.content AS content,
+       coalesce(f.confidence, 1.0) AS confidence,
+       f.valid_from AS valid_from
+ORDER BY coalesce(f.confidence, 1.0) DESC
+"""
+
+# Create a :Belief node and attach SYNTHESIZED_FROM edges to all source facts
+# in a single write.  $fact_ids is a list of fact id strings.
+CREATE_BELIEF_FROM_FACTS = """
+CREATE (b:Belief {
+    id: $belief_id,
+    silo_id: $silo_id,
+    content: $content,
+    confidence: $confidence,
+    evidence_count: $evidence_count,
+    created_at: $created_at,
+    valid_from: $valid_from,
+    valid_to: null
+})
+WITH b
+UNWIND $fact_ids AS fid
+MATCH (f:Fact {id: fid, silo_id: $silo_id})
+CREATE (b)-[:SYNTHESIZED_FROM]->(f)
+RETURN b.id AS belief_id, count(f) AS edges_created
+"""
+
+# Check whether a :Belief already exists whose content covers the subject
+# (case-insensitive substring match).  Used before synthesis to skip
+# redundant work.
+CHECK_BELIEF_COVERAGE = """
+MATCH (b:Belief {silo_id: $silo_id})
+WHERE toLower(b.content) CONTAINS toLower($subject)
+  AND (b.valid_to IS NULL OR b.valid_to > $as_of)
+RETURN b.id AS belief_id, b.content AS content, b.confidence AS confidence
+LIMIT 1
+"""
+
 GET_SUPERSESSION_CHAIN = (
     "MATCH (start {id: $start_id, silo_id: $silo_id}) "
     "OPTIONAL MATCH path = (start)-[:SUPERSEDES*0..20]->(related) "
