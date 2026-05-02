@@ -111,15 +111,6 @@ AUDIT_INDEX_QUERIES: tuple[str, ...] = (
 )
 
 
-# --- Meta-memory layer ---
-
-META_MEMORY_INDEX_QUERIES: tuple[str, ...] = (
-    "CREATE INDEX ON :MetaObservation(id);",
-    "CREATE INDEX ON :MetaObservation(silo_id);",
-    "CREATE INDEX ON :MetaObservation(created_at);",
-)
-
-
 # --- Aggregate ---
 
 ALL_INDEX_QUERIES: tuple[str, ...] = (
@@ -130,7 +121,6 @@ ALL_INDEX_QUERIES: tuple[str, ...] = (
     *INTELLIGENCE_INDEX_QUERIES,
     *REGISTRY_INDEX_QUERIES,
     *AUDIT_INDEX_QUERIES,
-    *META_MEMORY_INDEX_QUERIES,
 )
 
 
