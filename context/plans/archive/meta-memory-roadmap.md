@@ -1,5 +1,7 @@
 # Meta-Memory Roadmap
 
+**Status:** COMPLETE (Phases 1-4 shipped 2026-05-02). Open questions remain for future phases.
+
 > Enabling metacognition: agents reasoning about their own epistemic state.
 
 ## Overview
@@ -44,7 +46,7 @@ This is not a 5th layer. It's infrastructure that makes the four layers introspe
 
 ---
 
-### Phase 2: Time-Travel Queries (Medium effort, High value)
+### Phase 2: Time-Travel Queries (Medium effort, High value) — COMPLETE 2026-05-02
 
 **Goal**: Answer "What did I know on date Y?"
 
@@ -65,7 +67,7 @@ This is not a 5th layer. It's infrastructure that makes the four layers introspe
 
 ---
 
-### Phase 3: Belief History (Medium effort, Medium value)
+### Phase 3: Belief History (Medium effort, Medium value) — COMPLETE 2026-05-02
 
 **Goal**: Answer "How has my understanding of X evolved?"
 
@@ -87,7 +89,7 @@ This is not a 5th layer. It's infrastructure that makes the four layers introspe
 
 ---
 
-### Phase 4: Reflection (Higher effort, High value)
+### Phase 4: Reflection (Higher effort, High value) — COMPLETE 2026-05-02
 
 **Goal**: Agent can store meta-observations about its own cognition.
 
@@ -102,10 +104,10 @@ This is not a 5th layer. It's infrastructure that makes the four layers introspe
 - `context_get_reflections` MCP tool (retrieves by ABOUT edge)
 - `services/context.py:reflect()` and `get_reflections()` methods
 
-**Remaining**:
-- Formalize MetaObservation in `primitives.schema.labels`
-- Add ABOUT edge to `CITEEdgeType`
-- Add indexes on `:MetaObservation`
+**Completed 2026-05-02**:
+- MetaMemoryLabel in `primitives.schema.labels`
+- ABOUT edge in `CITEEdgeType`
+- Indexes on `:MetaObservation`
 
 **Spec**: [phase-4-reflection.md](./meta-memory/phase-4-reflection.md)
 
