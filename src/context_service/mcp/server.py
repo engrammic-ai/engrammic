@@ -42,6 +42,8 @@ def configure_services(
     from context_service.services.silo import SiloService
 
     _services["context"] = ContextService(
+        # MemgraphClient only implements escape-hatch methods (execute_query/write, session)
+        # currently; cast removable once full HyperGraphStore implementation lands.
         memgraph=cast("HyperGraphStore", memgraph),
         qdrant=qdrant,
         embedding=embedding,
