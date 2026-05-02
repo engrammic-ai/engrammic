@@ -1,6 +1,6 @@
 # Signals Port: Heat, Freshness, Priority
 
-**Status:** Draft 2026-04-30
+**Status:** Shipped (Phase 1+2 complete 2026-05-02); v1d enhancements in progress
 **Brainstorm:** `context/brainstorm/2026-04-30-signals-port.md`
 **Phasing:** Phase 1 ships this week (stubs + live emitters + real freshness/priority); Phase 2 ships after partner talks (real heat asset).
 
@@ -167,3 +167,110 @@ All exposed via `config/settings.py` so they can be overridden per environment w
 - **Stream backpressure.** If a silo's read traffic outpaces the heat asset's hourly cadence, the stream MAXLEN truncates oldest entries. Acceptable at 100 k entries / 1 hour cadence (would need ≈28 events/sec sustained to lose data); reconsider cadence if a partner exceeds this.
 - **Cursor advance failure.** If the heat write commits but cursor advance fails (network blip between two Cypher calls in the same session), next run double-counts the same window. Mitigation: keep both inside a single transaction (`session.execute_write`).
 - **Stub leakage.** Phase 1 ships with `get_heat` returning 0.5 for everything. Consequence: priority formula effectively reduces to `(1 - confidence) * log(distinct_agents + 1)` during the stub week. Documented; acceptable for partner trials since the relative ordering on the other two factors is still meaningful.
+
+---
+
+## v1d Enhancements (post Phase 2)
+
+**Status:** Draft 2026-05-02
+**Plan:** `context/plans/v1d-signals-enhancement.md`
+
+Four additional phases extending the signals subsystem after Phase 1+2 shipped.
+
+### v1d-1: Foundation (feature flags + schema prep)
+
+Add kill-switches before any behavioral changes:
+
+```python
+heat_ranking_enabled: bool = False      # gates query-time heat
+unified_decay_enabled: bool = False     # gates per-layer decay
+write_events_enabled: bool = False      # gates write-side events
+```
+
+Update `emit_access_event` signature:
+```python
+async def emit_access_event(
+    redis: RedisClient,
+    silo_id: str,
+    node_id: str,
+    event_type: str = "read",      # "read" or "write"
+    layer: str | None = None,       # for per-layer decay
+) -> None
+```
+
+Heat asset handles missing `event_type` field (defaults to "read" for backwards compat).
+
+### v1d-2: Query-time heat ranking
+
+Heat scores already exist on nodes (from Phase 2 asset). Add to query ranking:
+
+```python
+if settings.heat_ranking_enabled and heat_weight > 0:
+    heat = float(props.get("heat_score", 0.5))
+    relevance = relevance * ((1.0 - heat_weight) + heat_weight * heat)
+```
+
+Default `heat_weight: float = 0.1`. No additional I/O (heat_score already in node properties).
+
+Tradeoffs (from industry research):
+- Filter bubbles: popular stays popular. Mitigate with small weight (0.1) and diversity re-ranking.
+- Cold start: new nodes at 0.5 fallback. Acceptable.
+- Compounding: low heat + low freshness = double penalty. Keep both weights small.
+
+### v1d-3: Unified decay model
+
+Replace arbitrary constants with label-based decay. Layer determined by node label (immutable, not gameable):
+
+| Label | Multiplier | Effective half-life |
+|-------|------------|---------------------|
+| `:Claim`, `:Finding` | 1.0x | 7 days |
+| `:Fact` | 2.0x | 14 days |
+| `:Commitment` | 3.0x | 21 days |
+| `:Insight`, `:ReasoningChain` | 4.0x | 28 days |
+
+Embed `layer` in Redis stream entry at emit time (avoids N+1 in heat asset). Asset reads layer from stream, applies multiplier.
+
+Deprecate unused Gaussian freshness config (`sigma_default_days`, `temporal_decay_enabled`).
+
+Add backfill task: `just heat-recompute` for migration.
+
+### v1d-4: Write-side access events
+
+Writes signal stronger intent than reads. Design:
+
+1. **One event per write transaction** (not per reference - avoids flooding)
+2. **Emit after successful commit** (no orphaned events from failed writes)
+3. **Dedup window** (5 min cooldown per node)
+4. **Write weight 0.5x** (prevents write-heavy agents from dominating)
+
+```python
+heat_read_weight: float = 1.0
+heat_write_weight: float = 0.5
+heat_dedup_window_seconds: int = 300
+```
+
+Emit from:
+- `context_link`: target node only
+- `context_assert`: claim node itself (not per evidence_node)
+- `context_commit`: commitment node itself (not per about_node)
+
+### v1d constants
+
+| Constant | Value | Notes |
+|----------|-------|-------|
+| `heat_weight` | 0.1 | query-time multiplier |
+| `heat_read_weight` | 1.0 | event weight for reads |
+| `heat_write_weight` | 0.5 | event weight for writes |
+| `heat_dedup_window_seconds` | 300 | 5 min cooldown |
+| Layer multipliers | 1.0/2.0/3.0/4.0 | by epistemological layer |
+
+### v1d risks (addressed)
+
+| Risk | Mitigation |
+|------|------------|
+| Compounding penalties | Keep weights small (0.1 each) |
+| Write-heavy agents | 0.5x weight + dedup window |
+| Layer gaming | Layer from label (immutable), not property |
+| Orphaned events | Emit after commit |
+| Migration ranking shift | Backfill task + gradual rollout via flag |
+| Phase coupling | Each phase behind independent feature flag |

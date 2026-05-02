@@ -1006,6 +1006,10 @@ class ContextService:
                 fresh = compute_freshness(node.created_at, now, sigma_days=sigma_days)
                 relevance = relevance * ((1.0 - freshness_weight) + freshness_weight * fresh)
 
+            if settings.heat_ranking_enabled and settings.heat_weight > 0:
+                heat = float(props.get("heat_score", 0.5))
+                relevance = relevance * ((1.0 - settings.heat_weight) + settings.heat_weight * heat)
+
             results.append(
                 QueryResult(
                     node_id=node.id,
