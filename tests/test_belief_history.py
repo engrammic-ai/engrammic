@@ -1,4 +1,5 @@
 """Unit tests for belief history engine."""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -8,6 +9,7 @@ from context_service.engine.history import build_belief_timeline, compute_confid
 # ---------------------------------------------------------------------------
 # compute_confidence_trend
 # ---------------------------------------------------------------------------
+
 
 def test_trend_increasing() -> None:
     assert compute_confidence_trend([0.5, 0.7, 0.9]) == "increasing"
@@ -38,20 +40,23 @@ def test_trend_empty() -> None:
 # build_belief_timeline
 # ---------------------------------------------------------------------------
 
+
 def _make_rows(
     *entries: tuple[str, float, str | None, str | None, str | None],
 ) -> list[dict]:
     """Build fake Memgraph row dicts. Each entry: (id, confidence, valid_from_iso, valid_to_iso, superseded_by)."""
     rows = []
     for node_id, conf, vf, vt, sup_by in entries:
-        rows.append({
-            "id": node_id,
-            "content": f"content of {node_id}",
-            "confidence": conf,
-            "valid_from": datetime.fromisoformat(vf) if vf else None,
-            "valid_to": datetime.fromisoformat(vt) if vt else None,
-            "superseded_by": sup_by,
-        })
+        rows.append(
+            {
+                "id": node_id,
+                "content": f"content of {node_id}",
+                "confidence": conf,
+                "valid_from": datetime.fromisoformat(vf) if vf else None,
+                "valid_to": datetime.fromisoformat(vt) if vt else None,
+                "superseded_by": sup_by,
+            }
+        )
     return rows
 
 

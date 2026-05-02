@@ -70,9 +70,7 @@ class TestDevBypass:
         assert ctx.org_id == _DEV_SETTINGS.dev_org_id
         assert ctx.user_id == _DEV_SETTINGS.dev_user_id
 
-    async def test_dev_bypass_ignores_bearer_token(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_dev_bypass_ignores_bearer_token(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Bearer tokens are ignored when auth is disabled; dev context still returned."""
         monkeypatch.setattr("context_service.api.auth_dep.get_settings", lambda: _DEV_SETTINGS)
 

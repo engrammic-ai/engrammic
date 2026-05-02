@@ -27,9 +27,7 @@ class TestExtractionLLMUnavailable:
     async def test_llm_network_error_raises_extraction_error(self) -> None:
         """LLM raising a network error is wrapped as ExtractionError."""
         mock_llm = AsyncMock()
-        mock_llm.extract_structured = AsyncMock(
-            side_effect=OSError("Connection refused")
-        )
+        mock_llm.extract_structured = AsyncMock(side_effect=OSError("Connection refused"))
 
         service = ExtractionService.llm_only(mock_llm)
 
@@ -39,9 +37,7 @@ class TestExtractionLLMUnavailable:
     async def test_llm_timeout_raises_extraction_error(self) -> None:
         """LLM raising a timeout is wrapped as ExtractionError."""
         mock_llm = AsyncMock()
-        mock_llm.extract_structured = AsyncMock(
-            side_effect=TimeoutError()
-        )
+        mock_llm.extract_structured = AsyncMock(side_effect=TimeoutError())
 
         service = ExtractionService.llm_only(mock_llm)
 
@@ -51,9 +47,7 @@ class TestExtractionLLMUnavailable:
     async def test_llm_provider_error_raises_extraction_error(self) -> None:
         """LLM raising a provider-level exception is wrapped as ExtractionError."""
         mock_llm = AsyncMock()
-        mock_llm.extract_structured = AsyncMock(
-            side_effect=RuntimeError("API rate limit exceeded")
-        )
+        mock_llm.extract_structured = AsyncMock(side_effect=RuntimeError("API rate limit exceeded"))
 
         service = ExtractionService.llm_only(mock_llm)
 
@@ -63,9 +57,7 @@ class TestExtractionLLMUnavailable:
     async def test_llm_called_once_no_retry_on_error(self) -> None:
         """Extraction does not retry on LLM failure (retry is not the LLM's concern)."""
         mock_llm = AsyncMock()
-        mock_llm.extract_structured = AsyncMock(
-            side_effect=OSError("Unreachable")
-        )
+        mock_llm.extract_structured = AsyncMock(side_effect=OSError("Unreachable"))
 
         service = ExtractionService.llm_only(mock_llm)
 
@@ -109,9 +101,7 @@ class TestMemgraphTransientRetry:
         client = MemgraphClient(mock_driver)
 
         with patch.object(client, "session") as mock_session_ctx:
-            mock_session_ctx.return_value.__aenter__ = AsyncMock(
-                return_value=mock_session
-            )
+            mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
 
             result = await client.execute_read("MATCH (n) RETURN n LIMIT 1")
@@ -139,9 +129,7 @@ class TestMemgraphTransientRetry:
         client = MemgraphClient(mock_driver)
 
         with patch.object(client, "session") as mock_session_ctx:
-            mock_session_ctx.return_value.__aenter__ = AsyncMock(
-                return_value=mock_session
-            )
+            mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
 
             result = await client.execute_write(
@@ -155,9 +143,7 @@ class TestMemgraphTransientRetry:
     async def test_exhausted_retries_raise_memgraph_operation_error(self) -> None:
         """All retry attempts failing raises MemgraphOperationError."""
         mock_session = AsyncMock()
-        mock_session.run = AsyncMock(
-            side_effect=ServiceUnavailable("permanently down")
-        )
+        mock_session.run = AsyncMock(side_effect=ServiceUnavailable("permanently down"))
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
         mock_session.__aexit__ = AsyncMock(return_value=False)
 
@@ -165,9 +151,7 @@ class TestMemgraphTransientRetry:
         client = MemgraphClient(mock_driver)
 
         with patch.object(client, "session") as mock_session_ctx:
-            mock_session_ctx.return_value.__aenter__ = AsyncMock(
-                return_value=mock_session
-            )
+            mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
 
             with pytest.raises(MemgraphOperationError, match="Database unavailable"):

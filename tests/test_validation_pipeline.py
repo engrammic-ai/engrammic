@@ -1,4 +1,5 @@
 """Unit tests for run_validation() pipeline function."""
+
 from __future__ import annotations
 
 from typing import Any

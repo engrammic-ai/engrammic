@@ -73,6 +73,8 @@ async def run_validation(
 
     biz = business_validator.evaluate(finding, surviving_claims, surviving_edges, cluster_size)
     if not biz.accepted:
-        return PipelineResult(passed=False, failed_at="business", citation=citation_stage, business=biz)
+        return PipelineResult(
+            passed=False, failed_at="business", citation=citation_stage, business=biz
+        )
 
     return PipelineResult(passed=True, citation=citation_stage, business=biz)

@@ -34,9 +34,7 @@ CLUSTER_INDEX_QUERIES: tuple[str, ...] = (
 
 # --- Heat cursor (signals phase 2) ---
 
-HEAT_CURSOR_INDEX_QUERIES: tuple[str, ...] = (
-    "CREATE INDEX ON :HeatCursor(silo_id);",
-)
+HEAT_CURSOR_INDEX_QUERIES: tuple[str, ...] = ("CREATE INDEX ON :HeatCursor(silo_id);",)
 
 # --- Memory layer ---
 

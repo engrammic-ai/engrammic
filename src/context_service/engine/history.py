@@ -1,4 +1,5 @@
 """Belief history: supersession chain traversal and confidence trend analysis."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

@@ -21,10 +21,7 @@ logger = structlog.get_logger(__name__)
 
 DEFAULT_HEAT = 0.5
 
-_GET_HEAT_QUERY = (
-    "MATCH (n {id: $id, silo_id: $silo_id}) "
-    "RETURN coalesce(n.heat_score, 0.5) AS h"
-)
+_GET_HEAT_QUERY = "MATCH (n {id: $id, silo_id: $silo_id}) RETURN coalesce(n.heat_score, 0.5) AS h"
 
 
 async def get_heat(

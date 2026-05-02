@@ -1,4 +1,5 @@
 """MCP tool: context_belief_history - Supersession chain timeline for a fact."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
@@ -34,8 +35,12 @@ async def _context_belief_history(
     )
 
     timeline = history.timeline
-    first_belief = timeline[0].valid_from.isoformat() if timeline and timeline[0].valid_from else None
-    last_change = timeline[-1].valid_from.isoformat() if timeline and timeline[-1].valid_from else None
+    first_belief = (
+        timeline[0].valid_from.isoformat() if timeline and timeline[0].valid_from else None
+    )
+    last_change = (
+        timeline[-1].valid_from.isoformat() if timeline and timeline[-1].valid_from else None
+    )
 
     return {
         "subject": history.subject,

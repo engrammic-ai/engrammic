@@ -185,8 +185,7 @@ class TestE2EIngestQuery:
 
         top_id = str(results[0].node_id)
         assert top_id in france_ids, (
-            f"Top result {top_id} is not a France/Paris document. "
-            f"Expected one of {france_ids}"
+            f"Top result {top_id} is not a France/Paris document. Expected one of {france_ids}"
         )
 
     async def test_provenance_traces_to_seed_doc(
@@ -230,8 +229,7 @@ class TestE2EIngestQuery:
         assert result.chain, "Provenance chain should not be empty"
         chain_ids = [step.node_id for step in result.chain]
         assert str(seed_node.id) in chain_ids, (
-            f"Seed document {seed_node.id} should appear in provenance chain. "
-            f"Chain: {chain_ids}"
+            f"Seed document {seed_node.id} should appear in provenance chain. Chain: {chain_ids}"
         )
 
         assert any(step.layer == "Document" for step in result.chain), (
@@ -271,6 +269,4 @@ class TestE2EIngestQuery:
             {"silo_id": silo_id},
         )
         count = int(rows[0]["cnt"]) if rows else 0
-        assert count == len(_SEED_DOCS), (
-            f"Expected {len(_SEED_DOCS)} Document nodes, found {count}"
-        )
+        assert count == len(_SEED_DOCS), f"Expected {len(_SEED_DOCS)} Document nodes, found {count}"
