@@ -14,6 +14,7 @@ from context_service.auth.context import AuthContext
 if TYPE_CHECKING:
     from context_service.embeddings import EmbeddingService
     from context_service.embeddings.splade import SpladeEncoder
+    from context_service.engine.protocols import HyperGraphStore
     from context_service.services.context import ContextService
     from context_service.services.evidence import EvidenceValidator
     from context_service.services.silo import SiloService
@@ -41,7 +42,7 @@ def configure_services(
     from context_service.services.silo import SiloService
 
     _services["context"] = ContextService(
-        memgraph=memgraph,
+        memgraph=cast("HyperGraphStore", memgraph),
         qdrant=qdrant,
         embedding=embedding,
         cache=redis,

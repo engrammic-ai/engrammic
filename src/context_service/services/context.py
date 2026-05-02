@@ -28,12 +28,13 @@ if TYPE_CHECKING:
     from context_service.embeddings import EmbeddingService
     from context_service.embeddings.splade import SpladeEncoder
     from context_service.engine.history import BeliefHistory
+    from context_service.engine.protocols import HyperGraphStore
     from context_service.services.context_meta import (
         HistoryResult,
         ProvenanceResult,
         ReasoningChainResult,
     )
-    from context_service.stores import MemgraphClient, QdrantClient, RedisClient
+    from context_service.stores import QdrantClient, RedisClient
 
 logger = structlog.get_logger(__name__)
 
@@ -72,7 +73,7 @@ class ContextService:
 
     def __init__(
         self,
-        memgraph: MemgraphClient,
+        memgraph: HyperGraphStore,
         qdrant: QdrantClient,
         embedding: EmbeddingService | None = None,
         cache: RedisClient | None = None,

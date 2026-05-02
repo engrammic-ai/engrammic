@@ -26,6 +26,7 @@ def _clear_settings_cache() -> Generator[None, None, None]:
     yield
     get_settings.cache_clear()
 
+
 NOW = datetime(2026, 5, 1, tzinfo=UTC)
 
 SILO_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
