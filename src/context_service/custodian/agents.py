@@ -24,7 +24,6 @@ from context_service.custodian.models import (
     StitchedSummary,
     VisitPlan,
 )
-from context_service.custodian.output_recovery import patch_agent_output_validators
 from context_service.custodian.prompt_loader import load_prompt
 
 if TYPE_CHECKING:
@@ -206,12 +205,6 @@ fast_pass_agent = build_fast_pass_agent()
 plan_agent = build_plan_agent()
 deep_pass_agent = build_deep_pass_agent()
 stitch_agent = build_stitch_agent()
-
-# Patch output validators on all structured-output agents with recovery logic.
-# deep_pass_agent uses output_type=str and has no output toolset; patch_* no-ops for it.
-patch_agent_output_validators(fast_pass_agent, FastPassObservation, "fast_pass")
-patch_agent_output_validators(plan_agent, VisitPlan, "plan")
-patch_agent_output_validators(stitch_agent, StitchedSummary, "stitch")
 
 
 __all__ = [

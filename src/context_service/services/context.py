@@ -875,7 +875,7 @@ class ContextService:
             if ts is None:
                 return None
             if hasattr(ts, "isoformat"):
-                return ts.isoformat()
+                return str(ts.isoformat())
             if isinstance(ts, (int, float)):
                 # Memgraph timestamp() returns microseconds since epoch
                 return datetime.fromtimestamp(ts / 1_000_000, tz=UTC).isoformat()
