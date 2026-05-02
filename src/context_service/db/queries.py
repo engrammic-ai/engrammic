@@ -730,6 +730,65 @@ SET b.wisdom_status = 'stale',
 RETURN b.id AS belief_id
 """
 
+# ---------------------------------------------------------------------------
+# Pattern queries (Wisdom layer)
+# ---------------------------------------------------------------------------
+
+# Create a :Pattern node and attach OBSERVED_IN edges to each observed node.
+# $observed_node_ids is a list of node id strings (Fact, Belief, or Event).
+CREATE_PATTERN = """
+MERGE (p:Pattern {id: $pattern_id, silo_id: $silo_id})
+ON CREATE SET
+    p.pattern_type = $pattern_type,
+    p.description = $description,
+    p.frequency = $frequency,
+    p.confidence = $confidence,
+    p.first_observed = $first_observed,
+    p.last_observed = $last_observed,
+    p.created_at = $created_at
+WITH p
+UNWIND $observed_node_ids AS nid
+MATCH (n {id: nid, silo_id: $silo_id})
+MERGE (p)-[:OBSERVED_IN]->(n)
+RETURN p.id AS pattern_id, count(n) AS edges_created
+"""
+
+# Increment frequency and update last_observed timestamp.
+UPDATE_PATTERN_FREQUENCY = """
+MATCH (p:Pattern {id: $pattern_id, silo_id: $silo_id})
+SET p.frequency = p.frequency + 1,
+    p.last_observed = $last_observed
+RETURN p.id AS pattern_id, p.frequency AS frequency
+"""
+
+# Look up an existing pattern by type and subject description substring.
+GET_PATTERN_BY_TYPE_AND_SUBJECT = """
+MATCH (p:Pattern {silo_id: $silo_id, pattern_type: $pattern_type})
+WHERE toLower(p.description) CONTAINS toLower($subject)
+  AND (p.valid_to IS NULL OR p.valid_to > $as_of)
+RETURN p.id AS pattern_id, p.description AS description,
+       p.frequency AS frequency, p.confidence AS confidence,
+       p.first_observed AS first_observed, p.last_observed AS last_observed
+LIMIT 1
+"""
+
+# Detect temporal correlations: pairs of :Fact nodes in the same silo whose
+# valid_from timestamps fall within $window_seconds of each other.  Returns
+# up to $limit distinct unordered pairs so the caller can decide which to
+# materialise as a :Pattern.
+DETECT_TEMPORAL_CORRELATIONS = """
+MATCH (a:Fact {silo_id: $silo_id}), (b:Fact {silo_id: $silo_id})
+WHERE id(a) < id(b)
+  AND a.valid_from IS NOT NULL
+  AND b.valid_from IS NOT NULL
+  AND abs(duration.between(a.valid_from, b.valid_from).seconds) <= $window_seconds
+RETURN a.id AS fact_id_a, b.id AS fact_id_b,
+       a.content AS content_a, b.content AS content_b,
+       a.valid_from AS valid_from_a, b.valid_from AS valid_from_b
+ORDER BY a.valid_from DESC
+LIMIT $limit
+"""
+
 GET_SUPERSESSION_CHAIN = (
     "MATCH (start {id: $start_id, silo_id: $silo_id}) "
     "OPTIONAL MATCH path = (start)-[:SUPERSEDES*0..20]->(related) "
