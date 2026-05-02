@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 import uuid as uuid_mod
+from contextlib import AbstractAsyncContextManager
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -963,6 +964,6 @@ class MemgraphStore(EAGKnowledgeStore):
         """Delegate a write Cypher query to the underlying MemgraphClient."""
         return await self._client.execute_write(cypher, params)
 
-    def session(self) -> Any:
+    def session(self) -> AbstractAsyncContextManager[Any]:
         """Return an async context manager yielding a MemgraphClient session."""
         return self._client.session()
