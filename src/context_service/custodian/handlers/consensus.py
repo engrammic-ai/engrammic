@@ -9,7 +9,7 @@ from primitives.eag.epistemology import noisy_or_aggregate
 from context_service.custodian.consensus_promotion import promote_consensus_to_finding
 
 if TYPE_CHECKING:
-    from context_service.stores.memgraph import MemgraphClient
+    from context_service.engine.protocols import HyperGraphStore
 
 
 class ConsensusResult(TypedDict, total=False):
@@ -31,7 +31,7 @@ RETURN chain.id AS id, chain.produced_by_agent_id AS produced_by_agent_id,
 
 async def handle_consensus_task(
     *,
-    memgraph: MemgraphClient,
+    memgraph: HyperGraphStore,
     commitment_id: str,
     silo_id: str,
     min_distinct_agents: int = 2,

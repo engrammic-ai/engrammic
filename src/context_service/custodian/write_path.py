@@ -50,7 +50,7 @@ from context_service.utils.json import dumps
 if TYPE_CHECKING:
     from context_service.custodian.models import Claim, FindingOutput, ProposedEdge
     from context_service.custodian.validators import CitationValidator, RejectionMetrics
-    from context_service.stores.memgraph import MemgraphClient
+    from context_service.engine.protocols import HyperGraphStore
 
 _default_business_validator = BusinessRuleValidator()
 
@@ -192,7 +192,7 @@ class WritePath:
 
     def __init__(
         self,
-        memgraph_client: MemgraphClient,
+        memgraph_client: HyperGraphStore,
         citation_validator: CitationValidator,
         metrics: RejectionMetrics | None = None,
         business_validator: BusinessRuleValidator | None = None,
@@ -280,131 +280,140 @@ class WritePath:
 
         history_created = False
 
-        async with self._client.transaction() as tx:
-            # 4a. Look up prior finding inside the same transaction.
-            prior = await fetch_current_finding(
-                tx,
-                scope=finding.scope,
-                cluster_id=finding.cluster_id,
-                silo_id=finding.silo_id,
-            )
-
-            if prior is not None:
-                finding_id = str(prior["id"])
-                next_version = int(prior["version"] or 0) + 1
-                created_at = None  # MERGE ON CREATE won't fire; existing row
-                # 4b. Snapshot prior body to :FindingHistory.
-                prior_claims_str = prior.get("claims") or "[]"
-                prior_claims_hash = hashlib.sha256(prior_claims_str.encode("utf-8")).hexdigest()
-                prior_summary = prior.get("summary") or dumps(None)
-                prior_pass_id = prior.get("pass_id") or pass_id
-
-                await tx.run(
-                    FINDING_HISTORY_CREATE,
-                    finding_id=finding_id,
-                    pass_id=prior_pass_id,
-                    summary=prior_summary,
-                    claims_hash=prior_claims_hash,
-                    created_at=now_iso,
-                    org_id=org_id,
-                )
-                history_created = True
-            else:
-                finding_id = str(uuid.uuid4())
-                next_version = 1
-                created_at = now_iso
-
-            # 4c. MERGE the finding body (scope-aware).
-            merge_params: dict[str, Any] = {
-                "id": finding_id,
-                "scope": finding.scope,
-                "org_id": org_id,
-                "silo_id": finding.silo_id,
-                "pass_id": pass_id,
-                "version": next_version,
-                "status": "draft",
-                "summary_json": summary_json,
-                "claims_json": claims_json,
-                "inferred_json": edges_json,
-                "member_fingerprint": member_fingerprint,
-                "quality_score": qscore,
-                "visit_ref": visit_ref,
-                "source": "custodian",
-                "model": model_name,
-                "created_at": created_at if created_at is not None else now_iso,
-                "updated_at": now_iso,
-            }
-
-            if finding.scope == "cluster":
-                merge_params["cluster_id"] = finding.cluster_id
-                merge_result = await tx.run(FINDING_MERGE_CLUSTER_SCOPE, **merge_params)
-            else:
-                merge_result = await tx.run(FINDING_MERGE_SILO_SCOPE, **merge_params)
-
-            merge_row = await merge_result.single()
-            if merge_row is None:
-                raise RuntimeError(
-                    f"finding MERGE returned no row -- scope={finding.scope} "
-                    f"silo={finding.silo_id} cluster={finding.cluster_id}"
-                )
-            finding_id = str(merge_row["id"])
-
-            # 4d. Trim :FindingHistory to the most-recent HISTORY_KEEP_COUNT.
-            if history_created:
-                await tx.run(
-                    FINDING_HISTORY_TRIM,
-                    finding_id=finding_id,
-                    keep=HISTORY_KEEP_COUNT,
+        async with self._client.session() as _session:
+            tx = await _session.begin_transaction()
+            try:
+                # 4a. Look up prior finding inside the same transaction.
+                prior = await fetch_current_finding(
+                    tx,
+                    scope=finding.scope,
+                    cluster_id=finding.cluster_id,
+                    silo_id=finding.silo_id,
                 )
 
-            # 4e. Create :CITES edges to every cited :Node.
-            cited_pairs: set[tuple[str, str]] = set()
-            for claim in surviving_claims:
-                for citation in claim.citations:
-                    pair = (citation.node_id, citation.kind)
-                    if pair in cited_pairs:
-                        continue
-                    cited_pairs.add(pair)
+                if prior is not None:
+                    finding_id = str(prior["id"])
+                    next_version = int(prior["version"] or 0) + 1
+                    created_at = None  # MERGE ON CREATE won't fire; existing row
+                    # 4b. Snapshot prior body to :FindingHistory.
+                    prior_claims_str = prior.get("claims") or "[]"
+                    prior_claims_hash = hashlib.sha256(
+                        prior_claims_str.encode("utf-8")
+                    ).hexdigest()
+                    prior_summary = prior.get("summary") or dumps(None)
+                    prior_pass_id = prior.get("pass_id") or pass_id
+
                     await tx.run(
-                        CITES_EDGE_CREATE_NODE,
+                        FINDING_HISTORY_CREATE,
                         finding_id=finding_id,
-                        node_id=citation.node_id,
-                        kind=citation.kind,
+                        pass_id=prior_pass_id,
+                        summary=prior_summary,
+                        claims_hash=prior_claims_hash,
+                        created_at=now_iso,
+                        org_id=org_id,
+                    )
+                    history_created = True
+                else:
+                    finding_id = str(uuid.uuid4())
+                    next_version = 1
+                    created_at = now_iso
+
+                # 4c. MERGE the finding body (scope-aware).
+                merge_params: dict[str, Any] = {
+                    "id": finding_id,
+                    "scope": finding.scope,
+                    "org_id": org_id,
+                    "silo_id": finding.silo_id,
+                    "pass_id": pass_id,
+                    "version": next_version,
+                    "status": "draft",
+                    "summary_json": summary_json,
+                    "claims_json": claims_json,
+                    "inferred_json": edges_json,
+                    "member_fingerprint": member_fingerprint,
+                    "quality_score": qscore,
+                    "visit_ref": visit_ref,
+                    "source": "custodian",
+                    "model": model_name,
+                    "created_at": created_at if created_at is not None else now_iso,
+                    "updated_at": now_iso,
+                }
+
+                if finding.scope == "cluster":
+                    merge_params["cluster_id"] = finding.cluster_id
+                    merge_result = await tx.run(FINDING_MERGE_CLUSTER_SCOPE, **merge_params)
+                else:
+                    merge_result = await tx.run(FINDING_MERGE_SILO_SCOPE, **merge_params)
+
+                merge_row = await merge_result.single()
+                if merge_row is None:
+                    raise RuntimeError(
+                        f"finding MERGE returned no row -- scope={finding.scope} "
+                        f"silo={finding.silo_id} cluster={finding.cluster_id}"
+                    )
+                finding_id = str(merge_row["id"])
+
+                # 4d. Trim :FindingHistory to the most-recent HISTORY_KEEP_COUNT.
+                if history_created:
+                    await tx.run(
+                        FINDING_HISTORY_TRIM,
+                        finding_id=finding_id,
+                        keep=HISTORY_KEEP_COUNT,
                     )
 
-            # 4f. MERGE each surviving proposed edge.
-            for edge in surviving_edges:
-                await tx.run(
-                    PROPOSED_EDGE_MERGE,
-                    source_node_id=edge.source_node_id,
-                    target_node_id=edge.target_node_id,
-                    type=str(edge.type),
-                    pass_id=pass_id,
-                    source_type=edge.source_type,
-                    target_type=edge.target_type,
-                    confidence=float(edge.confidence),
-                    rationale=edge.rationale,
-                    supporting_node_ids=list(edge.supporting_node_ids),
-                    org_id=org_id,
-                    silo_id=finding.silo_id,
-                    now_iso=now_iso,
-                )
+                # 4e. Create :CITES edges to every cited :Node.
+                cited_pairs: set[tuple[str, str]] = set()
+                for claim in surviving_claims:
+                    for citation in claim.citations:
+                        pair = (citation.node_id, citation.kind)
+                        if pair in cited_pairs:
+                            continue
+                        cited_pairs.add(pair)
+                        await tx.run(
+                            CITES_EDGE_CREATE_NODE,
+                            finding_id=finding_id,
+                            node_id=citation.node_id,
+                            kind=citation.kind,
+                        )
 
-            # 4g. Cluster-scope only: last_custodian_* update + :CLAIMED edge.
-            if finding.scope == "cluster" and finding.cluster_id is not None:
-                await tx.run(
-                    CLUSTER_LAST_CUSTODIAN_UPDATE,
-                    cluster_id=finding.cluster_id,
-                    silo_id=finding.silo_id,
-                    pass_id=pass_id,
-                    now_iso=now_iso,
-                )
-                await tx.run(
-                    PASS_CLAIMED_EDGE_MERGE,
-                    pass_id=pass_id,
-                    cluster_id=finding.cluster_id,
-                    claimed_at=now_iso,
-                )
+                # 4f. MERGE each surviving proposed edge.
+                for edge in surviving_edges:
+                    await tx.run(
+                        PROPOSED_EDGE_MERGE,
+                        source_node_id=edge.source_node_id,
+                        target_node_id=edge.target_node_id,
+                        type=str(edge.type),
+                        pass_id=pass_id,
+                        source_type=edge.source_type,
+                        target_type=edge.target_type,
+                        confidence=float(edge.confidence),
+                        rationale=edge.rationale,
+                        supporting_node_ids=list(edge.supporting_node_ids),
+                        org_id=org_id,
+                        silo_id=finding.silo_id,
+                        now_iso=now_iso,
+                    )
+
+                # 4g. Cluster-scope only: last_custodian_* update + :CLAIMED edge.
+                if finding.scope == "cluster" and finding.cluster_id is not None:
+                    await tx.run(
+                        CLUSTER_LAST_CUSTODIAN_UPDATE,
+                        cluster_id=finding.cluster_id,
+                        silo_id=finding.silo_id,
+                        pass_id=pass_id,
+                        now_iso=now_iso,
+                    )
+                    await tx.run(
+                        PASS_CLAIMED_EDGE_MERGE,
+                        pass_id=pass_id,
+                        cluster_id=finding.cluster_id,
+                        claimed_at=now_iso,
+                    )
+
+                await tx.commit()
+            except Exception:
+                await tx.rollback()
+                raise
 
         return WritePathResult(
             finding_id=finding_id,

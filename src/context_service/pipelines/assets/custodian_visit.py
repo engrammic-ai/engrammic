@@ -61,11 +61,13 @@ def custodian_visit(
         from context_service.custodian.metrics import compute_cost_usd
         from context_service.custodian.models import VisitStatus
         from context_service.custodian.visit import run_visit
+        from context_service.engine.memgraph_store import MemgraphStore
         from context_service.stores import MemgraphClient
         from context_service.stores.redis import RedisClient
 
         driver = await memgraph.driver()
         mg_client = MemgraphClient(driver)
+        mg_store = MemgraphStore(mg_client)
         raw_redis = await redis.client()
         redis_client = RedisClient(raw_redis)
 
@@ -103,7 +105,7 @@ def custodian_visit(
                     cluster_member_count=member_count,
                     naive_summary=naive_summary,
                     child_finding_summaries=child_summaries,
-                    memgraph_client=mg_client,
+                    memgraph_client=mg_store,
                     redis_client=redis_client,
                 )
                 visits += 1

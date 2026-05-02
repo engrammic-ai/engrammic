@@ -42,10 +42,12 @@ def custodian_finalize(
         from context_service.custodian.handlers.consensus import (
             GET_CHAINS_FOR_COMMITMENT,
         )
+        from context_service.engine.memgraph_store import MemgraphStore
         from context_service.stores import MemgraphClient
 
         driver = await memgraph.driver()
         mg_client = MemgraphClient(driver)
+        mg_store = MemgraphStore(mg_client)
 
         rows = await mg_client.execute_query(
             _SCAN_PROMOTABLE_COMMITMENTS,
@@ -74,7 +76,7 @@ def custodian_finalize(
             chain_ids = [str(c["id"]) for c in chain_rows]
             try:
                 await promote_consensus_to_finding(
-                    memgraph=mg_client,
+                    memgraph=mg_store,
                     commitment_id=commitment_id,
                     contributing_chain_ids=chain_ids,
                     silo_id=silo_id,

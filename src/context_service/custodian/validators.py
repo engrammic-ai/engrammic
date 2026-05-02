@@ -37,7 +37,7 @@ _MIN_EDGE_CONFIDENCE: float = get_settings().custodian.min_edge_confidence
 
 if TYPE_CHECKING:
     from context_service.custodian.models import Claim, FindingOutput, ProposedEdge
-    from context_service.stores.memgraph import MemgraphClient
+    from context_service.engine.protocols import HyperGraphStore
 
 
 # ---------------------------------------------------------------------------
@@ -112,7 +112,7 @@ class CitationValidator:
 
     def __init__(
         self,
-        memgraph_client: MemgraphClient,
+        memgraph_client: HyperGraphStore,
         metrics: RejectionMetrics | None = None,
     ) -> None:
         self._client = memgraph_client

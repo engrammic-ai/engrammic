@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 if TYPE_CHECKING:
+    from context_service.engine.protocols import HyperGraphStore
     from context_service.stores.memgraph import MemgraphClient
 
 logger = structlog.get_logger(__name__)
@@ -25,7 +26,7 @@ _GET_HEAT_QUERY = "MATCH (n {id: $id, silo_id: $silo_id}) RETURN coalesce(n.heat
 
 
 async def get_heat(
-    memgraph: MemgraphClient,
+    memgraph: MemgraphClient | HyperGraphStore,
     node_id: str,
     silo_id: str,
 ) -> float:

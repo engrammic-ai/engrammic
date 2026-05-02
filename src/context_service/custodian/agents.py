@@ -28,7 +28,7 @@ from context_service.custodian.prompt_loader import load_prompt
 
 if TYPE_CHECKING:
     from context_service.custodian.validators import CitationValidator
-    from context_service.stores.memgraph import MemgraphClient
+    from context_service.engine.protocols import HyperGraphStore
 
 FAST_PASS_SYSTEM_PROMPT = load_prompt("prompts/custodian/fast_pass.yaml")
 PLAN_SYSTEM_PROMPT = load_prompt("prompts/custodian/plan.yaml")
@@ -70,7 +70,7 @@ class VisitDeps:
     # constructs VisitDeps; tools registered on the module-level Agent singletons
     # read them off ``ctx.deps`` (the singletons cannot capture per-visit clients
     # via closure). Unit tests inject fakes directly.
-    memgraph_client: MemgraphClient | None = None
+    memgraph_client: HyperGraphStore | None = None
     validator: CitationValidator | None = None
     # Budget defaults to a "full" status; orchestrator replaces it between turns.
     budget: BudgetStatus = field(

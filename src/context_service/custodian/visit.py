@@ -64,7 +64,7 @@ from context_service.custodian.write_path import WritePath, WritePathResult
 from context_service.db import custodian_read_queries as read_q
 
 if TYPE_CHECKING:
-    from context_service.stores.memgraph import MemgraphClient
+    from context_service.engine.protocols import HyperGraphStore
     from context_service.stores.redis import RedisClient
 
 logger = get_logger(__name__)
@@ -310,7 +310,7 @@ async def _finalize_visit(
 
 async def _write_and_trace(
     *,
-    memgraph_client: MemgraphClient,
+    memgraph_client: HyperGraphStore,
     redis_client: RedisClient,
     settings: CustodianSettings,
     deps: VisitDeps,
@@ -451,7 +451,7 @@ async def run_visit(
     cluster_member_count: int,
     naive_summary: str | None,
     child_finding_summaries: list[str],
-    memgraph_client: MemgraphClient,
+    memgraph_client: HyperGraphStore,
     redis_client: RedisClient,
 ) -> VisitResult:
     """Run a 4-phase visit against a single cluster.
@@ -490,7 +490,7 @@ async def _run_visit_body(
     cluster_member_count: int,
     naive_summary: str | None,
     child_finding_summaries: list[str],
-    memgraph_client: MemgraphClient,
+    memgraph_client: HyperGraphStore,
     redis_client: RedisClient,
 ) -> VisitResult:
     ov = get_settings().custodian
