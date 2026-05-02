@@ -51,7 +51,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("redis_connected")
 
         qdrant_client = QdrantClient.from_settings(settings)
-        await qdrant_client.ensure_collection()
+        await qdrant_client.ensure_collection(hybrid=settings.hybrid_search_enabled)
         logger.info("qdrant_connected")
 
         async def rebuild_memgraph() -> MemgraphClient:
@@ -103,11 +103,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 provider=type(embedding_service).__name__,
             )
 
+        splade_encoder = None
+        if settings.hybrid_search_enabled:
+            from context_service.embeddings.splade import SpladeEncoder
+
+            splade_encoder = SpladeEncoder()
+            logger.info("splade_encoder_configured")
+
         configure_services(
             memgraph=memgraph_client,
             qdrant=qdrant_client,
             redis=redis_client,
             embedding=embedding_service,
+            splade=splade_encoder,
         )
         logger.info("mcp_services_configured")
 

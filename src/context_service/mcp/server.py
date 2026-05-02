@@ -13,6 +13,7 @@ from context_service.auth.context import AuthContext
 
 if TYPE_CHECKING:
     from context_service.embeddings import EmbeddingService
+    from context_service.embeddings.splade import SpladeEncoder
     from context_service.services.context import ContextService
     from context_service.services.evidence import EvidenceValidator
     from context_service.services.silo import SiloService
@@ -28,6 +29,7 @@ def configure_services(
     qdrant: QdrantClient,
     redis: RedisClient | None = None,
     embedding: EmbeddingService | None = None,
+    splade: SpladeEncoder | None = None,
 ) -> None:
     """Configure MCP service dependencies.
 
@@ -43,6 +45,7 @@ def configure_services(
         qdrant=qdrant,
         embedding=embedding,
         cache=redis,
+        splade=splade,
     )
     ownership_cache = SiloOwnershipCache(redis) if redis is not None else None
     _services["silo"] = SiloService(memgraph=memgraph, ownership_cache=ownership_cache)
@@ -89,20 +92,37 @@ async def get_mcp_auth_context() -> AuthContext:
     """Resolve the MCP auth context for the current request.
 
     Reads the inbound Authorization header from the live FastMCP request via
-    `fastmcp.server.dependencies.get_http_headers` and verifies it through
-    WorkOS. There is no session-level cache — auth is resolved per call so
-    that org boundaries are honoured on every tool invocation.
+    ``fastmcp.server.dependencies.get_http_headers`` and verifies it through
+    WorkOS.  Auth is resolved per tool invocation (per-request), not at
+    session start, so org boundaries are enforced on every call.
+
+    Implementation note -- two auth paths exist in this package:
+
+    1. This function (active path): reads the Authorization header on every
+       tool call via FastMCP's ``get_http_headers`` dependency and returns a
+       WorkOS-backed ``AuthContext``.  All tool callsites must use this
+       function.
+
+    2. ``context_service.mcp.auth.MCPAuthMiddleware`` (not mounted --
+       known limitation): a Starlette middleware that stores auth in a
+       ``ContextVar`` and exposes it via ``get_mcp_auth()``.  It is not
+       mounted because FastMCP does not expose a standard Starlette ``app``
+       object at construction time, so there is no stable hook to attach
+       Starlette middleware.  Properly wiring the middleware path is deferred
+       to a future version; until then ``get_mcp_auth()`` must NOT be called
+       from tool code -- the ``ContextVar`` is never populated and it will
+       raise ``RuntimeError``.
 
     Behaviour:
-      - HTTP transport with `Authorization: Bearer <sealed-session>`:
-        verifies via WorkOS and returns the resulting `AuthContext`.
+      - HTTP transport with ``Authorization: Bearer <sealed-session>``:
+        verifies via WorkOS and returns the resulting ``AuthContext``.
       - No header (stdio transport, dev runs, tests, or a misconfigured
-        client) and `auth_enabled=true`: raises `MCPAuthError` — auth fails
-        closed.
-      - No header and `auth_enabled=false`: returns a dev `AuthContext`
-        built from `settings.dev_org_id` / `dev_user_id`. The boot-time
-        guard in `Settings._validate_auth` already prevents this branch in
-        production.
+        client) and ``auth_enabled=true``: raises ``MCPAuthError`` -- auth
+        fails closed.
+      - No header and ``auth_enabled=false``: returns a dev ``AuthContext``
+        built from ``settings.dev_org_id`` / ``dev_user_id``.  The
+        boot-time guard in ``Settings._validate_auth`` already prevents
+        this branch in production.
     """
     from context_service.auth.resolve import (
         MCPAuthError,
