@@ -100,13 +100,15 @@ RETURN count(c) as total
 
 DELETE_CLUSTERS = """
 MATCH (c:Cluster {silo_id: $silo_id})
-DETACH DELETE c
-RETURN count(c) as deleted
+WHERE c.id IN $cluster_ids
+WITH collect(c) AS clusters, count(c) AS cnt
+FOREACH (c IN clusters | DETACH DELETE c)
+RETURN cnt AS deleted
 """
 
 # Cluster membership queries
 CREATE_MEMBER_OF = f"""
-MATCH (n {{id: $node_id}})
+MATCH (n {{id: $node_id, silo_id: $silo_id}})
 MATCH (c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
 WHERE {content_union_predicate("n")} OR n:{LABEL_ENTITY}
 CREATE (n)-[r:MEMBER_OF {{weight: $weight, created_at: $created_at}}]->(c)
@@ -200,7 +202,7 @@ RETURN c
 BATCH_CREATE_MEMBER_OF = f"""
 MATCH (c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
 UNWIND $node_ids AS nid
-MATCH (n {{id: nid}})
+MATCH (n {{id: nid, silo_id: $silo_id}})
 WHERE {content_union_predicate("n")} OR n:{LABEL_ENTITY}
 CREATE (n)-[:MEMBER_OF {{weight: $weight, created_at: $created_at}}]->(c)
 RETURN count(*) as created

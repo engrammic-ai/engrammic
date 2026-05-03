@@ -152,7 +152,7 @@ def create_app() -> FastAPI:
     json_format = settings.environment != "development"
     configure_logging(log_level=log_level, json_format=json_format)
 
-    docs_enabled = settings.environment != "production"
+    docs_enabled = settings.environment not in ("production", "staging")
 
     app = FastAPI(
         title="Context Service",

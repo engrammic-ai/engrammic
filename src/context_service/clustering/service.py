@@ -22,6 +22,7 @@ from context_service.clustering.prompts import (
     get_clustering_user_template,
 )
 from context_service.config.logging import get_logger
+from context_service.llm.sanitize import escape_for_prompt
 from context_service.utils.json import dumps
 
 if TYPE_CHECKING:
@@ -245,6 +246,7 @@ class ClusteringService:
             if not child_clusters_dict or not parent_clusters_dict:
                 continue
 
+            part_of_pairs: list[dict[str, str]] = []
             for child_cid, child_cluster in child_clusters_dict.items():
                 child_nodes = [nid for nid, cid in child_map.items() if cid == child_cid]
 
@@ -262,21 +264,24 @@ class ClusteringService:
                 if parent_cluster is None:
                     continue
 
+                part_of_pairs.append(
+                    {"child_id": child_cluster.id, "parent_id": parent_cluster.id}
+                )
+
+            if part_of_pairs:
                 try:
                     await self._memgraph.execute_write(
-                        queries.CREATE_PART_OF,
+                        queries.BATCH_CREATE_PART_OF,
                         {
-                            "child_id": child_cluster.id,
-                            "parent_id": parent_cluster.id,
+                            "pairs": part_of_pairs,
                             "silo_id": silo_id,
                             "created_at": now.isoformat(),
                         },
                     )
                 except Exception as e:
                     logger.warning(
-                        "failed to create PART_OF edge",
-                        child_id=child_cluster.id,
-                        parent_id=parent_cluster.id,
+                        "failed to batch create PART_OF edges",
+                        pair_count=len(part_of_pairs),
                         error=str(e),
                         exc_info=True,
                     )
@@ -313,7 +318,7 @@ class ClusteringService:
                         {
                             "role": "user",
                             "content": get_clustering_user_template().format(
-                                count=len(contents), content=content_text
+                                count=len(contents), content=escape_for_prompt(content_text)
                             ),
                         },
                     ]

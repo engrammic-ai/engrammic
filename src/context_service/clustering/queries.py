@@ -20,6 +20,8 @@ from primitives.eag.queries.cluster import (
     UPDATE_CLUSTER_SUMMARY,
 )
 
+from context_service.db.queries import BATCH_CREATE_PART_OF
+
 # R-006: one round-trip for all Cluster nodes in a level (replaces per-cluster CREATE_CLUSTER loop).
 BATCH_CREATE_CLUSTERS = """
 UNWIND $clusters AS c
@@ -39,6 +41,7 @@ RETURN count(*) AS created
 
 __all__ = [
     "BATCH_CREATE_CLUSTERS",
+    "BATCH_CREATE_PART_OF",
     "BATCH_CREATE_MEMBER_OF",
     "BATCH_UPDATE_NODE_IMPORTANCE",
     "COUNT_CLUSTERS",

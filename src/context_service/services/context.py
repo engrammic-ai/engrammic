@@ -202,14 +202,37 @@ class ContextService:
                         error=str(exc),
                     )
 
-            await self._qdrant.upsert(
-                node_id=str(node.id),
-                vector=vector,
-                payload={"type": node_type},
-                silo_id=str(silo_id),
-                sparse_indices=sparse_indices,
-                sparse_values=sparse_values,
-            )
+            try:
+                await self._qdrant.upsert(
+                    node_id=str(node.id),
+                    vector=vector,
+                    payload={"type": node_type},
+                    silo_id=str(silo_id),
+                    sparse_indices=sparse_indices,
+                    sparse_values=sparse_values,
+                )
+            except Exception as exc:
+                logger.error(
+                    "qdrant_upsert_failed_rolling_back_memgraph",
+                    node_id=str(node.id),
+                    silo_id=str(silo_id),
+                    error=str(exc),
+                )
+                from context_service.engine.queries import DELETE_NODE
+
+                try:
+                    await self._memgraph.execute_write(
+                        DELETE_NODE,
+                        {"id": str(node.id), "silo_id": str(silo_id)},
+                    )
+                except Exception as rollback_exc:
+                    logger.error(
+                        "memgraph_rollback_failed",
+                        node_id=str(node.id),
+                        silo_id=str(silo_id),
+                        error=str(rollback_exc),
+                    )
+                raise
 
         logger.info("context_stored", node_id=str(node.id), type=node_type, silo_id=str(silo_id))
         return node

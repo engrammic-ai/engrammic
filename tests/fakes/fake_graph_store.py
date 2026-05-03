@@ -162,7 +162,7 @@ class FakeGraphStore:
 
     async def find_nodes(
         self,
-        silo_id: uuid.UUID,
+        silo_id: str,
         *,
         type: str | None = None,
         limit: int = 100,
@@ -170,13 +170,13 @@ class FakeGraphStore:
     ) -> tuple[list[Node], str | None]:
         raise NotImplementedError("FakeGraphStore.find_nodes not implemented")
 
-    async def count_nodes(self, silo_id: uuid.UUID) -> int:
+    async def count_nodes(self, silo_id: str) -> int:
         raise NotImplementedError("FakeGraphStore.count_nodes not implemented")
 
-    async def count_edges_in_silo(self, silo_id: uuid.UUID) -> int:
+    async def count_edges_in_silo(self, silo_id: str) -> int:
         raise NotImplementedError("FakeGraphStore.count_edges_in_silo not implemented")
 
-    async def sum_content_bytes_in_silo(self, silo_id: uuid.UUID) -> int:
+    async def sum_content_bytes_in_silo(self, silo_id: str) -> int:
         raise NotImplementedError("FakeGraphStore.sum_content_bytes_in_silo not implemented")
 
     async def upsert_binary_edge(self, edge: BinaryEdge, silo_id: str) -> None:
@@ -234,7 +234,7 @@ class FakeGraphStore:
         *,
         max_depth: int = 2,
         max_nodes: int = 100,
-        silo_scope: list[uuid.UUID] | None = None,
+        silo_scope: list[str] | None = None,
     ) -> SubGraph:
         raise NotImplementedError("FakeGraphStore.neighborhood not implemented")
 

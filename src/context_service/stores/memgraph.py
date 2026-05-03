@@ -180,7 +180,7 @@ class MemgraphClient:
                     return await _attempt()
         except RetryError as e:
             raise MemgraphOperationError(f"Transaction unavailable: {e}") from e
-        return None
+        raise RuntimeError("retry loop exhausted without result")
 
     async def health_check(self) -> bool:
         """Check if Memgraph is reachable.

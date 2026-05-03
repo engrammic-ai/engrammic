@@ -32,6 +32,7 @@ from context_service.extraction.prompts import (
     get_extraction_system_prompt,
     get_extraction_user_template,
 )
+from context_service.llm.sanitize import escape_for_prompt
 
 if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
@@ -89,7 +90,7 @@ class ExtractionService:
         """
         messages = [
             {"role": "system", "content": get_extraction_system_prompt()},
-            {"role": "user", "content": get_extraction_user_template().format(content=content)},
+            {"role": "user", "content": get_extraction_user_template().format(content=escape_for_prompt(content))},
         ]
 
         from context_service.llm.concurrency import with_llm_limit

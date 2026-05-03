@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import context_service.extraction.filter.circuit_breaker as cb_module
 from context_service.extraction.filter.circuit_breaker import CircuitBreaker
 from context_service.extraction.filter.models import FilterDecision, FilterRuleSet, RuleFired
+from context_service.llm.sanitize import escape_for_prompt
 
 if TYPE_CHECKING:
     from context_service.extraction.models import ClaimTriple
@@ -72,7 +73,9 @@ class LLMClassifierRule:
             )
 
         prompt = PROMPT_TEMPLATE.format(
-            subject=claim.subject, predicate=claim.predicate, object=claim.object
+            subject=escape_for_prompt(claim.subject),
+            predicate=escape_for_prompt(claim.predicate),
+            object=escape_for_prompt(claim.object),
         )
         try:
             text, _usage = await asyncio.wait_for(

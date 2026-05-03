@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from context_service.signals import compute_consensus_priority, get_heat
+from context_service.db.queries import GET_SEED_HEAT_BATCH
+from context_service.signals import compute_consensus_priority
 
 if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
@@ -50,9 +51,8 @@ async def find_consensus_candidates(
     """Find commitments / claims with multi-agent chain consensus.
 
     Returns up to ``limit`` candidates ranked DESC by ``compute_consensus_priority``.
-    Heat is fetched per-candidate via ``signals.heat.get_heat`` (Phase 1: stub
-    returns 0.5; Phase 2: real Memgraph read with a batched UNWIND query — see
-    the v1c plan for the migration step).
+    Heat is fetched for all qualifying candidates in a single batch query using
+    ``GET_SEED_HEAT_BATCH``.
     """
     rows = await memgraph.execute_query(
         FIND_CONSENSUS_CANDIDATES,
@@ -64,12 +64,22 @@ async def find_consensus_candidates(
         },
     )
 
+    # Collect qualifying target_ids, then fetch all heats in one batch query.
+    qualifying = [r for r in rows if r["distinct_agents"] >= min_distinct_agents]
+    seed_ids = [r["commitment_id"] for r in qualifying]
+
+    heat_map: dict[str, float] = {}
+    if seed_ids:
+        heat_rows = await memgraph.execute_query(
+            GET_SEED_HEAT_BATCH,
+            {"seed_ids": seed_ids, "silo_id": silo_id},
+        )
+        heat_map = {hr["node_id"]: float(hr["heat"]) for hr in heat_rows}
+
     candidates: list[dict[str, Any]] = []
-    for r in rows:
-        if r["distinct_agents"] < min_distinct_agents:
-            continue
+    for r in qualifying:
         target_id = r["commitment_id"]
-        heat = await get_heat(memgraph, target_id, silo_id)
+        heat = heat_map.get(target_id, 0.0)
         priority = compute_consensus_priority(
             avg_chain_confidence=float(r["avg_chain_confidence"]),
             avg_heat=heat,

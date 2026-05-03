@@ -512,14 +512,6 @@ class Settings(BaseSettings):
     version: str = Field(default="0.1.0")
     debug: bool = Field(default=False)
     environment: str = Field(default="development")
-    auth_dev_mode: bool = Field(
-        default=False,
-        description=(
-            "Enable auth dev mode. Accepts ck_dev_test key without validation. "
-            "Set AUTH_DEV_MODE=true."
-        ),
-    )
-
     @property
     def is_development(self) -> bool:
         return self.environment == "development"
@@ -536,7 +528,7 @@ class Settings(BaseSettings):
     # Server Settings (flat shims)
     # =========================================================================
 
-    host: str = Field(default="0.0.0.0")
+    host: str = Field(default="127.0.0.1")
     port: int = Field(default=8000)
     reload: bool = Field(default=False)
 
