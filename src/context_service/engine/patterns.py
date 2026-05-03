@@ -57,8 +57,12 @@ DEFAULT_DETECTION_LIMIT: int = 50
 
 # Minimum chain length (hops) required for a causal_chain pattern.
 # A 2-hop path is just one direct edge; below 3 there is no real chain.
+# NOTE: These are substituted into Cypher via .format() because Cypher requires
+# literal integers for variable-length path bounds ([:CAUSES*2..6]). This is safe
+# because they are module-level typed constants, never user input.
 CAUSAL_CHAIN_MIN_HOPS: int = 2  # means A->B->C (3 nodes, 2 edges)
 CAUSAL_CHAIN_MAX_HOPS: int = 6
+assert isinstance(CAUSAL_CHAIN_MIN_HOPS, int) and isinstance(CAUSAL_CHAIN_MAX_HOPS, int)
 
 # Decay factor applied per scheduled period (exponential: confidence *= 0.9).
 DEFAULT_DECAY_FACTOR: float = 0.9

@@ -162,11 +162,7 @@ async def maybe_trigger_confidence_shift(
                 error=str(exc),
             )
 
-    try:
-        loop = asyncio.get_event_loop()
-        loop.create_task(_write())
-    except RuntimeError:
-        asyncio.ensure_future(_write())
+    asyncio.get_running_loop().create_task(_write())
 
 
 async def maybe_trigger_contradiction(
@@ -211,8 +207,4 @@ async def maybe_trigger_contradiction(
                 error=str(exc),
             )
 
-    try:
-        loop = asyncio.get_event_loop()
-        loop.create_task(_write())
-    except RuntimeError:
-        asyncio.ensure_future(_write())
+    asyncio.get_running_loop().create_task(_write())

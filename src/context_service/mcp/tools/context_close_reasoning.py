@@ -52,6 +52,11 @@ async def close_reasoning_chain(
     settings = get_settings()
     now = datetime.now(UTC).isoformat()
 
+    # Cap referenced_chain_ids to prevent unbounded writes
+    MAX_REFERENCES = 50
+    if referenced_chain_ids and len(referenced_chain_ids) > MAX_REFERENCES:
+        referenced_chain_ids = referenced_chain_ids[:MAX_REFERENCES]
+
     rows = await store.execute_query(
         GET_CHAIN_FOR_CLOSE,
         {"chain_id": chain_id, "silo_id": silo_id},
@@ -203,7 +208,7 @@ async def _context_close_reasoning(
     )
     # Inject silo_id into result for callers (not exposed from core logic)
     if "error" not in result:
-        result["silo_id"] = silo_id
+        result["silo_id"] = expected_silo_id
     return result
 
 
