@@ -1104,31 +1104,52 @@ class ContextService:
         self,
         silo_id: str,
         as_of: datetime,
-        query: str,  # noqa: ARG002
+        query: str,
         top_k: int = 10,
         type_filter: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Memgraph-only temporal query: return nodes valid at as_of timestamp.
+        """Memgraph temporal query: return nodes valid at as_of timestamp.
 
-        Bypasses Qdrant entirely — no vector ranking, no split-brain risk.
-        Results are ordered by valid_from DESC (most recently valid first).
+        When ``query`` is non-empty and an embedding service is configured,
+        Qdrant is used to pre-filter candidate node IDs (top ``3 * top_k`` by
+        vector similarity). Memgraph then filters to those candidates and
+        orders by ``valid_from DESC``. Qdrant ranking is discarded; recency
+        governs final order.
 
-        Note: the ``query`` parameter is currently unused. Results are recency-
-        ordered, not relevance-ranked. Semantic filtering against ``query`` is
-        not yet implemented.
-        # TODO(v1.1): implement semantic filtering with context_snapshot
+        When ``query`` is empty or no embedding service is wired, falls back
+        to a full temporal scan (original behavior).
         """
-        from context_service.db.queries import TEMPORAL_QUERY
+        from context_service.db.queries import TEMPORAL_QUERY, TEMPORAL_QUERY_FILTERED
 
-        rows = await self._memgraph.execute_query(
-            TEMPORAL_QUERY,
-            {
+        use_semantic_filter = bool(query) and self._embedding is not None
+
+        if use_semantic_filter:
+            assert self._embedding is not None  # narrowed by use_semantic_filter
+            query_vector = await self._embedding.embed_query(query)
+            qdrant_results = await self._qdrant.search(
+                vector=query_vector,
+                limit=3 * top_k,
+                silo_id=silo_id,
+            )
+            candidate_ids = [r.node_id for r in qdrant_results]
+            cypher = TEMPORAL_QUERY_FILTERED
+            params: dict[str, Any] = {
+                "silo_id": silo_id,
+                "candidate_ids": candidate_ids,
+                "as_of": as_of.isoformat(),
+                "type_filter": type_filter,
+                "limit": top_k,
+            }
+        else:
+            cypher = TEMPORAL_QUERY
+            params = {
                 "silo_id": silo_id,
                 "as_of": as_of.isoformat(),
                 "type_filter": type_filter,
                 "limit": top_k,
-            },
-        )
+            }
+
+        rows = await self._memgraph.execute_query(cypher, params)
 
         def _format_timestamp(ts: Any) -> str | None:
             if ts is None:
