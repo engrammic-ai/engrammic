@@ -34,11 +34,11 @@ from context_service.extraction.prompts import (
 )
 
 if TYPE_CHECKING:
+    from context_service.engine.protocols import HyperGraphStore
     from context_service.extraction.filter.orchestrator import FilterOrchestrator
     from context_service.extraction.job_store import ExtractionJobStore
     from context_service.extraction.models import ExtractionJob
     from context_service.llm.base import LLMProvider, Usage
-    from context_service.stores.memgraph import MemgraphClient
 
 logger = get_logger(__name__)
 
@@ -53,13 +53,13 @@ class ExtractionService:
     def __init__(
         self,
         llm: LLMProvider,
-        memgraph: MemgraphClient,
+        graph: HyperGraphStore,
         job_store: ExtractionJobStore,
         *,
         filter_orchestrator: FilterOrchestrator | None = None,
     ) -> None:
         self._llm = llm
-        self._memgraph = memgraph
+        self._graph = graph
         self._job_store = job_store
         self._filter = filter_orchestrator
 
@@ -75,7 +75,7 @@ class ExtractionService:
 
         inst: ExtractionService = object.__new__(cls)
         inst._llm = llm
-        inst._memgraph = cast(Any, None)
+        inst._graph = cast(Any, None)
         inst._job_store = cast(Any, None)
         inst._filter = None
         return inst
@@ -249,7 +249,7 @@ class ExtractionService:
 
             for rel_type, group_rels in grouped.items():
                 try:
-                    result_rows = await self._memgraph.execute_write(
+                    result_rows = await self._graph.execute_write(
                         build_batch_entity_rel_query(rel_type),
                         {"rels": group_rels, "silo_id": silo_id},
                     )
@@ -308,7 +308,7 @@ class ExtractionService:
             for ent in order
         ]
 
-        results = await self._memgraph.execute_write(
+        results = await self._graph.execute_write(
             queries.BATCH_FIND_OR_CREATE_ENTITIES,
             {
                 "entities": rows,
@@ -412,21 +412,21 @@ MERGE (ps)<-[:EXTRACTED_FROM]-(c)
 """
 
         try:
-            await self._memgraph.execute_write(
+            await self._graph.execute_write(
                 queries.BATCH_UPSERT_CLAIMS,
                 {"claims": claims_batch, "silo_id": silo_id},
             )
-            await self._memgraph.execute_write(
+            await self._graph.execute_write(
                 BATCH_ATTACH_CLAIMS_TO_PASSAGE,
                 {"rows": passage_rows, "silo_id": silo_id},
             )
             if mention_rows:
-                await self._memgraph.execute_write(
+                await self._graph.execute_write(
                     queries.BATCH_UPSERT_ENTITY_MENTIONS,
                     {"rows": mention_rows, "silo_id": silo_id},
                 )
             if ref_rows:
-                await self._memgraph.execute_write(
+                await self._graph.execute_write(
                     queries.BATCH_ATTACH_CLAIM_REFERENCES,
                     {"rows": ref_rows, "silo_id": silo_id},
                 )
@@ -576,7 +576,7 @@ MERGE (ps)<-[:EXTRACTED_FROM]-(c)
 
         # Execute batch queries (4 total instead of N×4)
         try:
-            await self._memgraph.execute_write(
+            await self._graph.execute_write(
                 queries.BATCH_UPSERT_CLAIMS,
                 {"claims": claim_rows, "silo_id": silo_id},
             )
@@ -585,7 +585,7 @@ MERGE (ps)<-[:EXTRACTED_FROM]-(c)
             return []
 
         try:
-            await self._memgraph.execute_write(
+            await self._graph.execute_write(
                 queries.BATCH_ATTACH_CLAIMS_TO_DOCUMENT,
                 {"rows": attach_rows, "silo_id": silo_id},
             )
@@ -594,7 +594,7 @@ MERGE (ps)<-[:EXTRACTED_FROM]-(c)
 
         if mention_rows:
             try:
-                await self._memgraph.execute_write(
+                await self._graph.execute_write(
                     queries.BATCH_UPSERT_ENTITY_MENTIONS,
                     {"rows": mention_rows, "silo_id": silo_id},
                 )
@@ -605,7 +605,7 @@ MERGE (ps)<-[:EXTRACTED_FROM]-(c)
 
         if reference_rows:
             try:
-                await self._memgraph.execute_write(
+                await self._graph.execute_write(
                     queries.BATCH_ATTACH_CLAIM_REFERENCES,
                     {"rows": reference_rows, "silo_id": silo_id},
                 )
@@ -632,7 +632,7 @@ MERGE (ps)<-[:EXTRACTED_FROM]-(c)
         for pair in pairs:
             edge_id = contradicts_edge_id(pair.fingerprint_a, pair.fingerprint_b)
             try:
-                await self._memgraph.execute_write(
+                await self._graph.execute_write(
                     queries.CREATE_CONTRADICTS_EDGE,
                     {
                         "claim_id_a": pair.claim_id_a,
@@ -733,7 +733,7 @@ MERGE (ps)<-[:EXTRACTED_FROM]-(c)
             f"_update_node_extraction_status: silo={silo_id} node={node_id} status={status}"
         )
         try:
-            rows = await self._memgraph.execute_write(
+            rows = await self._graph.execute_write(
                 engine_queries.UPDATE_EXTRACTION_STATUS,
                 {"id": node_id, "silo_id": silo_id, "extraction_status": status},
             )

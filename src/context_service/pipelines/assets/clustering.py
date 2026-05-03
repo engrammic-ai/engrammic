@@ -44,13 +44,14 @@ def clustering(
         from context_service.clustering.job_store import ClusteringJobStore
         from context_service.clustering.models import ClusteringJob, ClusteringStatus
         from context_service.clustering.service import ClusteringService
+        from context_service.engine.memgraph_store import MemgraphStore
         from context_service.engine.qdrant_store import EngineQdrantStore
         from context_service.stores import MemgraphClient
         from context_service.stores.qdrant import QdrantClient
         from context_service.stores.redis import RedisClient
 
         driver = await memgraph.driver()
-        mg_client = MemgraphClient(driver)
+        mg_client = MemgraphStore(MemgraphClient(driver))
 
         qdrant_client = QdrantClient(
             url=qdrant.url,

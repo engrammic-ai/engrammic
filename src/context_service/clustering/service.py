@@ -26,8 +26,8 @@ from context_service.utils.json import dumps
 
 if TYPE_CHECKING:
     from context_service.clustering.job_store import ClusteringJobStore
+    from context_service.engine.protocols import HyperGraphStore
     from context_service.llm.base import LLMProvider
-    from context_service.stores.memgraph import MemgraphClient
 
 logger = get_logger(__name__)
 
@@ -37,7 +37,7 @@ class ClusteringService:
 
     def __init__(
         self,
-        memgraph: MemgraphClient,
+        memgraph: HyperGraphStore,
         llm: LLMProvider,
         job_store: ClusteringJobStore,
         embedding: Any | None = None,

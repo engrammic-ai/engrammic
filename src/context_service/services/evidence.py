@@ -9,7 +9,7 @@ import httpx
 import structlog
 
 if TYPE_CHECKING:
-    from context_service.stores.memgraph import MemgraphClient
+    from context_service.engine.protocols import HyperGraphStore
 
 logger = structlog.get_logger(__name__)
 
@@ -29,10 +29,10 @@ class EvidenceValidator:
 
     def __init__(
         self,
-        memgraph: MemgraphClient,
+        store: HyperGraphStore,
         http_timeout: float = 10.0,
     ) -> None:
-        self._memgraph = memgraph
+        self._store = store
         self._http_timeout = http_timeout
 
     async def validate(self, ref: str, silo_id: str) -> EvidenceResult:
@@ -68,7 +68,7 @@ class EvidenceValidator:
         RETURN n.id AS id
         LIMIT 1
         """
-        results = await self._memgraph.execute_query(
+        results = await self._store.execute_query(
             query,
             {"node_id": node_id, "silo_id": silo_id},
         )

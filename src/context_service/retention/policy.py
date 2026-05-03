@@ -56,7 +56,7 @@ class RetentionPolicy(BaseModel):
         return False
 
     @classmethod
-    def from_settings(cls, settings: "Settings") -> "RetentionPolicy":
+    def from_settings(cls, settings: Settings) -> RetentionPolicy:
         """Create RetentionPolicy from application settings."""
         return cls(
             ephemeral_max_age_hours=settings.retention_ephemeral_max_age_hours,
