@@ -80,6 +80,8 @@ class VertexAIEmbeddingService:
         return cls(
             project=settings.vertex_project_id,
             region=settings.vertex_location,
+            model=settings.vertex_model or "text-embedding-005",
+            dimensions=settings.vertex_dimensions or 768,
             _embedding_cache=_embedding_cache,
         )
 

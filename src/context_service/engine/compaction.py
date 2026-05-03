@@ -116,10 +116,12 @@ async def compact_reasoning_chain(
         steps = raw_steps if isinstance(raw_steps, list) else json.loads(raw_steps)
         try:
             from context_service.config.settings import get_settings
-            from context_service.llm.anthropic import AnthropicProvider
+            from context_service.llm import build_llm_provider
 
             settings = get_settings()
-            llm_client = AnthropicProvider.from_settings(model=settings.summarization_model)
+            llm_client = build_llm_provider(
+                settings.summarization_provider, settings.summarization_model
+            )
             content = await summarize_reasoning_steps(steps, llm_client=llm_client)
             summarization_pending = False
         except Exception as exc:

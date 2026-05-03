@@ -138,7 +138,9 @@ class LLMResource(dg.ConfigurableResource):  # type: ignore[type-arg]
 
     def get_client(self) -> LLMProvider:
         if self._llm is None:
-            self._llm = _build_llm_provider(self.provider, self.model or None)
+            from context_service.llm import build_llm_provider
+
+            self._llm = build_llm_provider(self.provider, self.model or None)
         return self._llm
 
     def teardown_after_execution(self, _context: dg.InitResourceContext) -> None:
@@ -146,30 +148,6 @@ class LLMResource(dg.ConfigurableResource):  # type: ignore[type-arg]
             llm = self._llm
             self._llm = None
             _close_async(llm.close())
-
-
-def _build_llm_provider(provider: str, model: str | None) -> LLMProvider:
-    if provider == "anthropic":
-        from context_service.llm.anthropic import AnthropicProvider
-
-        return AnthropicProvider.from_settings(model)
-    if provider == "openai":
-        from context_service.llm.openai import OpenAIProvider
-
-        return OpenAIProvider.from_settings(model)
-    if provider == "vertex_gemini":
-        from context_service.llm.vertex_gemini import VertexGeminiProvider
-
-        return VertexGeminiProvider.from_settings(model)
-    # default: gemini
-    from context_service.llm.gemini import GeminiProvider
-
-    settings = get_settings()
-    api_key = settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else ""
-    return GeminiProvider(
-        api_key=api_key,
-        model=model or settings.default_llm_model,
-    )
 
 
 class EmbeddingResource(dg.ConfigurableResource):  # type: ignore[type-arg]
@@ -184,7 +162,9 @@ class EmbeddingResource(dg.ConfigurableResource):  # type: ignore[type-arg]
 
     def get_client(self) -> EmbeddingService:
         if self._service is None:
-            self._service = _build_embedding_service(self.provider)
+            from context_service.embeddings import build_embedding_service
+
+            self._service = build_embedding_service(self.provider)
         return self._service
 
     def teardown_after_execution(self, _context: dg.InitResourceContext) -> None:
@@ -192,21 +172,6 @@ class EmbeddingResource(dg.ConfigurableResource):  # type: ignore[type-arg]
             svc = self._service
             self._service = None
             _close_async(svc.close())
-
-
-def _build_embedding_service(provider: str) -> EmbeddingService:
-    settings = get_settings()
-    if provider == "vertex":
-        from context_service.embeddings.vertex import VertexAIEmbeddingService
-
-        return VertexAIEmbeddingService(
-            project=settings.vertex_project_id,
-            region=settings.vertex_location,
-        )
-    from context_service.embeddings.jina import JinaEmbeddingService
-
-    api_key = settings.jina_api_key.get_secret_value() if settings.jina_api_key else ""
-    return JinaEmbeddingService(api_key=api_key)
 
 
 def build_default_resources() -> dict[str, dg.ConfigurableResource]:  # type: ignore[type-arg]

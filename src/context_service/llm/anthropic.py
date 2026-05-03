@@ -30,10 +30,12 @@ class AnthropicProvider(LLMProvider):
         api_key: str,
         model: str = "claude-sonnet-4-5-20250929",
         api_url: str = "https://api.anthropic.com/v1/messages",
+        api_version: str = "2023-06-01",
     ) -> None:
         self._api_key = api_key
         self._model = model
         self._api_url = api_url
+        self._api_version = api_version
         self._client: httpx.AsyncClient | None = None
 
     @classmethod
@@ -45,7 +47,8 @@ class AnthropicProvider(LLMProvider):
         )
         return cls(
             api_key=api_key,
-            model=model or "claude-sonnet-4-5-20250929",
+            model=model or settings.default_llm_model,
+            api_version=settings.anthropic_api_version,
         )
 
     async def _get_client(self) -> httpx.AsyncClient:
@@ -54,7 +57,7 @@ class AnthropicProvider(LLMProvider):
                 timeout=60.0,
                 headers={
                     "x-api-key": self._api_key,
-                    "anthropic-version": "2023-06-01",
+                    "anthropic-version": self._api_version,
                     "Content-Type": "application/json",
                 },
             )

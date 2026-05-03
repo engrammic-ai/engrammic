@@ -559,6 +559,7 @@ class Settings(BaseSettings):
 
     # Per-provider API keys (used by llm/ providers)
     anthropic_api_key: SecretStr | None = Field(default=None)
+    anthropic_api_version: str = Field(default="2023-06-01")
     openai_api_key: SecretStr | None = Field(default=None)
     gemini_api_key: SecretStr | None = Field(default=None)
 
@@ -727,7 +728,8 @@ class Settings(BaseSettings):
     # Summarization Settings
     # =========================================================================
 
-    summarization_model: str = Field(default="claude-3-haiku-20240307")
+    summarization_provider: str = Field(default="anthropic")
+    summarization_model: str = Field(default="claude-haiku-4-5-20250929")
     summarization_max_tokens: int = Field(default=500)
 
     # =========================================================================

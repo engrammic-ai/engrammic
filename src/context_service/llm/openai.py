@@ -43,7 +43,7 @@ class OpenAIProvider(LLMProvider):
         api_key = settings.openai_api_key.get_secret_value() if settings.openai_api_key else ""
         return cls(
             api_key=api_key,
-            model=model or "gpt-4o-mini",
+            model=model or settings.default_llm_model,
         )
 
     async def _get_client(self) -> httpx.AsyncClient:
