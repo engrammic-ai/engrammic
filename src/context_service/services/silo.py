@@ -174,3 +174,23 @@ async def validate_silo_ownership(
         await cache.set(org_id, silo_id)
 
     return None
+
+
+async def ensure_silo(silo_service: SiloService, org_id: str) -> Silo:
+    """Get or create the org's silo. Used for auto-create on first tool use.
+
+    MVP model: 1:1 org-to-silo mapping. The silo is auto-created with a
+    default name if it doesn't exist.
+    """
+    derived_id = derive_silo_id(org_id)
+    scope = ScopeContext(org_id=org_id, silo_id=derived_id)
+
+    existing = await silo_service.get_by_id(scope)
+    if existing is not None:
+        return existing
+
+    return await silo_service.get_or_create(
+        name="default",
+        org_id=org_id,
+        description="Auto-created org silo",
+    )
