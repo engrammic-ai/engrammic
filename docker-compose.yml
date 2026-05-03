@@ -10,9 +10,9 @@ services:
       - .env
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-development}
-      - MEMGRAPH_URI=bolt://memgraph:7687
+      - MEMGRAPH_HOST=memgraph
       - QDRANT_HOST=qdrant
-      - REDIS_URL=redis://redis:6379
+      - REDIS_HOST=redis
       - GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-sa.json
     volumes:
       - ./secrets:/app/secrets:ro

@@ -509,7 +509,7 @@ class Settings(BaseSettings):
     # =========================================================================
 
     app_name: str = Field(default="ContextService")
-    version: str = Field(default="0.1.0")
+    version: str = Field(default="1.3.0")
     debug: bool = Field(default=False)
     environment: str = Field(default="development")
     @property
