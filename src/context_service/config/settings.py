@@ -125,9 +125,7 @@ class RedisConfig(BaseModel):
 class PostgresConfig(BaseModel):
     model_config = {"extra": "ignore"}
 
-    dsn: SecretStr = SecretStr(
-        "postgresql://user:password@localhost:5432/context_service"
-    )
+    dsn: SecretStr = SecretStr("postgresql://user:password@localhost:5432/context_service")
 
 
 class InfraConfig(BaseModel):
@@ -783,9 +781,7 @@ class Settings(BaseSettings):
     # =========================================================================
 
     postgres_dsn: SecretStr = Field(
-        default=SecretStr(
-            "postgresql://user:password@localhost:5432/context_service"
-        )
+        default=SecretStr("postgresql://user:password@localhost:5432/context_service")
     )
 
     # =========================================================================

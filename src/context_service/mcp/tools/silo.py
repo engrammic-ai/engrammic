@@ -32,9 +32,7 @@ def register_silo_create(mcp: FastMCP) -> None:
             Dictionary with silo details.
         """
         if not (0.0 <= dissolvability <= 1.0):
-            raise ValueError(
-                f"dissolvability must be between 0.0 and 1.0, got {dissolvability}"
-            )
+            raise ValueError(f"dissolvability must be between 0.0 and 1.0, got {dissolvability}")
 
         from context_service.mcp.server import get_mcp_auth_context, get_silo_service
 

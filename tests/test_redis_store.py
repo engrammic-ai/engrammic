@@ -105,8 +105,7 @@ class TestRedisClientInit:
 
     def test_session_nodes_key_format(self) -> None:
         assert (
-            RedisClient._session_nodes_key("silo-1", "sess-abc")
-            == "session:silo-1:sess-abc:nodes"
+            RedisClient._session_nodes_key("silo-1", "sess-abc") == "session:silo-1:sess-abc:nodes"
         )
 
 

@@ -23,6 +23,7 @@ def _run_async(coro: Any) -> Any:
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
         return pool.submit(asyncio.run, coro).result(timeout=300)
 
+
 _BATCH_SIZE = 50
 
 _PENDING_DOCUMENTS = """

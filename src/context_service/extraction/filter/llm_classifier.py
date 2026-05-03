@@ -85,7 +85,9 @@ class LLMClassifierRule:
                 ),
                 timeout=self._rs.llm_timeout_s,
             )
-        except Exception as e:  # covers asyncio.TimeoutError from wait_for and any LLM provider error
+        except (
+            Exception
+        ) as e:  # covers asyncio.TimeoutError from wait_for and any LLM provider error
             await cb.record_failure()
             log.warning("llm classifier failed: %s", e)
             return FilterDecision(
