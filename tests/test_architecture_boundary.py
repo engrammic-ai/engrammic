@@ -45,18 +45,9 @@ _KNOWN_VIOLATIONS = {
     # TYPE_CHECKING cast bridge — runtime-safe, removable once HyperGraphStore
     # implementation is complete.
     "src/context_service/mcp/server.py",
-    # signals — pending protocol migration
-    "src/context_service/signals/cursor.py",
-    "src/context_service/signals/heat.py",
-    # clustering — pending protocol migration
-    "src/context_service/clustering/service.py",
-    # extraction — pending protocol migration
-    "src/context_service/extraction/service.py",
-    # services — pending protocol migration
-    "src/context_service/services/evidence.py",
-    "src/context_service/services/silo.py",
-    # api — wires concrete client at startup; deps.py bridges to DI
-    "src/context_service/api/deps.py",
+    # api/app.py is the composition root — it constructs the concrete
+    # MemgraphClient for lifecycle management (close(), bootstrap schema).
+    # This is intentional and not a violation of the boundary rule.
     "src/context_service/api/app.py",
 }
 

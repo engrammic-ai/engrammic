@@ -20,7 +20,6 @@ from context_service.db.schema import content_union_predicate
 
 if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
-    from context_service.stores.memgraph import MemgraphClient
 
 _cup = content_union_predicate
 
@@ -172,7 +171,7 @@ RETURN n.id AS node_id
 
 
 async def fetch_cluster_members(
-    client: MemgraphClient,
+    client: HyperGraphStore,
     *,
     cluster_id: str,
     silo_id: str,
@@ -192,7 +191,7 @@ async def fetch_cluster_members(
 
 
 async def count_cluster_members(
-    client: MemgraphClient,
+    client: HyperGraphStore,
     *,
     cluster_id: str,
     silo_id: str,
@@ -207,7 +206,7 @@ async def count_cluster_members(
 
 
 async def fetch_node_by_id(
-    client: MemgraphClient,
+    client: HyperGraphStore,
     *,
     node_id: str,
     silo_id: str,
@@ -220,7 +219,7 @@ async def fetch_node_by_id(
 
 
 async def fetch_neighborhood(
-    client: MemgraphClient,
+    client: HyperGraphStore,
     *,
     node_id: str,
     silo_id: str,
@@ -260,7 +259,7 @@ async def fetch_neighborhood(
 
 
 async def list_edges_of_type_in_cluster(
-    client: MemgraphClient,
+    client: HyperGraphStore,
     *,
     cluster_id: str,
     edge_type: str,
@@ -277,7 +276,7 @@ async def list_edges_of_type_in_cluster(
 
 
 async def fetch_lower_findings(
-    client: MemgraphClient,
+    client: HyperGraphStore,
     *,
     parent_cluster_id: str,
     silo_id: str,
@@ -292,7 +291,7 @@ async def fetch_lower_findings(
 
 
 async def fetch_cluster_member_ids(
-    client: MemgraphClient | HyperGraphStore,
+    client: HyperGraphStore,
     *,
     cluster_id: str,
     silo_id: str,

@@ -125,7 +125,6 @@ if TYPE_CHECKING:
     from neo4j import AsyncTransaction
 
     from context_service.engine.protocols import HyperGraphStore
-    from context_service.stores.memgraph import MemgraphClient
 
 logger = get_logger(__name__)
 
@@ -190,7 +189,7 @@ BOOTSTRAP_STATEMENTS: list[str] = [
 ]
 
 
-async def bootstrap_custodian_schema(client: MemgraphClient) -> None:
+async def bootstrap_custodian_schema(client: HyperGraphStore) -> None:
     """Apply Custodian schema DDL to Memgraph.
 
     Each statement is idempotent in Memgraph — re-running bootstrap on an
@@ -401,7 +400,7 @@ RETURN f.summary AS summary
 
 
 async def create_pass(
-    client: MemgraphClient,
+    client: HyperGraphStore,
     *,
     pass_id: str,
     silo_id: str,
@@ -424,7 +423,7 @@ async def create_pass(
 
 
 async def check_claimed(
-    client: MemgraphClient,
+    client: HyperGraphStore,
     *,
     pass_id: str,
     cluster_id: str,
@@ -440,7 +439,7 @@ async def check_claimed(
 
 
 async def finalize_pass(
-    client: MemgraphClient,
+    client: HyperGraphStore,
     *,
     pass_id: str,
     status: str,
@@ -462,7 +461,7 @@ async def finalize_pass(
 
 
 async def fetch_clusters_by_level(
-    client: MemgraphClient,
+    client: HyperGraphStore,
     *,
     silo_id: str,
     level: int,
@@ -475,7 +474,7 @@ async def fetch_clusters_by_level(
 
 
 async def fetch_child_finding_summaries(
-    client: MemgraphClient,
+    client: HyperGraphStore,
     *,
     cluster_id: str,
     silo_id: str,
@@ -569,7 +568,7 @@ RETURN n.id AS node_id, n.content AS content, cite_count
 
 
 async def fetch_coarse_findings_for_silo(
-    client: MemgraphClient | HyperGraphStore,
+    client: HyperGraphStore,
     *,
     silo_id: str,
     coarse_level: int,
@@ -582,7 +581,7 @@ async def fetch_coarse_findings_for_silo(
 
 
 async def fetch_top_entities_by_citation(
-    client: MemgraphClient | HyperGraphStore,
+    client: HyperGraphStore,
     *,
     silo_id: str,
 ) -> list[dict[str, Any]]:
@@ -601,7 +600,7 @@ async def fetch_top_entities_by_citation(
 
 
 async def get_pass(
-    client: MemgraphClient,
+    client: HyperGraphStore,
     *,
     pass_id: str,
     org_id: str,
