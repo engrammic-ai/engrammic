@@ -942,6 +942,61 @@ SET p.tombstoned_at = $now
 RETURN count(p) AS patterns_tombstoned
 """
 
+# ---------------------------------------------------------------------------
+# Belief merging queries (v1.4 Phase 4a)
+# ---------------------------------------------------------------------------
+
+# Find :Belief nodes in a silo whose content shares the same subject (case-
+# insensitive substring match) and whose centroid embedding cosine similarity
+# exceeds a threshold.  Returns up to $limit candidates along with their
+# fact ids so the merge function can union them.
+# Parameters: silo_id, subject (str), limit (int).
+FIND_SIMILAR_BELIEFS = """
+MATCH (b:Belief {silo_id: $silo_id})
+WHERE toLower(b.content) CONTAINS toLower($subject)
+  AND (b.valid_to IS NULL OR b.valid_to > $as_of)
+  AND NOT exists(b.tombstoned_at)
+WITH b
+OPTIONAL MATCH (b)-[:SYNTHESIZED_FROM]->(f:Fact {silo_id: $silo_id})
+RETURN b.id AS belief_id, b.content AS content,
+       coalesce(b.confidence, 1.0) AS confidence,
+       collect(f.id) AS fact_ids
+ORDER BY b.confidence DESC
+LIMIT $limit
+"""
+
+# Create a merged :Belief node and attach SYNTHESIZED_FROM edges to all
+# unioned fact ids in one write.
+# Parameters: belief_id, silo_id, content, confidence, evidence_count,
+#             created_at, valid_from, fact_ids (list[str]).
+CREATE_MERGED_BELIEF = """
+MERGE (b:Belief {id: $belief_id, silo_id: $silo_id})
+ON CREATE SET
+    b.content = $content,
+    b.confidence = $confidence,
+    b.evidence_count = $evidence_count,
+    b.created_at = $created_at,
+    b.valid_from = $valid_from,
+    b.valid_to = null,
+    b.merged = true
+WITH b
+UNWIND $fact_ids AS fid
+MATCH (f:Fact {id: fid, silo_id: $silo_id})
+MERGE (b)-[:SYNTHESIZED_FROM]->(f)
+RETURN b.id AS belief_id, count(f) AS edges_created
+"""
+
+# Attach MERGED_FROM edges from the new merged :Belief to each source belief.
+# Parameters: merged_belief_id, silo_id, source_belief_ids (list[str]),
+#             created_at (ISO datetime str).
+CREATE_MERGED_FROM_EDGES = """
+MATCH (merged:Belief {id: $merged_belief_id, silo_id: $silo_id})
+UNWIND $source_belief_ids AS sid
+MATCH (source:Belief {id: sid, silo_id: $silo_id})
+MERGE (merged)-[r:MERGED_FROM {created_at: $created_at}]->(source)
+RETURN count(r) AS edges_created
+"""
+
 GET_SUPERSESSION_CHAIN = (
     "MATCH (start {id: $start_id, silo_id: $silo_id}) "
     "OPTIONAL MATCH path = (start)-[:SUPERSEDES*0..20]->(related) "
