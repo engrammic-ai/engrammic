@@ -10,10 +10,12 @@ from typing import TYPE_CHECKING, Any, Literal
 import structlog
 
 from context_service.api.metrics import CONTEXT_STORE_LATENCY
+from context_service.config.settings import get_settings
 from context_service.mcp.server import (
     get_context_service,
     get_evidence_validator,
     get_mcp_auth_context,
+    get_redis,
     get_silo_service,
 )
 from context_service.models.mcp import (
@@ -26,11 +28,26 @@ from context_service.models.mcp import (
 )
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
+from context_service.signals import emit_access_event
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
 logger = structlog.get_logger(__name__)
+
+_LAYER_TO_LABEL: dict[str, str] = {
+    "memory": "Document",
+    "knowledge": "Claim",
+    "wisdom": "Commitment",
+    "intelligence": "ReasoningChain",
+    "meta": "MetaObservation",
+}
+
+
+def _layer_to_label(layer: str) -> str:
+    """Map EAG layer name to node label for heat tracking."""
+    return _LAYER_TO_LABEL.get(layer, "Document")
+
 
 # Minimum evidence count for R1 single-source promotion.
 _R1_THRESHOLD = 1
@@ -540,8 +557,11 @@ def register(mcp: FastMCP) -> None:
         Returns:
             Layer-specific response dict with at minimum {node_id, layer, created_at}.
         """
-        return await _context_store(
-            silo_id=silo_id,
+        auth = await get_mcp_auth_context()
+        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
+
+        result = await _context_store(
+            silo_id=resolved_silo_id,
             content=content,
             layer=layer,
             evidence=evidence,
@@ -555,3 +575,15 @@ def register(mcp: FastMCP) -> None:
             tags=tags,
             decay_class=decay_class,
         )
+
+        if "error" not in result and get_settings().write_events_enabled:
+            redis = get_redis()
+            if redis is not None:
+                node_id = result.get("node_id") or result.get("chain_id")
+                if node_id:
+                    node_label = _layer_to_label(layer)
+                    await emit_access_event(
+                        redis, resolved_silo_id, str(node_id), event_type="write", layer=node_label
+                    )
+
+        return result

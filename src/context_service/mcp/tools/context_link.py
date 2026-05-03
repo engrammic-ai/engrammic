@@ -5,10 +5,17 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from context_service.mcp.server import get_context_service, get_mcp_auth_context, get_silo_service
+from context_service.config.settings import get_settings
+from context_service.mcp.server import (
+    get_context_service,
+    get_mcp_auth_context,
+    get_redis,
+    get_silo_service,
+)
 from context_service.models.mcp import RelationshipType
 from context_service.services.models import derive_silo_id
 from context_service.services.silo import validate_silo_ownership
+from context_service.signals import emit_access_event
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -95,7 +102,7 @@ def register(mcp: FastMCP) -> None:
         """
         auth = await get_mcp_auth_context()
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
-        return await _context_link(
+        result = await _context_link(
             silo_id=resolved_silo_id,
             from_node=from_node,
             to_node=to_node,
@@ -103,3 +110,10 @@ def register(mcp: FastMCP) -> None:
             weight=weight,
             note=note,
         )
+
+        if "error" not in result and get_settings().write_events_enabled:
+            redis = get_redis()
+            if redis is not None:
+                await emit_access_event(redis, resolved_silo_id, to_node, event_type="write")
+
+        return result

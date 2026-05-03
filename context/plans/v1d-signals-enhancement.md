@@ -147,8 +147,8 @@ This revision addresses findings from the adversarial review:
       return  # skip duplicate
   await redis.setex(dedup_key, settings.heat_dedup_window_seconds, "1")
   ```
-- [ ] **4.2** Emit write event from `context_link` (target node only, after successful link)
-- [ ] **4.3** Emit write event from `context_assert` (one event for the claim node itself, not per evidence_node)
+- [x] **4.2** Emit write event from `context_link` (target node only, after successful link)
+- [x] **4.3** Emit write event from `context_store` (one event for the created node, gated by write_events_enabled)
 - [ ] **4.4** Emit write event from `context_commit` (one event for the commitment node itself, not per about_node)
 - [ ] **4.5** Update heat asset to weight by event_type:
   ```python
