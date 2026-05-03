@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from context_service.config.settings import Settings
 
 
 class RetentionPolicy(BaseModel):
@@ -50,3 +54,16 @@ class RetentionPolicy(BaseModel):
             )
 
         return False
+
+    @classmethod
+    def from_settings(cls, settings: "Settings") -> "RetentionPolicy":
+        """Create RetentionPolicy from application settings."""
+        return cls(
+            ephemeral_max_age_hours=settings.retention_ephemeral_max_age_hours,
+            standard_max_age_days=settings.retention_standard_max_age_days,
+            standard_heat_threshold=settings.retention_standard_heat_threshold,
+            durable_max_age_days=settings.retention_durable_max_age_days,
+            durable_heat_threshold=settings.retention_durable_heat_threshold,
+            meta_observation_max_count=settings.retention_meta_observation_max_count,
+            grace_period_days=settings.retention_grace_period_days,
+        )

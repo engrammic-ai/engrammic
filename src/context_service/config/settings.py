@@ -712,6 +712,18 @@ class Settings(BaseSettings):
     )
 
     # =========================================================================
+    # Retention Policy Defaults
+    # =========================================================================
+
+    retention_ephemeral_max_age_hours: int = Field(default=24, ge=1)
+    retention_standard_max_age_days: int = Field(default=7, ge=1)
+    retention_standard_heat_threshold: float = Field(default=0.3, ge=0.0, le=1.0)
+    retention_durable_max_age_days: int = Field(default=30, ge=1)
+    retention_durable_heat_threshold: float = Field(default=0.2, ge=0.0, le=1.0)
+    retention_meta_observation_max_count: int = Field(default=100, ge=10)
+    retention_grace_period_days: int = Field(default=7, ge=1)
+
+    # =========================================================================
     # Signals — heat / freshness / priority
     # =========================================================================
 
