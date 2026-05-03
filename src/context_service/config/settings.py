@@ -313,8 +313,10 @@ class AutoReflectConfig(BaseModel):
     on_supersession: bool = Field(
         default=True, description="Generate observation on fact supersession"
     )
-    on_revision: bool = Field(
-        default=True, description="Generate observation on belief revision"
+    on_revision: bool = Field(default=True, description="Generate observation on belief revision")
+    triggers_enabled: bool = Field(
+        default=False,
+        description="Gate for v1.3d auto-reflection triggers (confidence shift, contradiction, uncertainty)",
     )
 
 
@@ -391,6 +393,21 @@ class ExternalConfig(BaseModel):
     bear: BearConfig = Field(default_factory=BearConfig)
 
 
+class PatternConfig(BaseModel):
+    """Configuration for pattern detection (v1.3a/b)."""
+
+    model_config = {"extra": "ignore"}
+
+    detection_enabled: bool = Field(
+        default=False,
+        description="Gate for co_occurrence and causal_chain pattern detection.",
+    )
+    llm_enabled: bool = Field(
+        default=False,
+        description="Gate for LLM-based pattern detection (requires detection_enabled).",
+    )
+
+
 class CausalConfig(BaseModel):
     """Configuration for causal edge extraction, inference, and query exposure."""
 
@@ -462,6 +479,7 @@ class Settings(BaseSettings):
     retrieval_tuning: RetrievalTuning = Field(default_factory=RetrievalTuning)
     auto_reflect: AutoReflectConfig = Field(default_factory=AutoReflectConfig)
     causal: CausalConfig = Field(default_factory=CausalConfig)
+    pattern: PatternConfig = Field(default_factory=PatternConfig)
 
     # =========================================================================
     # Application Meta
@@ -792,6 +810,10 @@ class Settings(BaseSettings):
         default=5,
         ge=1,
         description="Chains with <= this many steps are inlined; longer chains use LLM summarization",
+    )
+    session_compaction_enabled: bool = Field(
+        default=False,
+        description="Gate for v1.3c session compaction (context_close_reasoning MCP tool)",
     )
     pattern_min_frequency: int = Field(
         default=2,

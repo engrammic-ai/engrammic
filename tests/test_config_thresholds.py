@@ -64,3 +64,26 @@ class TestThresholdDefaults:
     def test_pattern_min_frequency_default(self) -> None:
         settings = Settings()
         assert settings.pattern_min_frequency == 2
+
+
+class TestFeatureFlags:
+    """Verify v1.3 feature flags exist with correct defaults."""
+
+    def test_pattern_detection_flags(self) -> None:
+        settings = Settings()
+        assert settings.pattern.detection_enabled is False
+        assert settings.pattern.llm_enabled is False
+
+    def test_auto_reflect_triggers_flag(self) -> None:
+        settings = Settings()
+        assert settings.auto_reflect.triggers_enabled is False
+
+    def test_session_compaction_flag(self) -> None:
+        settings = Settings()
+        assert settings.session_compaction_enabled is False
+
+    def test_causal_flags_exist(self) -> None:
+        settings = Settings()
+        assert settings.causal.extraction_enabled is False
+        assert settings.causal.inference_enabled is False
+        assert settings.causal.query_enabled is False
