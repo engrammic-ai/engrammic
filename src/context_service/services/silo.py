@@ -11,7 +11,7 @@ from context_service.services.models import ScopeContext, Silo, derive_silo_id
 
 if TYPE_CHECKING:
     from context_service.cache.silo_ownership_cache import SiloOwnershipCache
-    from context_service.stores import MemgraphClient
+    from context_service.engine.protocols import HyperGraphStore
 
 logger = structlog.get_logger(__name__)
 
@@ -21,7 +21,7 @@ class SiloService:
 
     def __init__(
         self,
-        memgraph: MemgraphClient,
+        memgraph: HyperGraphStore,
         ownership_cache: SiloOwnershipCache | None = None,
     ) -> None:
         self._memgraph = memgraph

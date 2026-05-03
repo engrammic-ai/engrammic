@@ -6,13 +6,14 @@ from fastapi import Depends, Request
 
 from context_service.api.auth_dep import get_auth_context as get_auth_context
 from context_service.auth.context import AuthContext as AuthContext
-from context_service.stores import MemgraphClient, QdrantClient, RedisClient
+from context_service.engine.protocols import HyperGraphStore
+from context_service.stores import QdrantClient, RedisClient
 
 
-def get_memgraph(request: Request) -> MemgraphClient:
-    """Get Memgraph client from app state."""
-    client: MemgraphClient = request.app.state.memgraph
-    return client
+def get_memgraph(request: Request) -> HyperGraphStore:
+    """Get graph store from app state, vended as the HyperGraphStore protocol."""
+    store: HyperGraphStore = request.app.state.memgraph
+    return store
 
 
 def get_qdrant(request: Request) -> QdrantClient:
@@ -27,6 +28,6 @@ def get_redis(request: Request) -> RedisClient:
     return client
 
 
-MemgraphDep = Annotated[MemgraphClient, Depends(get_memgraph)]
+MemgraphDep = Annotated[HyperGraphStore, Depends(get_memgraph)]
 QdrantDep = Annotated[QdrantClient, Depends(get_qdrant)]
 RedisDep = Annotated[RedisClient, Depends(get_redis)]
