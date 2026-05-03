@@ -43,6 +43,7 @@ class RelationshipType(StrEnum):
 
 _ANY: frozenset[TypeClass] = frozenset(TypeClass)
 
+
 # (source_classes, edge_label, target_classes)
 # None in source/target position means ANY class (or unclassifiable) is accepted.
 def _build_matrix() -> list[

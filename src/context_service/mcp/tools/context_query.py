@@ -120,7 +120,10 @@ async def _context_query(
         try:
             await asyncio.wait_for(
                 asyncio.gather(
-                    *(emit_access_event(redis, silo_id, str(r.node_id), layer=r.layer) for r in results)
+                    *(
+                        emit_access_event(redis, silo_id, str(r.node_id), layer=r.layer)
+                        for r in results
+                    )
                 ),
                 timeout=2.0,
             )

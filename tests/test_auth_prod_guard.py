@@ -55,5 +55,3 @@ class TestProdGuard:
     def test_dev_environment_auth_disabled_ok(self) -> None:
         s = Settings(_env_file=None, environment="development", auth_enabled=False)
         assert s.auth_enabled is False
-
-

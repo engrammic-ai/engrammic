@@ -181,4 +181,18 @@ def create_app() -> FastAPI:
     app.include_router(admin.router)
     app.add_route("/metrics", metrics_endpoint, include_in_schema=False)
 
+    if settings.mcp_enabled:
+        from context_service.mcp.server import create_mcp_server
+
+        mcp_server = create_mcp_server()
+
+        @app.get("/mcp-health", tags=["health"])
+        async def mcp_health() -> dict[str, str]:
+            """Health check for MCP server."""
+            return {"status": "ok", "server": mcp_server.name}
+
+        mcp_app = mcp_server.http_app(path="/")
+        app.mount("/mcp", mcp_app)
+        logger.info("mcp_server_mounted", path="/mcp")
+
     return app

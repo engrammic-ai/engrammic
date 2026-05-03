@@ -6,6 +6,7 @@ Used as the default mode for quality evaluation.
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -268,6 +269,224 @@ async def reflection_task(
     }
 
 
+async def evidence_validation_task(
+    inputs: dict[str, Any],
+    context_service: ContextService,
+    scope: ScopeContext,
+) -> dict[str, Any]:
+    """Assert a claim with a mix of valid and invalid evidence refs.
+
+    inputs:
+        claim: str
+        valid_evidence_contents: list of str -- seeded as memory nodes; their
+            node IDs are resolved and passed as evidence
+        invalid_evidence_refs: list of str -- raw invalid refs (e.g. "node:bad-uuid")
+        confidence: float
+
+    returns:
+        {"claim_id": str | None, "error": str | None, "evidence_linked": int}
+    """
+    valid_ids: list[str] = []
+    for content in inputs.get("valid_evidence_contents", []):
+        node = await context_service.remember(
+            scope=scope,
+            content=content,
+            content_type="text",
+        )
+        valid_ids.append(f"node:{node.id}")
+
+    all_evidence = valid_ids + list(inputs.get("invalid_evidence_refs", []))
+
+    try:
+        claim_node = await context_service.assert_claim(
+            scope=scope,
+            claim=inputs["claim"],
+            evidence=all_evidence,
+            source_type="document",
+            confidence=inputs.get("confidence", 0.8),
+        )
+        return {
+            "claim_id": str(claim_node.id),
+            "error": None,
+            "evidence_linked": len(valid_ids),
+        }
+    except Exception as exc:
+        return {
+            "claim_id": None,
+            "error": str(exc),
+            "evidence_linked": 0,
+        }
+
+
+async def reasoning_coherence_task(
+    inputs: dict[str, Any],
+    context_service: ContextService,
+    scope: ScopeContext,
+) -> dict[str, Any]:
+    """Store a reasoning chain and verify it persists correctly.
+
+    inputs:
+        steps: list of {"step": int, "reasoning": str, "confidence": float}
+        conclusion: str
+        crystallizations: list of {"claim": str, "confidence": float} | None
+
+    returns:
+        {"chain_id": str, "steps_count": int, "conclusion_stored": bool,
+         "crystallizations_count": int}
+    """
+    from context_service.models.mcp import Crystallization, ReasoningStep
+
+    parsed_steps = [ReasoningStep(**s) for s in inputs["steps"]]
+    parsed_crystallizations: list[Crystallization] | None = None
+    if inputs.get("crystallizations"):
+        parsed_crystallizations = [Crystallization(**c) for c in inputs["crystallizations"]]
+
+    result = await context_service.reason(
+        silo_id=str(scope.silo_id),
+        steps=parsed_steps,
+        conclusion=inputs.get("conclusion"),
+        crystallizations=parsed_crystallizations,
+        session_id="eval-session",
+        agent_id="eval",
+    )
+
+    chain_id = str(result.chain_id)
+
+    # Retrieve the stored chain node to verify persistence.
+    rows = await context_service._memgraph.execute_query(
+        "MATCH (n:ReasoningChain {id: $id}) RETURN n.steps_count AS sc, n.conclusion AS conc",
+        {"id": chain_id},
+    )
+    stored_count = rows[0]["sc"] if rows else 0
+    stored_conclusion = rows[0]["conc"] if rows else None
+
+    return {
+        "chain_id": chain_id,
+        "steps_count": stored_count,
+        "conclusion_stored": stored_conclusion == inputs.get("conclusion"),
+        "crystallizations_count": len(parsed_crystallizations) if parsed_crystallizations else 0,
+    }
+
+
+async def time_travel_task(
+    inputs: dict[str, Any],
+    context_service: ContextService,
+    scope: ScopeContext,
+) -> dict[str, Any]:
+    """Seed nodes at known times and run temporal_query at specified as_of moments.
+
+    inputs:
+        content_before: str -- seeded before the checkpoint
+        content_after: str -- seeded after the checkpoint (by advancing its
+            created_at metadata only; temporal_query uses Memgraph valid_from)
+        query: str
+        as_of_before_update: bool -- if True query uses t_mid (between the two
+            nodes), otherwise uses t_after (should see both)
+
+    returns:
+        {"results_count": int, "before_id_found": bool, "after_id_found": bool}
+    """
+    from datetime import UTC, datetime, timedelta
+
+    now = datetime.now(UTC)
+    t_past = now - timedelta(minutes=10)
+    t_future = now + timedelta(minutes=10)
+
+    node_before = await context_service.remember(
+        scope=scope,
+        content=inputs["content_before"],
+        content_type="text",
+        metadata={"eval_time_tag": "before"},
+    )
+
+    node_after = await context_service.remember(
+        scope=scope,
+        content=inputs["content_after"],
+        content_type="text",
+        metadata={"eval_time_tag": "after"},
+    )
+
+    as_of = t_past if inputs.get("as_of_before_update") else t_future
+
+    results = await context_service.temporal_query(
+        silo_id=str(scope.silo_id),
+        as_of=as_of,
+        query=inputs["query"],
+        top_k=20,
+    )
+
+    result_ids = {r["node_id"] for r in results}
+    return {
+        "results_count": len(results),
+        "before_id_found": str(node_before.id) in result_ids,
+        "after_id_found": str(node_after.id) in result_ids,
+    }
+
+
+async def link_semantics_task(
+    inputs: dict[str, Any],
+    context_service: ContextService,
+    scope: ScopeContext,
+) -> dict[str, Any]:
+    """Create two nodes with a typed link and verify traversal.
+
+    inputs:
+        source_content: str
+        target_content: str
+        relationship: str  (e.g. "SUPPORTS", "CONTRADICTS")
+        traversal_depth: int
+
+    returns:
+        {"source_id": str, "target_id": str, "edge_id": str,
+         "target_reachable": bool, "source_reachable_reverse": bool}
+    """
+    silo_id = str(scope.silo_id)
+
+    source_node = await context_service.remember(
+        scope=scope,
+        content=inputs["source_content"],
+        content_type="text",
+    )
+    target_node = await context_service.remember(
+        scope=scope,
+        content=inputs["target_content"],
+        content_type="text",
+    )
+
+    edge_id = await context_service.link(
+        silo_id=silo_id,
+        from_node=str(source_node.id),
+        to_node=str(target_node.id),
+        relationship=inputs["relationship"],
+    )
+
+    depth = inputs.get("traversal_depth", 2)
+
+    # Forward traversal from source.
+    forward_graph = await context_service.graph_traversal(
+        silo_id=silo_id,
+        seed_nodes=[str(source_node.id)],
+        max_depth=depth,
+    )
+    forward_ids = {n["id"] for n in (forward_graph.nodes or [])}
+
+    # Reverse traversal from target.
+    reverse_graph = await context_service.graph_traversal(
+        silo_id=silo_id,
+        seed_nodes=[str(target_node.id)],
+        max_depth=depth,
+    )
+    reverse_ids = {n["id"] for n in (reverse_graph.nodes or [])}
+
+    return {
+        "source_id": str(source_node.id),
+        "target_id": str(target_node.id),
+        "edge_id": edge_id,
+        "target_reachable": str(target_node.id) in forward_ids,
+        "source_reachable_reverse": str(source_node.id) in reverse_ids,
+    }
+
+
 async def silo_isolation_task(
     inputs: dict[str, Any],
     context_service: ContextService,
@@ -296,3 +515,92 @@ async def silo_isolation_task(
         "queried_from": str(scope_b.silo_id),
         "found": len(results) > 0,
     }
+
+
+async def latency_task(
+    inputs: dict[str, Any],
+    context_service: ContextService,
+    scope: ScopeContext,
+) -> dict[str, Any]:
+    """Measure wall-clock latency for a named operation.
+
+    inputs:
+        operation: str -- one of "context_get_cached", "context_query",
+            "context_remember", "context_assert", "context_graph",
+            "context_reason"
+        seed_content: str | None -- content to seed before measuring
+        query: str | None -- query string for context_query
+
+    returns:
+        {"operation": str, "elapsed_ms": float}
+    """
+    from context_service.models.mcp import ReasoningStep
+
+    operation = inputs["operation"]
+    silo_id = str(scope.silo_id)
+
+    # Seed a node that multiple operations may need.
+    seed_node = await context_service.remember(
+        scope=scope,
+        content=inputs.get("seed_content", "Latency eval seed node."),
+        content_type="text",
+    )
+
+    t0 = time.perf_counter()
+
+    if operation == "context_get_cached":
+        # First get populates any in-process cache; measure second call.
+        await context_service.get(seed_node.id, scope.silo_id)
+        t0 = time.perf_counter()
+        await context_service.get(seed_node.id, scope.silo_id)
+
+    elif operation == "context_query":
+        await context_service.query(scope, inputs.get("query", "latency eval"), top_k=10)
+
+    elif operation == "context_remember":
+        t0 = time.perf_counter()
+        await context_service.remember(
+            scope=scope,
+            content="Latency measurement node for context_remember.",
+            content_type="text",
+        )
+
+    elif operation == "context_assert":
+        t0 = time.perf_counter()
+        await context_service.assert_claim(
+            scope=scope,
+            claim="Latency measurement claim for context_assert.",
+            evidence=[f"node:{seed_node.id}"],
+            source_type="document",
+            confidence=0.8,
+        )
+
+    elif operation == "context_graph":
+        t0 = time.perf_counter()
+        await context_service.graph_traversal(
+            silo_id=silo_id,
+            seed_nodes=[str(seed_node.id)],
+            max_depth=2,
+        )
+
+    elif operation == "context_reason":
+        steps = [
+            ReasoningStep(step=1, reasoning="Premise one.", confidence=0.9),
+            ReasoningStep(step=2, reasoning="Premise two.", confidence=0.9),
+            ReasoningStep(step=3, reasoning="Conclusion follows.", confidence=0.85),
+        ]
+        t0 = time.perf_counter()
+        await context_service.reason(
+            silo_id=silo_id,
+            steps=steps,
+            conclusion="Latency measurement conclusion.",
+            session_id="latency-eval",
+            agent_id="eval",
+        )
+
+    else:
+        raise ValueError(f"Unknown operation: {operation!r}")
+
+    elapsed_ms = (time.perf_counter() - t0) * 1000.0
+
+    return {"operation": operation, "elapsed_ms": elapsed_ms}
