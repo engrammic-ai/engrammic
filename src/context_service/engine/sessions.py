@@ -31,6 +31,7 @@ from context_service.db.queries import (
     CREATE_CROSS_CHAIN_REFERENCES,
     CREATE_REASONING_SESSION,
     GET_SESSION_CHAINS,
+    GET_SESSION_STATUS,
 )
 
 if TYPE_CHECKING:
@@ -68,6 +69,17 @@ async def create_or_join_session(
     str
         The session_id (unchanged from input).
     """
+    # Guard: refuse to re-join a closed session.
+    existing = await store.execute_query(
+        GET_SESSION_STATUS,
+        {"session_id": session_id, "silo_id": silo_id},
+    )
+    if existing and existing[0].get("status") == "closed":
+        raise ValueError(
+            f"ReasoningSession {session_id!r} is already closed; "
+            "generate a new session_id to start a fresh session."
+        )
+
     now = _now_iso()
     await store.execute_write(
         CREATE_REASONING_SESSION,

@@ -1022,6 +1022,12 @@ ON CREATE SET r.created_at = $created_at
 RETURN c.id AS chain_id, s.id AS session_id
 """
 
+# Fetch the status of a single :ReasoningSession by id.
+GET_SESSION_STATUS = """
+MATCH (s:ReasoningSession {id: $session_id, silo_id: $silo_id})
+RETURN s.id AS session_id, s.status AS status
+"""
+
 # Return open :ReasoningSession nodes whose updated_at is older than $stale_before.
 GET_STALE_OPEN_SESSIONS = """
 MATCH (s:ReasoningSession {silo_id: $silo_id, status: 'open'})

@@ -301,20 +301,21 @@ async def merge_beliefs(
         total_weight += w
     confidence = weighted_conf / total_weight if total_weight else 0.0
 
-    # Re-synthesise belief statement from unioned facts (fetched via their ids).
-    fact_rows: list[dict[str, Any]] = []
-    for sb in source_beliefs:
-        for fid in sb.get("fact_ids") or []:
-            fact_rows.append({"fact_id": fid, "content": sb.get("content", ""), "confidence": sb.get("confidence", 1.0)})
-
-    # Deduplicate fact_rows by fact_id (keep first occurrence).
-    seen_ids: set[str] = set()
+    # Build synthesis input from unique belief texts across all source beliefs.
+    # Each source belief contributes its own content (not duplicated per fact_id).
+    seen_belief_ids: set[str] = set()
     unique_fact_rows: list[dict[str, Any]] = []
-    for row in fact_rows:
-        fid = row["fact_id"]
-        if fid not in seen_ids:
-            seen_ids.add(fid)
-            unique_fact_rows.append(row)
+    for sb in source_beliefs:
+        bid = sb.get("belief_id", "")
+        if bid not in seen_belief_ids:
+            seen_belief_ids.add(bid)
+            unique_fact_rows.append(
+                {
+                    "fact_id": bid,
+                    "content": sb.get("content", ""),
+                    "confidence": sb.get("confidence", 1.0),
+                }
+            )
 
     prompt = _build_synthesis_prompt(unique_fact_rows)
     belief_text, _usage = await llm_client.complete(

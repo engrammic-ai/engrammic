@@ -18,13 +18,8 @@ from typing import Any
 
 import dagster as dg
 
+from context_service.db.queries import GET_ALL_STALE_OPEN_SESSIONS
 from context_service.pipelines.resources import MemgraphResource
-
-_GET_STALE_SESSIONS = """
-MATCH (s:ReasoningSession {status: 'open'})
-WHERE s.updated_at < $stale_before
-RETURN s.id AS session_id, s.silo_id AS silo_id, s.updated_at AS updated_at
-"""
 
 
 @dg.sensor(
@@ -55,7 +50,7 @@ def session_autoclose_sensor(
         raw_client = MemgraphClient(driver)
         store = MemgraphStore(raw_client)
 
-        rows = await raw_client.execute_query(_GET_STALE_SESSIONS, {"stale_before": stale_before})
+        rows = await raw_client.execute_query(GET_ALL_STALE_OPEN_SESSIONS, {"stale_before": stale_before})
 
         results: list[dict[str, Any]] = []
         for row in rows:

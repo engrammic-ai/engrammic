@@ -137,10 +137,13 @@ async def close_reasoning_chain(
                 try:
                     from context_service.llm import build_llm_provider
 
-                    llm_client = build_llm_provider(
+                    _llm_client = build_llm_provider(
                         settings.summarization_provider, settings.summarization_model
                     )
-                    summary = await summarize_reasoning_steps(steps_list, llm_client=llm_client)
+                except Exception:
+                    _llm_client = None
+                try:
+                    summary = await summarize_reasoning_steps(steps_list, llm_client=_llm_client)
                 except Exception:
                     summary = inline_summary(steps_list)
         except ValueError as exc:
