@@ -997,6 +997,70 @@ MERGE (merged)-[r:MERGED_FROM {created_at: $created_at}]->(source)
 RETURN count(r) AS edges_created
 """
 
+# ---------------------------------------------------------------------------
+# Multi-chain session queries (v1.4 Phase 4c)
+# ---------------------------------------------------------------------------
+
+# Create or return an existing open :ReasoningSession node.
+CREATE_REASONING_SESSION = """
+MERGE (s:ReasoningSession {id: $session_id, silo_id: $silo_id})
+ON CREATE SET
+    s.status = 'open',
+    s.created_at = $created_at,
+    s.updated_at = $created_at
+ON MATCH SET
+    s.updated_at = $created_at
+RETURN s.id AS session_id, s.status AS status
+"""
+
+# Attach a :ReasoningChain to an existing :ReasoningSession via PART_OF_SESSION.
+ATTACH_CHAIN_TO_SESSION = """
+MATCH (c:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+MATCH (s:ReasoningSession {id: $session_id, silo_id: $silo_id})
+MERGE (c)-[r:PART_OF_SESSION]->(s)
+ON CREATE SET r.created_at = $created_at
+RETURN c.id AS chain_id, s.id AS session_id
+"""
+
+# Return open :ReasoningSession nodes whose updated_at is older than $stale_before.
+GET_STALE_OPEN_SESSIONS = """
+MATCH (s:ReasoningSession {silo_id: $silo_id, status: 'open'})
+WHERE s.updated_at < $stale_before
+RETURN s.id AS session_id, s.updated_at AS updated_at
+"""
+
+# Return all :ReasoningChain nodes attached to a session (not yet compacted).
+GET_SESSION_CHAINS = """
+MATCH (c:ReasoningChain)-[:PART_OF_SESSION]->(s:ReasoningSession {id: $session_id, silo_id: $silo_id})
+RETURN c.id AS chain_id, coalesce(c.status, 'open') AS status,
+       coalesce(c.compacted, false) AS compacted
+"""
+
+# Mark a :ReasoningSession as closed.
+CLOSE_REASONING_SESSION = """
+MATCH (s:ReasoningSession {id: $session_id, silo_id: $silo_id})
+SET s.status = 'closed',
+    s.closed_at = $closed_at
+RETURN s.id AS session_id
+"""
+
+# Cross-chain REFERENCES edges within the same session.
+# Connects every chain in the session to every other chain (directed, oldest -> newest).
+CREATE_CROSS_CHAIN_REFERENCES = """
+MATCH (a:ReasoningChain)-[:PART_OF_SESSION]->(s:ReasoningSession {id: $session_id, silo_id: $silo_id})
+MATCH (b:ReasoningChain)-[:PART_OF_SESSION]->(s)
+WHERE a.id <> b.id AND a.created_at < b.created_at
+MERGE (a)-[r:REFERENCES {silo_id: $silo_id, reason: 'same_session', created_at: $created_at}]->(b)
+RETURN count(r) AS edges_created
+"""
+
+# List all open sessions across all silos (used by auto-close sensor).
+GET_ALL_STALE_OPEN_SESSIONS = """
+MATCH (s:ReasoningSession {status: 'open'})
+WHERE s.updated_at < $stale_before
+RETURN s.id AS session_id, s.silo_id AS silo_id, s.updated_at AS updated_at
+"""
+
 GET_SUPERSESSION_CHAIN = (
     "MATCH (start {id: $start_id, silo_id: $silo_id}) "
     "OPTIONAL MATCH path = (start)-[:SUPERSEDES*0..20]->(related) "

@@ -832,6 +832,11 @@ class Settings(BaseSettings):
         default=False,
         description="Gate for v1.3c session compaction (context_close_reasoning MCP tool)",
     )
+    session_timeout_minutes: int = Field(
+        default=30,
+        ge=1,
+        description="Minutes of inactivity after which an open ReasoningSession is auto-closed.",
+    )
     pattern_min_frequency: int = Field(
         default=2,
         ge=1,
