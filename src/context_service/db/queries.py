@@ -539,6 +539,29 @@ RETURN
 ORDER BY obs.created_at DESC
 """
 
+# Get reflection depths for MetaObservation targets (for hierarchical reflection)
+GET_META_OBSERVATION_DEPTHS = """
+MATCH (obs:MetaObservation {silo_id: $silo_id})
+WHERE obs.id IN $target_ids AND NOT exists(obs.tombstoned_at)
+RETURN obs.id AS id, coalesce(obs.reflection_depth, 1) AS reflection_depth
+"""
+
+# Get reflections at a specific depth
+GET_REFLECTIONS_AT_DEPTH = """
+MATCH (obs:MetaObservation {silo_id: $silo_id})
+WHERE coalesce(obs.reflection_depth, 1) = $depth AND NOT exists(obs.tombstoned_at)
+RETURN
+    obs.id AS node_id,
+    obs.content AS content,
+    obs.observation_type AS observation_type,
+    obs.confidence AS confidence,
+    obs.agent_id AS agent_id,
+    obs.reflection_depth AS reflection_depth,
+    obs.created_at AS created_at
+ORDER BY obs.created_at DESC
+LIMIT $limit
+"""
+
 BELIEF_HISTORY_CURRENT = """
 MATCH (n {id: $node_id, silo_id: $silo_id})
 OPTIONAL MATCH (n)-[:SUPERSEDES]->(next)

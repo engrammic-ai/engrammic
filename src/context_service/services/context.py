@@ -860,7 +860,14 @@ class ContextService:
         metadata: dict[str, Any] | None = None,
         agent_id: str,
     ) -> Node:
-        """Store a meta-observation (Meta-Memory layer)."""
+        """Store a meta-observation (Meta-Memory layer).
+
+        Supports hierarchical reflection: if targets include MetaObservations,
+        the new observation's reflection_depth is max(target_depths) + 1.
+        All MetaObservations have decay_class=permanent (they don't decay).
+        """
+        from context_service.db.queries import GET_META_OBSERVATION_DEPTHS
+
         props = dict(metadata or {})
         props["observation_type"] = (
             observation_type.value if hasattr(observation_type, "value") else observation_type
@@ -869,6 +876,21 @@ class ContextService:
         props["confidence"] = confidence
         if agent_id:
             props["agent_id"] = agent_id
+
+        # Compute reflection_depth for hierarchical meta-memory
+        silo_id = str(scope.silo_id)
+        if about:
+            depth_records = await self._memgraph.execute_query(
+                GET_META_OBSERVATION_DEPTHS,
+                {"silo_id": silo_id, "target_ids": about},
+            )
+            target_depths = [r["reflection_depth"] for r in depth_records]
+            props["reflection_depth"] = max(target_depths, default=0) + 1
+        else:
+            props["reflection_depth"] = 1
+
+        # MetaObservations don't decay (per spec)
+        props["decay_class"] = "permanent"
 
         node = await self.store(
             scope=scope,
