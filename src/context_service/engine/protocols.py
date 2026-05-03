@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
     import uuid
@@ -25,6 +25,7 @@ class Closeable(Protocol):
     async def close(self) -> None: ...
 
 
+@runtime_checkable
 class HyperGraphStore(Protocol):
     """Domain-agnostic graph storage interface.
 

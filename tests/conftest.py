@@ -51,8 +51,8 @@ def _bootstrap_custodian_models() -> None:
             stub.__path__ = [str(_SRC / Path(*parts))]
             sys.modules[pkg] = stub
 
-    # Load core.settings directly so custodian.models can call get_settings().
-    _load_module_direct("context_service.core.settings")
+    # Load config.settings directly so custodian.models can call get_settings().
+    _load_module_direct("context_service.config.settings")
 
     # Load extraction.models directly (no config required).
     _load_module_direct("context_service.extraction.models")
