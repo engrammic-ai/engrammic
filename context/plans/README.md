@@ -4,12 +4,22 @@ Active implementation plans for context-service. Each plan lives in its own file
 
 ## Active plans
 
-### v1.2 — Refinements + Protocol Migration (next)
-- [v1.2-backlog.md](./v1.2-backlog.md) — deferred items from v1.1. Config tuning, pattern detection stubs, protocol migration.
+### v1.3 — EAG Surface Completion (current)
+- [v1.3-master.md](./v1.3-master.md) — master plan for partner-demo readiness
+- [v1.3-phase-0-flags.md](./v1.3-phase-0-flags.md) — feature flags (prerequisite)
+- [v1.3a-pattern-detection.md](./v1.3a-pattern-detection.md) — co_occurrence, causal_chain, decay
+- [v1.3b-llm-patterns.md](./v1.3b-llm-patterns.md) — LLM-detected patterns
+- [v1.3c-session-compaction.md](./v1.3c-session-compaction.md) — `context_close_reasoning`, cross-chain
+- [v1.3d-auto-reflection.md](./v1.3d-auto-reflection.md) — confidence/contradiction/uncertainty triggers
+- [v1.3e-causal-completion.md](./v1.3e-causal-completion.md) — transitive invalidation, directionality, partial revision
+- [v1.3g-ops-tooling.md](./v1.3g-ops-tooling.md) — tombstone asset, metrics
+
+### v1.2 — Refinements + Protocol Migration (complete 2026-05-03)
+- [v1.2-backlog.md](./v1.2-backlog.md) — summary. Most items archived, v1.2a carried to v1.3.
+- [v1.2a-config-tuning.md](./v1.2a-config-tuning.md) — partial, v1.3 pre-req
 
 ### v1.1 — EAG Completion (complete 2026-05-03)
-- [v1.1-roadmap.md](./v1.1-roadmap.md) — T3 synthesis, T6 compaction, T4 revision, patterns, causal edges, auto-reflection.
-- Specs: `../specs/v1.1/`
+- Archived to `archive/v1.1-roadmap.md`
 
 ### v2 — Architecture Cleanup + REST API (current)
 - [2026-05-02-v2-master.md](../docs/superpowers/plans/2026-05-02-v2-master.md) — master index. Four phases.
