@@ -20,8 +20,10 @@ async def _context_reason(
     conclusion: str | None = None,
     evidence_used: list[str] | None = None,
     crystallizations: list[dict[str, Any]] | None = None,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
+    from context_service.engine.sessions import attach_chain_to_session, create_or_join_session
     from context_service.mcp.server import (
         get_context_service,
         get_mcp_auth_context,
@@ -51,8 +53,17 @@ async def _context_reason(
 
     ctx_svc = get_context_service()
 
-    session_id = getattr(auth, "session_id", None) or str(uuid.uuid4())
+    # session_id: caller-provided takes precedence; fall back to auth session, then new uuid.
+    resolved_session_id = (
+        session_id
+        or getattr(auth, "session_id", None)
+        or str(uuid.uuid4())
+    )
     agent_id = getattr(auth, "agent_id", None)
+
+    # Upsert the session node before writing the chain.
+    store = ctx_svc.graph_store
+    await create_or_join_session(store, resolved_session_id, str(expected_silo_id))
 
     result = await ctx_svc.reason(
         silo_id=str(expected_silo_id),
@@ -60,8 +71,13 @@ async def _context_reason(
         conclusion=conclusion,
         evidence_used=evidence_used,
         crystallizations=parsed_cryst,
-        session_id=session_id,
+        session_id=resolved_session_id,
         agent_id=agent_id,
+    )
+
+    # Attach the new chain to the session.
+    await attach_chain_to_session(
+        store, str(result.chain_id), resolved_session_id, str(expected_silo_id)
     )
 
     return {
@@ -69,7 +85,7 @@ async def _context_reason(
         "layer": "intelligence",
         "steps_count": len(steps),
         "crystallizations_queued": len(parsed_cryst),
-        "session_id": session_id,
+        "session_id": resolved_session_id,
         "created_at": datetime.now(UTC).isoformat(),
     }
 
@@ -91,6 +107,7 @@ def register(mcp: FastMCP) -> None:
         conclusion: str | None = None,
         evidence_used: list[str] | None = None,
         crystallizations: list[dict[str, Any]] | None = None,
+        session_id: str | None = None,
     ) -> dict[str, Any]:
         """Store reasoning chain to Intelligence layer.
 
@@ -100,6 +117,8 @@ def register(mcp: FastMCP) -> None:
             conclusion: Optional summary conclusion.
             evidence_used: Optional list of node:<uuid> or URI refs used.
             crystallizations: Optional list of {claim, confidence?} to extract.
+            session_id: Optional session UUID to group multiple chains together.
+                        If omitted a new session is created automatically.
 
         Returns:
             {chain_id, layer, steps_count, crystallizations_queued, session_id, created_at}
@@ -110,4 +129,5 @@ def register(mcp: FastMCP) -> None:
             conclusion=conclusion,
             evidence_used=evidence_used,
             crystallizations=crystallizations,
+            session_id=session_id,
         )

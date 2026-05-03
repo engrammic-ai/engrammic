@@ -539,6 +539,29 @@ RETURN
 ORDER BY obs.created_at DESC
 """
 
+# Get reflection depths for MetaObservation targets (for hierarchical reflection)
+GET_META_OBSERVATION_DEPTHS = """
+MATCH (obs:MetaObservation {silo_id: $silo_id})
+WHERE obs.id IN $target_ids AND NOT exists(obs.tombstoned_at)
+RETURN obs.id AS id, coalesce(obs.reflection_depth, 1) AS reflection_depth
+"""
+
+# Get reflections at a specific depth
+GET_REFLECTIONS_AT_DEPTH = """
+MATCH (obs:MetaObservation {silo_id: $silo_id})
+WHERE coalesce(obs.reflection_depth, 1) = $depth AND NOT exists(obs.tombstoned_at)
+RETURN
+    obs.id AS node_id,
+    obs.content AS content,
+    obs.observation_type AS observation_type,
+    obs.confidence AS confidence,
+    obs.agent_id AS agent_id,
+    obs.reflection_depth AS reflection_depth,
+    obs.created_at AS created_at
+ORDER BY obs.created_at DESC
+LIMIT $limit
+"""
+
 BELIEF_HISTORY_CURRENT = """
 MATCH (n {id: $node_id, silo_id: $silo_id})
 OPTIONAL MATCH (n)-[:SUPERSEDES]->(next)
@@ -917,6 +940,182 @@ WHERE p.confidence < $min_confidence
   AND NOT exists(p.tombstoned_at)
 SET p.tombstoned_at = $now
 RETURN count(p) AS patterns_tombstoned
+"""
+
+# ---------------------------------------------------------------------------
+# Belief merging queries (v1.4 Phase 4a)
+# ---------------------------------------------------------------------------
+
+# Find :Belief nodes in a silo whose content shares the same subject (case-
+# insensitive substring match) and whose centroid embedding cosine similarity
+# exceeds a threshold.  Returns up to $limit candidates along with their
+# fact ids so the merge function can union them.
+# Parameters: silo_id, subject (str), limit (int).
+FIND_SIMILAR_BELIEFS = """
+MATCH (b:Belief {silo_id: $silo_id})
+WHERE toLower(b.content) CONTAINS toLower($subject)
+  AND (b.valid_to IS NULL OR b.valid_to > $as_of)
+  AND NOT exists(b.tombstoned_at)
+WITH b
+OPTIONAL MATCH (b)-[:SYNTHESIZED_FROM]->(f:Fact {silo_id: $silo_id})
+RETURN b.id AS belief_id, b.content AS content,
+       coalesce(b.confidence, 1.0) AS confidence,
+       collect(f.id) AS fact_ids
+ORDER BY b.confidence DESC
+LIMIT $limit
+"""
+
+# Create a merged :Belief node and attach SYNTHESIZED_FROM edges to all
+# unioned fact ids in one write.
+# Parameters: belief_id, silo_id, content, confidence, evidence_count,
+#             created_at, valid_from, fact_ids (list[str]).
+CREATE_MERGED_BELIEF = """
+MERGE (b:Belief {id: $belief_id, silo_id: $silo_id})
+ON CREATE SET
+    b.content = $content,
+    b.confidence = $confidence,
+    b.evidence_count = $evidence_count,
+    b.created_at = $created_at,
+    b.valid_from = $valid_from,
+    b.valid_to = null,
+    b.merged = true
+WITH b
+UNWIND $fact_ids AS fid
+MATCH (f:Fact {id: fid, silo_id: $silo_id})
+MERGE (b)-[:SYNTHESIZED_FROM]->(f)
+RETURN b.id AS belief_id, count(f) AS edges_created
+"""
+
+# Attach MERGED_FROM edges from the new merged :Belief to each source belief.
+# Parameters: merged_belief_id, silo_id, source_belief_ids (list[str]),
+#             created_at (ISO datetime str).
+CREATE_MERGED_FROM_EDGES = """
+MATCH (merged:Belief {id: $merged_belief_id, silo_id: $silo_id})
+UNWIND $source_belief_ids AS sid
+MATCH (source:Belief {id: sid, silo_id: $silo_id})
+MERGE (merged)-[r:MERGED_FROM {created_at: $created_at}]->(source)
+RETURN count(r) AS edges_created
+"""
+
+# ---------------------------------------------------------------------------
+# Multi-chain session queries (v1.4 Phase 4c)
+# ---------------------------------------------------------------------------
+
+# Create or return an existing open :ReasoningSession node.
+CREATE_REASONING_SESSION = """
+MERGE (s:ReasoningSession {id: $session_id, silo_id: $silo_id})
+ON CREATE SET
+    s.status = 'open',
+    s.created_at = $created_at,
+    s.updated_at = $created_at
+ON MATCH SET
+    s.updated_at = $created_at
+RETURN s.id AS session_id, s.status AS status
+"""
+
+# Attach a :ReasoningChain to an existing :ReasoningSession via PART_OF_SESSION.
+ATTACH_CHAIN_TO_SESSION = """
+MATCH (c:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+MATCH (s:ReasoningSession {id: $session_id, silo_id: $silo_id})
+MERGE (c)-[r:PART_OF_SESSION]->(s)
+ON CREATE SET r.created_at = $created_at
+RETURN c.id AS chain_id, s.id AS session_id
+"""
+
+# Fetch the status of a single :ReasoningSession by id.
+GET_SESSION_STATUS = """
+MATCH (s:ReasoningSession {id: $session_id, silo_id: $silo_id})
+RETURN s.id AS session_id, s.status AS status
+"""
+
+# Return open :ReasoningSession nodes whose updated_at is older than $stale_before.
+GET_STALE_OPEN_SESSIONS = """
+MATCH (s:ReasoningSession {silo_id: $silo_id, status: 'open'})
+WHERE s.updated_at < $stale_before
+RETURN s.id AS session_id, s.updated_at AS updated_at
+"""
+
+# Return all :ReasoningChain nodes attached to a session (not yet compacted).
+GET_SESSION_CHAINS = """
+MATCH (c:ReasoningChain)-[:PART_OF_SESSION]->(s:ReasoningSession {id: $session_id, silo_id: $silo_id})
+RETURN c.id AS chain_id, coalesce(c.status, 'open') AS status,
+       coalesce(c.compacted, false) AS compacted
+"""
+
+# Mark a :ReasoningSession as closed.
+CLOSE_REASONING_SESSION = """
+MATCH (s:ReasoningSession {id: $session_id, silo_id: $silo_id})
+SET s.status = 'closed',
+    s.closed_at = $closed_at
+RETURN s.id AS session_id
+"""
+
+# Cross-chain REFERENCES edges within the same session.
+# Connects every chain in the session to every other chain (directed, oldest -> newest).
+CREATE_CROSS_CHAIN_REFERENCES = """
+MATCH (a:ReasoningChain)-[:PART_OF_SESSION]->(s:ReasoningSession {id: $session_id, silo_id: $silo_id})
+MATCH (b:ReasoningChain)-[:PART_OF_SESSION]->(s)
+WHERE a.id <> b.id AND a.created_at < b.created_at
+MERGE (a)-[r:REFERENCES {silo_id: $silo_id, reason: 'same_session', created_at: $created_at}]->(b)
+RETURN count(r) AS edges_created
+"""
+
+# List all open sessions across all silos (used by auto-close sensor).
+GET_ALL_STALE_OPEN_SESSIONS = """
+MATCH (s:ReasoningSession {status: 'open'})
+WHERE s.updated_at < $stale_before
+RETURN s.id AS session_id, s.silo_id AS silo_id, s.updated_at AS updated_at
+"""
+
+# ---------------------------------------------------------------------------
+# Partial revision + cascade flagging queries (v1.4 Phase 4b)
+# ---------------------------------------------------------------------------
+
+# Find all :Belief nodes that reference a given belief via SYNTHESIZED_FROM,
+# REVISED_FROM, MERGED_FROM, or REFERENCES edges.  Used to identify downstream
+# beliefs that must be flagged for review when the referenced belief changes.
+# Parameters: belief_id (str), silo_id (str).
+FIND_BELIEFS_REFERENCING = """
+MATCH (b:Belief {silo_id: $silo_id})
+WHERE (b)-[:SYNTHESIZED_FROM|REVISED_FROM|MERGED_FROM|REFERENCES]->(:Belief {id: $belief_id, silo_id: $silo_id})
+  AND NOT exists(b.tombstoned_at)
+RETURN b.id AS belief_id, b.content AS content,
+       coalesce(b.confidence, 1.0) AS confidence,
+       coalesce(b.wisdom_status, 'active') AS wisdom_status
+"""
+
+# Set revision_cascade_pending = true on a set of :Belief nodes to mark them
+# for review by the custodian.
+# Parameters: belief_ids (list[str]), silo_id (str), flagged_at (ISO str).
+FLAG_CASCADE_PENDING = """
+UNWIND $belief_ids AS bid
+MATCH (b:Belief {id: bid, silo_id: $silo_id})
+SET b.revision_cascade_pending = true,
+    b.cascade_flagged_at = $flagged_at
+RETURN count(b) AS flagged
+"""
+
+# Return all :Belief nodes in a silo that have revision_cascade_pending = true.
+# Parameters: silo_id (str), limit (int).
+GET_CASCADE_PENDING_BELIEFS = """
+MATCH (b:Belief {silo_id: $silo_id})
+WHERE b.revision_cascade_pending = true
+  AND NOT exists(b.tombstoned_at)
+RETURN b.id AS belief_id, b.content AS content,
+       coalesce(b.confidence, 1.0) AS confidence,
+       b.cascade_flagged_at AS cascade_flagged_at,
+       coalesce(b.wisdom_status, 'active') AS wisdom_status
+ORDER BY b.cascade_flagged_at ASC
+LIMIT $limit
+"""
+
+# Clear revision_cascade_pending flag after the custodian processes a belief.
+# Parameters: belief_id (str), silo_id (str).
+CLEAR_CASCADE_PENDING = """
+MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
+REMOVE b.revision_cascade_pending
+SET b.cascade_processed_at = $processed_at
+RETURN b.id AS belief_id
 """
 
 GET_SUPERSESSION_CHAIN = (

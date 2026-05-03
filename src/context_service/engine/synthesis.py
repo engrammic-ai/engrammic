@@ -29,7 +29,11 @@ from context_service.config.settings import get_settings
 from context_service.db.queries import (
     CHECK_BELIEF_COVERAGE,
     CREATE_BELIEF_FROM_FACTS,
+    CREATE_MERGED_BELIEF,
+    CREATE_MERGED_FROM_EDGES,
+    FIND_SIMILAR_BELIEFS,
     GET_FACTS_IN_CLUSTER,
+    MARK_BELIEF_STALE,
     UPDATE_BELIEF_CENTROID,
 )
 
@@ -195,6 +199,182 @@ async def synthesize_belief(
         confidence=confidence,
     )
     return belief_id
+
+
+def _make_merged_belief_id(source_ids: list[str], silo_id: str) -> str:
+    """Deterministic id for a merged belief derived from a sorted set of source belief ids."""
+    key = "merged:" + silo_id + ":" + ":".join(sorted(source_ids))
+    return hashlib.blake2b(key.encode(), digest_size=32).hexdigest()
+
+
+async def detect_overlapping_beliefs(
+    store: HyperGraphStore,
+    silo_id: str,
+    subject: str,
+    *,
+    limit: int = 20,
+) -> list[dict[str, Any]]:
+    """Return active :Belief nodes whose content contains *subject*.
+
+    Parameters
+    ----------
+    store:
+        A HyperGraphStore implementation.
+    silo_id:
+        Silo scope.
+    subject:
+        Subject string for case-insensitive substring match.
+    limit:
+        Maximum candidates to return (default 20).
+
+    Returns
+    -------
+    list[dict]
+        Each entry: ``{"belief_id", "content", "confidence", "fact_ids"}``.
+        Empty list when fewer than two matching beliefs exist (no overlap to merge).
+    """
+    now = datetime.now(UTC)
+    rows = await store.execute_query(
+        FIND_SIMILAR_BELIEFS,
+        {"silo_id": silo_id, "subject": subject, "as_of": now.isoformat(), "limit": limit},
+    )
+    # Only report overlap when there are at least two candidates.
+    if len(rows) < 2:
+        return []
+    return list(rows)
+
+
+async def merge_beliefs(
+    store: HyperGraphStore,
+    silo_id: str,
+    source_beliefs: list[dict[str, Any]],
+    llm_client: LLMProvider,
+) -> str:
+    """Merge overlapping beliefs into a single :Belief with MERGED_FROM edges.
+
+    Strategy:
+    - Union the fact sets from all source beliefs.
+    - Reconcile confidence as the weighted mean (weight = evidence_count).
+    - Call the LLM to synthesise a fresh belief statement from the unioned facts.
+    - Create the merged :Belief node and MERGED_FROM edges.
+    - Mark each source belief stale.
+
+    Parameters
+    ----------
+    store:
+        A HyperGraphStore implementation.
+    silo_id:
+        Silo scope.
+    source_beliefs:
+        List of candidate dicts as returned by ``detect_overlapping_beliefs``.
+        Each must carry ``belief_id``, ``confidence``, and ``fact_ids``.
+    llm_client:
+        LLM provider for re-synthesis of the merged statement.
+
+    Returns
+    -------
+    str
+        The id of the new merged :Belief node.
+
+    Raises
+    ------
+    ValueError
+        If fewer than two source beliefs are provided.
+    """
+    if len(source_beliefs) < 2:
+        raise ValueError(
+            f"merge_beliefs requires at least 2 source beliefs; got {len(source_beliefs)}."
+        )
+
+    # Union fact ids across all source beliefs (dedup).
+    seen_fact_ids: set[str] = set()
+    for sb in source_beliefs:
+        seen_fact_ids.update(sb.get("fact_ids") or [])
+    fact_ids = sorted(seen_fact_ids)
+
+    # Weighted mean confidence: weight by number of fact ids per source.
+    total_weight = 0.0
+    weighted_conf = 0.0
+    for sb in source_beliefs:
+        w = float(len(sb.get("fact_ids") or []) or 1)
+        weighted_conf += float(sb.get("confidence", 1.0)) * w
+        total_weight += w
+    confidence = weighted_conf / total_weight if total_weight else 0.0
+
+    # Build synthesis input from unique belief texts across all source beliefs.
+    # Each source belief contributes its own content (not duplicated per fact_id).
+    seen_belief_ids: set[str] = set()
+    unique_fact_rows: list[dict[str, Any]] = []
+    for sb in source_beliefs:
+        bid = sb.get("belief_id", "")
+        if bid not in seen_belief_ids:
+            seen_belief_ids.add(bid)
+            unique_fact_rows.append(
+                {
+                    "fact_id": bid,
+                    "content": sb.get("content", ""),
+                    "confidence": sb.get("confidence", 1.0),
+                }
+            )
+
+    prompt = _build_synthesis_prompt(unique_fact_rows)
+    belief_text, _usage = await llm_client.complete(
+        messages=[
+            {"role": "system", "content": _SYNTHESIS_SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.2,
+    )
+    belief_text = belief_text.strip()
+
+    now = datetime.now(UTC)
+    source_ids = [sb["belief_id"] for sb in source_beliefs]
+    merged_id = _make_merged_belief_id(source_ids, silo_id)
+
+    await store.execute_write(
+        CREATE_MERGED_BELIEF,
+        {
+            "belief_id": merged_id,
+            "silo_id": silo_id,
+            "content": belief_text,
+            "confidence": confidence,
+            "evidence_count": len(fact_ids),
+            "created_at": now.isoformat(),
+            "valid_from": now.isoformat(),
+            "fact_ids": fact_ids,
+        },
+    )
+
+    await store.execute_write(
+        CREATE_MERGED_FROM_EDGES,
+        {
+            "merged_belief_id": merged_id,
+            "silo_id": silo_id,
+            "source_belief_ids": source_ids,
+            "created_at": now.isoformat(),
+        },
+    )
+
+    # Mark source beliefs stale.
+    for sb in source_beliefs:
+        await store.execute_write(
+            MARK_BELIEF_STALE,
+            {
+                "belief_id": sb["belief_id"],
+                "silo_id": silo_id,
+                "valid_to": now.isoformat(),
+            },
+        )
+
+    logger.info(
+        "beliefs_merged",
+        merged_belief_id=merged_id,
+        silo_id=silo_id,
+        source_count=len(source_ids),
+        evidence_count=len(fact_ids),
+        confidence=confidence,
+    )
+    return merged_id
 
 
 async def check_belief_coverage(
