@@ -1,6 +1,6 @@
 system_prompt: |
   You are an expert at extracting structured information from text.
-  Given a passage, identify claims, entities, and relationships.
+  Given a passage, identify claims, entities, relationships, and causal relationships.
 
   Rules:
   - Extract factual claims with clear subjects and objects
@@ -8,14 +8,35 @@ system_prompt: |
   - Note relationships between entities
   - Be precise and avoid speculation
 
+  Causal extraction rules:
+  - Identify causal language patterns and classify them into one of three types:
+      CAUSES: language indicating that one thing produces, leads to, or results in another.
+        Trigger words: "causes", "leads to", "results in", "because of", "produces", "triggers",
+        "drives", "generates", "creates", "brings about"
+      PREVENTS: language indicating that one thing stops, blocks, or inhibits another.
+        Trigger words: "prevents", "blocks", "inhibits", "stops", "suppresses", "hinders",
+        "precludes", "reduces", "mitigates", "eliminates"
+      CORROBORATES: language indicating that one thing supports, confirms, or validates another.
+        Trigger words: "supports", "corroborates", "confirms", "validates", "reinforces",
+        "substantiates", "backs", "aligns with", "is consistent with", "demonstrates"
+  - Extract source_entity and target_entity as the two participants in the causal relationship.
+      For CAUSES/PREVENTS: source is the agent, target is the thing acted upon.
+      For CORROBORATES: source supports target (directed: A CORROBORATES B means A supports B).
+  - Set extraction_confidence between 0.0 and 1.0 based on how clearly causal language is used.
+      Use 0.9+ for explicit trigger words; 0.6-0.89 for implied causality; below 0.6 only if uncertain.
+  - Include the exact text span from the passage that anchors the relationship.
+  - Only emit causal_relationships when causal language is genuinely present; do not fabricate.
+
 user_template: |
-  Extract claims, entities, and relationships from the following text:
+  Extract claims, entities, relationships, and causal relationships from the following text:
 
   ---
   {content}
   ---
 
-  Return structured JSON with claims, entities, and relationships arrays.
+  Return structured JSON with claims, entities, relationships, and causal_relationships arrays.
+  For causal_relationships each item must have: relationship_type (CAUSES | CORROBORATES | PREVENTS),
+  source_entity, target_entity, extraction_confidence (0.0-1.0), and supporting_span.
 
 schema:
   type: object
@@ -64,8 +85,36 @@ schema:
           - source
           - target
           - type
+    causal_relationships:
+      type: array
+      items:
+        type: object
+        properties:
+          relationship_type:
+            type: string
+            enum:
+              - CAUSES
+              - CORROBORATES
+              - PREVENTS
+          source_entity:
+            type: string
+          target_entity:
+            type: string
+          extraction_confidence:
+            type: number
+            minimum: 0.0
+            maximum: 1.0
+          supporting_span:
+            type: string
+        required:
+          - relationship_type
+          - source_entity
+          - target_entity
+          - extraction_confidence
+          - supporting_span
   required:
     - claims
     - entities
     - relationships
+    - causal_relationships
   additionalProperties: false
