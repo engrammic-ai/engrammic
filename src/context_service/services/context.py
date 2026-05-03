@@ -6,7 +6,7 @@ import asyncio
 import hashlib
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 import structlog
 from primitives.schema.labels import ALL_CITE_LABELS
@@ -61,6 +61,18 @@ _CREATE_PROPS: frozenset[str] = frozenset(
 def _now_utc() -> datetime:
     """Indirection for testability — patched in tests to pin a fixed reference time."""
     return datetime.now(UTC)
+
+
+def _format_timestamp(ts: Any) -> str | None:
+    """Format a timestamp value to an ISO 8601 string."""
+    if ts is None:
+        return None
+    if hasattr(ts, "isoformat"):
+        return str(ts.isoformat())
+    if isinstance(ts, (int, float)):
+        # Memgraph timestamp() returns microseconds since epoch
+        return datetime.fromtimestamp(ts / 1_000_000, tz=UTC).isoformat()
+    return str(ts)
 
 
 class ContextService:
@@ -935,16 +947,6 @@ class ContextService:
             {"node_id": node_id, "silo_id": silo_id},
         )
 
-        def _format_timestamp(ts: Any) -> str | None:
-            if ts is None:
-                return None
-            if hasattr(ts, "isoformat"):
-                return str(ts.isoformat())
-            if isinstance(ts, (int, float)):
-                # Memgraph timestamp() returns microseconds since epoch
-                return datetime.fromtimestamp(ts / 1_000_000, tz=UTC).isoformat()
-            return str(ts)
-
         return [
             {
                 "node_id": r["node_id"],
@@ -1124,14 +1126,17 @@ class ContextService:
         use_semantic_filter = bool(query) and self._embedding is not None
 
         if use_semantic_filter:
-            assert self._embedding is not None  # narrowed by use_semantic_filter
-            query_vector = await self._embedding.embed_query(query)
+            embedding = cast("EmbeddingService", self._embedding)
+            query_vector = await embedding.embed_query(query)
             qdrant_results = await self._qdrant.search(
                 vector=query_vector,
                 limit=3 * top_k,
                 silo_id=silo_id,
+                search_mode="dense",
             )
             candidate_ids = [r.node_id for r in qdrant_results]
+            if not candidate_ids:
+                return []
             cypher = TEMPORAL_QUERY_FILTERED
             params: dict[str, Any] = {
                 "silo_id": silo_id,
@@ -1150,16 +1155,6 @@ class ContextService:
             }
 
         rows = await self._memgraph.execute_query(cypher, params)
-
-        def _format_timestamp(ts: Any) -> str | None:
-            if ts is None:
-                return None
-            if hasattr(ts, "isoformat"):
-                return str(ts.isoformat())
-            if isinstance(ts, (int, float)):
-                # Memgraph timestamp() returns microseconds since epoch
-                return datetime.fromtimestamp(ts / 1_000_000, tz=UTC).isoformat()
-            return str(ts)
 
         results = []
         for row in rows:
