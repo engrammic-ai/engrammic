@@ -100,6 +100,11 @@ class VertexGeminiProvider(LLMProvider):
                 "No service account credentials path provided and "
                 "GOOGLE_APPLICATION_CREDENTIALS is not set"
             )
+        # Local dev fallback: if Docker path doesn't exist, try ./secrets/
+        if not os.path.exists(resolved_path) and resolved_path.startswith("/app/secrets/"):
+            local_path = resolved_path.replace("/app/secrets/", "./secrets/")
+            if os.path.exists(local_path):
+                resolved_path = local_path
         self._credentials_path = resolved_path
         self._credentials: Any | None = None
         self._credentials_lock = asyncio.Lock()
@@ -115,10 +120,10 @@ class VertexGeminiProvider(LLMProvider):
         """Create provider from application settings."""
         settings = get_settings()
         return cls(
-            project=settings.vertex_project_id,
+            project=settings.vertex_project or settings.vertex_project_id,
             location=settings.vertex_location,
             model=model or settings.default_llm_model,
-            credentials_path=settings.google_application_credentials or None,
+            credentials_path=settings.vertex_credentials_path or settings.google_application_credentials or None,
         )
 
     async def _get_client(self) -> httpx.AsyncClient:

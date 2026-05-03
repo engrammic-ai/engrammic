@@ -83,8 +83,9 @@ async def test_reasoning_chain_llm_judge(
     llm = get_llm_provider(llm_provider)
     steps_text = "\n".join(f"Step {s.step}: {s.reasoning}" for s in steps)
     prompt = JUDGE_PROMPT.format(steps=steps_text, conclusion=conclusion)
+    messages = [{"role": "user", "content": prompt}]
 
-    judgment = await llm.complete(prompt, max_tokens=10)
+    judgment, _usage = await llm.complete(messages, max_tokens=10)
     verdict = judgment.strip().upper()
 
     assert verdict == "PASS", f"LLM judge verdict: {verdict}"
@@ -137,8 +138,9 @@ async def test_claim_coherence_llm_judge(
         claim="Python 3.12 includes enhanced error messages for debugging.",
         evidence="Python 3.12 was released in October 2023 with improved error messages.",
     )
+    messages = [{"role": "user", "content": prompt}]
 
-    judgment = await llm.complete(prompt, max_tokens=10)
+    judgment, _usage = await llm.complete(messages, max_tokens=10)
     verdict = judgment.strip().upper()
 
     assert verdict == "PASS", f"LLM judge verdict: {verdict}"
