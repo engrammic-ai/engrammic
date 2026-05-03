@@ -5,7 +5,7 @@ description = "Delta Prime context service - production backend"
 readme = "README.md"
 requires-python = ">=3.13"
 license = { text = "Proprietary" }
-authors = [{ name = "Delta Prime", email = "hello@deltaprime.dev" }]
+authors = [{ name = "Aliasgar Khimani", email = "khimanialiasgar@gmail.com" }]
 
 dependencies = [
     # Internal
