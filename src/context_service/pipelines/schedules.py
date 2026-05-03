@@ -138,12 +138,34 @@ def reasoning_compaction_schedule(
         )
 
 
+@dg.schedule(
+    cron_schedule="0 3 * * *",
+    name="retention_schedule",
+    target=dg.AssetSelection.assets("retention_sweep"),
+    description="Daily retention sweep (03:00 UTC) per active silo.",
+    execution_timezone="UTC",
+)
+def retention_schedule(
+    context: ScheduleEvaluationContext,
+    memgraph: MemgraphResource,
+) -> Iterator[dg.RunRequest]:
+    """Yield one retention RunRequest per active silo."""
+    silo_ids = _fetch_silo_ids(memgraph)
+    for silo_id in silo_ids:
+        yield dg.RunRequest(
+            run_key=f"retention:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            partition_key=silo_id,
+            tags={"dagster/concurrency_key": silo_id},
+        )
+
+
 all_schedules: list[Any] = [
     clustering_schedule,
     fact_promotion_schedule,
     custodian_visit_schedule,
     heat_schedule,
     reasoning_compaction_schedule,
+    retention_schedule,
 ]
 
 __all__ = [
@@ -153,4 +175,5 @@ __all__ = [
     "custodian_visit_schedule",
     "heat_schedule",
     "reasoning_compaction_schedule",
+    "retention_schedule",
 ]
