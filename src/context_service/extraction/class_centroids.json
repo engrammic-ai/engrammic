@@ -1,0 +1,8 @@
+{
+  "Agent": ["person", "user", "bot", "team", "engineer"],
+  "Organization": ["company", "department", "startup", "group"],
+  "Artifact": ["document", "file", "code", "module", "api"],
+  "Concept": ["topic", "theme", "idea", "pattern", "goal"],
+  "Event": ["meeting", "deployment", "incident", "release"],
+  "Location": ["city", "region", "address", "country"]
+}
