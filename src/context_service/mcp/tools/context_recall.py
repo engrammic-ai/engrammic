@@ -21,13 +21,21 @@ async def _context_recall(
     layers: list[str] | None = None,
     top_k: int = 10,
     as_of: str | None = None,
+    include_reflections: bool = False,
+    reflections_agent_id: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     if not query and not node_ids:
         return {"error": "missing_input", "message": "Provide query or node_ids"}
 
     if node_ids and depth == 0:
-        return await _context_get(node_ids=node_ids, silo_id=silo_id, as_of=as_of)
+        return await _context_get(
+            node_ids=node_ids,
+            silo_id=silo_id,
+            as_of=as_of,
+            include_reflections=include_reflections,
+            reflections_agent_id=reflections_agent_id,
+        )
 
     if node_ids and depth > 0:
         return await _context_graph(
@@ -75,6 +83,8 @@ def register(mcp: FastMCP) -> None:
         top_k: int = 10,
         as_of: str | None = None,
         silo_id: str | None = None,
+        include_reflections: bool = False,
+        reflections_agent_id: str | None = None,
     ) -> dict[str, Any]:
         """Unified read across Memory, Knowledge, Wisdom, and Intelligence layers.
 
@@ -88,6 +98,11 @@ def register(mcp: FastMCP) -> None:
             as_of: ISO 8601 datetime for time-travel (flat modes only).
             silo_id: UUID of the silo. Optional; defaults to the org's primary silo
                 derived from auth.
+            include_reflections: When True and fetching by node_ids at depth=0,
+                attach MetaObservation reflections to each returned node.
+            reflections_agent_id: Optional agent ID to filter reflections. When
+                provided with include_reflections=True, only observations created
+                by that agent are returned. Omit to return all agents' observations.
 
         Returns:
             Depends on mode:
@@ -108,4 +123,6 @@ def register(mcp: FastMCP) -> None:
             layers=layers,
             top_k=top_k,
             as_of=as_of,
+            include_reflections=include_reflections,
+            reflections_agent_id=reflections_agent_id,
         )

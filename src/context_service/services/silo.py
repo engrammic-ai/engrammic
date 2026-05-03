@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from context_service.models.silo import SiloConfig
 from context_service.services.models import ScopeContext, Silo, derive_silo_id
 
 if TYPE_CHECKING:
@@ -128,6 +130,66 @@ class SiloService:
             )
             for row in results
         ]
+
+    async def get_silo_config(self, scope: ScopeContext) -> SiloConfig:
+        """Return the per-silo config for *scope*.
+
+        If the silo has no stored config, an empty SiloConfig (all overrides
+        None, meaning global settings apply) is returned.
+        """
+        results = await self._memgraph.execute_query(
+            """
+            MATCH (s:Silo {id: $silo_id, org_id: $org_id})
+            RETURN s.silo_config AS silo_config
+            """,
+            {"silo_id": str(scope.silo_id), "org_id": scope.org_id},
+        )
+
+        if not results:
+            logger.warning(
+                "get_silo_config.silo_not_found",
+                silo_id=str(scope.silo_id),
+                org_id=scope.org_id,
+            )
+            return SiloConfig()
+
+        raw = results[0].get("silo_config")
+        if not raw:
+            return SiloConfig()
+
+        data: dict[str, Any] = json.loads(raw) if isinstance(raw, str) else raw
+        return SiloConfig.from_metadata_dict(data)
+
+    async def update_silo_config(
+        self,
+        scope: ScopeContext,
+        config: SiloConfig,
+    ) -> SiloConfig:
+        """Persist *config* for the silo identified by *scope*.
+
+        The config is serialised to JSON and stored on the Silo node's
+        ``silo_config`` property. Returns the stored config.
+        """
+        serialised = json.dumps(config.to_metadata_dict())
+
+        await self._memgraph.execute_write(
+            """
+            MATCH (s:Silo {id: $silo_id, org_id: $org_id})
+            SET s.silo_config = $silo_config
+            """,
+            {
+                "silo_id": str(scope.silo_id),
+                "org_id": scope.org_id,
+                "silo_config": serialised,
+            },
+        )
+
+        logger.info(
+            "silo_config_updated",
+            silo_id=str(scope.silo_id),
+            org_id=scope.org_id,
+        )
+        return config
 
 
 async def validate_silo_ownership(

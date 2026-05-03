@@ -133,6 +133,7 @@ META_MEMORY_INDEX_QUERIES: tuple[str, ...] = (
     "CREATE INDEX ON :MetaObservation(id);",
     "CREATE INDEX ON :MetaObservation(silo_id);",
     "CREATE INDEX ON :MetaObservation(created_at);",
+    "CREATE INDEX ON :MetaObservation(agent_id);",
 )
 
 

@@ -12,6 +12,7 @@ from primitives.eag import EAGKnowledgeStore
 from primitives.protocols import DeleteResult, IngestResult, KnowledgeNode, Scope
 
 from context_service.config.logging import get_logger
+from context_service.db import queries as db_queries
 from context_service.db.schema import (
     LABEL_CLAIM,
     LABEL_DOCUMENT,
@@ -904,6 +905,67 @@ class MemgraphStore(EAGKnowledgeStore):
             {"silo_id": silo_id, "offset": offset, "limit": limit},
         )
         return [self._hyperedge_from_record(r) for r in result]
+
+    # --- Agent Identity (v1.5 phase 5a) ---
+
+    async def upsert_agent(
+        self,
+        agent_id: str,
+        silo_id: str,
+        *,
+        role: str = "agent",
+        parent_agent_id: str | None = None,
+        lineage_root_id: str | None = None,
+    ) -> str:
+        """Create or return an :Agent node and optionally link it to a parent via SPAWNED_BY.
+
+        Validates that parent_agent_id exists in the same silo before writing the
+        SPAWNED_BY edge. Lineage depth is capped at 3 hops by the Cypher query.
+
+        Returns the agent_id on success.
+        Raises ValueError if parent_agent_id is provided but does not exist in silo.
+        """
+        now = datetime.now(UTC).isoformat()
+
+        # Resolve lineage_root_id: if a parent is provided and no explicit root is
+        # given, inherit the parent's lineage_root_id (falling back to parent itself).
+        resolved_root = lineage_root_id
+
+        if parent_agent_id is not None:
+            parent_rows = await self._client.execute_query(
+                db_queries.GET_AGENT_IN_SILO,
+                {"agent_id": parent_agent_id, "silo_id": silo_id},
+            )
+            if not parent_rows:
+                raise ValueError(
+                    f"parent_agent_id {parent_agent_id!r} not found in silo {silo_id!r}"
+                )
+            if resolved_root is None:
+                resolved_root = parent_rows[0].get("lineage_root_id") or parent_agent_id
+
+        await self._client.execute_write(
+            db_queries.UPSERT_AGENT,
+            {
+                "agent_id": agent_id,
+                "silo_id": silo_id,
+                "role": role,
+                "lineage_root_id": resolved_root or agent_id,
+                "created_at": now,
+            },
+        )
+
+        if parent_agent_id is not None:
+            await self._client.execute_write(
+                db_queries.CREATE_SPAWNED_BY_EDGE,
+                {
+                    "child_agent_id": agent_id,
+                    "parent_agent_id": parent_agent_id,
+                    "silo_id": silo_id,
+                    "created_at": now,
+                },
+            )
+
+        return agent_id
 
     # --- Bulk Operations ---
 

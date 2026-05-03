@@ -6,10 +6,22 @@ from context_service.models.inference import (
     CommitmentScope,
     ReasoningChain,
 )
+from context_service.models.silo import (
+    HeatDecayOverrides,
+    ResolvedSiloConfig,
+    RetentionOverrides,
+    SiloConfig,
+    ValidatorOverrides,
+)
 
 __all__ = [
     "ChainStep",
     "Commitment",
     "CommitmentScope",
     "ReasoningChain",
+    "HeatDecayOverrides",
+    "ResolvedSiloConfig",
+    "RetentionOverrides",
+    "SiloConfig",
+    "ValidatorOverrides",
 ]

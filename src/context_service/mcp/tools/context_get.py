@@ -25,6 +25,7 @@ async def _context_get(
     silo_id: str | None = None,
     as_of: str | None = None,
     include_reflections: bool = False,
+    reflections_agent_id: str | None = None,
 ) -> dict[str, Any]:
     """Retrieve context nodes by ID.
 
@@ -99,6 +100,7 @@ async def _context_get(
                 node_dict["reflections"] = await ctx_svc.get_reflections(
                     silo_id=str(resolved_silo_id),
                     node_id=str(node.id),
+                    agent_id=reflections_agent_id,
                 )
             nodes_out.append(node_dict)
 

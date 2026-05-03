@@ -309,6 +309,20 @@ async def _context_reflect(
 
     agent_id = auth.agent_id or auth.org_id
 
+    if agent_id is not None:
+        try:
+            await ctx_svc.graph_store.upsert_agent(
+                agent_id,
+                str(expected_silo_id),
+                role="reflector",
+            )
+        except Exception:
+            logger.warning(
+                "context_reflect_agent_upsert_failed",
+                exc_info=True,
+                agent_id=agent_id,
+            )
+
     scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
     node = await ctx_svc.reflect(
         scope=scope,
@@ -368,6 +382,20 @@ async def _context_reason(
 
     store = ctx_svc.graph_store
     await create_or_join_session(store, resolved_session_id, str(expected_silo_id))
+
+    if agent_id is not None:
+        try:
+            await store.upsert_agent(
+                agent_id,
+                str(expected_silo_id),
+                role="reasoner",
+            )
+        except Exception:
+            logger.warning(
+                "context_reason_agent_upsert_failed",
+                exc_info=True,
+                agent_id=agent_id,
+            )
 
     result = await ctx_svc.reason(
         silo_id=str(expected_silo_id),

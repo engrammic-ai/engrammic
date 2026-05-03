@@ -188,6 +188,27 @@ class HyperGraphStore(Protocol):
     async def update_silo(self, silo: Silo) -> None: ...
     async def delete_silo(self, scope: ScopeContext) -> bool: ...
 
+    # --- Agent Identity (v1.5 phase 5a) ---
+
+    async def upsert_agent(
+        self,
+        agent_id: str,
+        silo_id: str,
+        *,
+        role: str = "agent",
+        parent_agent_id: str | None = None,
+        lineage_root_id: str | None = None,
+    ) -> str:
+        """Create or return an :Agent node and optionally link it to a parent via SPAWNED_BY.
+
+        Validates that parent_agent_id exists in the same silo before writing the
+        SPAWNED_BY edge. Lineage depth is capped at 3 hops by the underlying query.
+
+        Returns the agent_id (unchanged) on success.
+        Raises ValueError if parent_agent_id is not None but does not exist in silo.
+        """
+        ...
+
     # --- Bulk Operations ---
 
     async def batch_upsert_nodes(self, nodes: list[Node]) -> None: ...

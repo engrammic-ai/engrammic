@@ -929,22 +929,27 @@ class ContextService:
         self,
         silo_id: str,
         node_id: str,
+        *,
+        agent_id: str | None = None,
     ) -> list[dict[str, Any]]:
         """Get MetaObservations about a node.
 
         Args:
             silo_id: Silo UUID.
             node_id: Target node ID.
+            agent_id: Optional agent ID filter. When provided, only observations
+                created by that agent are returned. Pass None (default) to
+                return observations from all agents.
 
         Returns:
             List of reflection dicts with node_id, content, observation_type,
             confidence, agent_id, created_at.
         """
-        from context_service.db.queries import GET_REFLECTIONS_FOR_NODE
+        from context_service.db.queries import GET_REFLECTIONS_FOR_NODE_BY_AGENT
 
         records = await self._memgraph.execute_query(
-            GET_REFLECTIONS_FOR_NODE,
-            {"node_id": node_id, "silo_id": silo_id},
+            GET_REFLECTIONS_FOR_NODE_BY_AGENT,
+            {"node_id": node_id, "silo_id": silo_id, "agent_id": agent_id},
         )
 
         return [

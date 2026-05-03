@@ -8,13 +8,19 @@ Phase-3 label scheme (O-30): content nodes are :Document, :Passage, :Claim.
 All retrieval-facing reads filter AND n.committed = true per O-75.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from context_service.db.schema import (
     EDGE_EXTRACTED_FROM,
     EDGE_MENTIONS,
     LABEL_ENTITY,
     content_union_predicate,
 )
-from context_service.extraction.models import RelationshipType
+
+if TYPE_CHECKING:
+    from context_service.extraction.models import RelationshipType
 
 # Entity queries
 
@@ -478,6 +484,49 @@ RETURN n.id AS node_id,
        c.tier AS cluster_tier
 """
 
+# ---------------------------------------------------------------------------
+# Agent node queries (v1.5 phase 5a)
+# ---------------------------------------------------------------------------
+
+# Edge type constant for agent lineage.
+EDGE_SPAWNED_BY = "SPAWNED_BY"
+
+# Upsert an :Agent node. Returns the agent_id on both create and match.
+UPSERT_AGENT = """
+MERGE (a:Agent {agent_id: $agent_id, silo_id: $silo_id})
+ON CREATE SET
+    a.role = $role,
+    a.lineage_root_id = $lineage_root_id,
+    a.created_at = $created_at
+RETURN a.agent_id AS agent_id
+"""
+
+# Validate that a parent :Agent exists in the same silo before creating a
+# SPAWNED_BY edge. Returns the agent_id and lineage_root_id if found.
+GET_AGENT_IN_SILO = """
+MATCH (a:Agent {agent_id: $agent_id, silo_id: $silo_id})
+RETURN a.agent_id AS agent_id, a.lineage_root_id AS lineage_root_id
+"""
+
+# Create a SPAWNED_BY edge from child agent to parent agent.
+# Caller must verify parent exists in the same silo first (GET_AGENT_IN_SILO).
+CREATE_SPAWNED_BY_EDGE = """
+MATCH (child:Agent {agent_id: $child_agent_id, silo_id: $silo_id})
+MATCH (parent:Agent {agent_id: $parent_agent_id, silo_id: $silo_id})
+MERGE (child)-[r:SPAWNED_BY {created_at: $created_at}]->(parent)
+RETURN child.agent_id AS child_id, parent.agent_id AS parent_id
+"""
+
+# Walk SPAWNED_BY lineage up to 3 hops (max lineage depth constraint).
+GET_AGENT_LINEAGE = """
+MATCH path = (a:Agent {agent_id: $agent_id, silo_id: $silo_id})-[:SPAWNED_BY*0..3]->(ancestor:Agent)
+WHERE ancestor.silo_id = $silo_id
+RETURN ancestor.agent_id AS agent_id, ancestor.role AS role,
+       ancestor.lineage_root_id AS lineage_root_id,
+       length(path) AS depth
+ORDER BY depth ASC
+"""
+
 # Health check query
 HEALTH_CHECK = "RETURN 1 as health"
 
@@ -529,6 +578,23 @@ ORDER BY depth DESC
 GET_REFLECTIONS_FOR_NODE = """
 MATCH (obs:MetaObservation)-[:ABOUT]->(n {id: $node_id, silo_id: $silo_id})
 WHERE obs.silo_id = $silo_id AND NOT exists(obs.tombstoned_at)
+RETURN
+    obs.id AS node_id,
+    obs.content AS content,
+    obs.observation_type AS observation_type,
+    obs.confidence AS confidence,
+    obs.agent_id AS agent_id,
+    obs.created_at AS created_at
+ORDER BY obs.created_at DESC
+"""
+
+# Meta-memory: reflections about a node filtered by agent_id.
+# Pass $agent_id = null to return observations from all agents.
+GET_REFLECTIONS_FOR_NODE_BY_AGENT = """
+MATCH (obs:MetaObservation)-[:ABOUT]->(n {id: $node_id, silo_id: $silo_id})
+WHERE obs.silo_id = $silo_id
+  AND NOT exists(obs.tombstoned_at)
+  AND ($agent_id IS NULL OR obs.agent_id = $agent_id)
 RETURN
     obs.id AS node_id,
     obs.content AS content,
