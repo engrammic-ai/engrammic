@@ -138,8 +138,8 @@ async def validate_silo_ownership(
     """Validate that a silo exists and belongs to the given org.
 
     Returns None on success, or an error dict if validation fails.
-    The silo_id must be a valid UUID, match the org's deterministic silo,
-    and exist in the graph.
+    The silo_id must be a valid UUID and match the org's deterministic silo.
+    Auto-creates the silo if it doesn't exist (MVP 1:1 model).
     """
     try:
         requested = uuid.UUID(silo_id)
@@ -160,15 +160,8 @@ async def validate_silo_ownership(
         if cached is True:
             return None
 
-    scope = ScopeContext(org_id=org_id, silo_id=expected)
-    silo = await silo_service.get_by_id(scope)
-    if silo is None:
-        logger.warning("silo_ownership_check_failed", silo_id=silo_id, org_id=org_id)
-        return {
-            "error": "silo_not_found",
-            "silo_id": silo_id,
-            "message": "Silo does not exist or org_id mismatch.",
-        }
+    # Auto-create silo if it doesn't exist (MVP 1:1 model)
+    await ensure_silo(silo_service, org_id)
 
     if cache is not None:
         await cache.set(org_id, silo_id)

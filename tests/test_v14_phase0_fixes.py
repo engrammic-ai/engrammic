@@ -124,3 +124,28 @@ class TestSiloApiCleanup:
         assert "silos" in result
         assert len(result["silos"]) == 1
         assert result["silos"][0]["org_id"] == "org-456"
+
+
+class TestValidateSiloOwnershipAutoCreate:
+    """validate_silo_ownership auto-creates silo if missing."""
+
+    @pytest.mark.asyncio
+    async def test_auto_creates_when_missing(self) -> None:
+        """Silo is auto-created when validation finds it missing."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        from context_service.services.models import derive_silo_id
+        from context_service.services.silo import SiloService, validate_silo_ownership
+
+        org_id = "org-auto-create"
+        silo_id = str(derive_silo_id(org_id))
+
+        mock_store = MagicMock()
+        mock_store.execute_query = AsyncMock(return_value=[])
+        mock_store.execute_write = AsyncMock(return_value=[])
+
+        svc = SiloService(memgraph=mock_store)
+        result = await validate_silo_ownership(svc, silo_id, org_id)
+
+        assert result is None  # No error = success
+        mock_store.execute_write.assert_called_once()  # Silo was created
