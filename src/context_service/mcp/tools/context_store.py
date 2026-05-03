@@ -2,17 +2,377 @@
 
 from __future__ import annotations
 
+import time
+import uuid
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
-from context_service.mcp.tools.context_assert import _context_assert
-from context_service.mcp.tools.context_commit import _context_commit
-from context_service.mcp.tools.context_reason import _context_reason
-from context_service.mcp.tools.context_reflect import _context_reflect
-from context_service.mcp.tools.context_remember import _context_remember
-from context_service.services.models import derive_silo_id
+import structlog
+
+from context_service.api.metrics import CONTEXT_STORE_LATENCY
+from context_service.mcp.server import (
+    get_context_service,
+    get_evidence_validator,
+    get_mcp_auth_context,
+    get_silo_service,
+)
+from context_service.models.mcp import (
+    Crystallization,
+    DecayClass,
+    ObservationType,
+    ReasoningStep,
+    SourceType,
+    SPOClaim,
+)
+from context_service.services.models import ScopeContext, derive_silo_id
+from context_service.services.silo import validate_silo_ownership
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
+
+logger = structlog.get_logger(__name__)
+
+# Minimum evidence count for R1 single-source promotion.
+_R1_THRESHOLD = 1
+
+_VALID_SOURCE_TIERS = ("authoritative", "validated", "community", "unknown")
+
+
+async def _context_remember(
+    silo_id: str,
+    content: str,
+    content_type: str = "text",
+    metadata: dict[str, Any] | None = None,
+    tags: list[str] | None = None,
+    decay_class: str = "standard",
+    observed_from: str | None = None,
+) -> dict[str, Any]:
+    """Internal implementation for testing."""
+    auth = await get_mcp_auth_context()
+
+    err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+    if err is not None:
+        return err
+
+    validated_silo_id = derive_silo_id(auth.org_id)
+
+    try:
+        decay = DecayClass(decay_class)
+    except ValueError:
+        return {
+            "error": "invalid_decay_class",
+            "message": f"decay_class must be one of: {[e.value for e in DecayClass]}",
+        }
+
+    ctx_svc = get_context_service()
+    scope = ScopeContext(org_id=auth.org_id, silo_id=validated_silo_id)
+    _start = time.perf_counter()
+    node = await ctx_svc.remember(
+        scope=scope,
+        content=content,
+        content_type=content_type,
+        metadata=metadata,
+        tags=tags,
+        decay_class=decay,
+        observed_from=observed_from,
+        agent_id=getattr(auth, "agent_id", None),
+    )
+    CONTEXT_STORE_LATENCY.labels(tool="context_remember").observe(time.perf_counter() - _start)
+
+    return {
+        "node_id": str(node.id),
+        "layer": "memory",
+        "decay_class": decay_class,
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+
+
+async def _context_assert(
+    silo_id: str,
+    claim: str | dict[str, Any],
+    evidence: str | list[str],
+    source_type: str,
+    confidence: float = 0.8,
+    metadata: dict[str, Any] | None = None,
+    tags: list[str] | None = None,
+    evidence_mode: str = "sync",
+    source_tier: str | None = None,
+) -> dict[str, Any]:
+    """Internal implementation."""
+    auth = await get_mcp_auth_context()
+    ctx_svc = get_context_service()
+    ev_validator = get_evidence_validator()
+
+    err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+    if err is not None:
+        return err
+
+    expected_silo_id = derive_silo_id(auth.org_id)
+
+    try:
+        src_type = SourceType(source_type)
+    except ValueError:
+        return {
+            "error": "invalid_source_type",
+            "message": f"Must be one of: {[e.value for e in SourceType]}",
+        }
+
+    if source_tier is not None and source_tier not in _VALID_SOURCE_TIERS:
+        return {
+            "error": "invalid_source_tier",
+            "message": f"Must be one of: {list(_VALID_SOURCE_TIERS)}",
+        }
+
+    if not 0.0 <= confidence <= 1.0:
+        return {"error": "invalid_confidence", "message": "confidence must be between 0.0 and 1.0"}
+
+    claim_type = "freeform"
+    parsed_claim: str | SPOClaim
+    if isinstance(claim, dict):
+        try:
+            parsed_claim = SPOClaim(**claim)
+            claim_type = "structured"
+        except Exception as e:
+            return {"error": "invalid_claim", "message": str(e)}
+    else:
+        parsed_claim = claim
+
+    evidence_list = [evidence] if isinstance(evidence, str) else list(evidence)
+
+    evidence_nodes: list[str] = []
+    if evidence_mode == "sync":
+        for ev_ref in evidence_list:
+            result = await ev_validator.validate(ev_ref, str(expected_silo_id))
+            if result.status != "valid":
+                return {
+                    "error": "invalid_evidence",
+                    "evidence": ev_ref,
+                    "reason": result.reason,
+                }
+            if result.node_id:
+                evidence_nodes.append(result.node_id)
+
+    scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
+    node = await ctx_svc.assert_claim(
+        scope=scope,
+        claim=parsed_claim,
+        evidence=evidence_list,
+        source_type=src_type,
+        confidence=confidence,
+        metadata=metadata,
+        tags=tags,
+        agent_id=getattr(auth, "agent_id", None),
+        source_tier=source_tier,
+    )
+
+    promoted = False
+    if len(evidence_list) >= _R1_THRESHOLD:
+        try:
+            promotion_result = await ctx_svc.promote_claim_to_fact(
+                silo_id=str(expected_silo_id),
+                claim_id=str(node.id),
+                evidence_count=len(evidence_list),
+            )
+            if promotion_result is not None:
+                promoted = True
+        except Exception:
+            logger.warning(
+                "claim_assert_promotion_failed",
+                exc_info=True,
+                claim_id=str(node.id),
+            )
+
+    return {
+        "node_id": str(node.id),
+        "layer": "knowledge",
+        "claim_type": claim_type,
+        "evidence_status": "verified" if evidence_mode == "sync" else "pending",
+        "evidence_nodes": evidence_nodes,
+        "promoted_to_fact": promoted,
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+
+
+async def _context_commit(
+    silo_id: str,
+    belief: str,
+    about: list[str],
+    confidence: float = 0.8,
+    reasoning: str | None = None,
+    metadata: dict[str, Any] | None = None,
+    tags: list[str] | None = None,
+    chain_id: str | None = None,
+) -> dict[str, Any]:
+    """Internal implementation."""
+    auth = await get_mcp_auth_context()
+    ctx_svc = get_context_service()
+
+    err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+    if err is not None:
+        return err
+
+    expected_silo_id = derive_silo_id(auth.org_id)
+
+    if not about:
+        return {"error": "missing_about", "message": "about must reference at least one node"}
+
+    agent_id = getattr(auth, "agent_id", None) or auth.org_id
+
+    scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
+    node = await ctx_svc.commit_belief(
+        scope=scope,
+        belief=belief,
+        about=about,
+        confidence=confidence,
+        reasoning=reasoning,
+        metadata=metadata,
+        tags=tags,
+        agent_id=agent_id,
+    )
+
+    result: dict[str, Any] = {
+        "node_id": str(node.id),
+        "layer": "wisdom",
+        "declared_by": agent_id,
+        "about_nodes": about,
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+
+    if chain_id is not None:
+        try:
+            from context_service.engine.compaction import compact_reasoning_chain
+
+            event_id = await compact_reasoning_chain(
+                ctx_svc.graph_store,
+                chain_id=chain_id,
+                silo_id=str(expected_silo_id),
+                outcome="committed",
+            )
+            result["compacted_chain_id"] = chain_id
+            result["compaction_event_id"] = event_id
+        except ValueError as exc:
+            logger.warning(
+                "context_commit_compaction_skip",
+                chain_id=chain_id,
+                reason=str(exc),
+            )
+
+    return result
+
+
+async def _context_reflect(
+    silo_id: str,
+    observation: str,
+    observation_type: str,
+    about: list[str],
+    confidence: float = 0.8,
+    metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Internal implementation."""
+    auth = await get_mcp_auth_context()
+    ctx_svc = get_context_service()
+
+    err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+    if err is not None:
+        return err
+
+    expected_silo_id = derive_silo_id(auth.org_id)
+
+    try:
+        obs_type = ObservationType(observation_type)
+    except ValueError:
+        return {
+            "error": "invalid_observation_type",
+            "valid": [e.value for e in ObservationType],
+        }
+
+    agent_id = getattr(auth, "agent_id", None) or auth.org_id
+
+    scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
+    node = await ctx_svc.reflect(
+        scope=scope,
+        observation=observation,
+        observation_type=obs_type,
+        about=about,
+        confidence=confidence,
+        metadata=metadata,
+        agent_id=agent_id,
+    )
+
+    return {
+        "node_id": str(node.id),
+        "observation_type": observation_type,
+        "about_nodes": about,
+        "created_at": datetime.now(UTC).isoformat(),
+    }
+
+
+async def _context_reason(
+    silo_id: str,
+    steps: list[dict[str, Any]],
+    conclusion: str | None = None,
+    evidence_used: list[str] | None = None,
+    crystallizations: list[dict[str, Any]] | None = None,
+    session_id: str | None = None,
+) -> dict[str, Any]:
+    """Internal implementation for testing."""
+    from context_service.engine.sessions import attach_chain_to_session, create_or_join_session
+
+    auth = await get_mcp_auth_context()
+
+    err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+    if err is not None:
+        return err
+
+    expected_silo_id = derive_silo_id(auth.org_id)
+
+    if not steps:
+        return {"error": "missing_steps", "message": "steps must be a non-empty list"}
+
+    try:
+        parsed_steps = [ReasoningStep(**s) for s in steps]
+    except Exception as e:
+        return {"error": "invalid_steps", "message": str(e)}
+
+    try:
+        parsed_cryst = [Crystallization(**c) for c in (crystallizations or [])]
+    except Exception as e:
+        return {"error": "invalid_crystallizations", "message": str(e)}
+
+    ctx_svc = get_context_service()
+
+    resolved_session_id = (
+        session_id
+        or getattr(auth, "session_id", None)
+        or str(uuid.uuid4())
+    )
+    agent_id = getattr(auth, "agent_id", None)
+
+    store = ctx_svc.graph_store
+    await create_or_join_session(store, resolved_session_id, str(expected_silo_id))
+
+    result = await ctx_svc.reason(
+        silo_id=str(expected_silo_id),
+        steps=parsed_steps,
+        conclusion=conclusion,
+        evidence_used=evidence_used,
+        crystallizations=parsed_cryst,
+        session_id=resolved_session_id,
+        agent_id=agent_id,
+    )
+
+    await attach_chain_to_session(
+        store, str(result.chain_id), resolved_session_id, str(expected_silo_id)
+    )
+
+    return {
+        "chain_id": str(result.chain_id),
+        "layer": "intelligence",
+        "steps_count": len(steps),
+        "crystallizations_queued": len(parsed_cryst),
+        "session_id": resolved_session_id,
+        "created_at": datetime.now(UTC).isoformat(),
+    }
 
 
 async def _context_store(
@@ -179,8 +539,6 @@ def register(mcp: FastMCP) -> None:
         Returns:
             Layer-specific response dict with at minimum {node_id, layer, created_at}.
         """
-        from context_service.mcp.server import get_mcp_auth_context
-
         auth = await get_mcp_auth_context()
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         return await _context_store(
