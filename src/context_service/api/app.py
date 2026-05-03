@@ -182,17 +182,30 @@ def create_app() -> FastAPI:
     app.add_route("/metrics", metrics_endpoint, include_in_schema=False)
 
     if settings.mcp_enabled:
+        from contextlib import asynccontextmanager
+
         from context_service.mcp.server import create_mcp_server
 
         mcp_server = create_mcp_server()
+        mcp_app = mcp_server.http_app(path="/", transport="sse")
+
+        # Store original lifespan and wrap it to include MCP lifespan
+        original_lifespan = app.router.lifespan_context
+
+        @asynccontextmanager
+        async def combined_lifespan(app_instance: FastAPI):
+            async with original_lifespan(app_instance):
+                async with mcp_app.lifespan(app_instance):
+                    yield
+
+        app.router.lifespan_context = combined_lifespan
 
         @app.get("/mcp-health", tags=["health"])
         async def mcp_health() -> dict[str, str]:
             """Health check for MCP server."""
             return {"status": "ok", "server": mcp_server.name}
 
-        mcp_app = mcp_server.http_app(path="/")
         app.mount("/mcp", mcp_app)
-        logger.info("mcp_server_mounted", path="/mcp")
+        logger.info("mcp_server_mounted", path="/mcp", transport="sse")
 
     return app
