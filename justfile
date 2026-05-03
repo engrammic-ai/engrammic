@@ -71,6 +71,10 @@ dagster-web:
 dagster-daemon:
     uv run dagster-daemon run -m context_service.pipelines.definitions
 
+# Trigger heat asset recompute for all silos (backfill after enabling unified_decay)
+heat-recompute:
+    uv run dagster asset materialize -m context_service.pipelines.definitions --select heat
+
 # --- Running ---
 
 # Run FastAPI server (production)

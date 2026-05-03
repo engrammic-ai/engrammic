@@ -196,15 +196,6 @@ class RetrievalConfig(BaseModel):
     rrf_channel_weights: dict[str, float] = Field(default_factory=dict)
     hybrid_enabled: bool = False
     fresh_floor: float = 0.25
-    sigma_default_days: dict[str, float] = Field(
-        default_factory=lambda: {
-            "ephemeral": 7.0,
-            "standard": 90.0,
-            "durable": 540.0,
-            "permanent": 1825.0,
-        }
-    )
-    temporal_decay_enabled: bool = False
     staleness_weight: float = 0.15
     tiebreak: TiebreakConfig = Field(default_factory=TiebreakConfig)
     entity: EntityRetrievalConfig = Field(default_factory=EntityRetrievalConfig)
@@ -727,10 +718,9 @@ class Settings(BaseSettings):
     lookup_cache_ttl: int = Field(default=300)
 
     # =========================================================================
-    # Temporal Decay Settings
+    # Temporal Decay Settings (unified decay via heat asset)
     # =========================================================================
 
-    temporal_decay_enabled: bool = Field(default=False)
     staleness_weight: float = Field(default=0.15, ge=0.0, le=1.0)
     tiebreak_enabled: bool = Field(default=False)
     tiebreak_similarity_threshold: float = Field(default=0.85, ge=0.0, le=1.0)

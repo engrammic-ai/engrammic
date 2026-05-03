@@ -20,7 +20,9 @@ from context_service.pipelines.assets.heat import (
     WARM_THRESHOLD,
     XREAD_COUNT,
     _tier,
+    parse_layer,
 )
+from context_service.signals.heat import LAYER_DECAY_MULTIPLIERS, get_decay_multiplier
 
 # ------------------------------------------------------------------
 # Pure helpers
@@ -131,3 +133,46 @@ async def test_empty_stream_skips_memgraph_writes() -> None:
     mg_mock = AsyncMock()
     mg_mock.execute_write = AsyncMock()
     mg_mock.execute_write.assert_not_awaited()
+
+
+# ------------------------------------------------------------------
+# Layer parsing and decay multipliers (Phase 3)
+# ------------------------------------------------------------------
+
+
+def test_parse_layer_extracts_from_bytes() -> None:
+    fields: dict[bytes, bytes] = {b"node_id": b"abc", b"layer": b"Fact"}
+    assert parse_layer(fields) == "Fact"
+
+
+def test_parse_layer_extracts_from_str() -> None:
+    fields: dict[str, str] = {"node_id": "abc", "layer": "Claim"}
+    assert parse_layer(fields) == "Claim"
+
+
+def test_parse_layer_returns_none_when_missing() -> None:
+    fields: dict[bytes, bytes] = {b"node_id": b"abc"}
+    assert parse_layer(fields) is None
+
+
+def test_layer_decay_multipliers_match_spec() -> None:
+    assert LAYER_DECAY_MULTIPLIERS["Claim"] == 1.0
+    assert LAYER_DECAY_MULTIPLIERS["Finding"] == 1.0
+    assert LAYER_DECAY_MULTIPLIERS["Fact"] == 2.0
+    assert LAYER_DECAY_MULTIPLIERS["Commitment"] == 3.0
+    assert LAYER_DECAY_MULTIPLIERS["Insight"] == 4.0
+    assert LAYER_DECAY_MULTIPLIERS["ReasoningChain"] == 4.0
+
+
+def test_get_decay_multiplier_known_labels() -> None:
+    assert get_decay_multiplier("Fact") == 2.0
+    assert get_decay_multiplier("Commitment") == 3.0
+
+
+def test_get_decay_multiplier_unknown_label() -> None:
+    assert get_decay_multiplier("Document") == 1.0
+    assert get_decay_multiplier("SomeOther") == 1.0
+
+
+def test_get_decay_multiplier_none() -> None:
+    assert get_decay_multiplier(None) == 1.0

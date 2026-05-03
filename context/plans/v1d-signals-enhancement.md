@@ -1,6 +1,6 @@
 # v1d Signals Enhancement Plan
 
-**Status:** IN PROGRESS (Phase 1+2 complete, Phase 3+4 pending)
+**Status:** IN PROGRESS (Phase 1-3 complete, Phase 4 pending)
 **Goal:** Extend the signals subsystem with query-time heat ranking, unified decay model, and write-side access events.
 **Branch:** `phase-signals-enhancement`
 
@@ -46,7 +46,7 @@ This revision addresses findings from the adversarial review:
   heat_write_weight: float = 0.5
   heat_dedup_window_seconds: int = 300  # 5 min cooldown per node
   ```
-- [ ] **1.3** Update `emit_access_event` signature to accept optional `event_type: str = "read"` and `layer: str | None = None`
+- [x] **1.3** Update `emit_access_event` signature to accept optional `event_type: str = "read"` and `layer: str | None = None`
 - [ ] **1.4** Update heat asset to handle missing `event_type` field (default to "read" for backwards compat)
 - [ ] **1.5** Add `heat_events_processed` and `heat_events_skipped` metrics to asset logging
 
@@ -100,7 +100,7 @@ This revision addresses findings from the adversarial review:
 
 ### Tasks
 
-- [ ] **3.1** Add `LAYER_DECAY_MULTIPLIERS` constant to `signals/heat.py`:
+- [x] **3.1** Add `LAYER_DECAY_MULTIPLIERS` constant to `signals/heat.py`:
   ```python
   LAYER_DECAY_MULTIPLIERS: dict[str, float] = {
       "Claim": 1.0, "Finding": 1.0,
@@ -109,14 +109,14 @@ This revision addresses findings from the adversarial review:
       "Insight": 4.0, "ReasoningChain": 4.0,
   }
   ```
-- [ ] **3.2** Update `emit_access_event` calls in MCP tools to include `layer` param (read from node labels, not properties)
-- [ ] **3.3** Update heat asset to:
+- [x] **3.2** Update `emit_access_event` calls in MCP tools to include `layer` param (read from node labels, not properties)
+- [x] **3.3** Update heat asset to:
   - Read `layer` from stream entry (not Memgraph lookup - avoids N+1)
   - Apply multiplier: `effective_half_life = base_half_life * multiplier`
   - Gate behind `unified_decay_enabled` flag
-- [ ] **3.4** Add backfill task: `just heat-recompute` that triggers full asset run with `--backfill` flag
-- [ ] **3.5** Add test: Fact-layer node retains heat longer than Claim-layer node
-- [ ] **3.6** Deprecate unused Gaussian freshness config (`sigma_default_days`, `temporal_decay_enabled`) with removal in v1e
+- [x] **3.4** Add backfill task: `just heat-recompute` that triggers full asset run with `--backfill` flag
+- [x] **3.5** Add test: Fact-layer node retains heat longer than Claim-layer node
+- [x] **3.6** Deprecate unused Gaussian freshness config (`sigma_default_days`, `temporal_decay_enabled`) with removal in v1e
 
 ### Acceptance
 - `unified_decay_enabled=True` applies label-based multipliers

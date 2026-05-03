@@ -28,6 +28,7 @@ from dagster import (
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import MemgraphResource, RedisResource
 from context_service.signals.access_events import access_stream_key
+from context_service.signals.heat import get_decay_multiplier
 
 
 def _run_async(coro: Any) -> Any:
@@ -85,6 +86,14 @@ def parse_event_type(fields: dict[str | bytes, str | bytes]) -> str:
     return raw.decode() if isinstance(raw, bytes) else raw
 
 
+def parse_layer(fields: dict[str | bytes, str | bytes]) -> str | None:
+    """Extract layer from stream entry. Returns None if not present."""
+    raw = fields.get(b"layer") or fields.get("layer")
+    if raw is None:
+        return None
+    return raw.decode() if isinstance(raw, bytes) else raw
+
+
 @dg.asset(
     name="heat",
     partitions_def=silo_partitions,
@@ -119,9 +128,13 @@ def heat_asset(
         stream_key = access_stream_key(silo_id)
         last_id = await fetch_or_init_heat_cursor(mg_client, silo_id)
 
-        # Accumulate raw access counts from stream entries.
-        # Each entry: {b"node_id": b"<uuid-str>"}
+        from context_service.config.settings import get_settings
+
+        settings = get_settings()
+
+        # Accumulate raw access counts and track layer per node.
         raw_counts: dict[str, int] = defaultdict(int)
+        node_layers: dict[str, str | None] = {}
         new_last_id = last_id
         total_events = 0
 
@@ -141,6 +154,9 @@ def heat_asset(
                         node_id_raw.decode() if isinstance(node_id_raw, bytes) else node_id_raw
                     )
                     raw_counts[node_id] += 1
+                    layer = parse_layer(fields)
+                    if layer is not None:
+                        node_layers[node_id] = layer
                 eid = entry_id_b.decode() if isinstance(entry_id_b, bytes) else entry_id_b
                 new_last_id = eid
 
@@ -158,6 +174,15 @@ def heat_asset(
         for node_id, count in raw_counts.items():
             # Normalise: log(1 + count) / log(1 + XREAD_COUNT)
             heat = min(1.0, math.log1p(count) / math.log1p(XREAD_COUNT))
+
+            # Apply layer-based decay multiplier when unified decay is enabled.
+            # Higher layers (Wisdom, Intelligence) retain heat longer.
+            if settings.unified_decay_enabled:
+                layer = node_layers.get(node_id)
+                multiplier = get_decay_multiplier(layer)
+                # Scale heat by multiplier (normalized to 1.0-2.0 range for stability)
+                heat = min(1.0, heat * (1.0 + (multiplier - 1.0) * 0.25))
+
             updates.append({"node_id": node_id, "heat_score": heat, "tier": _tier(heat)})
 
         now_iso = datetime.now(UTC).isoformat()
@@ -203,4 +228,5 @@ __all__ = [
     "XREAD_COUNT",
     "heat_asset",
     "parse_event_type",
+    "parse_layer",
 ]

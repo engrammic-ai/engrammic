@@ -33,18 +33,30 @@ async def emit_access_event(
     redis: RedisClient,
     silo_id: str,
     node_id: str,
+    event_type: str = "read",
+    layer: str | None = None,
 ) -> None:
     """Append an access event to the silo's stream. Best-effort.
 
     Failures are logged and swallowed — never raised — so callers in MCP read
     paths don't need a try/except around every emit.
+
+    Args:
+        redis: Redis client for stream operations.
+        silo_id: Silo the node belongs to.
+        node_id: Node ID (string form of the UUID).
+        event_type: "read" or "write". Defaults to "read".
+        layer: Node label (e.g. "Fact", "Claim") for layer-based decay. Optional.
     """
     from context_service.config.settings import get_settings
 
     try:
+        fields: dict[str, str | bytes] = {"node_id": str(node_id), "event_type": event_type}
+        if layer is not None:
+            fields["layer"] = layer
         await redis.xadd(
             access_stream_key(silo_id),
-            {"node_id": str(node_id)},
+            fields,
             maxlen=get_settings().access_stream_maxlen,
             approximate=True,
         )
@@ -53,6 +65,7 @@ async def emit_access_event(
             "access_event_emit_failed",
             silo_id=silo_id,
             node_id=str(node_id),
+            event_type=event_type,
             error=str(exc),
         )
 

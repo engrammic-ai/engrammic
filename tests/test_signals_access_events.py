@@ -23,8 +23,30 @@ async def test_emit_calls_xadd_with_expected_shape() -> None:
     redis.xadd.assert_awaited_once()
     args, kwargs = redis.xadd.call_args
     assert args[0] == "silo:silo-a:access_events"
-    assert args[1] == {"node_id": "node-42"}
+    assert args[1] == {"node_id": "node-42", "event_type": "read"}
     assert kwargs == {"maxlen": ACCESS_STREAM_MAXLEN, "approximate": True}
+
+
+@pytest.mark.asyncio
+async def test_emit_includes_layer_when_provided() -> None:
+    redis = AsyncMock()
+    redis.xadd = AsyncMock(return_value="1700000000-0")
+
+    await emit_access_event(redis, "silo-a", "node-42", layer="Fact")
+
+    args, _kwargs = redis.xadd.call_args
+    assert args[1] == {"node_id": "node-42", "event_type": "read", "layer": "Fact"}
+
+
+@pytest.mark.asyncio
+async def test_emit_write_event_type() -> None:
+    redis = AsyncMock()
+    redis.xadd = AsyncMock(return_value="1700000000-0")
+
+    await emit_access_event(redis, "silo-a", "node-42", event_type="write", layer="Claim")
+
+    args, _kwargs = redis.xadd.call_args
+    assert args[1] == {"node_id": "node-42", "event_type": "write", "layer": "Claim"}
 
 
 @pytest.mark.asyncio

@@ -105,7 +105,7 @@ async def _context_get(
     redis = get_redis()
     if redis is not None:
         emits = [
-            emit_access_event(redis, str(resolved_silo_id), n["node_id"])
+            emit_access_event(redis, str(resolved_silo_id), n["node_id"], layer=n.get("type"))
             for n in nodes_out
             if n.get("node_id") is not None
         ]
@@ -114,5 +114,3 @@ async def _context_get(
 
     CONTEXT_GET_LATENCY.observe(time.perf_counter() - _start)
     return {"nodes": nodes_out}
-
-
