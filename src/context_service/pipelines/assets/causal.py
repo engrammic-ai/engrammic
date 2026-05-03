@@ -25,6 +25,7 @@ def _run_async_int(coro: Any) -> int:
         result = pool.submit(asyncio.run, coro).result(timeout=300)
         return result
 
+
 _SCAN_CAUSES_CHAINS = """
 MATCH path = (a)-[:CAUSES*2..{depth}]->(c)
 WHERE a.silo_id = $silo_id
@@ -56,9 +57,7 @@ RETURN r.id AS created_id
 """
 
 
-def _compute_confidence(
-    edge_confidences: list[tuple[str, float]], formula: str
-) -> float:
+def _compute_confidence(edge_confidences: list[tuple[str, float]], formula: str) -> float:
     """Compute chain confidence from per-hop confidences.
 
     Deduplicates by edge ID before applying the formula so that repeated source
@@ -174,9 +173,7 @@ def causal_transitivity(
                 # conservative default of 1.0 per hop so the chain isn't silently
                 # skipped — callers control the floor via min_inferred_confidence.
                 if not hop_confidences:
-                    hop_confidences = [
-                        (str(i), 1.0) for i in range(len(edges))
-                    ]
+                    hop_confidences = [(str(i), 1.0) for i in range(len(edges))]
 
                 confidence = _compute_confidence(hop_confidences, formula)
                 if confidence < min_confidence:

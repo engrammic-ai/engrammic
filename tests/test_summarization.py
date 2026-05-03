@@ -39,8 +39,7 @@ async def test_summarize_short_chain_returns_inline() -> None:
 @pytest.mark.asyncio
 async def test_summarize_long_chain_calls_llm(mock_llm_client: AsyncMock) -> None:
     steps = [
-        {"step_index": i, "operation": "analyze", "conclusion": f"Step {i}"}
-        for i in range(10)
+        {"step_index": i, "operation": "analyze", "conclusion": f"Step {i}"} for i in range(10)
     ]
     result = await summarize_reasoning_steps(steps, llm_client=mock_llm_client)
     assert result == "Summary of reasoning chain."

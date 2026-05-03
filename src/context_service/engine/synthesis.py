@@ -40,12 +40,15 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
+
 def _get_min_facts_for_belief() -> int:
     """Get minimum facts threshold, supporting hot-reload."""
     return get_settings().belief_density_threshold
 
 
-MIN_FACTS_FOR_BELIEF: int = 3  # Default for docs/type hints; use _get_min_facts_for_belief() at runtime
+MIN_FACTS_FOR_BELIEF: int = (
+    3  # Default for docs/type hints; use _get_min_facts_for_belief() at runtime
+)
 
 _SYNTHESIS_SYSTEM_PROMPT = (
     "You are a knowledge synthesis agent. Given a list of verified facts, "
@@ -133,8 +136,7 @@ async def synthesize_belief(
     min_facts = _get_min_facts_for_belief()
     if len(fact_rows) < min_facts:
         raise InsufficientEvidenceError(
-            f"Cluster {cluster_id!r} has {len(fact_rows)} fact(s); "
-            f"minimum required is {min_facts}."
+            f"Cluster {cluster_id!r} has {len(fact_rows)} fact(s); minimum required is {min_facts}."
         )
 
     fact_ids = [row["fact_id"] for row in fact_rows]

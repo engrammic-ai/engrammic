@@ -9,9 +9,7 @@ import pytest
 from primitives.schema.edges import CITEEdgeType
 
 
-def _compute_confidence(
-    edge_confidences: list[tuple[str, float]], formula: str
-) -> float:
+def _compute_confidence(edge_confidences: list[tuple[str, float]], formula: str) -> float:
     """Mirror of the production function for testing."""
     if not edge_confidences:
         return 0.0
@@ -51,15 +49,11 @@ def _load_query_strings() -> tuple[str, str]:
     source = causal_path.read_text()
 
     # Extract _SCAN_CAUSES_CHAINS
-    scan_match = re.search(
-        r'_SCAN_CAUSES_CHAINS\s*=\s*"""(.+?)"""', source, re.DOTALL
-    )
+    scan_match = re.search(r'_SCAN_CAUSES_CHAINS\s*=\s*"""(.+?)"""', source, re.DOTALL)
     scan_query = scan_match.group(1) if scan_match else ""
 
     # Extract _UPSERT_INFERRED_CAUSES
-    upsert_match = re.search(
-        r'_UPSERT_INFERRED_CAUSES\s*=\s*"""(.+?)"""', source, re.DOTALL
-    )
+    upsert_match = re.search(r'_UPSERT_INFERRED_CAUSES\s*=\s*"""(.+?)"""', source, re.DOTALL)
     upsert_query = upsert_match.group(1) if upsert_match else ""
 
     return scan_query, upsert_query

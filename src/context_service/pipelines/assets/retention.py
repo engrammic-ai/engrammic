@@ -36,6 +36,7 @@ def retention_sweep(
         driver = await memgraph.driver()
         mg_client = MemgraphClient(driver)
         from context_service.engine.memgraph_store import MemgraphStore
+
         store = MemgraphStore(mg_client)
         settings = get_settings()
         policy = RetentionPolicy.from_settings(settings)

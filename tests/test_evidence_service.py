@@ -51,7 +51,9 @@ class TestValidateNodeRef:
         mock_store.execute_query.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_node_not_found(self, validator: EvidenceValidator, mock_store: AsyncMock) -> None:
+    async def test_node_not_found(
+        self, validator: EvidenceValidator, mock_store: AsyncMock
+    ) -> None:
         mock_store.execute_query.return_value = []
 
         result = await validator.validate("node:missing-id", "silo-1")

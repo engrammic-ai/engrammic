@@ -46,9 +46,7 @@ class TestDeriveSiloId:
 
 class TestGetOrCreate:
     @pytest.mark.asyncio
-    async def test_creates_new_silo(
-        self, silo_service: SiloService, mock_store: AsyncMock
-    ) -> None:
+    async def test_creates_new_silo(self, silo_service: SiloService, mock_store: AsyncMock) -> None:
         mock_store.execute_query.return_value = []  # get_by_id returns nothing
         mock_store.execute_write.return_value = None
 
@@ -157,9 +155,7 @@ class TestValidateSiloOwnership:
         assert result["error"] == "silo_not_found"
 
     @pytest.mark.asyncio
-    async def test_valid_ownership(
-        self, silo_service: SiloService, mock_store: AsyncMock
-    ) -> None:
+    async def test_valid_ownership(self, silo_service: SiloService, mock_store: AsyncMock) -> None:
         org_id = "org-valid"
         expected_id = derive_silo_id(org_id)
         mock_store.execute_query.return_value = [
@@ -182,9 +178,7 @@ class TestValidateSiloOwnership:
         expected_id = derive_silo_id(org_id)
         mock_cache.get.return_value = True
 
-        result = await validate_silo_ownership(
-            silo_service_with_cache, str(expected_id), org_id
-        )
+        result = await validate_silo_ownership(silo_service_with_cache, str(expected_id), org_id)
 
         assert result is None
         mock_store.execute_query.assert_not_called()  # Skipped due to cache
@@ -200,9 +194,7 @@ class TestValidateSiloOwnership:
             {"id": str(expected_id), "name": "silo", "org_id": org_id}
         ]
 
-        result = await validate_silo_ownership(
-            silo_service_with_cache, str(expected_id), org_id
-        )
+        result = await validate_silo_ownership(silo_service_with_cache, str(expected_id), org_id)
 
         assert result is None
         mock_cache.set.assert_called_once()

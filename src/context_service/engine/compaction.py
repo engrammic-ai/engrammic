@@ -44,7 +44,6 @@ OutcomeT = Literal["committed", "abandoned", "expired"]
 # ---------------------------------------------------------------------------
 
 
-
 def _make_event_id(chain_id: str, silo_id: str) -> str:
     return hashlib.blake2b(
         f"reasoning_trace:{silo_id}:{chain_id}".encode(), digest_size=32

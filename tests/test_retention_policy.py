@@ -19,12 +19,15 @@ def test_ephemeral_eligible_after_24h():
     now = datetime.now(UTC)
     created_25h_ago = now - timedelta(hours=25)
 
-    assert policy.is_eligible_for_tombstone(
-        decay_class="ephemeral",
-        created_at=created_25h_ago,
-        heat_score=0.9,
-        now=now,
-    ) is True
+    assert (
+        policy.is_eligible_for_tombstone(
+            decay_class="ephemeral",
+            created_at=created_25h_ago,
+            heat_score=0.9,
+            now=now,
+        )
+        is True
+    )
 
 
 def test_ephemeral_not_eligible_before_24h():
@@ -32,12 +35,15 @@ def test_ephemeral_not_eligible_before_24h():
     now = datetime.now(UTC)
     created_23h_ago = now - timedelta(hours=23)
 
-    assert policy.is_eligible_for_tombstone(
-        decay_class="ephemeral",
-        created_at=created_23h_ago,
-        heat_score=0.1,
-        now=now,
-    ) is False
+    assert (
+        policy.is_eligible_for_tombstone(
+            decay_class="ephemeral",
+            created_at=created_23h_ago,
+            heat_score=0.1,
+            now=now,
+        )
+        is False
+    )
 
 
 def test_standard_eligible_low_heat_old():
@@ -45,12 +51,15 @@ def test_standard_eligible_low_heat_old():
     now = datetime.now(UTC)
     created_8d_ago = now - timedelta(days=8)
 
-    assert policy.is_eligible_for_tombstone(
-        decay_class="standard",
-        created_at=created_8d_ago,
-        heat_score=0.2,
-        now=now,
-    ) is True
+    assert (
+        policy.is_eligible_for_tombstone(
+            decay_class="standard",
+            created_at=created_8d_ago,
+            heat_score=0.2,
+            now=now,
+        )
+        is True
+    )
 
 
 def test_standard_not_eligible_high_heat():
@@ -58,12 +67,15 @@ def test_standard_not_eligible_high_heat():
     now = datetime.now(UTC)
     created_8d_ago = now - timedelta(days=8)
 
-    assert policy.is_eligible_for_tombstone(
-        decay_class="standard",
-        created_at=created_8d_ago,
-        heat_score=0.5,
-        now=now,
-    ) is False
+    assert (
+        policy.is_eligible_for_tombstone(
+            decay_class="standard",
+            created_at=created_8d_ago,
+            heat_score=0.5,
+            now=now,
+        )
+        is False
+    )
 
 
 def test_permanent_never_eligible():
@@ -71,9 +83,12 @@ def test_permanent_never_eligible():
     now = datetime.now(UTC)
     created_1y_ago = now - timedelta(days=365)
 
-    assert policy.is_eligible_for_tombstone(
-        decay_class="permanent",
-        created_at=created_1y_ago,
-        heat_score=0.0,
-        now=now,
-    ) is False
+    assert (
+        policy.is_eligible_for_tombstone(
+            decay_class="permanent",
+            created_at=created_1y_ago,
+            heat_score=0.0,
+            now=now,
+        )
+        is False
+    )

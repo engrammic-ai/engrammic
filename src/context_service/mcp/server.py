@@ -51,7 +51,9 @@ def configure_services(
         splade=splade,
     )
     ownership_cache = SiloOwnershipCache(redis) if redis is not None else None
-    _services["silo"] = SiloService(memgraph=cast("HyperGraphStore", memgraph), ownership_cache=ownership_cache)
+    _services["silo"] = SiloService(
+        memgraph=cast("HyperGraphStore", memgraph), ownership_cache=ownership_cache
+    )
     _services["evidence"] = EvidenceValidator(store=cast("HyperGraphStore", memgraph))
     _services["redis"] = redis
     logger.info("MCP services configured")

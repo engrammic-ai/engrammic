@@ -58,10 +58,7 @@ def make_supersession_content(old_content: str, new_content: str, reason: str) -
 def make_revision_content(subject: str, magnitude_pct: float) -> str:
     """Build the observation text for a belief revision event."""
     subj_snippet = subject[:80].replace("'", "`")
-    return (
-        f"Belief about '{subj_snippet}' was revised due to evidence shift "
-        f"({magnitude_pct:.1f}%)"
-    )
+    return f"Belief about '{subj_snippet}' was revised due to evidence shift ({magnitude_pct:.1f}%)"
 
 
 async def create_auto_reflection(

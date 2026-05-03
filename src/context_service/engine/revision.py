@@ -56,6 +56,7 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
+
 def _get_revision_threshold() -> float:
     """Get revision threshold, supporting hot-reload."""
     return get_settings().revision_cosine_threshold

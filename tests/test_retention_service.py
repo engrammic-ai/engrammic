@@ -12,9 +12,11 @@ def mock_store():
     store.execute_query = AsyncMock(return_value=[])
     return store
 
+
 @pytest.fixture
 def service(mock_store):
     return RetentionService(store=mock_store, policy=RetentionPolicy())
+
 
 @pytest.mark.asyncio
 async def test_find_tombstone_candidates_queries_store(service, mock_store):
@@ -22,6 +24,7 @@ async def test_find_tombstone_candidates_queries_store(service, mock_store):
     mock_store.execute_query.assert_called_once()
     call_args = mock_store.execute_query.call_args
     assert "silo_id" in str(call_args)
+
 
 @pytest.mark.asyncio
 async def test_tombstone_nodes_sets_timestamp(service, mock_store):

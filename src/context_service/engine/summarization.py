@@ -15,6 +15,7 @@ def _get_inline_threshold() -> int:
     """Get threshold at call time (not cached at import) for hot-reload support."""
     return get_settings().compaction_step_threshold
 
+
 _SUMMARIZATION_PROMPT = """Summarize this reasoning chain concisely. Capture the key steps, conclusions, and final outcome. Be brief but preserve important details.
 
 Reasoning steps:
