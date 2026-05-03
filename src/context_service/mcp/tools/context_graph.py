@@ -37,6 +37,9 @@ async def _context_graph(
     if mode not in ("graph", "provenance"):
         return {"error": "invalid_mode", "message": "mode must be 'graph' or 'provenance'"}
 
+    if max_depth < 1 or max_depth > 5:
+        return {"error": "invalid_max_depth", "message": "max_depth must be between 1 and 5"}
+
     if mode == "provenance":
         if not seed_nodes:
             return {"error": "missing_seed", "message": "seed_nodes must have at least one entry for provenance mode"}
@@ -65,9 +68,6 @@ async def _context_graph(
 
     if not query and not seed_nodes:
         return {"error": "missing_seed", "message": "Provide query or seed_nodes"}
-
-    if max_depth < 1 or max_depth > 5:
-        return {"error": "invalid_max_depth", "message": "max_depth must be between 1 and 5"}
 
     if max_nodes < 1 or max_nodes > 200:
         return {"error": "invalid_max_nodes", "message": "max_nodes must be between 1 and 200"}

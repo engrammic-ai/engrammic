@@ -39,7 +39,7 @@ _VALID_SOURCE_TIERS = ("authoritative", "validated", "community", "unknown")
 
 
 async def _context_remember(
-    silo_id: str,
+    silo_id: str | None,
     content: str,
     content_type: str = "text",
     metadata: dict[str, Any] | None = None,
@@ -50,9 +50,10 @@ async def _context_remember(
     """Internal implementation for testing."""
     auth = await get_mcp_auth_context()
 
-    err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
-    if err is not None:
-        return err
+    if silo_id is not None:
+        err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+        if err is not None:
+            return err
 
     validated_silo_id = derive_silo_id(auth.org_id)
 
@@ -88,7 +89,7 @@ async def _context_remember(
 
 
 async def _context_assert(
-    silo_id: str,
+    silo_id: str | None,
     claim: str | dict[str, Any],
     evidence: str | list[str],
     source_type: str,
@@ -103,9 +104,10 @@ async def _context_assert(
     ctx_svc = get_context_service()
     ev_validator = get_evidence_validator()
 
-    err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
-    if err is not None:
-        return err
+    if silo_id is not None:
+        err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+        if err is not None:
+            return err
 
     expected_silo_id = derive_silo_id(auth.org_id)
 
@@ -194,7 +196,7 @@ async def _context_assert(
 
 
 async def _context_commit(
-    silo_id: str,
+    silo_id: str | None,
     belief: str,
     about: list[str],
     confidence: float = 0.8,
@@ -207,9 +209,10 @@ async def _context_commit(
     auth = await get_mcp_auth_context()
     ctx_svc = get_context_service()
 
-    err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
-    if err is not None:
-        return err
+    if silo_id is not None:
+        err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+        if err is not None:
+            return err
 
     expected_silo_id = derive_silo_id(auth.org_id)
 
@@ -261,7 +264,7 @@ async def _context_commit(
 
 
 async def _context_reflect(
-    silo_id: str,
+    silo_id: str | None,
     observation: str,
     observation_type: str,
     about: list[str],
@@ -272,9 +275,10 @@ async def _context_reflect(
     auth = await get_mcp_auth_context()
     ctx_svc = get_context_service()
 
-    err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
-    if err is not None:
-        return err
+    if silo_id is not None:
+        err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+        if err is not None:
+            return err
 
     expected_silo_id = derive_silo_id(auth.org_id)
 
@@ -308,7 +312,7 @@ async def _context_reflect(
 
 
 async def _context_reason(
-    silo_id: str,
+    silo_id: str | None,
     steps: list[dict[str, Any]],
     conclusion: str | None = None,
     evidence_used: list[str] | None = None,
@@ -320,9 +324,10 @@ async def _context_reason(
 
     auth = await get_mcp_auth_context()
 
-    err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
-    if err is not None:
-        return err
+    if silo_id is not None:
+        err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+        if err is not None:
+            return err
 
     expected_silo_id = derive_silo_id(auth.org_id)
 
@@ -376,7 +381,7 @@ async def _context_reason(
 
 
 async def _context_store(
-    silo_id: str,
+    silo_id: str | None,
     content: str,
     layer: str,
     evidence: list[str] | None = None,
@@ -539,10 +544,8 @@ def register(mcp: FastMCP) -> None:
         Returns:
             Layer-specific response dict with at minimum {node_id, layer, created_at}.
         """
-        auth = await get_mcp_auth_context()
-        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         return await _context_store(
-            silo_id=resolved_silo_id,
+            silo_id=silo_id,
             content=content,
             layer=layer,
             evidence=evidence,

@@ -77,6 +77,8 @@ async def _context_history(
             else None
         )
         out["confidence_trend"] = belief.confidence_trend
+        out["first_belief"] = first_belief
+        out["last_change"] = last_change
         out["belief_timeline"] = [
             {
                 "node_id": s.node_id,
@@ -86,8 +88,6 @@ async def _context_history(
                 "valid_to": s.valid_to.isoformat() if s.valid_to else None,
                 "status": s.status,
                 "superseded_by": s.superseded_by,
-                "first_belief": first_belief,
-                "last_change": last_change,
             }
             for s in belief_timeline
         ]
