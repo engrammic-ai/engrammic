@@ -126,7 +126,7 @@ class PostgresConfig(BaseModel):
     model_config = {"extra": "ignore"}
 
     dsn: SecretStr = SecretStr(
-        "postgresql://context_service:context_service@localhost:5432/context_service"
+        "postgresql://user:password@localhost:5432/context_service"
     )
 
 
@@ -512,6 +512,7 @@ class Settings(BaseSettings):
     version: str = Field(default="1.3.0")
     debug: bool = Field(default=False)
     environment: str = Field(default="development")
+
     @property
     def is_development(self) -> bool:
         return self.environment == "development"
@@ -768,6 +769,7 @@ class Settings(BaseSettings):
     redis_port: int = Field(default=6379)
     redis_password: SecretStr | None = Field(default=None)
     redis_db: int = Field(default=0)
+    redis_max_connections: int = Field(default=50)
 
     @property
     def redis_url(self) -> str:
@@ -782,7 +784,7 @@ class Settings(BaseSettings):
 
     postgres_dsn: SecretStr = Field(
         default=SecretStr(
-            "postgresql://context_service:context_service@localhost:5432/context_service"
+            "postgresql://user:password@localhost:5432/context_service"
         )
     )
 

@@ -140,6 +140,7 @@ class GeminiProvider(LLMProvider):
         *,
         temperature: float | None = None,
         timeout: float | None = None,
+        max_tokens: int = 4096,  # noqa: ARG002
     ) -> tuple[str, Usage]:
         client = await self._get_client()
         payload: dict[str, Any] = {
@@ -172,6 +173,7 @@ class GeminiProvider(LLMProvider):
         schema: dict[str, Any],  # noqa: ARG002
         *,
         timeout: float | None = None,
+        max_tokens: int = 4096,  # noqa: ARG002
     ) -> tuple[dict[str, Any], Usage]:
         client = await self._get_client()
         payload: dict[str, Any] = {

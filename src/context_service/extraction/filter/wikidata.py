@@ -172,7 +172,7 @@ class WikidataRule:
             except Exception as e:
                 log.warning("wikidata cache write failed: %s", e)
             return self._decision_from_present(present)
-        except (TimeoutError, Exception) as e:
+        except Exception as e:
             await cb.record_failure()
             log.info("wikidata sparql failed: %s", e)
             return FilterDecision(

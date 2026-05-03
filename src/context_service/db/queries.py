@@ -305,6 +305,17 @@ MATCH (b:Claim {id: $claim_id_b, silo_id: $silo_id})
 MERGE (a)-[r:CONTRADICTS {id: $edge_id}]->(b)
 """
 
+# Batch variant: accepts a list of rows, each with claim_id_a, claim_id_b, edge_id.
+# Eliminates N+1 round trips when writing multiple CONTRADICTS edges in one call.
+# Parameters: rows (list[{claim_id_a, claim_id_b, edge_id}]), silo_id.
+BATCH_CREATE_CONTRADICTS_EDGES = """
+UNWIND $rows AS r
+MATCH (a:Claim {id: r.claim_id_a, silo_id: $silo_id})
+MATCH (b:Claim {id: r.claim_id_b, silo_id: $silo_id})
+MERGE (a)-[:CONTRADICTS {id: r.edge_id}]->(b)
+RETURN count(*) AS edges_written
+"""
+
 # Causal edge: written between any two silo nodes (Claims, Facts, Beliefs, etc.)
 # Parameters: source_id, target_id, silo_id, confidence (float), mechanism (str|null),
 #             extracted_from (str — source doc or claim id).
@@ -837,11 +848,14 @@ LIMIT 1
 # up to $limit distinct unordered pairs so the caller can decide which to
 # materialise as a :Pattern.
 DETECT_TEMPORAL_CORRELATIONS = """
-MATCH (a:Fact {silo_id: $silo_id}), (b:Fact {silo_id: $silo_id})
-WHERE id(a) < id(b)
-  AND a.valid_from IS NOT NULL
-  AND b.valid_from IS NOT NULL
-  AND abs(duration.inSeconds(a.valid_from, b.valid_from)) <= $window_seconds
+MATCH (a:Fact {silo_id: $silo_id})
+WHERE a.valid_from IS NOT NULL
+WITH a
+MATCH (b:Fact {silo_id: $silo_id})
+WHERE b.valid_from IS NOT NULL
+  AND b.valid_from >= a.valid_from - duration({seconds: $window_seconds})
+  AND b.valid_from <= a.valid_from + duration({seconds: $window_seconds})
+  AND a.id < b.id
 RETURN a.id AS fact_id_a, b.id AS fact_id_b,
        a.content AS content_a, b.content AS content_b,
        a.valid_from AS valid_from_a, b.valid_from AS valid_from_b

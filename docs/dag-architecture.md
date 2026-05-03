@@ -50,6 +50,13 @@ Note: extraction and embedding run in parallel with no inter-dependency. custodi
 | custodian_finalize       | Depends on custodian_visit          | Follows visit schedule     |
 | claim_to_fact_promotion  | fact_promotion_schedule             | `0 * * * *` (hourly)       |
 | clustering               | clustering_schedule                 | `0 4 * * *` (daily 04 UTC) |
+| heat                     | heat_schedule                       | `0 * * * *` (hourly)       |
+| reasoning_compaction     | reasoning_compaction_schedule       | `0 * * * *` (hourly)       |
+| retention_sweep          | retention_schedule                  | `0 3 * * *` (daily 03 UTC) |
+| pattern_detection        | pattern_detection_schedule          | `0 5 * * *` (daily 05 UTC) |
+| llm_pattern_detection    | Depends on pattern_detection        | Follows pattern_detection  |
+| belief_synthesis         | belief_synthesis_sensor             | Event-driven (cluster density >= threshold) |
+| causal_tombstone         | Manual / admin-triggered            | On demand                  |
 
 ## Concurrency Model
 

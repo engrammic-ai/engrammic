@@ -1,6 +1,7 @@
 """Dagster asset: synthesise a :Belief node from a dense fact cluster."""
 
 import asyncio
+import concurrent.futures
 import time
 from typing import Any
 
@@ -9,6 +10,16 @@ from dagster import AssetExecutionContext
 
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import LLMResource, MemgraphResource
+
+
+def _run_async(coro: Any) -> Any:
+    """Run a coroutine, handling cases where an event loop is already running."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result(timeout=300)
 
 
 @dg.asset(
@@ -38,18 +49,14 @@ def belief_synthesis_asset(
     t0 = time.monotonic()
 
     async def _run() -> str:
-        from context_service.engine.memgraph_store import MemgraphStore
         from context_service.engine.synthesis import synthesize_belief
-        from context_service.stores import MemgraphClient
 
-        driver = await memgraph.driver()
-        mg_client = MemgraphClient(driver)
-        store = MemgraphStore(mg_client)
+        store = await memgraph.store()
         llm_client = llm.get_client()
 
         return await synthesize_belief(store, cluster_id, silo_id, llm_client)
 
-    belief_id = asyncio.run(_run())
+    belief_id = _run_async(_run())
     duration_s = time.monotonic() - t0
 
     context.log.info(

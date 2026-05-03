@@ -1,6 +1,7 @@
 """Dagster asset: batch :Claim -> :Fact promotion per silo."""
 
 import asyncio
+import concurrent.futures
 import time
 import uuid
 from typing import Any
@@ -10,6 +11,16 @@ from dagster import AssetExecutionContext
 
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import MemgraphResource
+
+
+def _run_async(coro: Any) -> Any:
+    """Run a coroutine, handling cases where an event loop is already running."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result(timeout=300)
 
 _BATCH_SIZE = 500
 
@@ -123,7 +134,7 @@ def claim_to_fact_promotion(
 
         return claims_scanned, claims_promoted
 
-    scanned, promoted = asyncio.run(_run())
+    scanned, promoted = _run_async(_run())
     duration_s = time.monotonic() - t0
     context.log.info(
         f"silo {silo_id}: scanned={scanned} promoted={promoted} duration={duration_s:.2f}s"

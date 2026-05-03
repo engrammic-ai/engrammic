@@ -105,6 +105,7 @@ def register(mcp: FastMCP) -> None:
         reasoning: str | None = None,
         metadata: dict[str, Any] | None = None,
         tags: list[str] | None = None,
+        chain_id: str | None = None,
     ) -> dict[str, Any]:
         """Commit a belief.
 
@@ -116,6 +117,7 @@ def register(mcp: FastMCP) -> None:
             reasoning: Why agent holds this belief.
             metadata: Optional metadata.
             tags: Optional tags.
+            chain_id: Optional reasoning chain ID to compact on commit.
 
         Returns:
             {node_id, layer, declared_by, about_nodes, created_at}
@@ -128,4 +130,5 @@ def register(mcp: FastMCP) -> None:
             reasoning=reasoning,
             metadata=metadata,
             tags=tags,
+            chain_id=chain_id,
         )

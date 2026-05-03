@@ -40,13 +40,27 @@ def get_extraction_user_template() -> str:
     return _get_extraction_preset()["user_template"].rstrip()
 
 
-# Schema is provider-independent, stays in extraction.yaml
-_config = load_config("extraction")
-EXTRACTION_SCHEMA: dict[str, Any] = _config["schema"]
+# Schema is provider-independent, stays in extraction.yaml.
+# Loaded lazily so import does not force config I/O at startup.
+_extraction_schema_cache: dict[str, Any] | None = None
 
-# Module-level constants for backward compatibility — reflect active preset at import time.
-EXTRACTION_SYSTEM_PROMPT: str = _config["system_prompt"].rstrip()
-EXTRACTION_USER_TEMPLATE: str = _config["user_template"].rstrip()
+
+def get_extraction_schema() -> dict[str, Any]:
+    """Get the extraction JSON schema (provider-independent)."""
+    global _extraction_schema_cache
+    if _extraction_schema_cache is None:
+        _extraction_schema_cache = load_config("extraction")["schema"]
+    return _extraction_schema_cache
+
+
+# EXTRACTION_SCHEMA is a module-level alias kept only for callers that import it
+# directly.  Prefer get_extraction_schema() in new code so the schema is not
+# evaluated at import time.
+def __getattr__(name: str) -> Any:
+    if name == "EXTRACTION_SCHEMA":
+        return get_extraction_schema()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 # Causal extraction gate
 # ---------------------

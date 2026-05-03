@@ -1,6 +1,7 @@
 """Dagster asset: batch embed committed content nodes and upsert to Qdrant per silo."""
 
 import asyncio
+import concurrent.futures
 import time
 from typing import Any
 
@@ -13,6 +14,16 @@ from context_service.pipelines.resources import (
     MemgraphResource,
     QdrantResource,
 )
+
+
+def _run_async(coro: Any) -> Any:
+    """Run a coroutine, handling cases where an event loop is already running."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result(timeout=300)
 
 _BATCH_SIZE = 100
 
@@ -62,23 +73,15 @@ def embedding_asset(
     async def _run() -> tuple[int, int, float]:
         from datetime import UTC, datetime
 
-        from context_service.engine.qdrant_store import EngineQdrantStore
         from context_service.stores import MemgraphClient
-        from context_service.stores.qdrant import QdrantClient as StoreQdrantClient
 
         driver = await memgraph.driver()
         mg_client = MemgraphClient(driver)
         embed_svc = embedding.get_client()
 
-        # StoreQdrantClient lazily creates its own AsyncQdrantClient internally,
-        # so it's a separate handle from QdrantResource.client(). Close it in
-        # `finally` so the per-asset-run handle doesn't leak past teardown.
-        store_qdrant = StoreQdrantClient(
-            url=qdrant.url,
-            api_key=qdrant.api_key if qdrant.api_key else None,
-            vector_size=embed_svc.dimensions,
-        )
-        engine_qdrant = EngineQdrantStore(store_qdrant)
+        # qdrant_store() creates a dedicated StoreQdrantClient/EngineQdrantStore
+        # pair for this asset run. Close it in `finally` to avoid handle leaks.
+        engine_qdrant = qdrant.qdrant_store(vector_size=embed_svc.dimensions)
 
         try:
             nodes_processed = 0
@@ -156,9 +159,9 @@ def embedding_asset(
 
             return nodes_processed, vectors_upserted, 0.0
         finally:
-            await store_qdrant.close()
+            await engine_qdrant.close()
 
-    nodes_processed, vectors_upserted, cost_usd = asyncio.run(_run())
+    nodes_processed, vectors_upserted, cost_usd = _run_async(_run())
     duration_s = time.monotonic() - t0
 
     context.log.info(

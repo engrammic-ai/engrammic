@@ -240,7 +240,7 @@ class MemgraphClient:
                             max_attempts=_READ_RETRY_MAX_ATTEMPTS,
                         )
                     return await _run_once()
-            return []
+            raise MemgraphOperationError("Retry loop exited without result or exception")
         except ServiceUnavailable as e:
             logger.error("memgraph_service_unavailable", error=str(e))
             raise MemgraphOperationError(f"Database unavailable: {e}") from e

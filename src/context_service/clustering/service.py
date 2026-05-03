@@ -264,9 +264,7 @@ class ClusteringService:
                 if parent_cluster is None:
                     continue
 
-                part_of_pairs.append(
-                    {"child_id": child_cluster.id, "parent_id": parent_cluster.id}
-                )
+                part_of_pairs.append({"child_id": child_cluster.id, "parent_id": parent_cluster.id})
 
             if part_of_pairs:
                 try:

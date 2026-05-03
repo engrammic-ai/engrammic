@@ -13,6 +13,7 @@ Tier thresholds (verbatim from prototype):
 """
 
 import asyncio
+import concurrent.futures
 import math
 import time
 from collections import defaultdict
@@ -25,6 +26,16 @@ from dagster import AssetExecutionContext
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import MemgraphResource, RedisResource
 from context_service.signals.access_events import access_stream_key
+
+
+def _run_async(coro: Any) -> Any:
+    """Run a coroutine, handling cases where an event loop is already running."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result(timeout=300)
 
 # ------------------------------------------------------------------
 # Constants (match prototype heat asset)
@@ -147,7 +158,7 @@ def heat_asset(
         await advance_heat_cursor(mg_client, silo_id, new_last_id)
         return len(updates), total_events, new_last_id
 
-    nodes_updated, events_consumed, final_cursor = asyncio.run(_run())
+    nodes_updated, events_consumed, final_cursor = _run_async(_run())
     duration_s = time.monotonic() - t0
 
     context.log.info(

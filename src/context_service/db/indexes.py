@@ -43,10 +43,12 @@ MEMORY_INDEX_QUERIES: tuple[str, ...] = (
     f"CREATE INDEX ON :{MemoryLabel.DOCUMENT}(silo_id);",
     f"CREATE INDEX ON :{MemoryLabel.DOCUMENT}(silo_id, committed);",
     f"CREATE INDEX ON :{MemoryLabel.DOCUMENT}(source_uri);",
+    f"CREATE INDEX ON :{MemoryLabel.DOCUMENT}(embedded_at);",
     f"CREATE INDEX ON :{MemoryLabel.PASSAGE}(id);",
     f"CREATE INDEX ON :{MemoryLabel.PASSAGE}(silo_id);",
     f"CREATE INDEX ON :{MemoryLabel.PASSAGE}(silo_id, committed);",
     f"CREATE INDEX ON :{MemoryLabel.PASSAGE}(source_uri);",
+    f"CREATE INDEX ON :{MemoryLabel.PASSAGE}(embedded_at);",
     f"CREATE INDEX ON :{MemoryLabel.UTTERANCE}(id);",
     f"CREATE INDEX ON :{MemoryLabel.UTTERANCE}(silo_id);",
     f"CREATE INDEX ON :{MemoryLabel.EVENT}(id);",
@@ -63,12 +65,14 @@ KNOWLEDGE_INDEX_QUERIES: tuple[str, ...] = (
     f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(silo_id);",
     f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(fingerprint);",
     f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(silo_id, committed);",
+    f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(embedded_at);",
     # :Commitment is multi-label (:Claim:Commitment); Claim indexes already apply.
     f"CREATE INDEX ON :{KnowledgeLabel.COMMITMENT}(predicate);",
     f"CREATE INDEX ON :{KnowledgeLabel.COMMITMENT}(scope_type);",
     f"CREATE INDEX ON :{KnowledgeLabel.FACT}(id);",
     f"CREATE INDEX ON :{KnowledgeLabel.FACT}(silo_id);",
     f"CREATE INDEX ON :{KnowledgeLabel.FACT}(silo_id, committed);",
+    f"CREATE INDEX ON :{KnowledgeLabel.FACT}(valid_from);",
 )
 
 
@@ -77,10 +81,12 @@ KNOWLEDGE_INDEX_QUERIES: tuple[str, ...] = (
 WISDOM_INDEX_QUERIES: tuple[str, ...] = (
     f"CREATE INDEX ON :{WisdomLabel.BELIEF}(id);",
     f"CREATE INDEX ON :{WisdomLabel.BELIEF}(silo_id);",
+    f"CREATE INDEX ON :{WisdomLabel.BELIEF}(tombstoned_at);",
     f"CREATE INDEX ON :{WisdomLabel.PATTERN}(id);",
     f"CREATE INDEX ON :{WisdomLabel.PATTERN}(silo_id);",
     f"CREATE INDEX ON :{WisdomLabel.PATTERN}(pattern_type);",
     f"CREATE INDEX ON :{WisdomLabel.PATTERN}(silo_id, pattern_type);",
+    f"CREATE INDEX ON :{WisdomLabel.PATTERN}(tombstoned_at);",
 )
 
 
@@ -92,6 +98,7 @@ INTELLIGENCE_INDEX_QUERIES: tuple[str, ...] = (
     f"CREATE INDEX ON :{IntelligenceLabel.REASONING_CHAIN}(tier);",
     f"CREATE INDEX ON :{IntelligenceLabel.REASONING_CHAIN}(heat_score);",
     f"CREATE INDEX ON :{IntelligenceLabel.REASONING_CHAIN}(produced_by_agent_id);",
+    f"CREATE INDEX ON :{IntelligenceLabel.REASONING_CHAIN}(compacted);",
     f"CREATE INDEX ON :{IntelligenceLabel.QUERY_CONTEXT}(id);",
     f"CREATE INDEX ON :{IntelligenceLabel.QUERY_CONTEXT}(silo_id);",
 )

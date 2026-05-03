@@ -198,7 +198,13 @@ class JinaEmbeddingService:
         if not items or not isinstance(items, list):
             raise JinaEmbeddingError(f"Unexpected response: missing 'data' in {list(data.keys())}")
 
-        fetched: list[list[float]] = [item["embedding"] for item in items]
+        try:
+            fetched: list[list[float]] = [item["embedding"] for item in items]
+        except KeyError as e:
+            raise JinaEmbeddingError(
+                f"Jina response item missing 'embedding' key; got keys: "
+                f"{[list(item.keys()) for item in items]}"
+            ) from e
 
         if self._embedding_cache:
             for text, vector in zip(miss_texts, fetched, strict=True):

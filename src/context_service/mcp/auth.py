@@ -28,8 +28,6 @@ import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
-from context_service.config.settings import get_settings
-
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
@@ -38,7 +36,6 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
-DEV_ORG_ID = "dev-org"
 ALL_PERMISSIONS = ["read", "write", "admin"]
 
 _mcp_auth_context: ContextVar[MCPAuthContext | None] = ContextVar("mcp_auth_context", default=None)
@@ -99,24 +96,12 @@ async def validate_mcp_request(authorization: str | None) -> MCPAuthContext:
         MCPAuthContext with org_id and permissions.
 
     Raises:
-        MCPAuthError: If authentication fails or the dev fallback is reached
-            in a production environment.
+        MCPAuthError: If authentication fails or MCP_API_KEY is not configured.
     """
     expected_key = os.environ.get("MCP_API_KEY")
 
-    # Dev mode: no API key configured
     if not expected_key:
-        # Request-layer prod guard — mirrors the boot-time guard in
-        # ``Settings._validate_auth`` so a missing MCP_API_KEY can never
-        # silently grant admin access in production.
-        if get_settings().environment == "production":
-            raise MCPAuthError("MCP_API_KEY must be set when ENVIRONMENT=production")
-        logger.debug("MCP running in dev mode (no MCP_API_KEY)")
-        return MCPAuthContext(
-            org_id=DEV_ORG_ID,
-            permissions=list(ALL_PERMISSIONS),
-            is_dev_mode=True,
-        )
+        raise MCPAuthError("MCP_API_KEY is not configured")
 
     # Validate Bearer token
     if not authorization:
@@ -131,7 +116,7 @@ async def validate_mcp_request(authorization: str | None) -> MCPAuthContext:
         raise MCPAuthError("Empty API key")
 
     # Timing-safe comparison to avoid leaking key bytes via response timing.
-    if not hmac.compare_digest(token.encode("utf-8"), expected_key.encode("utf-8")):
+    if not hmac.compare_digest(token.encode("utf-8"), expected_key.strip().encode("utf-8")):
         raise MCPAuthError("Invalid API key")
 
     # In production, org_id would come from API key lookup

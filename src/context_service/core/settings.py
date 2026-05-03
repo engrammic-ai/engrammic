@@ -1,83 +1,10 @@
-"""Deprecated: import from context_service.config.settings instead.
+"""Removed: import from context_service.config.settings instead.
 
-Re-exports all public names for backwards compatibility.
-TODO(2026-Q3): Remove after all direct callers are migrated.
+This shim has been deleted. All public names are available from
+context_service.config.settings.
 """
 
-from context_service.config.settings import (
-    AuthConfig,
-    BearConfig,
-    CacheConfig,
-    ClusteringConfig,
-    ClusterRetrievalConfig,
-    CustodianSettings,
-    EmbeddingConfig,
-    EntityRetrievalConfig,
-    ExternalConfig,
-    ExtractionConfig,
-    FeaturesConfig,
-    InfraConfig,
-    JinaConfig,
-    LLMConfig,
-    MemgraphConfig,
-    PostgresConfig,
-    PromptsConfig,
-    ProviderConfig,
-    QdrantConfig,
-    RateLimitConfig,
-    RedisConfig,
-    RetrievalConfig,
-    RetrievalTuning,
-    SecurityConfig,
-    ServerConfig,
-    Settings,
-    SpladeConfig,
-    StripeConfig,
-    SupersessionConfig,
-    TiebreakConfig,
-    VertexConfig,
-    WalkerTuning,
-    WorkosConfig,
-    get_settings,
-    reload_settings,
-    settings,
+raise ImportError(
+    "context_service.core.settings has been removed. "
+    "Import from context_service.config.settings instead."
 )
-
-__all__ = [
-    "AuthConfig",
-    "BearConfig",
-    "CacheConfig",
-    "ClusterRetrievalConfig",
-    "ClusteringConfig",
-    "CustodianSettings",
-    "EmbeddingConfig",
-    "EntityRetrievalConfig",
-    "ExternalConfig",
-    "ExtractionConfig",
-    "FeaturesConfig",
-    "InfraConfig",
-    "JinaConfig",
-    "LLMConfig",
-    "MemgraphConfig",
-    "PostgresConfig",
-    "PromptsConfig",
-    "ProviderConfig",
-    "QdrantConfig",
-    "RateLimitConfig",
-    "RedisConfig",
-    "RetrievalConfig",
-    "RetrievalTuning",
-    "SecurityConfig",
-    "ServerConfig",
-    "Settings",
-    "SpladeConfig",
-    "StripeConfig",
-    "SupersessionConfig",
-    "TiebreakConfig",
-    "VertexConfig",
-    "WalkerTuning",
-    "WorkosConfig",
-    "get_settings",
-    "reload_settings",
-    "settings",
-]

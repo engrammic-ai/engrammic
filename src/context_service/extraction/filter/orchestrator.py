@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import time
 from typing import TYPE_CHECKING, Protocol
 
@@ -71,8 +70,10 @@ class FilterOrchestrator:
             f"total={len(results)} model={extractor_model}"
         )
 
-        with contextlib.suppress(Exception):
+        try:
             self._auditor.flush()
+        except Exception as e:
+            logger.warning("extraction_filter_audit_flush_failed", error=str(e))
         return results
 
     async def _evaluate_one(self, claim: ClaimTriple) -> FilterDecision:

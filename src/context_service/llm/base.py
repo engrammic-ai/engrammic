@@ -69,6 +69,7 @@ class LLMProvider(abc.ABC):
         *,
         temperature: float | None = None,
         timeout: float | None = None,
+        max_tokens: int = 4096,
     ) -> tuple[str, Usage]:
         """Generate a text completion.
 
@@ -76,6 +77,7 @@ class LLMProvider(abc.ABC):
             messages: List of message dicts with 'role' and 'content' keys.
             temperature: Optional sampling temperature override.
             timeout: Optional per-call HTTP timeout (seconds).
+            max_tokens: Maximum number of tokens to generate (default 4096).
 
         Returns:
             (text, usage) tuple.
@@ -88,6 +90,7 @@ class LLMProvider(abc.ABC):
         schema: dict[str, Any],
         *,
         timeout: float | None = None,
+        max_tokens: int = 4096,
     ) -> tuple[dict[str, Any], Usage]:
         """Generate a structured JSON response matching the given schema.
 
@@ -95,6 +98,7 @@ class LLMProvider(abc.ABC):
             messages: List of message dicts with 'role' and 'content' keys.
             schema: JSON schema describing the expected output structure.
             timeout: Optional per-call HTTP timeout (seconds).
+            max_tokens: Maximum number of tokens to generate (default 4096).
 
         Returns:
             (parsed, usage) tuple.

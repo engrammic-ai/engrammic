@@ -74,7 +74,10 @@ def _parse_dt(value: Any) -> datetime:
         return datetime.fromisoformat(value.iso_format())
     if hasattr(value, "to_native"):
         native = value.to_native()
-        assert isinstance(native, datetime)
+        if not isinstance(native, datetime):
+            raise TypeError(
+                f"to_native() returned {type(native).__name__!r}, expected datetime"
+            )
         return native
     return datetime.fromisoformat(str(value))
 

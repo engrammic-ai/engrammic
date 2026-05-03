@@ -90,7 +90,12 @@ class ExtractionService:
         """
         messages = [
             {"role": "system", "content": get_extraction_system_prompt()},
-            {"role": "user", "content": get_extraction_user_template().format(content=escape_for_prompt(content))},
+            {
+                "role": "user",
+                "content": get_extraction_user_template().format(
+                    content=escape_for_prompt(content)
+                ),
+            },
         ]
 
         from context_service.llm.concurrency import with_llm_limit
@@ -629,22 +634,30 @@ MERGE (ps)<-[:EXTRACTED_FROM]-(c)
 
         Returns the number of CONTRADICTS edges written.
         """
-        edges_written = 0
-        for pair in pairs:
-            edge_id = contradicts_edge_id(pair.fingerprint_a, pair.fingerprint_b)
-            try:
-                await self._graph.execute_write(
-                    queries.CREATE_CONTRADICTS_EDGE,
-                    {
-                        "claim_id_a": pair.claim_id_a,
-                        "claim_id_b": pair.claim_id_b,
-                        "silo_id": silo_id,
-                        "edge_id": edge_id,
-                    },
-                )
-                edges_written += 1
-            except Exception as e:
-                logger.warning(f"Failed to write CONTRADICTS edge {edge_id!r}: {e}", exc_info=True)
+        if not pairs:
+            return 0
+
+        rows = [
+            {
+                "claim_id_a": pair.claim_id_a,
+                "claim_id_b": pair.claim_id_b,
+                "edge_id": contradicts_edge_id(pair.fingerprint_a, pair.fingerprint_b),
+            }
+            for pair in pairs
+        ]
+        try:
+            result = await self._graph.execute_write(
+                queries.BATCH_CREATE_CONTRADICTS_EDGES,
+                {"rows": rows, "silo_id": silo_id},
+            )
+            edges_written: int = result[0]["edges_written"] if result else len(rows)
+        except Exception as e:
+            logger.warning(
+                "batch_create_contradicts_edges_failed",
+                error=str(e),
+                count=len(rows),
+            )
+            edges_written = 0
         return edges_written
 
     async def run_extraction_job(

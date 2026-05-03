@@ -109,6 +109,8 @@ Commit a belief or stance to the Wisdom layer. Commitments are agent-scoped via 
 
 **Params:** `silo_id` (str, required), `belief` (str, required), `about` (list[str], required — node IDs this belief concerns, at least one), `confidence` (float, default `0.8`), `reasoning` (str|null — why the agent holds this belief), `metadata` (dict|null), `tags` (list[str]|null).
 
+Note: `chain_id` is implemented in the internal `_context_commit` function (triggers reasoning-chain compaction when provided) but is intentionally not exposed on the public MCP tool signature. Compaction currently has no separate MCP or REST surface; it is triggered automatically when a chain is committed via internal call paths.
+
 ```json
 {
   "tool": "context_commit",
@@ -266,7 +268,7 @@ Note: passing `as_of` currently returns an error:
 
 Semantic search across layers with optional filtering.
 
-**Params:** `silo_id` (str, required), `query` (str, required), `layers` (list[str]|null — `memory|knowledge|wisdom|intelligence`), `filters` (dict|null — keys: `tags`, `source_type`, `min_confidence`, `created_after`, `created_before`), `top_k` (int, default `10`), `include_superseded` (bool, default `false`), `as_of` (str|null — reserved, returns `as_of_not_supported` if non-null).
+**Params:** `silo_id` (str, required), `query` (str, required), `layers` (list[str]|null — `memory|knowledge|wisdom|intelligence`), `filters` (dict|null — keys: `tags`, `source_type`, `min_confidence`, `created_after`, `created_before`), `top_k` (int, default `10`), `include_superseded` (bool, default `false`), `search_mode` (str, default `"hybrid"` — `hybrid|dense|sparse`), `as_of` (str|null — ISO 8601 datetime for point-in-time queries; returns only nodes whose validity window covers the timestamp; future timestamps return current state with a warning).
 
 ```json
 {
@@ -301,7 +303,11 @@ Response:
     }
   ],
   "total_candidates": 1,
-  "search_time_ms": 45
+  "search_time_ms": 45,
+  "search_mode": "hybrid",
+  "metadata": {
+    "causal_edges_enabled": false
+  }
 }
 ```
 
@@ -336,6 +342,9 @@ Response:
     "depth_reached": 2,
     "nodes_visited": 18,
     "edges_traversed": 22
+  },
+  "metadata": {
+    "causal_edges_enabled": false
   }
 }
 ```
@@ -428,7 +437,9 @@ Response:
 
 Create a typed relationship between two context nodes.
 
-**Params:** `silo_id` (str, required), `from_node` (str, required), `to_node` (str, required), `relationship` (str, required — one of `REFERENCES|SUPPORTS|CONTRADICTS|DERIVED_FROM|RELATED_TO`), `weight` (float, default `1.0`, range 0.0-10.0), `note` (str|null — optional annotation on the edge).
+**Params:** `silo_id` (str, required), `from_node` (str, required), `to_node` (str, required), `relationship` (str, required — one of `REFERENCES|SUPPORTS|CONTRADICTS|DERIVED_FROM|RELATED_TO|CAUSES|CORROBORATES`), `weight` (float, default `1.0`, range 0.0-10.0), `note` (str|null — optional annotation on the edge).
+
+Note: `CAUSES` and `CORROBORATES` edges are gated behind `settings.pattern.causal_edges_enabled`. When the feature flag is off, creating these edge types returns an error. The `metadata.causal_edges_enabled` field in responses indicates whether the flag is active for the silo.
 
 ```json
 {

@@ -331,7 +331,7 @@ WITH n
 MATCH (old:{LABEL_DOCUMENT} {{id: $old_id, silo_id: $silo_id}})
 WHERE old.valid_to IS NULL
 SET old.valid_to = $valid_from
-CREATE (n)-[:SUPERSEDES]->(old)
+CREATE (n)-[:SUPERSEDES {{reason: $reason}}]->(old)
 RETURN n
 """
 

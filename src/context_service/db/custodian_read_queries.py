@@ -140,8 +140,7 @@ ORDER BY e.id
 # fingerprint-drift filter before handing results to the agent.
 FETCH_LOWER_FINDINGS = """
 MATCH (parent:Cluster {id: $parent_cluster_id, silo_id: $silo_id})
-MATCH (child:Cluster)-[:PART_OF]->(parent)
-WHERE child.silo_id = $silo_id
+MATCH (child:Cluster {silo_id: $silo_id})-[:PART_OF]->(parent)
 MATCH (f:Finding {scope: "cluster", silo_id: $silo_id})-[:ABOUT]->(child)
 WHERE (f.source = 'extraction' OR f.status = 'published')
 RETURN f.id AS finding_id,

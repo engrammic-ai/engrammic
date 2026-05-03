@@ -34,7 +34,7 @@ src/context_service/
 
 ```bash
 # Install
-uv pip install -e ".[dev]"
+uv sync --all-extras
 
 # Run
 just dev

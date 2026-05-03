@@ -1,6 +1,7 @@
 """Dagster asset: clustering — Leiden community detection + hierarchical summaries per silo."""
 
 import asyncio
+import concurrent.futures
 import time
 from typing import Any
 
@@ -15,6 +16,16 @@ from context_service.pipelines.resources import (
     QdrantResource,
     RedisResource,
 )
+
+
+def _run_async(coro: Any) -> Any:
+    """Run a coroutine, handling cases where an event loop is already running."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result(timeout=300)
 
 
 @dg.asset(
@@ -44,20 +55,10 @@ def clustering(
         from context_service.clustering.job_store import ClusteringJobStore
         from context_service.clustering.models import ClusteringJob, ClusteringStatus
         from context_service.clustering.service import ClusteringService
-        from context_service.engine.memgraph_store import MemgraphStore
-        from context_service.engine.qdrant_store import EngineQdrantStore
-        from context_service.stores import MemgraphClient
-        from context_service.stores.qdrant import QdrantClient
         from context_service.stores.redis import RedisClient
 
-        driver = await memgraph.driver()
-        mg_client = MemgraphStore(MemgraphClient(driver))
-
-        qdrant_client = QdrantClient(
-            url=qdrant.url,
-            api_key=qdrant.api_key if qdrant.api_key else None,
-        )
-        cluster_qdrant = EngineQdrantStore(qdrant_client)
+        mg_client = await memgraph.store()
+        cluster_qdrant = qdrant.qdrant_store()
 
         redis_conn = await redis.client()
         job_store = ClusteringJobStore(RedisClient(redis_conn))
@@ -82,7 +83,7 @@ def clustering(
         try:
             await service.run_clustering(silo_id, job)
         finally:
-            await qdrant_client.close()
+            await cluster_qdrant.close()
 
         clusters_created = job.total_clusters or 0
         hierarchy_levels = len(job.level_counts or {})
@@ -91,7 +92,7 @@ def clustering(
 
         return clusters_created, hierarchy_levels, embeddings_upserted, cost_usd
 
-    clusters_created, hierarchy_levels, embeddings_upserted, cost_usd = asyncio.run(_run())
+    clusters_created, hierarchy_levels, embeddings_upserted, cost_usd = _run_async(_run())
     duration_s = time.monotonic() - t0
 
     context.log.info(

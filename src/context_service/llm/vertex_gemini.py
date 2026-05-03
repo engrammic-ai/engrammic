@@ -294,6 +294,7 @@ class VertexGeminiProvider(LLMProvider):
         *,
         temperature: float | None = None,
         timeout: float | None = None,
+        max_tokens: int = 4096,  # noqa: ARG002
     ) -> tuple[str, Usage]:
         client = await self._get_client()
         payload = self._build_payload(messages, structured=False, temperature=temperature)
@@ -311,6 +312,7 @@ class VertexGeminiProvider(LLMProvider):
         schema: dict[str, Any],
         *,
         timeout: float | None = None,
+        max_tokens: int = 4096,  # noqa: ARG002
     ) -> tuple[dict[str, Any], Usage]:
         client = await self._get_client()
         payload = self._build_payload(messages, structured=True, schema=schema)

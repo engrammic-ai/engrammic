@@ -3,11 +3,22 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 from typing import Any
 
 import dagster as dg
 
 from context_service.pipelines.resources import MemgraphResource
+
+
+def _run_async(coro: Any) -> Any:
+    """Run a coroutine, handling cases where an event loop is already running."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result(timeout=300)
 
 
 @dg.asset(
@@ -31,19 +42,14 @@ def retention_sweep(
     async def _run() -> dict[str, Any]:
         from context_service.config.settings import get_settings
         from context_service.retention import RetentionPolicy, RetentionService
-        from context_service.stores import MemgraphClient
 
-        driver = await memgraph.driver()
-        mg_client = MemgraphClient(driver)
-        from context_service.engine.memgraph_store import MemgraphStore
-
-        store = MemgraphStore(mg_client)
+        store = await memgraph.store()
         settings = get_settings()
         policy = RetentionPolicy.from_settings(settings)
         service = RetentionService(store=store, policy=policy)
         return await service.run_sweep(silo_id)
 
-    result: dict[str, Any] = asyncio.run(_run())
+    result: dict[str, Any] = _run_async(_run())
 
     context.log.info(
         f"silo={silo_id} tombstoned={result['tombstoned']} "

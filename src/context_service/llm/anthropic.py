@@ -133,7 +133,10 @@ class AnthropicProvider(LLMProvider):
         *,
         temperature: float | None = None,
         timeout: float | None = None,
+        max_tokens: int = 4096,
     ) -> tuple[str, Usage]:
+        if max_tokens < 1:
+            raise ValueError(f"max_tokens must be at least 1, got {max_tokens}")
         client = await self._get_client()
 
         system = ""
@@ -146,7 +149,7 @@ class AnthropicProvider(LLMProvider):
 
         payload: dict[str, Any] = {
             "model": self._model,
-            "max_tokens": 4096,
+            "max_tokens": max_tokens,
             "messages": user_messages,
         }
         if system:
@@ -186,7 +189,10 @@ class AnthropicProvider(LLMProvider):
         schema: dict[str, Any],
         *,
         timeout: float | None = None,
+        max_tokens: int = 4096,
     ) -> tuple[dict[str, Any], Usage]:
+        if max_tokens < 1:
+            raise ValueError(f"max_tokens must be at least 1, got {max_tokens}")
         client = await self._get_client()
 
         system = ""
@@ -205,7 +211,7 @@ class AnthropicProvider(LLMProvider):
 
         payload: dict[str, Any] = {
             "model": self._model,
-            "max_tokens": 4096,
+            "max_tokens": max_tokens,
             "messages": user_messages,
             "tools": [tool],
             "tool_choice": {"type": "tool", "name": "extraction_result"},

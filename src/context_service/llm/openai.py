@@ -125,6 +125,7 @@ class OpenAIProvider(LLMProvider):
         *,
         temperature: float | None = None,
         timeout: float | None = None,
+        max_tokens: int = 4096,  # noqa: ARG002
     ) -> tuple[str, Usage]:
         client = await self._get_client()
         payload: dict[str, Any] = {
@@ -168,6 +169,7 @@ class OpenAIProvider(LLMProvider):
         schema: dict[str, Any],
         *,
         timeout: float | None = None,
+        max_tokens: int = 4096,  # noqa: ARG002
     ) -> tuple[dict[str, Any], Usage]:
         client = await self._get_client()
         payload = {

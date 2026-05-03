@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -54,6 +55,7 @@ class QdrantClient:
         self._api_key = api_key
         self._vector_size = vector_size
         self._client: AsyncQdrantClient | None = None
+        self._init_lock: asyncio.Lock = asyncio.Lock()
 
     @classmethod
     def from_settings(cls, settings: Settings) -> QdrantClient:
@@ -73,12 +75,14 @@ class QdrantClient:
         )
 
     async def _get_client(self) -> AsyncQdrantClient:
-        """Get or create the Qdrant client."""
+        """Get or create the Qdrant client (thread-safe via asyncio lock)."""
         if self._client is None:
-            self._client = AsyncQdrantClient(
-                url=self._url,
-                api_key=self._api_key,
-            )
+            async with self._init_lock:
+                if self._client is None:
+                    self._client = AsyncQdrantClient(
+                        url=self._url,
+                        api_key=self._api_key,
+                    )
         return self._client
 
     async def ensure_collection(self, *, hybrid: bool = False) -> None:

@@ -169,5 +169,5 @@ def create_mcp_server() -> FastMCP:
 
     register_all(mcp)
 
-    logger.info("MCP server created", tools=14)
+    logger.info("MCP server created", tools=16)
     return mcp

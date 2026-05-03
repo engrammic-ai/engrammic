@@ -123,7 +123,7 @@ class VertexAIEmbeddingService:
         self, client: httpx.AsyncClient, payload: dict[str, object]
     ) -> httpx.Response:
         """Make API request with exponential backoff on 429 rate limit."""
-        token = await asyncio.get_event_loop().run_in_executor(None, self._get_auth_token)
+        token = await asyncio.get_running_loop().run_in_executor(None, self._get_auth_token)
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",

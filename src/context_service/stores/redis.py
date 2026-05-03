@@ -36,7 +36,7 @@ async def create_redis_pool(settings: Settings | None = None) -> Redis[bytes]:  
 
     pool = ConnectionPool.from_url(
         settings.redis_url,
-        max_connections=50,
+        max_connections=settings.redis_max_connections,
         decode_responses=False,
     )
 

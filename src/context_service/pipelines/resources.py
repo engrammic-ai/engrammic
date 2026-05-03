@@ -21,6 +21,8 @@ if TYPE_CHECKING:
     from redis.asyncio import Redis
 
     from context_service.embeddings.base import EmbeddingService
+    from context_service.engine.protocols import HyperGraphStore
+    from context_service.engine.qdrant_store import EngineQdrantStore
     from context_service.llm.base import LLMProvider
 
 
@@ -63,6 +65,18 @@ class MemgraphResource(dg.ConfigurableResource):  # type: ignore[type-arg]
                 connection_acquisition_timeout=30.0,
             )
         return self._driver
+
+    async def store(self) -> HyperGraphStore:
+        """Return a HyperGraphStore wrapping the Memgraph driver.
+
+        Centralises the concrete MemgraphStore construction so asset bodies
+        depend only on the HyperGraphStore protocol (rule 8).
+        """
+        from context_service.engine.memgraph_store import MemgraphStore
+        from context_service.stores import MemgraphClient
+
+        driver = await self.driver()
+        return MemgraphStore(MemgraphClient(driver))
 
     def teardown_after_execution(self, _context: dg.InitResourceContext) -> None:
         if self._driver is not None:
@@ -115,6 +129,23 @@ class QdrantResource(dg.ConfigurableResource):  # type: ignore[type-arg]
                 api_key=self.api_key if self.api_key else None,
             )
         return self._client
+
+    def qdrant_store(self, vector_size: int = 768) -> EngineQdrantStore:
+        """Return an EngineQdrantStore backed by the resource's Qdrant config.
+
+        Asset bodies should call this rather than importing EngineQdrantStore
+        directly, keeping concrete store construction out of pipeline assets.
+        The caller is responsible for closing the underlying client when done.
+        """
+        from context_service.engine.qdrant_store import EngineQdrantStore
+        from context_service.stores.qdrant import QdrantClient as StoreQdrantClient
+
+        store_client = StoreQdrantClient(
+            url=self.url,
+            api_key=self.api_key if self.api_key else None,
+            vector_size=vector_size,
+        )
+        return EngineQdrantStore(store_client)
 
     def teardown_after_execution(self, _context: dg.InitResourceContext) -> None:
         if self._client is not None:

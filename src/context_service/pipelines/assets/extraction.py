@@ -1,6 +1,7 @@
 """Dagster asset: batch extraction of :Document nodes to :Claim/:Entity per silo."""
 
 import asyncio
+import concurrent.futures
 import hashlib
 import time
 from datetime import UTC, datetime
@@ -11,6 +12,16 @@ from dagster import AssetExecutionContext
 
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import LLMResource, MemgraphResource
+
+
+def _run_async(coro: Any) -> Any:
+    """Run a coroutine, handling cases where an event loop is already running."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result(timeout=300)
 
 _BATCH_SIZE = 50
 
@@ -202,7 +213,7 @@ def extraction(
 
         return docs_processed, claims_created, tokens_used, 0.0
 
-    docs_processed, claims_created, tokens_used, cost_usd = asyncio.run(_run())
+    docs_processed, claims_created, tokens_used, cost_usd = _run_async(_run())
     duration_s = time.monotonic() - t0
 
     context.log.info(

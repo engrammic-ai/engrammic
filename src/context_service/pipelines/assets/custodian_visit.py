@@ -1,6 +1,7 @@
 """Dagster asset: custodian visit sweep per silo — runs the 4-phase visit loop over clusters."""
 
 import asyncio
+import concurrent.futures
 import time
 from typing import Any
 
@@ -9,6 +10,16 @@ from dagster import AssetExecutionContext
 
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import MemgraphResource, RedisResource
+
+
+def _run_async(coro: Any) -> Any:
+    """Run a coroutine, handling cases where an event loop is already running."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result(timeout=300)
 
 _BATCH_SIZE = 20
 
@@ -61,17 +72,16 @@ def custodian_visit(
         from context_service.custodian.metrics import compute_cost_usd
         from context_service.custodian.models import VisitStatus
         from context_service.custodian.visit import run_visit
-        from context_service.engine.memgraph_store import MemgraphStore
         from context_service.stores import MemgraphClient
         from context_service.stores.redis import RedisClient
 
         driver = await memgraph.driver()
-        mg_client = MemgraphClient(driver)
-        mg_store = MemgraphStore(mg_client)
+        mg_raw = MemgraphClient(driver)
+        mg_store = await memgraph.store()
         raw_redis = await redis.client()
         redis_client = RedisClient(raw_redis)
 
-        cluster_rows = await mg_client.execute_query(
+        cluster_rows = await mg_raw.execute_query(
             _LIST_ACTIVE_CLUSTERS,
             {"silo_id": silo_id, "batch_size": _BATCH_SIZE},
         )
@@ -88,7 +98,7 @@ def custodian_visit(
             member_count = int(row.get("member_count") or 0)
             naive_summary: str | None = row.get("summary")
 
-            child_rows = await mg_client.execute_query(
+            child_rows = await mg_raw.execute_query(
                 _FETCH_CHILD_FINDINGS,
                 {"cluster_id": cluster_id, "silo_id": silo_id},
             )
@@ -127,7 +137,7 @@ def custodian_visit(
 
         return visits, commitments_created, llm_calls, total_cost_usd
 
-    visits, commitments_created, llm_calls, cost_usd = asyncio.run(_run())
+    visits, commitments_created, llm_calls, cost_usd = _run_async(_run())
     duration_s = time.monotonic() - t0
 
     context.log.info(

@@ -32,7 +32,9 @@ async def _context_remember(
     if err is not None:
         return err
 
-    expected_silo_id = derive_silo_id(auth.org_id)
+    # derive_silo_id is deterministic and validate_silo_ownership already
+    # confirmed silo_id == derive_silo_id(org_id), so use silo_id directly.
+    validated_silo_id = derive_silo_id(auth.org_id)
 
     try:
         decay = DecayClass(decay_class)
@@ -43,7 +45,7 @@ async def _context_remember(
         }
 
     ctx_svc = get_context_service()
-    scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
+    scope = ScopeContext(org_id=auth.org_id, silo_id=validated_silo_id)
     _start = time.perf_counter()
     node = await ctx_svc.remember(
         scope=scope,

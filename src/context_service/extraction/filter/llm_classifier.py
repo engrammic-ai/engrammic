@@ -85,9 +85,9 @@ class LLMClassifierRule:
                 ),
                 timeout=self._rs.llm_timeout_s,
             )
-        except Exception as e:  # TimeoutError is a subclass; Exception covers both
+        except Exception as e:  # covers asyncio.TimeoutError from wait_for and any LLM provider error
             await cb.record_failure()
-            log.info("llm classifier failed: %s", e)
+            log.warning("llm classifier failed: %s", e)
             return FilterDecision(
                 action="keep",
                 rule_fired=RuleFired.EXTERNAL_FAILURE,

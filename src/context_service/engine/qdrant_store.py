@@ -64,6 +64,10 @@ class EngineQdrantStore:
         self._ensured_collections: set[str] = set()
         self._hybrid = hybrid
 
+    async def close(self) -> None:
+        """Release the underlying Qdrant client connection."""
+        await self._qdrant.close()
+
     def _collection_name(self, silo_id: str) -> str:
         return f"{self.COLLECTION_PREFIX}{silo_id}"
 

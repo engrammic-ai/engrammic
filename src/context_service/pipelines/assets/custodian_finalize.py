@@ -1,6 +1,7 @@
 """Dagster asset: custodian finalize — promote committed claims to :Finding nodes via R2 consensus."""
 
 import asyncio
+import concurrent.futures
 import time
 from typing import Any
 
@@ -9,6 +10,16 @@ from dagster import AssetExecutionContext
 
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import MemgraphResource
+
+
+def _run_async(coro: Any) -> Any:
+    """Run a coroutine, handling cases where an event loop is already running."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result(timeout=300)
 
 _BATCH_SIZE = 100
 
@@ -42,14 +53,13 @@ def custodian_finalize(
         from context_service.custodian.handlers.consensus import (
             GET_CHAINS_FOR_COMMITMENT,
         )
-        from context_service.engine.memgraph_store import MemgraphStore
         from context_service.stores import MemgraphClient
 
         driver = await memgraph.driver()
-        mg_client = MemgraphClient(driver)
-        mg_store = MemgraphStore(mg_client)
+        mg_raw = MemgraphClient(driver)
+        mg_store = await memgraph.store()
 
-        rows = await mg_client.execute_query(
+        rows = await mg_raw.execute_query(
             _SCAN_PROMOTABLE_COMMITMENTS,
             {"silo_id": silo_id, "batch_size": _BATCH_SIZE},
         )
@@ -62,7 +72,7 @@ def custodian_finalize(
         for row in rows:
             commitment_id = str(row["commitment_id"])
 
-            chain_rows = await mg_client.execute_query(
+            chain_rows = await mg_raw.execute_query(
                 GET_CHAINS_FOR_COMMITMENT,
                 {"commitment_id": commitment_id, "silo_id": silo_id},
             )
@@ -90,7 +100,7 @@ def custodian_finalize(
 
         return clusters_processed, findings_created
 
-    clusters_processed, findings_created = asyncio.run(_run())
+    clusters_processed, findings_created = _run_async(_run())
     duration_s = time.monotonic() - t0
 
     context.log.info(

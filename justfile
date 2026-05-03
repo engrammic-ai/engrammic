@@ -65,11 +65,11 @@ coverage:
 
 # Start Dagster webserver (local)
 dagster-web:
-    uv run dagster-webserver -h 0.0.0.0 -p 3000 -m context_service.pipelines
+    uv run dagster-webserver -h 0.0.0.0 -p 3000 -m context_service.pipelines.definitions
 
 # Start Dagster daemon (local)
 dagster-daemon:
-    uv run dagster-daemon run -m context_service.pipelines
+    uv run dagster-daemon run -m context_service.pipelines.definitions
 
 # --- Running ---
 

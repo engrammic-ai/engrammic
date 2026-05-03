@@ -9,6 +9,7 @@ while preserving provenance via :DERIVED_FROM edges.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import time
 from typing import Any
 
@@ -17,6 +18,16 @@ from dagster import AssetExecutionContext
 
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import MemgraphResource
+
+
+def _run_async(coro: Any) -> Any:
+    """Run a coroutine, handling cases where an event loop is already running."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result(timeout=300)
 
 _BATCH_LIMIT = 100
 
@@ -41,12 +52,8 @@ def reasoning_compaction(
 
     async def _run() -> tuple[int, list[str]]:
         from context_service.engine.compaction import batch_compact_chains
-        from context_service.engine.memgraph_store import MemgraphStore
-        from context_service.stores import MemgraphClient
 
-        driver = await memgraph.driver()
-        mg_client = MemgraphClient(driver)
-        store = MemgraphStore(mg_client)
+        store = await memgraph.store()
 
         event_ids = await batch_compact_chains(
             store,
@@ -55,7 +62,7 @@ def reasoning_compaction(
         )
         return len(event_ids), event_ids
 
-    chains_compacted, event_ids = asyncio.run(_run())
+    chains_compacted, event_ids = _run_async(_run())
     duration_s = time.monotonic() - t0
 
     context.log.info(
