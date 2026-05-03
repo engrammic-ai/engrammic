@@ -31,8 +31,12 @@ import structlog
 
 from context_service.config.settings import get_settings
 from context_service.db.queries import (
+    CLEAR_CASCADE_PENDING,
     CREATE_BELIEF_FROM_FACTS,
     CREATE_BELIEF_SUPERSEDES,
+    FIND_BELIEFS_REFERENCING,
+    FLAG_CASCADE_PENDING,
+    GET_CASCADE_PENDING_BELIEFS,
     GET_FACTS_IN_CLUSTER,
     MARK_BELIEF_STALE,
     UPDATE_BELIEF_CENTROID,
@@ -583,4 +587,207 @@ async def split_belief(
         parent_belief_id=belief_id,
         child_belief_ids=child_belief_ids,
         child_count=len(child_belief_ids),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Partial revision: split + cascade flagging
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class PartialRevisionResult:
+    """Outcome of partial_revise_belief."""
+
+    original_belief_id: str
+    revised_id: str
+    retained_id: str
+    cascade_flagged_count: int
+
+
+async def partial_revise_belief(
+    store: HyperGraphStore,
+    belief_id: str,
+    silo_id: str,
+    revision_note: str,
+    llm_client: LLMProvider,
+    embedding_client: EmbeddingService,
+) -> PartialRevisionResult:
+    """Partially revise a belief: split into revised + retained, then cascade-flag dependents.
+
+    When new evidence partially contradicts a belief (some claims remain valid,
+    some do not), this function:
+
+    1. Calls split_belief to decompose the original into child beliefs.
+       The first child is treated as the *revised* portion; the second (if any)
+       is the *retained* portion.  When the LLM returns only one child,
+       the original belief is also treated as the retained portion.
+    2. Updates the confidence on the retained portion using the original
+       belief's confidence unchanged (the split function already inherits it).
+    3. Calls flag_cascade to mark all beliefs that reference the original
+       belief for review.
+
+    Parameters
+    ----------
+    store:
+        HyperGraphStore implementation.
+    belief_id:
+        ID of the :Belief to partially revise.
+    silo_id:
+        Silo scope.
+    revision_note:
+        Human-readable description of what changed and why.
+    llm_client:
+        LLM provider for splitting belief content.
+    embedding_client:
+        Used to compute centroid embeddings for child beliefs.
+
+    Returns
+    -------
+    PartialRevisionResult
+        Contains the original belief id, the revised child id, the retained
+        child id, and the number of downstream beliefs flagged for cascade review.
+    """
+    split_result = await split_belief(
+        store=store,
+        belief_id=belief_id,
+        silo_id=silo_id,
+        revision_note=revision_note,
+        llm_client=llm_client,
+        embedding_client=embedding_client,
+    )
+
+    if len(split_result.child_belief_ids) >= 2:
+        revised_id = split_result.child_belief_ids[0]
+        retained_id = split_result.child_belief_ids[1]
+    else:
+        # Single-child split: treat the child as revised, original as retained.
+        revised_id = split_result.child_belief_ids[0]
+        retained_id = belief_id
+
+    flagged_count = await flag_cascade(
+        store=store,
+        revised_belief_id=belief_id,
+        silo_id=silo_id,
+    )
+
+    logger.info(
+        "belief_partially_revised",
+        original_belief_id=belief_id,
+        revised_id=revised_id,
+        retained_id=retained_id,
+        silo_id=silo_id,
+        cascade_flagged_count=flagged_count,
+    )
+
+    return PartialRevisionResult(
+        original_belief_id=belief_id,
+        revised_id=revised_id,
+        retained_id=retained_id,
+        cascade_flagged_count=flagged_count,
+    )
+
+
+async def flag_cascade(
+    store: HyperGraphStore,
+    revised_belief_id: str,
+    silo_id: str,
+) -> int:
+    """Flag downstream beliefs for review after a belief has been revised.
+
+    Finds all :Belief nodes that reference ``revised_belief_id`` and sets
+    ``revision_cascade_pending = true`` on each.  The custodian sensor then
+    picks these up for re-evaluation.
+
+    Parameters
+    ----------
+    store:
+        HyperGraphStore implementation.
+    revised_belief_id:
+        ID of the belief that was just revised or split.
+    silo_id:
+        Silo scope.
+
+    Returns
+    -------
+    int
+        Number of downstream beliefs flagged.
+    """
+    referencing_rows = await store.execute_query(
+        FIND_BELIEFS_REFERENCING,
+        {"belief_id": revised_belief_id, "silo_id": silo_id},
+    )
+    if not referencing_rows:
+        return 0
+
+    belief_ids = [row["belief_id"] for row in referencing_rows]
+    now = datetime.now(UTC)
+
+    await store.execute_write(
+        FLAG_CASCADE_PENDING,
+        {
+            "belief_ids": belief_ids,
+            "silo_id": silo_id,
+            "flagged_at": now.isoformat(),
+        },
+    )
+
+    logger.info(
+        "cascade_flagged",
+        revised_belief_id=revised_belief_id,
+        silo_id=silo_id,
+        flagged_count=len(belief_ids),
+    )
+
+    return len(belief_ids)
+
+
+async def get_cascade_pending(
+    store: HyperGraphStore,
+    silo_id: str,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Return beliefs with revision_cascade_pending = true for custodian processing.
+
+    Parameters
+    ----------
+    store:
+        HyperGraphStore implementation.
+    silo_id:
+        Silo scope.
+    limit:
+        Maximum number of pending beliefs to return.
+
+    Returns
+    -------
+    list[dict[str, Any]]
+        Each dict contains belief_id, content, confidence, cascade_flagged_at,
+        and wisdom_status.
+    """
+    return await store.execute_query(
+        GET_CASCADE_PENDING_BELIEFS,
+        {"silo_id": silo_id, "limit": limit},
+    )
+
+
+async def clear_cascade_pending(
+    store: HyperGraphStore,
+    belief_id: str,
+    silo_id: str,
+) -> None:
+    """Clear the revision_cascade_pending flag after custodian processes a belief.
+
+    Parameters
+    ----------
+    store:
+        HyperGraphStore implementation.
+    belief_id:
+        ID of the belief to clear.
+    silo_id:
+        Silo scope.
+    """
+    now = datetime.now(UTC)
+    await store.execute_write(
+        CLEAR_CASCADE_PENDING,
+        {"belief_id": belief_id, "silo_id": silo_id, "processed_at": now.isoformat()},
     )

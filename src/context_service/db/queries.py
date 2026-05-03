@@ -1061,6 +1061,57 @@ WHERE s.updated_at < $stale_before
 RETURN s.id AS session_id, s.silo_id AS silo_id, s.updated_at AS updated_at
 """
 
+# ---------------------------------------------------------------------------
+# Partial revision + cascade flagging queries (v1.4 Phase 4b)
+# ---------------------------------------------------------------------------
+
+# Find all :Belief nodes that reference a given belief via SYNTHESIZED_FROM,
+# REVISED_FROM, MERGED_FROM, or REFERENCES edges.  Used to identify downstream
+# beliefs that must be flagged for review when the referenced belief changes.
+# Parameters: belief_id (str), silo_id (str).
+FIND_BELIEFS_REFERENCING = """
+MATCH (b:Belief {silo_id: $silo_id})
+WHERE (b)-[:SYNTHESIZED_FROM|REVISED_FROM|MERGED_FROM|REFERENCES]->(:Belief {id: $belief_id, silo_id: $silo_id})
+  AND NOT exists(b.tombstoned_at)
+RETURN b.id AS belief_id, b.content AS content,
+       coalesce(b.confidence, 1.0) AS confidence,
+       coalesce(b.wisdom_status, 'active') AS wisdom_status
+"""
+
+# Set revision_cascade_pending = true on a set of :Belief nodes to mark them
+# for review by the custodian.
+# Parameters: belief_ids (list[str]), silo_id (str), flagged_at (ISO str).
+FLAG_CASCADE_PENDING = """
+UNWIND $belief_ids AS bid
+MATCH (b:Belief {id: bid, silo_id: $silo_id})
+SET b.revision_cascade_pending = true,
+    b.cascade_flagged_at = $flagged_at
+RETURN count(b) AS flagged
+"""
+
+# Return all :Belief nodes in a silo that have revision_cascade_pending = true.
+# Parameters: silo_id (str), limit (int).
+GET_CASCADE_PENDING_BELIEFS = """
+MATCH (b:Belief {silo_id: $silo_id})
+WHERE b.revision_cascade_pending = true
+  AND NOT exists(b.tombstoned_at)
+RETURN b.id AS belief_id, b.content AS content,
+       coalesce(b.confidence, 1.0) AS confidence,
+       b.cascade_flagged_at AS cascade_flagged_at,
+       coalesce(b.wisdom_status, 'active') AS wisdom_status
+ORDER BY b.cascade_flagged_at ASC
+LIMIT $limit
+"""
+
+# Clear revision_cascade_pending flag after the custodian processes a belief.
+# Parameters: belief_id (str), silo_id (str).
+CLEAR_CASCADE_PENDING = """
+MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
+REMOVE b.revision_cascade_pending
+SET b.cascade_processed_at = $processed_at
+RETURN b.id AS belief_id
+"""
+
 GET_SUPERSESSION_CHAIN = (
     "MATCH (start {id: $start_id, silo_id: $silo_id}) "
     "OPTIONAL MATCH path = (start)-[:SUPERSEDES*0..20]->(related) "
