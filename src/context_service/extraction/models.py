@@ -32,6 +32,7 @@ class RelationshipType(StrEnum):
     SPECIALIZES = "SPECIALIZES"  # X is a kind / refinement of Y
     INSTANTIATES = "INSTANTIATES"  # X is an instance of type Y
     CAUSES = "CAUSES"  # X triggers / leads to Y
+    PREVENTS = "PREVENTS"  # X blocks / inhibits Y from occurring
     CORROBORATES = "CORROBORATES"  # X supports / confirms Y
     CONTRADICTS = "CONTRADICTS"  # X opposes / supersedes Y (symmetric)
     REFERENCES = "REFERENCES"  # X mentions / describes Y

@@ -441,7 +441,7 @@ class ClusteringService:
 
     async def clear_clusters(self, silo_id: str) -> None:
         """Delete all existing clusters and their relationships for this silo."""
-        result = await self._memgraph.execute_write(queries.DELETE_CLUSTERS, {"silo_id": silo_id})
+        result = await self._memgraph.execute_write(queries.DELETE_ALL_CLUSTERS, {"silo_id": silo_id})
         deleted = result[0].get("deleted", 0) if result else 0
         if deleted > 0:
             logger.info("cleared existing clusters", count=deleted)

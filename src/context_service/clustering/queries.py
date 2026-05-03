@@ -20,7 +20,11 @@ from primitives.eag.queries.cluster import (
     UPDATE_CLUSTER_SUMMARY,
 )
 
-from context_service.db.queries import BATCH_CREATE_PART_OF, BATCH_UPDATE_CLUSTER_SUMMARIES
+from context_service.db.queries import (
+    BATCH_CREATE_PART_OF,
+    BATCH_UPDATE_CLUSTER_SUMMARIES,
+    DELETE_ALL_CLUSTERS,
+)
 
 # R-006: one round-trip for all Cluster nodes in a level (replaces per-cluster CREATE_CLUSTER loop).
 BATCH_CREATE_CLUSTERS = """
@@ -48,6 +52,7 @@ __all__ = [
     "COUNT_CLUSTERS",
     "CREATE_CLUSTER",
     "CREATE_PART_OF",
+    "DELETE_ALL_CLUSTERS",
     "DELETE_CLUSTERS",
     "GET_CLUSTER",
     "GET_CLUSTER_MEMBERS",

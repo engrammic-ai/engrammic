@@ -379,6 +379,10 @@ class SecurityConfig(BaseModel):
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     rate_limit: RateLimitConfig = Field(default_factory=RateLimitConfig)
     max_request_body_mb: int = 10
+    admin_api_key: SecretStr | None = Field(
+        default=None,
+        description="Bearer token required for /admin/* endpoints. None disables the check (dev only).",
+    )
 
 
 class BearConfig(BaseModel):

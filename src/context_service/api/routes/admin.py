@@ -10,12 +10,29 @@ from datetime import datetime
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
+
+from context_service.config.settings import get_settings
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+_bearer = HTTPBearer(auto_error=False)
+
+
+def _require_admin_key(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),  # noqa: B008
+) -> None:
+    """Validate the Authorization: Bearer <key> header against ADMIN_API_KEY."""
+    settings = get_settings()
+    configured_key = settings.security.admin_api_key
+    if configured_key is None:
+        return
+    if credentials is None or credentials.credentials != configured_key.get_secret_value():
+        raise HTTPException(status_code=401, detail="Invalid or missing admin API key")
 
 
 # ---------------------------------------------------------------------------
@@ -73,6 +90,7 @@ class TombstoneResponse(BaseModel):
     response_model=TombstoneResponse,
     operation_id="admin_tombstone",
     summary="Tombstone inferred CAUSES edges for a silo",
+    dependencies=[Depends(_require_admin_key)],
 )
 async def admin_tombstone(body: TombstoneRequest, request: Request) -> TombstoneResponse:
     """Tombstone edges matching the supplied criteria within the given silo.

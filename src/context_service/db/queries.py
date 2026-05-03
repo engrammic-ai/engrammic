@@ -112,6 +112,13 @@ FOREACH (c IN clusters | DETACH DELETE c)
 RETURN cnt AS deleted
 """
 
+DELETE_ALL_CLUSTERS = """
+MATCH (c:Cluster {silo_id: $silo_id})
+WITH collect(c) AS clusters, count(c) AS cnt
+FOREACH (c IN clusters | DETACH DELETE c)
+RETURN cnt AS deleted
+"""
+
 # Cluster membership queries
 CREATE_MEMBER_OF = f"""
 MATCH (n {{id: $node_id, silo_id: $silo_id}})

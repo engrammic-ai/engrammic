@@ -1239,6 +1239,9 @@ class ContextService:
             quoted = ", ".join(f'"{lyr}"' for lyr in layers)
             layer_filter = f"AND n.layer IN [{quoted}]"
 
+        if not isinstance(max_depth, int):
+            raise TypeError(f"max_depth must be an int, got {type(max_depth).__name__!r}")
+
         rows = await self._memgraph.execute_query(
             f"""
             UNWIND $start_ids AS seed_id
