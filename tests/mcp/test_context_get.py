@@ -328,3 +328,29 @@ async def test_get_no_access_event_when_redis_unavailable(
         await _context_get(node_ids=str(node_id), silo_id=_SILO_ID)
 
     mock_emit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_include_reflections(
+    mock_auth, mock_context_service, mock_silo_valid, mock_redis_none, mock_metrics
+):
+    from context_service.mcp.tools.context_get import _context_get
+
+    node_id = uuid.uuid4()
+    fake_reflections = [
+        {"reflection_id": str(uuid.uuid4()), "content": "This was updated after review."},
+    ]
+    mock_context_service.get.return_value = _make_node(node_id=node_id)
+    mock_context_service.get_reflections = AsyncMock(return_value=fake_reflections)
+
+    result = await _context_get(
+        node_ids=str(node_id),
+        silo_id=_SILO_ID,
+        include_reflections=True,
+    )
+
+    assert len(result["nodes"]) == 1
+    node = result["nodes"][0]
+    assert "reflections" in node
+    assert node["reflections"] == fake_reflections
+    mock_context_service.get_reflections.assert_called_once()
