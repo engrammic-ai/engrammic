@@ -724,6 +724,13 @@ class Settings(BaseSettings):
     retention_grace_period_days: int = Field(default=7, ge=1)
 
     # =========================================================================
+    # Summarization Settings
+    # =========================================================================
+
+    summarization_model: str = Field(default="claude-3-haiku-20240307")
+    summarization_max_tokens: int = Field(default=500)
+
+    # =========================================================================
     # Signals — heat / freshness / priority
     # =========================================================================
 
