@@ -4,9 +4,12 @@ Active implementation plans for context-service. Each plan lives in its own file
 
 ## Active plans
 
-### v1.1 — EAG Completion (next)
-- [v1.1-roadmap.md](./v1.1-roadmap.md) — master index. P0: T3 synthesis + T6 compaction. P1: T4 revision + patterns + causal edges. P2: auto-reflection.
-- Specs: `../specs/v1.1/` (t3-belief-synthesis, t6-session-compaction, t4-belief-revision, pattern-nodes, causal-edges, auto-reflection)
+### v1.2 — Refinements + Protocol Migration (next)
+- [v1.2-backlog.md](./v1.2-backlog.md) — deferred items from v1.1. Config tuning, pattern detection stubs, protocol migration.
+
+### v1.1 — EAG Completion (complete 2026-05-03)
+- [v1.1-roadmap.md](./v1.1-roadmap.md) — T3 synthesis, T6 compaction, T4 revision, patterns, causal edges, auto-reflection.
+- Specs: `../specs/v1.1/`
 
 ### v2 — Architecture Cleanup + REST API (current)
 - [2026-05-02-v2-master.md](../docs/superpowers/plans/2026-05-02-v2-master.md) — master index. Four phases.
