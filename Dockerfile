@@ -1,5 +1,5 @@
 # Stage 1: Build dependencies
-FROM python:3.12-slim AS builder
+FROM python:3.13-slim AS builder
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ COPY context-service/pyproject.toml context-service/uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
 # Stage 2: Runtime
-FROM python:3.12-slim
+FROM python:3.13-slim
 
 WORKDIR /app
 
