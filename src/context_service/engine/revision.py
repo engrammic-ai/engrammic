@@ -43,10 +43,10 @@ from context_service.engine.auto_reflection import (
 )
 from context_service.engine.synthesis import (
     _SYNTHESIS_SYSTEM_PROMPT,
-    MIN_FACTS_FOR_BELIEF,
     InsufficientEvidenceError,
     _average_confidence,
     _build_synthesis_prompt,
+    _get_min_facts_for_belief,
 )
 
 if TYPE_CHECKING:
@@ -56,12 +56,12 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
-# Cosine *distance* threshold above which a belief is considered stale.
-# Distance = 1 - cosine_similarity.  0.15 corresponds to ~8.6 degrees of
-# angular drift -- conservative enough to suppress noise while catching real
-# topic shifts.
-# Reads from settings so it can be tuned via REVISION_COSINE_THRESHOLD env var.
-REVISION_THRESHOLD: float = get_settings().revision_cosine_threshold
+def _get_revision_threshold() -> float:
+    """Get revision threshold, supporting hot-reload."""
+    return get_settings().revision_cosine_threshold
+
+
+REVISION_THRESHOLD: float = 0.15  # Default for docs; use _get_revision_threshold() at runtime
 
 _GET_BELIEF_FOR_REVISION = """
 MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
@@ -210,7 +210,8 @@ async def check_belief_revision(
         _GET_FACT_CONTENTS_IN_CLUSTER,
         {"cluster_id": cluster_id, "silo_id": silo_id},
     )
-    if len(fact_rows) < MIN_FACTS_FOR_BELIEF:
+    min_facts = _get_min_facts_for_belief()
+    if len(fact_rows) < min_facts:
         return RevisionCheckResult(
             belief_id=belief_id,
             needs_revision=False,
@@ -224,7 +225,7 @@ async def check_belief_revision(
     new_centroid = _centroid(embeddings)
 
     distance = _cosine_distance(stored_centroid, new_centroid)
-    needs_revision = distance > REVISION_THRESHOLD
+    needs_revision = distance > _get_revision_threshold()
 
     logger.info(
         "belief_revision_check",
@@ -289,10 +290,11 @@ async def revise_belief(
         GET_FACTS_IN_CLUSTER,
         {"cluster_id": cluster_id, "silo_id": silo_id},
     )
-    if len(fact_rows) < MIN_FACTS_FOR_BELIEF:
+    min_facts = _get_min_facts_for_belief()
+    if len(fact_rows) < min_facts:
         raise InsufficientEvidenceError(
             f"Cluster {cluster_id!r} has {len(fact_rows)} fact(s); "
-            f"minimum required for revision is {MIN_FACTS_FOR_BELIEF}."
+            f"minimum required for revision is {min_facts}."
         )
 
     fact_ids = [row["fact_id"] for row in fact_rows]

@@ -7,11 +7,11 @@ from typing import Any
 
 import dagster as dg
 
-from context_service.engine.synthesis import MIN_FACTS_FOR_BELIEF
+from context_service.engine.synthesis import _get_min_facts_for_belief
 from context_service.pipelines.resources import MemgraphResource
 from context_service.utils.json import JSONDecodeError, dumps, loads
 
-# Query clusters that have at least MIN_FACTS_FOR_BELIEF :Fact members and
+# Query clusters that meet the minimum fact density threshold and
 # do not yet have a :Belief synthesised from them.
 _LIST_DENSE_CLUSTERS_WITHOUT_BELIEF = """
 MATCH (f:Fact)-[:MEMBER_OF]->(c:Cluster {silo_id: $silo_id})
@@ -43,8 +43,8 @@ def _parse_cursor(cursor: str | None) -> dict[str, list[str]]:
     asset_selection=dg.AssetSelection.assets("belief_synthesis"),
     minimum_interval_seconds=120,
     description=(
-        "Triggers belief synthesis for clusters with >= "
-        f"{MIN_FACTS_FOR_BELIEF} facts that lack a covering :Belief node."
+        "Triggers belief synthesis for clusters meeting the density threshold "
+        "(belief_density_threshold setting) that lack a covering :Belief node."
     ),
 )
 def belief_synthesis_sensor(
@@ -69,7 +69,7 @@ def belief_synthesis_sensor(
             already_seen: list[str] = cursor_data.get(silo_id, [])
             rows = await client.execute_query(
                 _LIST_DENSE_CLUSTERS_WITHOUT_BELIEF,
-                {"silo_id": silo_id, "min_facts": MIN_FACTS_FOR_BELIEF},
+                {"silo_id": silo_id, "min_facts": _get_min_facts_for_belief()},
             )
             for row in rows:
                 cluster_id = str(row["cluster_id"])
