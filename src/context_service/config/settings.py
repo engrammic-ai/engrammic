@@ -793,6 +793,11 @@ class Settings(BaseSettings):
         ge=1,
         description="Chains with <= this many steps are inlined; longer chains use LLM summarization",
     )
+    pattern_min_frequency: int = Field(
+        default=2,
+        ge=1,
+        description="Minimum observation frequency for a pattern to be retained",
+    )
 
     # =========================================================================
     # Signals — heat / freshness / priority

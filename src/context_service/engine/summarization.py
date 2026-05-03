@@ -10,9 +10,10 @@ from context_service.config.settings import get_settings
 
 logger = structlog.get_logger(__name__)
 
-# Chains with <= this many steps are inlined; longer chains use LLM summarization.
-# Reads from settings so it can be tuned via COMPACTION_STEP_THRESHOLD env var.
-_INLINE_THRESHOLD: int = get_settings().compaction_step_threshold
+
+def _get_inline_threshold() -> int:
+    """Get threshold at call time (not cached at import) for hot-reload support."""
+    return get_settings().compaction_step_threshold
 
 _SUMMARIZATION_PROMPT = """Summarize this reasoning chain concisely. Capture the key steps, conclusions, and final outcome. Be brief but preserve important details.
 
@@ -81,11 +82,12 @@ async def summarize_reasoning_steps(
     if not steps:
         return "(no steps)"
 
-    if len(steps) <= _INLINE_THRESHOLD:
+    threshold = _get_inline_threshold()
+    if len(steps) <= threshold:
         return inline_summary(steps)
 
     if llm_client is None:
-        raise ValueError(f"LLM client required for chains > {_INLINE_THRESHOLD} steps")
+        raise ValueError(f"LLM client required for chains > {threshold} steps")
 
     steps_text = _format_steps_for_prompt(steps)
     prompt = _SUMMARIZATION_PROMPT.format(steps_text=steps_text)
