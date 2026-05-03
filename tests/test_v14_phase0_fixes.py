@@ -100,7 +100,6 @@ class TestSiloApiCleanup:
         from unittest.mock import AsyncMock, MagicMock, patch
 
         from context_service.auth.context import AuthContext
-        from context_service.services.models import derive_silo_id
         from context_service.services.silo import SiloService
 
         mock_store = MagicMock()
