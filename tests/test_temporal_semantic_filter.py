@@ -108,9 +108,7 @@ async def test_results_contain_expected_keys() -> None:
         "created_at": None,
     }
     svc = _make_svc(qdrant_ids=["id-1"], memgraph_rows=[row])
-    results = await svc.temporal_query(
-        silo_id=SILO, as_of=AS_OF, query="some content"
-    )
+    results = await svc.temporal_query(silo_id=SILO, as_of=AS_OF, query="some content")
     assert len(results) == 1
     assert results[0]["node_id"] == "id-1"
     assert results[0]["content"] == "some content"

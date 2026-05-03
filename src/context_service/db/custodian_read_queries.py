@@ -106,10 +106,6 @@ RETURN DISTINCT other.id AS node_id,
                 labels(other)[0] AS label
 """
 
-# Kept for back-compat with the public import surface; equals the neighbours
-# template string so external callers pinning it by reference still resolve.
-FETCH_NEIGHBORHOOD_TEMPLATE = FETCH_NEIGHBORHOOD_NEIGHBOURS_TEMPLATE
-
 
 # List edges of a given type inside a cluster. Both endpoints must be cluster
 # members. ``$edge_type`` filters on ``e.type`` (the free-form property set by
@@ -309,7 +305,6 @@ __all__ = [
     "FETCH_LOWER_FINDINGS",
     "FETCH_NEIGHBORHOOD_NEIGHBOURS_TEMPLATE",
     "FETCH_NEIGHBORHOOD_SEED",
-    "FETCH_NEIGHBORHOOD_TEMPLATE",
     "FETCH_NODE_BY_ID",
     "LIST_EDGES_OF_TYPE_IN_CLUSTER",
     "count_cluster_members",

@@ -23,7 +23,12 @@ def mock_remember():
     with patch(
         "context_service.mcp.tools.context_store._context_remember",
         new_callable=AsyncMock,
-        return_value={"node_id": str(node.id), "layer": "memory", "decay_class": "standard", "created_at": "2026-01-01T00:00:00+00:00"},
+        return_value={
+            "node_id": str(node.id),
+            "layer": "memory",
+            "decay_class": "standard",
+            "created_at": "2026-01-01T00:00:00+00:00",
+        },
     ) as m:
         yield m
 

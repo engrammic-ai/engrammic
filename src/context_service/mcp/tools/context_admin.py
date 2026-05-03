@@ -249,7 +249,10 @@ async def _context_admin(
 
     if action == "history":
         if not ref:
-            return {"error": "missing_ref", "message": "ref (node_id or subject) required for history"}
+            return {
+                "error": "missing_ref",
+                "message": "ref (node_id or subject) required for history",
+            }
         return await _context_history(silo_id=silo_id, node_id=ref)
 
     return {"error": "unknown_action", "valid": list(_VALID_ACTIONS)}

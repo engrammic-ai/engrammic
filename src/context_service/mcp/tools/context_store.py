@@ -346,11 +346,7 @@ async def _context_reason(
 
     ctx_svc = get_context_service()
 
-    resolved_session_id = (
-        session_id
-        or getattr(auth, "session_id", None)
-        or str(uuid.uuid4())
-    )
+    resolved_session_id = session_id or getattr(auth, "session_id", None) or str(uuid.uuid4())
     agent_id = getattr(auth, "agent_id", None)
 
     store = ctx_svc.graph_store

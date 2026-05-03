@@ -42,7 +42,10 @@ async def _context_graph(
 
     if mode == "provenance":
         if not seed_nodes:
-            return {"error": "missing_seed", "message": "seed_nodes must have at least one entry for provenance mode"}
+            return {
+                "error": "missing_seed",
+                "message": "seed_nodes must have at least one entry for provenance mode",
+            }
         node_id = seed_nodes[0]
         if not node_id or not node_id.strip():
             return {"error": "missing_node_id", "message": "node_id is required"}

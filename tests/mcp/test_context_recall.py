@@ -118,7 +118,9 @@ async def test_recall_passes_layers_to_query(mock_query):
     await _context_recall(silo_id=_SILO_ID, query="test", layers=["memory"], depth=0)
 
     _, kwargs = mock_query.call_args
-    assert kwargs.get("layers") == ["memory"] or mock_query.call_args.kwargs.get("layers") == ["memory"]
+    assert kwargs.get("layers") == ["memory"] or mock_query.call_args.kwargs.get("layers") == [
+        "memory"
+    ]
 
 
 @pytest.mark.asyncio

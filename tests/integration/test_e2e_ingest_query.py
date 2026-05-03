@@ -203,7 +203,7 @@ class TestE2EIngestQuery:
         claim_id = str(uuid.uuid4())
         await memgraph.execute_write(
             """
-            CREATE (c:Node:Claim {
+            CREATE (c:Claim {
                 id: $claim_id,
                 silo_id: $silo_id,
                 type: 'Claim',

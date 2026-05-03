@@ -74,7 +74,7 @@ class ClusteringService:
                 [Layer.MEMORY, Layer.KNOWLEDGE] to include Document/Passage nodes.
         """
         resolved_layers = target_layers if target_layers is not None else [Layer.KNOWLEDGE]
-        node_labels = queries.layer_labels(resolved_layers).split(" OR ")
+        node_labels = queries.layer_label_list(resolved_layers)
 
         job.status = ClusteringStatus.RUNNING
         await self._job_store.save(job)
@@ -94,7 +94,9 @@ class ClusteringService:
                     communities=len({a["community_id"] for a in assignments}),
                 )
 
-            all_clusters = await self.build_hierarchy(silo_id, level_assignments, node_labels=node_labels)
+            all_clusters = await self.build_hierarchy(
+                silo_id, level_assignments, node_labels=node_labels
+            )
 
             await self.generate_cluster_summaries(silo_id, all_clusters)
 

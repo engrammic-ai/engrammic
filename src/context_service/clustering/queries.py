@@ -39,25 +39,33 @@ _LAYER_LABEL_MAP: dict[Layer, list[str]] = {
 _UNSUPPORTED_LAYERS = {Layer.WISDOM, Layer.INTELLIGENCE}
 
 
+def layer_label_list(layers: list[Layer]) -> list[str]:
+    """Return flat list of label strings for the given layers.
+
+    e.g. layer_label_list([Layer.KNOWLEDGE]) -> ["Fact", "Claim"]
+
+    Only MEMORY and KNOWLEDGE are supported. Raises ValueError for empty input,
+    WISDOM, or INTELLIGENCE.
+    """
+    if not layers:
+        raise ValueError("layers must not be empty")
+    unsupported = set(layers) & _UNSUPPORTED_LAYERS
+    if unsupported:
+        names = ", ".join(layer.value.capitalize() for layer in unsupported)
+        raise ValueError(f"Unsupported layers for clustering: {names}")
+    return [label for layer in layers for label in _LAYER_LABEL_MAP[layer]]
+
+
 def layer_labels(layers: list[Layer]) -> str:
     """Return a Cypher label-predicate string for the given layers.
 
     e.g. layer_labels([Layer.KNOWLEDGE]) -> "Fact OR Claim"
 
-    Only MEMORY and KNOWLEDGE are supported. Raises ValueError for WISDOM or
-    INTELLIGENCE because those layers have no content nodes that are clusterable
-    at this time.
+    Only MEMORY and KNOWLEDGE are supported. Raises ValueError for empty input,
+    WISDOM, or INTELLIGENCE because those layers have no content nodes that are
+    clusterable at this time.
     """
-    for layer in layers:
-        if layer in _UNSUPPORTED_LAYERS:
-            raise ValueError(
-                f"{layer.value.capitalize()} layer is not supported for clustering. "
-                "Only Memory and Knowledge layers contain clusterable content nodes."
-            )
-    labels: list[str] = []
-    for layer in layers:
-        labels.extend(_LAYER_LABEL_MAP[layer])
-    return " OR ".join(labels)
+    return " OR ".join(layer_label_list(layers))
 
 
 # Scoped variants — accept $node_labels as a Cypher list param.
@@ -129,5 +137,6 @@ __all__ = [
     "RUN_PAGERANK",
     "RUN_PAGERANK_SCOPED",
     "UPDATE_CLUSTER_SUMMARY",
+    "layer_label_list",
     "layer_labels",
 ]
