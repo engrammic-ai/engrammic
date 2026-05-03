@@ -1,12 +1,12 @@
 # context_service/mcp/tools/context_get.py
-"""MCP tool: context_get - Retrieve context nodes by ID."""
+"""Internal: context_get implementation. Exposed via context_recall."""
 
 from __future__ import annotations
 
 import asyncio
 import time
 import uuid
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from context_service.api.metrics import CONTEXT_GET_LATENCY
 from context_service.mcp.server import (
@@ -18,9 +18,6 @@ from context_service.mcp.server import (
 from context_service.services.models import derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 from context_service.signals import emit_access_event
-
-if TYPE_CHECKING:
-    from fastmcp import FastMCP
 
 
 async def _context_get(
@@ -119,34 +116,3 @@ async def _context_get(
     return {"nodes": nodes_out}
 
 
-def register(mcp: FastMCP) -> None:
-    """Register the context_get tool on the MCP server."""
-
-    @mcp.tool(
-        name="context_get",
-        description=(
-            "Retrieve one or more context nodes by their IDs. "
-            "Returns full node data including content, properties, and version. "
-            "Set include_reflections=true to also fetch MetaObservations for each node."
-        ),
-    )
-    async def context_get(
-        node_ids: str | list[str],
-        as_of: str | None = None,
-        silo_id: str | None = None,
-        include_reflections: bool = False,
-    ) -> dict[str, Any]:
-        """Retrieve context nodes by ID.
-
-        Args:
-            node_ids: A single node ID string or a list of node ID strings.
-            as_of: Reserved for point-in-time retrieval.
-            silo_id: UUID of the silo. Optional; defaults to the org's primary silo
-                derived from auth.
-            include_reflections: When True, fetch and attach MetaObservations for
-                each returned node under a 'reflections' key.
-
-        Returns:
-            {nodes}
-        """
-        return await _context_get(node_ids, silo_id, as_of, include_reflections)

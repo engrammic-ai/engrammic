@@ -1,13 +1,10 @@
-"""MCP tool: context_history - Belief evolution over time via SUPERSEDES chain."""
+"""Internal: context_history implementation. Exposed via context_admin."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from context_service.services.models import derive_silo_id
-
-if TYPE_CHECKING:
-    from fastmcp import FastMCP
 
 
 async def _context_history(
@@ -93,47 +90,3 @@ async def _context_history(
         ]
 
     return out
-
-
-def register(mcp: FastMCP) -> None:
-    """Register the context_history tool."""
-
-    @mcp.tool(
-        name="context_history",
-        description=(
-            "Show how a belief or fact evolved over time. "
-            "Traverses the SUPERSEDES chain from oldest to newest. "
-            "Accepts either a node_id (specific node) or subject (keyword search). "
-            "Set include_confidence_trend=true with a node_id to also return the "
-            "full confidence trend analysis and belief timeline."
-        ),
-    )
-    async def context_history(
-        subject: str | None = None,
-        node_id: str | None = None,
-        silo_id: str | None = None,
-        include_confidence_trend: bool = False,
-    ) -> dict[str, Any]:
-        """Show belief evolution over time.
-
-        Args:
-            subject: Keyword to search for in content/subject field.
-            node_id: Specific node to trace history for.
-            silo_id: UUID of the silo. Optional; defaults to the org's primary silo
-                derived from auth.
-            include_confidence_trend: When True and node_id is provided, include
-                confidence_trend and belief_timeline in the response.
-
-        Returns:
-            {timeline, current, entries_count} and optionally {confidence_trend, belief_timeline}
-        """
-        from context_service.mcp.server import get_mcp_auth_context
-
-        auth = await get_mcp_auth_context()
-        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
-        return await _context_history(
-            silo_id=resolved_silo_id,
-            subject=subject,
-            node_id=node_id,
-            include_confidence_trend=include_confidence_trend,
-        )
