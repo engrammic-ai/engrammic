@@ -27,6 +27,7 @@ async def _context_get(
     node_ids: str | list[str],
     silo_id: str | None = None,
     as_of: str | None = None,
+    include_reflections: bool = False,
 ) -> dict[str, Any]:
     """Retrieve context nodes by ID.
 
@@ -83,22 +84,26 @@ async def _context_get(
             )
         else:
             props = node.properties or {}
-            nodes_out.append(
-                {
-                    "node_id": str(node.id),
-                    "content": node.content,
-                    "type": node.type,
-                    "silo_id": str(node.silo_id) if node.silo_id else None,
-                    "properties": props,
-                    "source_uri": node.source_uri,
-                    "content_hash": node.content_hash,
-                    "layer": props.get("layer"),
-                    "summary": props.get("summary"),
-                    "confidence": props.get("confidence"),
-                    "tags": props.get("tags"),
-                    "created_at": (node.created_at.isoformat() if node.created_at else None),
-                }
-            )
+            node_dict: dict[str, Any] = {
+                "node_id": str(node.id),
+                "content": node.content,
+                "type": node.type,
+                "silo_id": str(node.silo_id) if node.silo_id else None,
+                "properties": props,
+                "source_uri": node.source_uri,
+                "content_hash": node.content_hash,
+                "layer": props.get("layer"),
+                "summary": props.get("summary"),
+                "confidence": props.get("confidence"),
+                "tags": props.get("tags"),
+                "created_at": (node.created_at.isoformat() if node.created_at else None),
+            }
+            if include_reflections:
+                node_dict["reflections"] = await ctx_svc.get_reflections(
+                    silo_id=str(resolved_silo_id),
+                    node_id=str(node.id),
+                )
+            nodes_out.append(node_dict)
 
     redis = get_redis()
     if redis is not None:
@@ -121,13 +126,15 @@ def register(mcp: FastMCP) -> None:
         name="context_get",
         description=(
             "Retrieve one or more context nodes by their IDs. "
-            "Returns full node data including content, properties, and version."
+            "Returns full node data including content, properties, and version. "
+            "Set include_reflections=true to also fetch MetaObservations for each node."
         ),
     )
     async def context_get(
         node_ids: str | list[str],
         as_of: str | None = None,
         silo_id: str | None = None,
+        include_reflections: bool = False,
     ) -> dict[str, Any]:
         """Retrieve context nodes by ID.
 
@@ -136,8 +143,10 @@ def register(mcp: FastMCP) -> None:
             as_of: Reserved for point-in-time retrieval.
             silo_id: UUID of the silo. Optional; defaults to the org's primary silo
                 derived from auth.
+            include_reflections: When True, fetch and attach MetaObservations for
+                each returned node under a 'reflections' key.
 
         Returns:
             {nodes}
         """
-        return await _context_get(node_ids, silo_id, as_of)
+        return await _context_get(node_ids, silo_id, as_of, include_reflections)

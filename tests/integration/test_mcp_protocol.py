@@ -22,12 +22,9 @@ EXPECTED_TOOLS = {
     "context_query",
     "context_get",
     "context_graph",
-    "context_provenance",
-    "context_get_reflections",
     "context_history",
-    "context_belief_history",
     "context_reason",
-    "silo_create",
+    "context_close_reasoning",
     "silo_list",
 }
 

@@ -22,6 +22,7 @@ async def _context_graph(
     max_nodes: int = 50,
     relationship_types: list[str] | None = None,
     layers: list[str] | None = None,
+    mode: str = "graph",
 ) -> dict[str, Any]:
     auth = await get_mcp_auth_context()
     ctx_svc = get_context_service()
@@ -32,6 +33,35 @@ async def _context_graph(
         return err
 
     expected_silo_id = derive_silo_id(auth.org_id)
+
+    if mode not in ("graph", "provenance"):
+        return {"error": "invalid_mode", "message": "mode must be 'graph' or 'provenance'"}
+
+    if mode == "provenance":
+        if not seed_nodes:
+            return {"error": "missing_seed", "message": "seed_nodes must have at least one entry for provenance mode"}
+        node_id = seed_nodes[0]
+        if not node_id or not node_id.strip():
+            return {"error": "missing_node_id", "message": "node_id is required"}
+        prov = await ctx_svc.provenance(
+            silo_id=str(expected_silo_id),
+            node_id=node_id,
+            max_depth=max_depth,
+        )
+        return {
+            "node_id": node_id,
+            "chain": [
+                {
+                    "node_id": step.node_id,
+                    "layer": step.layer,
+                    "relationship": step.relationship,
+                    "confidence": step.confidence,
+                }
+                for step in prov.chain
+            ],
+            "root_sources": prov.root_sources,
+            "chain_length": len(prov.chain),
+        }
 
     if not query and not seed_nodes:
         return {"error": "missing_seed", "message": "Provide query or seed_nodes"}
@@ -107,7 +137,8 @@ def register(mcp: FastMCP) -> None:
         description=(
             "Graph traversal from a semantic query or specific seed nodes. "
             "Returns subgraph with nodes, edges, and traversal stats. "
-            "Target: < 500ms for depth 2."
+            "Target: < 500ms for depth 2. "
+            "Set mode='provenance' with seed_nodes to trace citation chain to Memory-layer sources."
         ),
     )
     async def context_graph(
@@ -118,6 +149,7 @@ def register(mcp: FastMCP) -> None:
         relationship_types: list[str] | None = None,
         layers: list[str] | None = None,
         silo_id: str | None = None,
+        mode: str = "graph",
     ) -> dict[str, Any]:
         """Graph traversal from semantic seed.
 
@@ -130,12 +162,13 @@ def register(mcp: FastMCP) -> None:
             layers: Filter nodes to specific layers (memory, knowledge, wisdom).
             silo_id: UUID of the silo. Optional; defaults to the org's primary silo
                 derived from auth.
+            mode: 'graph' (default) for traversal, 'provenance' to trace citation chain.
+                When 'provenance', seed_nodes[0] is used as the starting node and
+                returns {node_id, chain, root_sources, chain_length}.
 
         Returns:
-            {nodes, edges, traversal_stats, metadata}
-            edges include an ``inferred`` bool on causal edges.
-            metadata includes ``causal_edges_enabled`` and, when set on the silo,
-            ``causal_coverage_from`` (epoch from which causal coverage applies).
+            mode='graph': {nodes, edges, traversal_stats, metadata}
+            mode='provenance': {node_id, chain, root_sources, chain_length}
         """
         auth = await get_mcp_auth_context()
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
@@ -147,4 +180,5 @@ def register(mcp: FastMCP) -> None:
             max_nodes=max_nodes,
             relationship_types=relationship_types,
             layers=layers,
+            mode=mode,
         )

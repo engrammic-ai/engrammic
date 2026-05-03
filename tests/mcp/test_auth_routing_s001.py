@@ -17,7 +17,6 @@ TOOL_MODULES = [
     "context_service.mcp.tools.context_graph",
     "context_service.mcp.tools.context_history",
     "context_service.mcp.tools.context_link",
-    "context_service.mcp.tools.context_provenance",
     "context_service.mcp.tools.context_query",
     "context_service.mcp.tools.context_reason",
     "context_service.mcp.tools.context_reflect",
