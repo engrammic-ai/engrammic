@@ -44,3 +44,14 @@ MATCH (n {silo_id: $silo_id})
 WHERE n.id IN $node_ids
 SET n.heat_dirty = true
 """
+
+FIND_ORPHANED_SUMMARIES = """
+MATCH (e:Event {silo_id: $silo_id})
+WHERE e.event_type = 'reasoning_trace'
+  AND e.source_chain_id IS NOT NULL
+  AND NOT exists(e.tombstoned_at)
+WITH e
+OPTIONAL MATCH (c:ReasoningChain {id: e.source_chain_id, silo_id: $silo_id})
+WHERE c IS NULL
+RETURN e.id AS id
+"""
