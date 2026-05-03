@@ -69,7 +69,7 @@ class BinaryEdge(BaseModel):
     type: str = Field(min_length=1, max_length=255)
     source_id: uuid.UUID
     target_id: uuid.UUID
-    silo_id: str | None = Field(default=None)
+    silo_id: uuid.UUID | None = Field(default=None)
     properties: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 

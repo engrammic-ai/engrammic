@@ -1,6 +1,7 @@
 """Dagster asset: causal_transitivity — infer transitive CAUSES edges per silo."""
 
 import asyncio
+import concurrent.futures
 import time
 import uuid
 from typing import Any
@@ -11,6 +12,18 @@ from dagster import AssetExecutionContext
 from context_service.config.settings import get_settings
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import MemgraphResource
+
+
+def _run_async_int(coro: Any) -> int:
+    """Run an int-returning coroutine, handling nested event loops."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        result: int = asyncio.run(coro)
+        return result
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        result = pool.submit(asyncio.run, coro).result()
+        return result
 
 _SCAN_CAUSES_CHAINS = """
 MATCH path = (a)-[:CAUSES*2..{depth}]->(c)
@@ -25,8 +38,9 @@ LIMIT $batch_size
 _UPSERT_INFERRED_CAUSES = """
 MATCH (a {{id: $source_id, silo_id: $silo_id}})
 MATCH (c {{id: $target_id, silo_id: $silo_id}})
-MERGE (a)-[r:CAUSES {{id: $edge_id, silo_id: $silo_id, inferred: true}}]->(c)
+MERGE (a)-[r:CAUSES {{silo_id: $silo_id, inferred: true}}]->(c)
 ON CREATE SET
+    r.id = $edge_id,
     r.consensus_confidence = $confidence,
     r.extraction_confidence = null,
     r.inferred_from_edge_ids = $inferred_from_edge_ids,
@@ -40,17 +54,28 @@ RETURN r.id AS created_id
 """
 
 
-def _compute_confidence(edge_confidences: list[float], formula: str) -> float:
+def _compute_confidence(
+    edge_confidences: list[tuple[str, float]], formula: str
+) -> float:
     """Compute chain confidence from per-hop confidences.
 
-    Deduplicates identical confidence values before applying the formula so that
-    repeated source edges in a diamond don't double-count.
+    Deduplicates by edge ID before applying the formula so that repeated source
+    edges in a diamond path don't double-count.
+
+    Args:
+        edge_confidences: List of (edge_id, confidence) tuples.
+        formula: One of "minimum" or "geometric_mean".
     """
     if not edge_confidences:
         return 0.0
 
-    # Source-dedup: use unique values only.
-    unique = list(dict.fromkeys(edge_confidences))
+    # Source-dedup by edge ID, not value.
+    seen: set[str] = set()
+    unique: list[float] = []
+    for edge_id, conf in edge_confidences:
+        if edge_id not in seen:
+            seen.add(edge_id)
+            unique.append(conf)
 
     if formula == "minimum":
         return min(unique)
@@ -130,7 +155,7 @@ def causal_transitivity(
                 target_id: str = str(row["target_id"])
                 edges: list[Any] = list(row["edges"])
 
-                hop_confidences: list[float] = []
+                hop_confidences: list[tuple[str, float]] = []
                 edge_ids: list[str] = []
                 for edge in edges:
                     props = dict(edge) if not isinstance(edge, dict) else edge
@@ -140,14 +165,16 @@ def causal_transitivity(
                     raw_conf = props.get("consensus_confidence") or props.get(
                         "extraction_confidence"
                     )
-                    if raw_conf is not None:
-                        hop_confidences.append(float(raw_conf))
+                    if raw_conf is not None and edge_id:
+                        hop_confidences.append((edge_id, float(raw_conf)))
 
                 # If no confidence values are recorded on the hops, use a
                 # conservative default of 1.0 per hop so the chain isn't silently
                 # skipped — callers control the floor via min_inferred_confidence.
                 if not hop_confidences:
-                    hop_confidences = [1.0] * len(edges)
+                    hop_confidences = [
+                        (str(i), 1.0) for i in range(len(edges))
+                    ]
 
                 confidence = _compute_confidence(hop_confidences, formula)
                 if confidence < min_confidence:
@@ -179,7 +206,7 @@ def causal_transitivity(
 
         return edges_created
 
-    edges_created = asyncio.run(_run())
+    edges_created: int = _run_async_int(_run())
     duration_s = time.monotonic() - t0
     context.log.info(
         f"silo={silo_id} edges_created={edges_created} depth={depth} duration={duration_s:.2f}s"
