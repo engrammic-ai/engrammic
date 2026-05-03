@@ -22,12 +22,13 @@ def _run_async_int(coro: Any) -> int:
         result: int = asyncio.run(coro)
         return result
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        result = pool.submit(asyncio.run, coro).result()
+        result = pool.submit(asyncio.run, coro).result(timeout=300)
         return result
 
 _SCAN_CAUSES_CHAINS = """
 MATCH path = (a)-[:CAUSES*2..{depth}]->(c)
 WHERE a.silo_id = $silo_id
+  AND a <> c
   AND ALL(n IN nodes(path) WHERE n.silo_id = $silo_id)
   AND NOT EXISTS((a)-[:CAUSES {{inferred: true}}]->(c))
 RETURN a.id AS source_id, c.id AS target_id, relationships(path) AS edges
@@ -49,7 +50,8 @@ ON CREATE SET
 ON MATCH SET
     r.consensus_confidence = $confidence,
     r.inferred_from_edge_ids = $inferred_from_edge_ids,
-    r.depth = $depth
+    r.depth = $depth,
+    r.updated_at = $created_at
 RETURN r.id AS created_id
 """
 

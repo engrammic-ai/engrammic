@@ -192,3 +192,7 @@ class TestCycleTermination:
         # The NOT EXISTS clause prevents re-inferring already-inferred edges
         # Query uses {{ for escaped braces in Python
         assert "NOT EXISTS((a)-[:CAUSES {{inferred: true}}]->(c))" in _SCAN_CAUSES_CHAINS
+
+    def test_self_loop_guard(self) -> None:
+        # Prevents A->...->A cycles from creating self-referential edges
+        assert "a <> c" in _SCAN_CAUSES_CHAINS
