@@ -542,6 +542,7 @@ class Settings(BaseSettings):
     auth_enabled: bool = Field(default=False)
     dev_org_id: str = Field(default="dev-org")
     dev_user_id: str = Field(default="dev-user")
+    dev_agent_id: str = Field(default="dev-agent")
 
     # =========================================================================
     # Memgraph Settings

@@ -129,26 +129,44 @@ async def get_mcp_auth_context() -> AuthContext:
         boot-time guard in ``Settings._validate_auth`` already prevents
         this branch in production.
     """
+    import hashlib
+
     from context_service.auth.resolve import (
         MCPAuthError,
         resolve_mcp_auth_from_header,
     )
     from context_service.config.settings import get_settings
 
-    headers = get_http_headers(include={"authorization"})
+    headers = get_http_headers(include={"authorization", "x-agent-id", "x-session-id"})
     auth_header = headers.get("authorization")
 
     if auth_header:
-        return await resolve_mcp_auth_from_header(auth_header)
+        base = await resolve_mcp_auth_from_header(auth_header)
+        agent_id = headers.get("x-agent-id") or f"user:{base.user_id}"
+        # Derive a stable session identifier from the token so the same
+        # sealed session always maps to the same session_id.
+        session_id: str | None = headers.get("x-session-id") or hashlib.sha256(auth_header.encode()).hexdigest()[:32]
+        return AuthContext(
+            org_id=base.org_id,
+            user_id=base.user_id,
+            email=base.email,
+            is_dev=base.is_dev,
+            agent_id=agent_id,
+            session_id=session_id,
+        )
 
     settings = get_settings()
     if settings.auth_enabled:
         raise MCPAuthError("Missing Authorization header on authenticated MCP transport")
+    agent_id = headers.get("x-agent-id") or f"user:{settings.dev_user_id}"
+    session_id = headers.get("x-session-id")  # str | None, already typed above
     return AuthContext(
         org_id=settings.dev_org_id,
         user_id=settings.dev_user_id,
         email=None,
         is_dev=True,
+        agent_id=agent_id,
+        session_id=session_id,
     )
 
 

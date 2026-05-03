@@ -126,7 +126,18 @@ def register(mcp: FastMCP) -> None:
     )
     async def context_get(
         node_ids: str | list[str],
-        silo_id: str | None = None,
         as_of: str | None = None,
+        silo_id: str | None = None,
     ) -> dict[str, Any]:
+        """Retrieve context nodes by ID.
+
+        Args:
+            node_ids: A single node ID string or a list of node ID strings.
+            as_of: Reserved for point-in-time retrieval.
+            silo_id: UUID of the silo. Optional; defaults to the org's primary silo
+                derived from auth.
+
+        Returns:
+            {nodes}
+        """
         return await _context_get(node_ids, silo_id, as_of)

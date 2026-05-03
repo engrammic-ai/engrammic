@@ -2,33 +2,47 @@
 
 MCP is the primary agent-facing interface. The REST API is used for admin, dashboard, and silo management. Examples below cover both surfaces.
 
-The 13 MCP tools are:
+The 3 MCP tools are:
 
-- Reads: `context_get`, `context_query`, `context_graph`, `context_history`, `context_provenance`
-- Writes: `context_remember` (Memory), `context_assert` (Knowledge), `context_commit` (Wisdom), `context_reason` (Intelligence), `context_reflect` (meta-memory)
-- Linking: `context_link`
-- Tenancy: `silo_create`, `silo_list`
+- `context_store` — write to any layer (memory, knowledge, wisdom, intelligence, meta)
+- `context_recall` — read, search, traverse, or trace context
+- `context_link` — create a typed relationship between two nodes
+
+`silo_id` is no longer passed by callers. It is derived from the authenticated session.
 
 ---
 
 ## MCP Tools (Agent Interface)
 
-### context_remember
+### context_store
 
-Store an experience or observation to the Memory layer. Memories decay over time.
+Write content to any cognitive layer. The `layer` param selects the target; layer-specific required params are enforced at call time.
 
-**Params:** `silo_id` (str, required), `content` (str, required), `content_type` (str, default `"text"`), `metadata` (dict|null), `tags` (list[str]|null), `decay_class` (str, default `"standard"` — one of `ephemeral|standard|durable|permanent`), `observed_from` (str|null — attribution, e.g. `"user:<id>"` or `"agent:<id>"`).
+**Params:**
+
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `content` | str | required | The content to store |
+| `layer` | str | `"memory"` | One of `memory \| knowledge \| wisdom \| intelligence \| meta` |
+| `evidence` | str or list[str] | null | Required for `knowledge` layer. `node:<uuid>` refs or URIs |
+| `about` | list[str] | null | Required for `wisdom` and `meta` layers. Node IDs this entry concerns |
+| `steps` | list[dict] | null | Required for `intelligence` layer. Each dict: `{step, reasoning, confidence?}` |
+| `tags` | list[str] | null | Optional labels |
+| `session` | str | null | Optional session ID for grouping intelligence chains |
+
+---
+
+#### Memory layer
+
+Observations and experiences. Decays over time.
 
 ```json
 {
-  "tool": "context_remember",
+  "tool": "context_store",
   "arguments": {
-    "silo_id": "silo-uuid-123",
     "content": "OAuth refresh tokens expire in 30 days per the auth service config.",
-    "content_type": "text",
-    "tags": ["auth", "tokens", "expiry"],
-    "decay_class": "durable",
-    "observed_from": "agent:agent-uuid-abc"
+    "layer": "memory",
+    "tags": ["auth", "tokens", "expiry"]
   }
 }
 ```
@@ -39,50 +53,38 @@ Response:
 {
   "node_id": "node-abc-123",
   "layer": "memory",
-  "decay_class": "durable",
   "created_at": "2026-04-28T09:00:00+00:00"
 }
 ```
 
 ---
 
-### context_assert
+#### Knowledge layer
 
-Assert a claim to the Knowledge layer. Evidence is required. Claims persist until contradicted (no decay).
-
-**Params:** `silo_id` (str, required), `claim` (str or `{subject, predicate, object}` dict, required), `evidence` (str or list[str], required — `node:<uuid>` refs or URIs), `source_type` (str, required — one of `document|user|external|agent`), `confidence` (float, default `0.8`, range 0.0-1.0), `metadata` (dict|null), `tags` (list[str]|null), `evidence_mode` (str, default `"sync"` — `sync` validates evidence first, `async` validates later), `source_tier` (str|null — one of `authoritative|validated|community|unknown`; defaults to `unknown` if omitted, which fails R1 single-source promotion).
+Claims that persist until contradicted. Evidence is required.
 
 ```json
 {
-  "tool": "context_assert",
+  "tool": "context_store",
   "arguments": {
-    "silo_id": "silo-uuid-123",
-    "claim": "The async connection pool uses a maximum of 20 connections by default.",
-    "evidence": "node:node-abc-123",
-    "source_type": "document",
-    "confidence": 0.9,
-    "tags": ["database", "async", "config"],
-    "source_tier": "authoritative"
+    "content": "The async connection pool uses a maximum of 20 connections by default.",
+    "layer": "knowledge",
+    "evidence": ["node:node-abc-123"],
+    "tags": ["database", "async", "config"]
   }
 }
 ```
 
-Structured (SPO) claim form:
+Structured (SPO) content also accepted as a string or via tags; evidence must resolve to existing nodes:
 
 ```json
 {
-  "tool": "context_assert",
+  "tool": "context_store",
   "arguments": {
-    "silo_id": "silo-uuid-123",
-    "claim": {
-      "subject": "async-pool",
-      "predicate": "max_connections",
-      "object": "20"
-    },
+    "content": "async-pool max_connections is 20",
+    "layer": "knowledge",
     "evidence": ["node:node-abc-123", "node:node-def-456"],
-    "source_type": "document",
-    "confidence": 0.95,
-    "source_tier": "authoritative"
+    "tags": ["database", "config"]
   }
 }
 ```
@@ -93,7 +95,6 @@ Response:
 {
   "node_id": "node-claim-789",
   "layer": "knowledge",
-  "claim_type": "freeform",
   "evidence_status": "verified",
   "evidence_nodes": ["node-abc-123"],
   "promoted_to_fact": true,
@@ -103,23 +104,17 @@ Response:
 
 ---
 
-### context_commit
+#### Wisdom layer
 
-Commit a belief or stance to the Wisdom layer. Commitments are agent-scoped via DECLARED_BY edge.
-
-**Params:** `silo_id` (str, required), `belief` (str, required), `about` (list[str], required — node IDs this belief concerns, at least one), `confidence` (float, default `0.8`), `reasoning` (str|null — why the agent holds this belief), `metadata` (dict|null), `tags` (list[str]|null).
-
-Note: `chain_id` is implemented in the internal `_context_commit` function (triggers reasoning-chain compaction when provided) but is intentionally not exposed on the public MCP tool signature. Compaction currently has no separate MCP or REST surface; it is triggered automatically when a chain is committed via internal call paths.
+Agent-scoped beliefs or stances. `about` is required — list the nodes this belief concerns.
 
 ```json
 {
-  "tool": "context_commit",
+  "tool": "context_store",
   "arguments": {
-    "silo_id": "silo-uuid-123",
-    "belief": "Exponential backoff is the preferred retry strategy for this service.",
+    "content": "Exponential backoff is the preferred retry strategy for this service.",
+    "layer": "wisdom",
     "about": ["node-abc-123", "node-def-456"],
-    "confidence": 0.92,
-    "reasoning": "Two separate incidents showed linear retry causing thundering herd; exponential backoff resolved both.",
     "tags": ["retry", "architecture"]
   }
 }
@@ -139,30 +134,22 @@ Response:
 
 ---
 
-### context_reason
+#### Intelligence layer
 
-Store a multi-step reasoning chain to the Intelligence layer. Optionally extract crystallizations (beliefs or claims) from the chain.
-
-**Params:** `silo_id` (str, required), `steps` (list[dict], required — each dict has `step` (int), `reasoning` (str), optional `confidence` (float)), `conclusion` (str|null), `evidence_used` (list[str]|null — `node:<uuid>` or URI refs), `crystallizations` (list[dict]|null — each dict has `claim` (str), optional `confidence` (float)).
+Multi-step reasoning chains. `steps` is required. Crystallizations (emergent claims) are extracted automatically.
 
 ```json
 {
-  "tool": "context_reason",
+  "tool": "context_store",
   "arguments": {
-    "silo_id": "silo-uuid-123",
+    "content": "asyncpg connection pool is the correct approach for this workload.",
+    "layer": "intelligence",
     "steps": [
-      {"step": 1, "reasoning": "First considered approach A: per-request connection.", "confidence": 0.6},
-      {"step": 2, "reasoning": "Rejected because of latency overhead under load.", "confidence": 0.85},
+      {"step": 1, "reasoning": "Considered approach A: per-request connection.", "confidence": 0.6},
+      {"step": 2, "reasoning": "Rejected — unacceptable latency overhead under load.", "confidence": 0.85},
       {"step": 3, "reasoning": "Settled on approach B: pooled connections with asyncpg.", "confidence": 0.95}
     ],
-    "conclusion": "asyncpg connection pool is the correct approach for this workload.",
-    "evidence_used": ["node:node-abc-123"],
-    "crystallizations": [
-      {
-        "claim": "Per-request connection creation adds unacceptable latency at scale.",
-        "confidence": 0.85
-      }
-    ]
+    "tags": ["database", "architecture"]
   }
 }
 ```
@@ -182,21 +169,18 @@ Response:
 
 ---
 
-### context_reflect
+#### Meta layer
 
-Store a meta-observation about cognition. Use for belief changes, contradictions, confidence shifts, corrections, or insights.
-
-**Params:** `silo_id` (str, required), `observation` (str, required), `observation_type` (str, required — one of `belief_change|confidence_shift|contradiction|uncertainty|correction|insight`), `about` (list[str], required — node IDs this observation concerns), `confidence` (float, default `0.8`), `metadata` (dict|null).
+Meta-observations about cognition: belief changes, contradictions, confidence shifts, corrections, insights. `about` is required.
 
 ```json
 {
-  "tool": "context_reflect",
+  "tool": "context_store",
   "arguments": {
-    "silo_id": "silo-uuid-123",
-    "observation": "My earlier confidence in approach A was too high; incident data contradicts it.",
-    "observation_type": "contradiction",
+    "content": "My earlier confidence in approach A was too high; incident data contradicts it.",
+    "layer": "meta",
     "about": ["node-abc-123", "node-claim-789"],
-    "confidence": 0.9
+    "tags": ["contradiction"]
   }
 }
 ```
@@ -206,7 +190,7 @@ Response:
 ```json
 {
   "node_id": "node-reflect-202",
-  "observation_type": "contradiction",
+  "layer": "meta",
   "about_nodes": ["node-abc-123", "node-claim-789"],
   "created_at": "2026-04-28T09:04:00+00:00"
 }
@@ -214,73 +198,35 @@ Response:
 
 ---
 
-### context_get
+### context_recall
 
-Retrieve one or more context nodes by ID.
+Read, search, traverse, or trace context. The `mode` param selects the operation.
 
-**Params:** `node_ids` (str or list[str], required), `silo_id` (str|null — defaults to the org's primary silo), `as_of` (str|null — reserved for point-in-time retrieval; currently returns `as_of_not_supported` if non-null).
+**Params:**
 
-```json
-{
-  "tool": "context_get",
-  "arguments": {
-    "node_ids": ["node-abc-123", "node-def-456"],
-    "silo_id": "silo-uuid-123"
-  }
-}
-```
-
-Response:
-
-```json
-{
-  "nodes": [
-    {
-      "node_id": "node-abc-123",
-      "content": "Full content here...",
-      "type": "Claim",
-      "silo_id": "silo-uuid-123",
-      "properties": {},
-      "source_uri": null,
-      "content_hash": "sha256-abc...",
-      "layer": "knowledge",
-      "summary": "Implementation of async connection pool using asyncpg",
-      "confidence": 0.87,
-      "tags": ["python", "asyncpg"],
-      "created_at": "2026-02-05T14:30:00+00:00"
-    }
-  ]
-}
-```
-
-Note: passing `as_of` currently returns an error:
-
-```json
-{
-  "error": "as_of_not_supported",
-  "message": "Point-in-time retrieval is not yet implemented"
-}
-```
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `query` | str | null | Semantic query string. Required for `search` and `graph` modes |
+| `mode` | str | `"search"` | One of `search \| fetch \| graph \| history \| provenance` |
+| `node_ids` | list[str] | null | Required for `fetch`, `history`, and `provenance` modes |
+| `depth` | int | 0 | Values > 0 trigger graph traversal (used with `graph` mode, range 1-5) |
+| `layers` | list[str] | null | Filter to specific layers: `memory \| knowledge \| wisdom \| intelligence \| meta` |
+| `top_k` | int | 10 | Max results for `search` mode |
+| `as_of` | str | null | ISO 8601 datetime for point-in-time queries |
 
 ---
 
-### context_query
+#### search mode
 
-Semantic search across layers with optional filtering.
-
-**Params:** `silo_id` (str, required), `query` (str, required), `layers` (list[str]|null — `memory|knowledge|wisdom|intelligence`), `filters` (dict|null — keys: `tags`, `source_type`, `min_confidence`, `created_after`, `created_before`), `top_k` (int, default `10`), `include_superseded` (bool, default `false`), `search_mode` (str, default `"hybrid"` — `hybrid|dense|sparse`), `as_of` (str|null — ISO 8601 datetime for point-in-time queries; returns only nodes whose validity window covers the timestamp; future timestamps return current state with a warning).
+Semantic search across layers.
 
 ```json
 {
-  "tool": "context_query",
+  "tool": "context_recall",
   "arguments": {
-    "silo_id": "silo-uuid-123",
     "query": "How did we implement the async database connection pool?",
+    "mode": "search",
     "layers": ["knowledge"],
-    "filters": {
-      "tags": ["database", "async"],
-      "min_confidence": 0.7
-    },
     "top_k": 5
   }
 }
@@ -303,31 +249,72 @@ Response:
     }
   ],
   "total_candidates": 1,
-  "search_time_ms": 45,
-  "search_mode": "hybrid",
-  "metadata": {
-    "causal_edges_enabled": false
-  }
+  "search_time_ms": 45
 }
 ```
 
 ---
 
-### context_graph
+#### fetch mode
 
-Graph traversal from a semantic query or explicit seed nodes. Returns a subgraph.
-
-**Params:** `silo_id` (str, required), `query` (str|null — semantic seed), `seed_nodes` (list[str]|null — explicit starting node IDs), `max_depth` (int, default `2`, range 1-5), `max_nodes` (int, default `50`, range 1-200), `relationship_types` (list[str]|null — e.g. `["REFERENCES", "SUPPORTS"]`), `layers` (list[str]|null — filter nodes to specific layers). At least one of `query` or `seed_nodes` is required.
+Retrieve one or more nodes by ID.
 
 ```json
 {
-  "tool": "context_graph",
+  "tool": "context_recall",
   "arguments": {
-    "silo_id": "silo-uuid-123",
+    "mode": "fetch",
+    "node_ids": ["node-abc-123", "node-def-456"]
+  }
+}
+```
+
+Response:
+
+```json
+{
+  "nodes": [
+    {
+      "node_id": "node-abc-123",
+      "content": "Full content here...",
+      "type": "Claim",
+      "layer": "knowledge",
+      "summary": "Implementation of async connection pool using asyncpg",
+      "confidence": 0.87,
+      "tags": ["python", "asyncpg"],
+      "created_at": "2026-02-05T14:30:00+00:00"
+    }
+  ]
+}
+```
+
+---
+
+#### graph mode
+
+Graph traversal from a semantic query or explicit seed nodes. Returns a subgraph. Set `depth` > 0 to hop the graph.
+
+```json
+{
+  "tool": "context_recall",
+  "arguments": {
     "query": "database connection decisions",
-    "max_depth": 2,
-    "max_nodes": 30,
-    "relationship_types": ["REFERENCES", "DERIVED_FROM"]
+    "mode": "graph",
+    "depth": 2,
+    "top_k": 30
+  }
+}
+```
+
+With explicit seed nodes:
+
+```json
+{
+  "tool": "context_recall",
+  "arguments": {
+    "mode": "graph",
+    "node_ids": ["node-abc-123"],
+    "depth": 2
   }
 }
 ```
@@ -342,27 +329,22 @@ Response:
     "depth_reached": 2,
     "nodes_visited": 18,
     "edges_traversed": 22
-  },
-  "metadata": {
-    "causal_edges_enabled": false
   }
 }
 ```
 
 ---
 
-### context_history
+#### history mode
 
 Show how a belief or fact evolved over time. Traverses the SUPERSEDES chain oldest-to-newest.
 
-**Params:** `silo_id` (str, required), `subject` (str|null — keyword to search for), `node_id` (str|null — specific node to trace). At least one of `subject` or `node_id` is required.
-
 ```json
 {
-  "tool": "context_history",
+  "tool": "context_recall",
   "arguments": {
-    "silo_id": "silo-uuid-123",
-    "node_id": "node-claim-789"
+    "mode": "history",
+    "node_ids": ["node-claim-789"]
   }
 }
 ```
@@ -396,19 +378,16 @@ Response:
 
 ---
 
-### context_provenance
+#### provenance mode
 
 Trace a node's citation chain back to its Memory-layer sources. Follows DERIVED_FROM, PROMOTED_FROM, and SYNTHESIZED_FROM edges.
 
-**Params:** `silo_id` (str, required), `node_id` (str, required), `max_depth` (int, default `10`).
-
 ```json
 {
-  "tool": "context_provenance",
+  "tool": "context_recall",
   "arguments": {
-    "silo_id": "silo-uuid-123",
-    "node_id": "node-claim-789",
-    "max_depth": 5
+    "mode": "provenance",
+    "node_ids": ["node-claim-789"]
   }
 }
 ```
@@ -437,18 +416,23 @@ Response:
 
 Create a typed relationship between two context nodes.
 
-**Params:** `silo_id` (str, required), `from_node` (str, required), `to_node` (str, required), `relationship` (str, required — one of `REFERENCES|SUPPORTS|CONTRADICTS|DERIVED_FROM|RELATED_TO|CAUSES|CORROBORATES`), `weight` (float, default `1.0`, range 0.0-10.0), `note` (str|null — optional annotation on the edge).
+**Params:**
 
-Note: `CAUSES` and `CORROBORATES` edges are gated behind `settings.pattern.causal_edges_enabled`. When the feature flag is off, creating these edge types returns an error. The `metadata.causal_edges_enabled` field in responses indicates whether the flag is active for the silo.
+| Param | Type | Default | Notes |
+|---|---|---|---|
+| `from_id` | str | required | Source node ID |
+| `to_id` | str | required | Target node ID |
+| `rel` | str | required | One of `supports \| contradicts \| derives \| supersedes \| references` |
+| `weight` | float | 1.0 | Edge weight, range 0.0-10.0 |
+| `note` | str | null | Optional annotation on the edge |
 
 ```json
 {
   "tool": "context_link",
   "arguments": {
-    "silo_id": "silo-uuid-123",
-    "from_node": "node-abc-123",
-    "to_node": "node-def-456",
-    "relationship": "REFERENCES",
+    "from_id": "node-abc-123",
+    "to_id": "node-def-456",
+    "rel": "references",
     "weight": 1.0,
     "note": "Connection pool implementation references the asyncpg docs"
   }
@@ -460,70 +444,10 @@ Response:
 ```json
 {
   "edge_id": "edge-uuid-xyz",
-  "from_node": "node-abc-123",
-  "to_node": "node-def-456",
-  "relationship": "REFERENCES",
+  "from_id": "node-abc-123",
+  "to_id": "node-def-456",
+  "rel": "references",
   "created_at": "2026-04-28T09:05:00+00:00"
-}
-```
-
----
-
-### silo_create
-
-Create a new organizational silo (tenancy boundary).
-
-**Params:** `name` (str, required), `description` (str|null), `dissolvability` (float, default `0.5` — cross-silo traversal permeability, 0.0 = fully isolated, 1.0 = fully open).
-
-```json
-{
-  "tool": "silo_create",
-  "arguments": {
-    "name": "my-project",
-    "description": "Silo for the auth service team",
-    "dissolvability": 0.3
-  }
-}
-```
-
-Response:
-
-```json
-{
-  "silo_id": "silo-uuid-new",
-  "name": "my-project",
-  "org_id": "org-uuid-123",
-  "description": "Silo for the auth service team",
-  "dissolvability": 0.3
-}
-```
-
----
-
-### silo_list
-
-List all silos for the current tenant. Takes no arguments.
-
-```json
-{
-  "tool": "silo_list",
-  "arguments": {}
-}
-```
-
-Response:
-
-```json
-{
-  "silos": [
-    {
-      "silo_id": "silo-uuid-123",
-      "name": "my-project",
-      "org_id": "org-uuid-123",
-      "description": "Silo for the auth service team",
-      "dissolvability": 0.3
-    }
-  ]
 }
 ```
 
@@ -617,29 +541,29 @@ Response:
 
 ## Agent Integration Patterns
 
-### Pattern 1: Remember then query
+### Pattern 1: Store then search
 
 ```python
 # Agent stores an observation to Memory
-result = await mcp.call("context_remember", {
-    "silo_id": silo_id,
+result = await mcp.call("context_store", {
     "content": response_text,
+    "layer": "memory",
     "tags": extract_tags(response_text),
-    "decay_class": "standard",
 })
 node_id = result["node_id"]
 
 # Later — agent searches across layers
-results = await mcp.call("context_query", {
-    "silo_id": silo_id,
+results = await mcp.call("context_recall", {
     "query": current_query,
+    "mode": "search",
     "top_k": 3,
 })
 
+# Fetch full content for top results
 for r in results["results"]:
-    node = await mcp.call("context_get", {
+    node = await mcp.call("context_recall", {
+        "mode": "fetch",
         "node_ids": [r["node_id"]],
-        "silo_id": silo_id,
     })
     # inject into prompt
 ```
@@ -648,32 +572,31 @@ for r in results["results"]:
 
 ```python
 # Agent asserts a Knowledge-layer claim backed by a Memory node
-await mcp.call("context_assert", {
-    "silo_id": silo_id,
-    "claim": "The retry helper uses exponential backoff with jitter.",
-    "evidence": f"node:{node_id}",
-    "source_type": "agent",
-    "confidence": 0.88,
-    "source_tier": "validated",
+await mcp.call("context_store", {
+    "content": "The retry helper uses exponential backoff with jitter.",
+    "layer": "knowledge",
+    "evidence": [f"node:{node_id}"],
     "tags": ["retry", "error-handling"],
 })
 ```
 
 ### Pattern 3: Multi-agent shared silo
 
+Silo isolation is handled by auth. Agents sharing a silo see the same context without any extra params.
+
 ```python
 # Agent A stores shared context
-await mcp.call("context_remember", {
-    "silo_id": "team-silo-123",  # shared silo
+await mcp.call("context_store", {
     "content": "Database schema design decisions: ...",
+    "layer": "memory",
     "tags": ["shared", "database", "architecture"],
 })
 
 # Agent B (different agent, same silo) searches
-results = await mcp.call("context_query", {
-    "silo_id": "team-silo-123",
+results = await mcp.call("context_recall", {
     "query": "What database decisions were made?",
-    "filters": {"tags": ["shared"]},
+    "mode": "search",
+    "layers": ["memory", "knowledge"],
 })
 ```
 
@@ -681,30 +604,23 @@ results = await mcp.call("context_query", {
 
 ```python
 # Seed with semantic search, then hop the graph
-results = await mcp.call("context_graph", {
-    "silo_id": silo_id,
+results = await mcp.call("context_recall", {
     "query": "database connection decisions",
-    "max_depth": 2,
-    "max_nodes": 30,
-    "relationship_types": ["REFERENCES", "DERIVED_FROM"],
+    "mode": "graph",
+    "depth": 2,
+    "top_k": 30,
 })
 ```
 
-### Pattern 5: Reasoning chain with crystallization
+### Pattern 5: Reasoning chain to Intelligence layer
 
 ```python
-# Store a reasoning chain — crystallizations become Claim candidates
-await mcp.call("context_reason", {
-    "silo_id": silo_id,
-    "steps": reasoning_steps,   # list of {step, reasoning, confidence?}
-    "conclusion": "Exponential backoff is preferred.",
-    "evidence_used": [f"node:{evidence_node_id}"],
-    "crystallizations": [
-        {
-            "claim": "Exponential backoff reduces thundering herd at high concurrency.",
-            "confidence": 0.92,
-        }
-    ],
+# Store a reasoning chain — crystallizations become Knowledge candidates
+await mcp.call("context_store", {
+    "content": "Exponential backoff is preferred for all external calls.",
+    "layer": "intelligence",
+    "steps": reasoning_steps,  # list of {step, reasoning, confidence?}
+    "tags": ["retry", "architecture"],
 })
 ```
 
@@ -712,12 +628,27 @@ await mcp.call("context_reason", {
 
 ```python
 # Agent commits a synthesized judgment about prior nodes
-await mcp.call("context_commit", {
-    "silo_id": silo_id,
-    "belief": "Exponential backoff is the team standard for all external calls.",
+await mcp.call("context_store", {
+    "content": "Exponential backoff is the team standard for all external calls.",
+    "layer": "wisdom",
     "about": [knowledge_node_id, chain_node_id],
-    "confidence": 0.95,
-    "reasoning": "Consistent with two post-mortems and the retry policy doc.",
+    "tags": ["retry", "architecture"],
+})
+```
+
+### Pattern 7: Trace provenance then history
+
+```python
+# Where did this fact come from?
+prov = await mcp.call("context_recall", {
+    "mode": "provenance",
+    "node_ids": ["node-claim-789"],
+})
+
+# How did this fact evolve?
+history = await mcp.call("context_recall", {
+    "mode": "history",
+    "node_ids": ["node-claim-789"],
 })
 ```
 
@@ -731,16 +662,17 @@ await mcp.call("context_commit", {
 {
   "error": "node_not_found",
   "node_id": "node-missing-123",
-  "message": "Node may have been deleted or the silo_id is wrong."
+  "message": "Node may have been deleted or does not belong to the current silo."
 }
 ```
 
-### Silo not found
+### Missing required param
 
 ```json
 {
-  "error": "silo_not_found",
-  "silo_id": "silo-uuid-missing"
+  "error": "missing_required_param",
+  "param": "evidence",
+  "message": "evidence is required for the knowledge layer"
 }
 ```
 
@@ -783,8 +715,8 @@ await mcp.call("context_commit", {
 
 | Operation | Target |
 |-----------|--------|
-| `context_get` (cached) | < 20ms |
-| `context_query` | < 250ms |
-| `context_remember` / `context_assert` / `context_commit` / `context_reflect` (single-layer writes) | < 300ms p95 |
-| `context_graph` (depth 2) | < 500ms |
-| `context_reason` (chained) | < 400ms p95 |
+| `context_recall` fetch (cached) | < 20ms |
+| `context_recall` search | < 250ms |
+| `context_store` (single-layer writes) | < 300ms p95 |
+| `context_recall` graph (depth 2) | < 500ms |
+| `context_recall` history / provenance | < 400ms p95 |

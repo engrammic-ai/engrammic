@@ -180,7 +180,6 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def context_query(
-        silo_id: str,
         query: str,
         layers: list[str] | None = None,
         filters: dict[str, Any] | None = None,
@@ -188,11 +187,11 @@ def register(mcp: FastMCP) -> None:
         include_superseded: bool = False,
         as_of: str | None = None,
         search_mode: str = "hybrid",
+        silo_id: str | None = None,
     ) -> dict[str, Any]:
         """Semantic search with layer filtering.
 
         Args:
-            silo_id: UUID of the silo.
             query: Natural language search query.
             layers: Filter to layers: memory, knowledge, wisdom, intelligence.
             filters: QueryFilters: tags, source_type, min_confidence, created_after, created_before.
@@ -204,10 +203,14 @@ def register(mcp: FastMCP) -> None:
                 against the Memgraph store.
             search_mode: Retrieval mode — "hybrid" (dense+sparse RRF, default),
                 "dense" (dense-only), or "sparse" (SPLADE-only).
+            silo_id: UUID of the silo. Optional; defaults to the org's primary silo
+                derived from auth.
 
         Returns:
             {results, total_candidates, search_time_ms, search_mode}
         """
+        auth = await get_mcp_auth_context()
+        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         # Validate search_mode before passing to the typed internal function.
         if search_mode not in _VALID_SEARCH_MODES:
             return {
@@ -216,7 +219,7 @@ def register(mcp: FastMCP) -> None:
             }
         validated_mode: Literal["hybrid", "dense", "sparse"] = search_mode  # type: ignore[assignment]
         return await _context_query(
-            silo_id=silo_id,
+            silo_id=resolved_silo_id,
             query=query,
             layers=layers,
             filters=filters,

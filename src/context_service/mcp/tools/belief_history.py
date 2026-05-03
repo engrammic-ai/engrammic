@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 
 from context_service.mcp.server import get_context_service, get_mcp_auth_context, get_silo_service
+from context_service.services.models import derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 
 if TYPE_CHECKING:
@@ -77,16 +78,21 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def context_belief_history(
-        silo_id: str,
         node_id: str,
         limit: int = 20,
+        silo_id: str | None = None,
     ) -> dict[str, Any]:
         """Get the belief evolution timeline for a fact.
 
         Args:
-            silo_id: The silo to search within.
             node_id: Starting fact node ID. The tool traverses SUPERSEDES edges
                      in both directions to build the full chain.
             limit: Maximum nodes to return (default 20).
+            silo_id: UUID of the silo. Optional; defaults to the org's primary silo
+                derived from auth.
         """
-        return await _context_belief_history(silo_id=silo_id, node_id=node_id, limit=limit)
+        auth = await get_mcp_auth_context()
+        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
+        return await _context_belief_history(
+            silo_id=resolved_silo_id, node_id=node_id, limit=limit
+        )

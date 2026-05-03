@@ -111,24 +111,25 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def context_graph(
-        silo_id: str,
         query: str | None = None,
         seed_nodes: list[str] | None = None,
         max_depth: int = 2,
         max_nodes: int = 50,
         relationship_types: list[str] | None = None,
         layers: list[str] | None = None,
+        silo_id: str | None = None,
     ) -> dict[str, Any]:
         """Graph traversal from semantic seed.
 
         Args:
-            silo_id: UUID of the silo.
             query: Semantic query to find seed nodes (requires embedding service).
             seed_nodes: Explicit starting node IDs (list of node ID strings).
             max_depth: Traversal depth 1-5 (default 2).
             max_nodes: Maximum nodes to return 1-200 (default 50).
             relationship_types: Filter edges by type (e.g. REFERENCES, SUPPORTS).
             layers: Filter nodes to specific layers (memory, knowledge, wisdom).
+            silo_id: UUID of the silo. Optional; defaults to the org's primary silo
+                derived from auth.
 
         Returns:
             {nodes, edges, traversal_stats, metadata}
@@ -136,8 +137,10 @@ def register(mcp: FastMCP) -> None:
             metadata includes ``causal_edges_enabled`` and, when set on the silo,
             ``causal_coverage_from`` (epoch from which causal coverage applies).
         """
+        auth = await get_mcp_auth_context()
+        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         return await _context_graph(
-            silo_id=silo_id,
+            silo_id=resolved_silo_id,
             query=query,
             seed_nodes=seed_nodes,
             max_depth=max_depth,

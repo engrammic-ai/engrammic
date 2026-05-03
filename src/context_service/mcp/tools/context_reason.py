@@ -102,29 +102,34 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def context_reason(
-        silo_id: str,
         steps: list[dict[str, Any]],
         conclusion: str | None = None,
         evidence_used: list[str] | None = None,
         crystallizations: list[dict[str, Any]] | None = None,
         session_id: str | None = None,
+        silo_id: str | None = None,
     ) -> dict[str, Any]:
         """Store reasoning chain to Intelligence layer.
 
         Args:
-            silo_id: UUID of the silo.
             steps: List of {step, reasoning, confidence?} dicts.
             conclusion: Optional summary conclusion.
             evidence_used: Optional list of node:<uuid> or URI refs used.
             crystallizations: Optional list of {claim, confidence?} to extract.
             session_id: Optional session UUID to group multiple chains together.
                         If omitted a new session is created automatically.
+            silo_id: UUID of the silo. Optional; defaults to the org's primary silo
+                derived from auth.
 
         Returns:
             {chain_id, layer, steps_count, crystallizations_queued, session_id, created_at}
         """
+        from context_service.mcp.server import get_mcp_auth_context
+
+        auth = await get_mcp_auth_context()
+        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         return await _context_reason(
-            silo_id=silo_id,
+            silo_id=resolved_silo_id,
             steps=steps,
             conclusion=conclusion,
             evidence_used=evidence_used,

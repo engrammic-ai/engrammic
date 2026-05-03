@@ -72,22 +72,27 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def context_history(
-        silo_id: str,
         subject: str | None = None,
         node_id: str | None = None,
+        silo_id: str | None = None,
     ) -> dict[str, Any]:
         """Show belief evolution over time.
 
         Args:
-            silo_id: UUID of the silo.
             subject: Keyword to search for in content/subject field.
             node_id: Specific node to trace history for.
+            silo_id: UUID of the silo. Optional; defaults to the org's primary silo
+                derived from auth.
 
         Returns:
             {timeline, current, entries_count}
         """
+        from context_service.mcp.server import get_mcp_auth_context
+
+        auth = await get_mcp_auth_context()
+        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         return await _context_history(
-            silo_id=silo_id,
+            silo_id=resolved_silo_id,
             subject=subject,
             node_id=node_id,
         )

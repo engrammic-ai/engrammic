@@ -66,22 +66,25 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def context_provenance(
-        silo_id: str,
         node_id: str,
         max_depth: int = 10,
+        silo_id: str | None = None,
     ) -> dict[str, Any]:
         """Trace citation chain to source.
 
         Args:
-            silo_id: UUID of the silo.
             node_id: The node to trace provenance for.
             max_depth: Maximum edges to follow (default 10).
+            silo_id: UUID of the silo. Optional; defaults to the org's primary silo
+                derived from auth.
 
         Returns:
             {node_id, chain, root_sources, chain_length}
         """
+        auth = await get_mcp_auth_context()
+        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         return await _context_provenance(
-            silo_id=silo_id,
+            silo_id=resolved_silo_id,
             node_id=node_id,
             max_depth=max_depth,
         )

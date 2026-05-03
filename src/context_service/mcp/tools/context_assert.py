@@ -149,7 +149,6 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def context_assert(
-        silo_id: str,
         claim: str | dict[str, Any],
         evidence: str | list[str],
         source_type: str,
@@ -158,11 +157,11 @@ def register(mcp: FastMCP) -> None:
         tags: list[str] | None = None,
         evidence_mode: str = "sync",
         source_tier: str | None = None,
+        silo_id: str | None = None,
     ) -> dict[str, Any]:
         """Assert a claim with evidence.
 
         Args:
-            silo_id: UUID of the silo.
             claim: Free text or {subject, predicate, object} SPO.
             evidence: node:<uuid> or URI, or list thereof. Required.
             source_type: document|user|external|agent.
@@ -174,12 +173,16 @@ def register(mcp: FastMCP) -> None:
                 validated, community, unknown. Persisted on the claim and
                 consumed by Claim->Fact promotion. Defaults to unknown if
                 omitted (which fails R1 single-source promotion).
+            silo_id: UUID of the silo. Optional; defaults to the org's primary silo
+                derived from auth.
 
         Returns:
             {node_id, layer, claim_type, evidence_status, evidence_nodes, created_at}
         """
+        auth = await get_mcp_auth_context()
+        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         return await _context_assert(
-            silo_id=silo_id,
+            silo_id=resolved_silo_id,
             claim=claim,
             evidence=evidence,
             source_type=source_type,

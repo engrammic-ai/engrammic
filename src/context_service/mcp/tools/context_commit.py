@@ -98,7 +98,6 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def context_commit(
-        silo_id: str,
         belief: str,
         about: list[str],
         confidence: float = 0.8,
@@ -106,11 +105,11 @@ def register(mcp: FastMCP) -> None:
         metadata: dict[str, Any] | None = None,
         tags: list[str] | None = None,
         chain_id: str | None = None,
+        silo_id: str | None = None,
     ) -> dict[str, Any]:
         """Commit a belief.
 
         Args:
-            silo_id: UUID of the silo.
             belief: The belief statement.
             about: Node IDs this belief concerns.
             confidence: 0.0-1.0.
@@ -118,12 +117,16 @@ def register(mcp: FastMCP) -> None:
             metadata: Optional metadata.
             tags: Optional tags.
             chain_id: Optional reasoning chain ID to compact on commit.
+            silo_id: UUID of the silo. Optional; defaults to the org's primary silo
+                derived from auth.
 
         Returns:
             {node_id, layer, declared_by, about_nodes, created_at}
         """
+        auth = await get_mcp_auth_context()
+        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         return await _context_commit(
-            silo_id=silo_id,
+            silo_id=resolved_silo_id,
             belief=belief,
             about=about,
             confidence=confidence,

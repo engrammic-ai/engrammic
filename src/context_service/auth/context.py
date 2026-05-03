@@ -11,3 +11,5 @@ class AuthContext:
     user_id: str
     email: str | None
     is_dev: bool
+    agent_id: str | None = None
+    session_id: str | None = None

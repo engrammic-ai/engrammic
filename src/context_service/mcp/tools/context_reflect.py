@@ -72,28 +72,31 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def context_reflect(
-        silo_id: str,
         observation: str,
         observation_type: str,
         about: list[str],
         confidence: float = 0.8,
         metadata: dict[str, Any] | None = None,
+        silo_id: str | None = None,
     ) -> dict[str, Any]:
         """Store a meta-observation.
 
         Args:
-            silo_id: UUID of the silo.
             observation: The meta-observation text.
             observation_type: belief_change|confidence_shift|contradiction|uncertainty|correction|insight.
             about: Node IDs this observation concerns.
             confidence: 0.0-1.0.
             metadata: Optional metadata.
+            silo_id: UUID of the silo. Optional; defaults to the org's primary silo
+                derived from auth.
 
         Returns:
             {node_id, observation_type, about_nodes, created_at}
         """
+        auth = await get_mcp_auth_context()
+        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         return await _context_reflect(
-            silo_id=silo_id,
+            silo_id=resolved_silo_id,
             observation=observation,
             observation_type=observation_type,
             about=about,

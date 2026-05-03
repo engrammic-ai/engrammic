@@ -79,30 +79,33 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def context_remember(
-        silo_id: str,
         content: str,
         content_type: str = "text",
         metadata: dict[str, Any] | None = None,
         tags: list[str] | None = None,
         decay_class: str = "standard",
         observed_from: str | None = None,
+        silo_id: str | None = None,
     ) -> dict[str, Any]:
         """Store to Memory layer.
 
         Args:
-            silo_id: UUID of the silo.
             content: The content to store.
             content_type: One of text, utterance, event.
             metadata: Optional metadata dict.
             tags: Optional tags for filtering.
             decay_class: ephemeral|standard|durable|permanent.
             observed_from: Attribution (user:<id>, agent:<id>).
+            silo_id: UUID of the silo. Optional; defaults to the org's primary silo
+                derived from auth.
 
         Returns:
             {node_id, layer, decay_class, created_at}
         """
+        auth = await get_mcp_auth_context()
+        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         return await _context_remember(
-            silo_id=silo_id,
+            silo_id=resolved_silo_id,
             content=content,
             content_type=content_type,
             metadata=metadata,

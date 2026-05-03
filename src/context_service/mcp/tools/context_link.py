@@ -72,28 +72,31 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def context_link(
-        silo_id: str,
         from_node: str,
         to_node: str,
         relationship: str,
         weight: float = 1.0,
         note: str | None = None,
+        silo_id: str | None = None,
     ) -> dict[str, Any]:
         """Create a relationship between nodes.
 
         Args:
-            silo_id: UUID of the silo.
             from_node: Source node ID.
             to_node: Target node ID.
             relationship: REFERENCES|SUPPORTS|CONTRADICTS|DERIVED_FROM|RELATED_TO|CAUSES|CORROBORATES|PREVENTS.
             weight: Edge weight 0.0-10.0 (default 1.0).
             note: Optional annotation on the edge.
+            silo_id: UUID of the silo. Optional; defaults to the org's primary silo
+                derived from auth.
 
         Returns:
             {edge_id, from_node, to_node, relationship, created_at}
         """
+        auth = await get_mcp_auth_context()
+        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         return await _context_link(
-            silo_id=silo_id,
+            silo_id=resolved_silo_id,
             from_node=from_node,
             to_node=to_node,
             relationship=relationship,

@@ -229,24 +229,30 @@ def register(mcp: FastMCP) -> None:
         ),
     )
     async def context_close_reasoning(
-        silo_id: str,
         chain_id: str,
         referenced_chain_ids: list[str] | None = None,
+        silo_id: str | None = None,
     ) -> dict[str, Any]:
         """Explicitly close a reasoning session.
 
         Args:
-            silo_id: UUID of the silo.
             chain_id: ID of the ReasoningChain to close.
             referenced_chain_ids: Optional list of chain IDs this session references.
                 Creates REFERENCES edges between chains for cross-session traversal.
+            silo_id: UUID of the silo. Optional; defaults to the org's primary silo
+                derived from auth.
 
         Returns:
             {chain_id, silo_id, session_state, summarization_triggered, step_count,
              closed_at, summary?, event_id?, references_created?}
         """
+        from context_service.mcp.server import get_mcp_auth_context
+        from context_service.services.models import derive_silo_id
+
+        auth = await get_mcp_auth_context()
+        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         return await _context_close_reasoning(
-            silo_id=silo_id,
+            silo_id=resolved_silo_id,
             chain_id=chain_id,
             referenced_chain_ids=referenced_chain_ids,
         )
