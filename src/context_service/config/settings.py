@@ -391,6 +391,46 @@ class ExternalConfig(BaseModel):
     bear: BearConfig = Field(default_factory=BearConfig)
 
 
+class CausalConfig(BaseModel):
+    """Configuration for causal edge extraction, inference, and query exposure."""
+
+    model_config = {"extra": "ignore"}
+
+    extraction_enabled: bool = Field(
+        default=False,
+        description="Gate for causal claim extraction during document processing.",
+    )
+    inference_enabled: bool = Field(
+        default=False,
+        description="Gate for the causal_transitivity Dagster asset.",
+    )
+    query_enabled: bool = Field(
+        default=False,
+        description="Gate for returning CAUSES/CORROBORATES/PREVENTS edges in MCP responses.",
+    )
+    max_transitivity_depth: int = Field(
+        default=3,
+        ge=2,
+        le=4,
+        description="Maximum hop count for transitivity inference.",
+    )
+    min_inferred_confidence: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence for materialized inferred edges.",
+    )
+    confidence_formula: str = Field(
+        default="multiplicative",
+        description="Formula: 'multiplicative', 'minimum', or 'geometric_mean'.",
+    )
+    transitivity_batch_size: int = Field(
+        default=500,
+        ge=1,
+        description="Anchor nodes per batch in transitivity asset.",
+    )
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -421,6 +461,7 @@ class Settings(BaseSettings):
     custodian: CustodianSettings = Field(default_factory=CustodianSettings)
     retrieval_tuning: RetrievalTuning = Field(default_factory=RetrievalTuning)
     auto_reflect: AutoReflectConfig = Field(default_factory=AutoReflectConfig)
+    causal: CausalConfig = Field(default_factory=CausalConfig)
 
     # =========================================================================
     # Application Meta
