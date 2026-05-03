@@ -80,8 +80,10 @@ def clustering(
             status=ClusteringStatus.PENDING,
         )
 
+        from primitives.protocols import Layer
+
         try:
-            await service.run_clustering(silo_id, job)
+            await service.run_clustering(silo_id, job, target_layers=[Layer.KNOWLEDGE])
         finally:
             await cluster_qdrant.close()
 
