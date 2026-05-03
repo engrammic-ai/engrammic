@@ -1291,8 +1291,9 @@ class ContextService:
             MATCH (seed {{id: seed_id, silo_id: $silo_id}})
             OPTIONAL MATCH path = (seed)-[*1..{max_depth}]-(neighbor)
             WHERE neighbor.silo_id = $silo_id {layer_filter}
-            WITH DISTINCT seed, neighbor
-            UNWIND [seed] + COLLECT(neighbor) AS n
+            WITH seed, [x IN COLLECT(DISTINCT neighbor) WHERE x IS NOT NULL] AS neighbors
+            WITH [seed] + neighbors AS all_nodes
+            UNWIND all_nodes AS n
             RETURN DISTINCT
                 n.id AS node_id,
                 n.type AS type,

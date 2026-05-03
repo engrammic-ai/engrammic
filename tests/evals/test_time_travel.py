@@ -72,7 +72,7 @@ async def test_time_travel_precision(
     for case_result in report.cases:
         output = case_result.output
         assert output is not None, f"Case {case_result.name}: no output"
-        expected = case_result.case.expected_output
+        expected = case_result.expected_output
 
         if "min_results" in expected:
             assert output["results_count"] >= expected["min_results"], (

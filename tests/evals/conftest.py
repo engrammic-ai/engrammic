@@ -52,6 +52,27 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "evals: mark test as an HIL quality eval")
 
 
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[Any]) -> Any:
+    """Auto-capture eval test results for JSON output."""
+    outcome = yield
+    report = outcome.get_result()
+
+    if call.when != "call":
+        return
+
+    if not any(mark.name == "evals" for mark in item.iter_markers()):
+        return
+
+    item._eval_report = {  # type: ignore[attr-defined]
+        "name": item.name,
+        "nodeid": item.nodeid,
+        "outcome": report.outcome,
+        "duration_s": round(report.duration, 3),
+        "failed_reason": str(report.longrepr) if report.failed else None,
+    }
+
+
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:  # noqa: ARG001
     output_path: str | None = session.config.getoption("--eval-output", default=None)
     if not output_path:

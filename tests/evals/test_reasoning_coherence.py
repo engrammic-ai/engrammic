@@ -111,7 +111,7 @@ async def test_reasoning_coherence_quality(
         output = case_result.output
         assert output is not None, f"Case {case_result.name}: no output"
         assert output.get("chain_id"), f"Case {case_result.name}: chain_id missing"
-        expected_steps = case_result.case.expected_output.get("steps_count")
+        expected_steps = case_result.expected_output.get("steps_count")
         if expected_steps is not None:
             assert output.get("steps_count") == expected_steps, (
                 f"Case {case_result.name}: steps_count {output.get('steps_count')} "
