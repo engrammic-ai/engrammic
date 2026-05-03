@@ -1,5 +1,11 @@
 # Clustering Scope Implementation Plan
 
+**Status:** COMPLETE (2026-05-03)
+**Commits:** `7a12620`, `c6fbf39`
+**Tests:** 9 passing in `tests/test_clustering_scope.py`
+
+---
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans
 
 **Goal:** Scope clustering to Knowledge layer (Fact/Claim) by default, with configurable layer param
