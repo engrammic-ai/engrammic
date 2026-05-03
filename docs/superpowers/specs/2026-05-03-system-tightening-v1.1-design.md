@@ -1,5 +1,7 @@
 # System Tightening v1.1 Design
 
+**Status:** IMPLEMENTED (2026-05-03)
+
 Three improvements to tighten the context service: semantic filtering for temporal queries, Knowledge-layer clustering, and edge type validation.
 
 ## 1. context_history Semantic Filtering
