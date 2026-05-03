@@ -84,7 +84,8 @@ class SiloService:
             """
             MATCH (s:Silo {id: $silo_id, org_id: $org_id})
             RETURN s.id AS id, s.name AS name, s.org_id AS org_id,
-                   s.description AS description, s.dissolvability AS dissolvability
+                   s.description AS description, s.dissolvability AS dissolvability,
+                   s.causal_coverage_from AS causal_coverage_from
             """,
             {"silo_id": str(scope.silo_id), "org_id": scope.org_id},
         )
@@ -93,12 +94,16 @@ class SiloService:
             return None
 
         row = results[0]
+        meta: dict[str, Any] = {}
+        if row.get("causal_coverage_from") is not None:
+            meta["causal_coverage_from"] = row["causal_coverage_from"]
         return Silo(
             id=uuid.UUID(row["id"]),
             name=row["name"],
             org_id=row["org_id"],
             description=row.get("description"),
             dissolvability=row.get("dissolvability", 0.5),
+            metadata=meta,
         )
 
     async def list(self, org_id: str) -> list[Silo]:

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import structlog
 
 from context_service.api.metrics import CONTEXT_QUERY_LATENCY
+from context_service.config.settings import get_settings
 from context_service.mcp.server import (
     get_context_service,
     get_mcp_auth_context,
@@ -77,6 +78,7 @@ async def _context_query(
             return {"error": "invalid_filters", "message": str(exc)}
 
     scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
+    silo_service = get_silo_service()
 
     start = time.perf_counter()
 
@@ -130,6 +132,17 @@ async def _context_query(
         except Exception as exc:
             logger.warning("access_event_emit_failed", silo_id=silo_id, error=str(exc))
 
+    settings = get_settings()
+    metadata: dict[str, Any] = {
+        "causal_edges_enabled": settings.causal.query_enabled,
+    }
+    if settings.causal.query_enabled:
+        silo = await silo_service.get_by_id(scope)
+        if silo is not None:
+            coverage_from = silo.metadata.get("causal_coverage_from")
+            if coverage_from is not None:
+                metadata["causal_coverage_from"] = coverage_from
+
     return {
         "results": [
             {
@@ -147,6 +160,7 @@ async def _context_query(
         "total_candidates": len(results),
         "search_time_ms": elapsed_ms,
         "search_mode": search_mode,
+        "metadata": metadata,
     }
 
 

@@ -1238,7 +1238,8 @@ class ContextService:
                     MATCH (a {{id: nid}})-[r]->(b)
                     WHERE b.id IN $node_ids {rel_filter}
                     RETURN a.id AS from_node, b.id AS to_node, type(r) AS relationship,
-                           COALESCE(r.weight, 1.0) AS weight
+                           COALESCE(r.weight, 1.0) AS weight,
+                           COALESCE(r.inferred, false) AS inferred
                     """,
                     params,
                 )
@@ -1261,6 +1262,7 @@ class ContextService:
                 "to_node": e["to_node"],
                 "relationship": e["relationship"],
                 "weight": e.get("weight", 1.0),
+                "inferred": bool(e.get("inferred", False)),
             }
             for e in edge_rows
         ]
