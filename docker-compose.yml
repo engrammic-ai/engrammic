@@ -11,7 +11,7 @@ services:
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - MEMGRAPH_URI=bolt://memgraph:7687
-      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_HOST=qdrant
       - REDIS_URL=redis://redis:6379
       - GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-sa.json
     volumes:
