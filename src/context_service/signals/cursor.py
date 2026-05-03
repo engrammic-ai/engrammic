@@ -17,7 +17,7 @@ import structlog
 if TYPE_CHECKING:
     from neo4j import AsyncTransaction
 
-    from context_service.stores.memgraph import MemgraphClient
+    from context_service.engine.protocols import HyperGraphStore
 
 logger = structlog.get_logger(__name__)
 
@@ -36,7 +36,7 @@ SET c.last_id = $last_id, c.updated_at = $now
 
 
 async def fetch_or_init_heat_cursor(
-    memgraph: MemgraphClient,
+    memgraph: HyperGraphStore,
     silo_id: str,
 ) -> str:
     """Return the cursor's last-consumed stream entry ID, creating it if absent.
@@ -45,7 +45,7 @@ async def fetch_or_init_heat_cursor(
     causes the heat asset to read from the beginning of the stream.
 
     Args:
-        memgraph: Live Memgraph client.
+        memgraph: HyperGraphStore instance.
         silo_id: Silo to look up.
 
     Returns:
@@ -62,7 +62,7 @@ async def fetch_or_init_heat_cursor(
 
 
 async def advance_heat_cursor(
-    memgraph: MemgraphClient,
+    memgraph: HyperGraphStore,
     silo_id: str,
     new_cursor: str,
     *,
@@ -75,14 +75,20 @@ async def advance_heat_cursor(
     None a standalone write is issued via ``memgraph.execute_write``.
 
     Args:
-        memgraph: Live Memgraph client.
+        memgraph: HyperGraphStore instance.
         silo_id: Silo whose cursor to advance.
         new_cursor: New last-consumed stream entry ID.
-        tx: Optional bound transaction.
+        tx: Optional bound transaction (AsyncTransaction). The tx path calls
+            tx.run() directly, which is outside the HyperGraphStore protocol.
+            DEBT: callers currently never pass tx; if this path is ever
+            activated, migrate to store.transaction() instead.
     """
     now = datetime.now(UTC).isoformat()
     params: dict[str, Any] = {"silo_id": silo_id, "last_id": new_cursor, "now": now}
     if tx is not None:
+        # DEBT(protocol-migration): tx.run() is a raw neo4j call, not on
+        # HyperGraphStore. Migrate to store.transaction() when this path is
+        # activated. Tracked in context/plans/v1.2b-protocol-migration.md.
         result = await tx.run(_ADVANCE_CURSOR, params)
         await result.consume()
     else:

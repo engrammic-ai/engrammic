@@ -16,7 +16,6 @@ import structlog
 
 if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
-    from context_service.stores.memgraph import MemgraphClient
 
 logger = structlog.get_logger(__name__)
 
@@ -26,17 +25,21 @@ _GET_HEAT_QUERY = "MATCH (n {id: $id, silo_id: $silo_id}) RETURN coalesce(n.heat
 
 
 async def get_heat(
-    memgraph: MemgraphClient | HyperGraphStore,
+    store: HyperGraphStore,
     node_id: str,
     silo_id: str,
 ) -> float:
     """Return the heat score for a node.
 
-    Queries Memgraph for ``n.heat_score`` and falls back to ``DEFAULT_HEAT``
-    (0.5) when the property is absent or the node is not found.
+    Queries the graph store for ``n.heat_score`` and falls back to
+    ``DEFAULT_HEAT`` (0.5) when the property is absent or the node is not
+    found.
+
+    Uses ``execute_query`` escape hatch because heat_score is a raw node
+    property not surfaced by any domain-level protocol method (tech debt).
 
     Args:
-        memgraph: Live Memgraph client.
+        store: HyperGraphStore protocol implementation.
         node_id: Node ID (string form of the UUID).
         silo_id: Silo the node belongs to.
 
@@ -44,7 +47,7 @@ async def get_heat(
         Float heat score in [0.0, 1.0] (typically).
     """
     try:
-        rows: list[dict[str, Any]] = await memgraph.execute_query(
+        rows: list[dict[str, Any]] = await store.execute_query(
             _GET_HEAT_QUERY,
             {"id": str(node_id), "silo_id": silo_id},
         )

@@ -93,6 +93,7 @@ def heat_asset(
     t0 = time.monotonic()
 
     async def _run() -> tuple[int, int, str]:
+        from context_service.engine.protocols import HyperGraphStore
         from context_service.signals.cursor import (
             advance_heat_cursor,
             fetch_or_init_heat_cursor,
@@ -100,7 +101,7 @@ def heat_asset(
         from context_service.stores import MemgraphClient
 
         driver = await memgraph.driver()
-        mg_client = MemgraphClient(driver)
+        mg_client: HyperGraphStore = MemgraphClient(driver)  # type: ignore[assignment]
         redis_conn = await redis.client()
 
         stream_key = access_stream_key(silo_id)
