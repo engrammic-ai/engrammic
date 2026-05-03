@@ -43,6 +43,11 @@ def test_layer_labels_intelligence_raises() -> None:
         layer_labels([Layer.INTELLIGENCE])
 
 
+def test_layer_labels_empty_raises() -> None:
+    with pytest.raises(ValueError, match="must not be empty"):
+        layer_labels([])
+
+
 # --- run_clustering signature ---
 
 
@@ -78,6 +83,13 @@ async def test_run_clustering_defaults_to_knowledge_layer() -> None:
 
     # At minimum, execute_query must have been called (Leiden detection)
     assert memgraph.execute_query.called
-    # Verify node_labels param was passed (scoped query variant)
-    all_call_strs = [str(c) for c in memgraph.execute_query.call_args_list]
-    assert any("node_labels" in s for s in all_call_strs)
+    # Verify node_labels param was passed with the correct Knowledge layer labels
+    all_calls = memgraph.execute_query.call_args_list
+    node_labels_arg: list[str] | None = None
+    for call in all_calls:
+        args, kwargs = call
+        params = args[1] if len(args) > 1 else kwargs.get("params", {})
+        if isinstance(params, dict) and "node_labels" in params:
+            node_labels_arg = params["node_labels"]
+            break
+    assert node_labels_arg == ["Fact", "Claim"]
