@@ -212,6 +212,7 @@ async def run_supersession_pass(
     dropped_low_conf = 0
     dropped_bad_order = 0
     dropped_unknown = 0
+    written_pairs = []
 
     # Process structured pairs first
     for pair in structured_pairs:
@@ -240,6 +241,7 @@ async def run_supersession_pass(
         )
         if written:
             edges_written += 1
+            written_pairs.append(pair)
 
     # Process LLM pairs
     for pair in llm_pairs:
@@ -282,12 +284,14 @@ async def run_supersession_pass(
         )
         if written:
             edges_written += 1
+            written_pairs.append(pair)
 
     # Auto-reflection hook: fire-and-forget per supersession edge written.
+    # Iterate only pairs for which an edge was actually written, not dropped pairs.
     # Errors are caught inside create_auto_reflection and only logged.
     _settings = get_settings()
     if _settings.auto_reflect.enabled and _settings.auto_reflect.on_supersession:
-        for pair in list(structured_pairs) + list(llm_pairs):
+        for pair in written_pairs:
             from_node = node_map.get(pair.superseding_id)
             to_node = node_map.get(pair.superseded_id)
             if not from_node or not to_node:

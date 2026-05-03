@@ -35,7 +35,7 @@ def _close_async(coro: object) -> None:
         return
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
         f: concurrent.futures.Future[None] = pool.submit(asyncio.run, coro)  # type: ignore[arg-type]
-        f.result()
+        f.result(timeout=30)
 
 
 class MemgraphResource(dg.ConfigurableResource):  # type: ignore[type-arg]

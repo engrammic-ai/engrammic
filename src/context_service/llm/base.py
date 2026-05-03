@@ -36,6 +36,11 @@ class Usage:
         return self.input_tokens + self.output_tokens
 
 
+def truncate(text: str, max_len: int = 200) -> str:
+    """Truncate text to max_len characters for safe logging (prevents PII leakage)."""
+    return text[:max_len] if len(text) > max_len else text
+
+
 def robust_json_loads(text: str) -> Any:
     """Parse JSON with automatic repair for malformed LLM output.
 

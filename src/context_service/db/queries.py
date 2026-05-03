@@ -14,6 +14,7 @@ from context_service.db.schema import (
     LABEL_ENTITY,
     content_union_predicate,
 )
+from context_service.extraction.models import RelationshipType
 
 # Entity queries
 
@@ -39,18 +40,23 @@ RETURN e
 """
 
 
-def build_create_entity_relationship_query(rel_type: str) -> str:
+def build_create_entity_relationship_query(rel_type: RelationshipType) -> str:
     """Build a CREATE entity relationship query with a real edge label.
 
     The edge label comes from the closed :class:`RelationshipType` vocabulary.
     Domain-specific nuance is captured on edge properties:
     ``kind`` (free-form verb), ``directed``, ``confidence``, ``temporal``,
     and ``source_node_ids``.
+
+    ``rel_type`` must be a :class:`RelationshipType` member; passing a raw
+    string is a type error.  The caller is responsible for validating the
+    input *before* reaching this function.
     """
+    label = rel_type.value  # guaranteed member of the closed enum
     return f"""
 MATCH (a:Entity {{id: $source_id, silo_id: $silo_id}})
 MATCH (b:Entity {{id: $target_id, silo_id: $silo_id}})
-CREATE (a)-[r:{rel_type} {{
+CREATE (a)-[r:{label} {{
     kind: $kind,
     directed: $directed,
     confidence: $confidence,
@@ -198,6 +204,12 @@ SET c.summary = $summary, c.key_topics = $key_topics, c.updated_at = $updated_at
 RETURN c
 """
 
+BATCH_UPDATE_CLUSTER_SUMMARIES = """
+UNWIND $updates AS u
+MATCH (c:Cluster {id: u.id, silo_id: $silo_id})
+SET c.summary = u.summary, c.key_topics = u.key_topics, c.updated_at = $updated_at
+"""
+
 # Batch operations
 BATCH_CREATE_MEMBER_OF = f"""
 MATCH (c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
@@ -311,19 +323,23 @@ CREATE (a)-[:CORROBORATES {strength: $strength, created_at: datetime(), extracte
 """
 
 
-def build_batch_entity_rel_query(rel_type: str) -> str:
+def build_batch_entity_rel_query(rel_type: RelationshipType) -> str:
     """Build a batch CREATE entity relationship query with a real edge label.
 
     The edge label comes from the closed :class:`RelationshipType` vocabulary.
     Each row in ``$rels`` must carry ``source_id``, ``target_id``, ``kind``,
     ``directed``, ``confidence``, ``temporal``, ``source_node_ids``, and
     ``created_at``.
+
+    ``rel_type`` must be a :class:`RelationshipType` member; passing a raw
+    string is a type error.
     """
+    label = rel_type.value  # guaranteed member of the closed enum
     return f"""
 UNWIND $rels AS r
 MATCH (a:Entity {{id: r.source_id, silo_id: $silo_id}})
 MATCH (b:Entity {{id: r.target_id, silo_id: $silo_id}})
-CREATE (a)-[:{rel_type} {{
+CREATE (a)-[:{label} {{
     kind: r.kind,
     directed: r.directed,
     confidence: r.confidence,

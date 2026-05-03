@@ -10,7 +10,7 @@ import httpx
 
 from context_service.config import get_settings
 from context_service.config.logging import get_logger
-from context_service.llm.base import LLMProvider, Usage, robust_json_loads
+from context_service.llm.base import LLMProvider, Usage, robust_json_loads, truncate
 
 logger = get_logger(__name__)
 
@@ -32,6 +32,8 @@ class AnthropicProvider(LLMProvider):
         api_url: str = "https://api.anthropic.com/v1/messages",
         api_version: str = "2023-06-01",
     ) -> None:
+        if not api_key:
+            raise ValueError("Anthropic API key must not be empty")
         self._api_key = api_key
         self._model = model
         self._api_url = api_url
@@ -159,7 +161,7 @@ class AnthropicProvider(LLMProvider):
             logger.error(
                 "Anthropic API error",
                 status_code=e.response.status_code,
-                response_text=e.response.text,
+                response_text=truncate(e.response.text),
             )
             raise AnthropicError(f"Anthropic API request failed: {e}") from e
         except httpx.RequestError as e:
@@ -218,7 +220,7 @@ class AnthropicProvider(LLMProvider):
             logger.error(
                 "Anthropic API error",
                 status_code=e.response.status_code,
-                response_text=e.response.text,
+                response_text=truncate(e.response.text),
             )
             raise AnthropicError(f"Anthropic API request failed: {e}") from e
         except httpx.RequestError as e:

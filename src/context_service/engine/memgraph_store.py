@@ -756,6 +756,10 @@ class MemgraphStore(EAGKnowledgeStore):
         max_nodes: int = 100,
         silo_scope: list[str] | None = None,
     ) -> SubGraph:
+        if not isinstance(max_depth, int):
+            raise TypeError(f"max_depth must be int, got {type(max_depth).__name__}")
+        if not isinstance(max_nodes, int):
+            raise TypeError(f"max_nodes must be int, got {type(max_nodes).__name__}")
         capped_depth = min(max_depth, 5)  # hard cap
         capped_nodes = min(max_nodes, 500)  # hard cap
         query = queries.NEIGHBORHOOD % (capped_depth * 2)  # *2 for bipartite hops
@@ -835,6 +839,8 @@ class MemgraphStore(EAGKnowledgeStore):
         *,
         max_depth: int = 5,
     ) -> list[Node] | None:
+        if not isinstance(max_depth, int):
+            raise TypeError(f"max_depth must be int, got {type(max_depth).__name__}")
         capped_depth = min(max_depth, 5) * 2  # *2 for bipartite
         query = queries.SHORTEST_PATH % capped_depth
         result = await self._client.execute_query(

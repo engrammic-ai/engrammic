@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import os
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -21,7 +21,7 @@ from google.oauth2 import service_account
 
 from context_service.config import get_settings
 from context_service.config.logging import get_logger
-from context_service.llm.base import LLMProvider, Usage, robust_json_loads
+from context_service.llm.base import LLMProvider, Usage, robust_json_loads, truncate
 
 logger = get_logger(__name__)
 
@@ -124,7 +124,6 @@ class VertexGeminiProvider(LLMProvider):
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
             self._client = httpx.AsyncClient(
-                timeout=30.0,
                 headers={"Content-Type": "application/json"},
             )
         return self._client
@@ -144,7 +143,7 @@ class VertexGeminiProvider(LLMProvider):
             creds: Any = self._credentials
             needs_refresh = force_refresh or creds.token is None or creds.expired
             if not needs_refresh and creds.expiry is not None:
-                now = datetime.utcnow()
+                now = datetime.now(UTC).replace(tzinfo=None)
                 remaining = (creds.expiry - now).total_seconds()
                 if remaining < _TOKEN_REFRESH_MARGIN_SECONDS:
                     needs_refresh = True
@@ -238,7 +237,7 @@ class VertexGeminiProvider(LLMProvider):
                 logger.error(
                     "VertexGemini API error",
                     status_code=e.response.status_code,
-                    response_text=e.response.text,
+                    response_text=truncate(e.response.text),
                 )
                 raise VertexGeminiError(
                     f"VertexGemini API request failed: {type(e).__name__}: {e!r}"

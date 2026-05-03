@@ -53,140 +53,152 @@ def extraction(
         client = MemgraphClient(driver)
         llm_provider = llm.get_client()
 
-        rows = await client.execute_query(
-            _PENDING_DOCUMENTS,
-            {"silo_id": silo_id, "batch": _BATCH_SIZE},
-        )
-        if not rows:
-            return 0, 0, 0, 0.0
-
         docs_processed = 0
         claims_created = 0
         tokens_used = 0
 
         svc = ExtractionService.llm_only(llm_provider)
 
-        now = datetime.now(UTC).isoformat()
+        max_iterations = 10
+        for iteration in range(max_iterations):
+            rows = await client.execute_query(
+                _PENDING_DOCUMENTS,
+                {"silo_id": silo_id, "batch": _BATCH_SIZE},
+            )
+            if not rows:
+                break
 
-        # Accumulate writes across all docs in this batch, then issue
-        # exactly 4 RTTs after the loop. R-003/F-016 from 2026-04-28 review.
-        all_claim_rows: list[dict[str, Any]] = []
-        all_attach_rows: list[dict[str, Any]] = []
-        all_mention_rows: list[dict[str, Any]] = []
-        all_ref_rows: list[dict[str, Any]] = []
+            now = datetime.now(UTC).isoformat()
 
-        for row in rows:
-            doc_id: str = str(row["id"])
-            content: str = str(row.get("content") or "")
-            if not content:
-                context.log.warning(f"doc {doc_id} has no content; skipping")
-                continue
+            # Accumulate writes across all docs in this batch, then issue
+            # exactly 4 RTTs after the loop. R-003/F-016 from 2026-04-28 review.
+            all_claim_rows: list[dict[str, Any]] = []
+            all_attach_rows: list[dict[str, Any]] = []
+            all_mention_rows: list[dict[str, Any]] = []
+            all_ref_rows: list[dict[str, Any]] = []
 
-            try:
-                result: ExtractionResult
-                result, usage = await svc.extract(content)
-                tokens_used += usage.total_tokens
-                docs_processed += 1
-            except Exception as exc:
-                context.log.warning(f"extraction failed for doc {doc_id}: {exc}")
-                continue
+            for row in rows:
+                doc_id: str = str(row["id"])
+                content: str = str(row.get("content") or "")
+                if not content:
+                    context.log.warning(f"doc {doc_id} has no content; skipping")
+                    continue
 
-            entity_type_by_name = {e.name: e.entity_type for e in result.entities}
-            triples: list[ClaimTriple] = []
-            for rel in result.relationships:
-                predicate = (rel.kind or rel.relationship_type.value).strip().lower()
-                if not predicate:
-                    predicate = rel.relationship_type.value.lower()
-                mentions = [
-                    EntityMention(
-                        entity_id=_stable_entity_id(silo_id, rel.source),
-                        name=rel.source,
-                        entity_type=entity_type_by_name.get(rel.source, "unknown"),
-                    ),
-                    EntityMention(
-                        entity_id=_stable_entity_id(silo_id, rel.target),
-                        name=rel.target,
-                        entity_type=entity_type_by_name.get(rel.target, "unknown"),
-                    ),
-                ]
-                triples.append(
-                    ClaimTriple(
-                        subject=rel.source,
-                        predicate=predicate,
-                        object=rel.target,
-                        source_passage_id=doc_id,
-                        source_doc_id=doc_id,
-                        valid_from=now,
-                        valid_to=None,
-                        confidence=rel.confidence,
-                        entity_mentions=mentions,
+                try:
+                    result: ExtractionResult
+                    result, usage = await svc.extract(content)
+                    tokens_used += usage.total_tokens
+                    docs_processed += 1
+                except Exception as exc:
+                    context.log.warning(f"extraction failed for doc {doc_id}: {exc}")
+                    continue
+
+                entity_type_by_name = {e.name: e.entity_type for e in result.entities}
+                triples: list[ClaimTriple] = []
+                for rel in result.relationships:
+                    predicate = (rel.kind or rel.relationship_type.value).strip().lower()
+                    if not predicate:
+                        predicate = rel.relationship_type.value.lower()
+                    mentions = [
+                        EntityMention(
+                            entity_id=_stable_entity_id(silo_id, rel.source),
+                            name=rel.source,
+                            entity_type=entity_type_by_name.get(rel.source, "unknown"),
+                        ),
+                        EntityMention(
+                            entity_id=_stable_entity_id(silo_id, rel.target),
+                            name=rel.target,
+                            entity_type=entity_type_by_name.get(rel.target, "unknown"),
+                        ),
+                    ]
+                    triples.append(
+                        ClaimTriple(
+                            subject=rel.source,
+                            predicate=predicate,
+                            object=rel.target,
+                            source_passage_id=doc_id,
+                            source_doc_id=doc_id,
+                            valid_from=now,
+                            valid_to=None,
+                            confidence=rel.confidence,
+                            entity_mentions=mentions,
+                        )
                     )
-                )
 
-            if not triples:
-                continue
+                if not triples:
+                    continue
 
-            for t in triples:
-                cid = make_claim_id(
-                    t.subject,
-                    t.predicate,
-                    t.object,
-                    t.valid_from,
-                    t.valid_to,
-                    t.source_doc_id,
-                )
-                all_claim_rows.append(
-                    {
-                        "claim_id": cid,
-                        "fingerprint": cid,
-                        "subject": t.subject,
-                        "predicate": t.predicate,
-                        "object": t.object,
-                        "valid_from": t.valid_from,
-                        "valid_to": t.valid_to,
-                        "source_doc_id": t.source_doc_id,
-                        "source_passage_id": t.source_passage_id,
-                        "confidence": t.confidence,
-                        "created_at": now,
-                    }
-                )
-                all_attach_rows.append({"doc_id": doc_id, "claim_id": cid})
-                for m in t.entity_mentions:
-                    all_mention_rows.append(
+                for t in triples:
+                    cid = make_claim_id(
+                        t.subject,
+                        t.predicate,
+                        t.object,
+                        t.valid_from,
+                        t.valid_to,
+                        t.source_doc_id,
+                    )
+                    all_claim_rows.append(
                         {
-                            "entity_id": m.entity_id,
-                            "silo_id": silo_id,
-                            "name": m.name,
-                            "entity_type": m.entity_type,
-                            "created_at": now,
                             "claim_id": cid,
+                            "fingerprint": cid,
+                            "subject": t.subject,
+                            "predicate": t.predicate,
+                            "object": t.object,
+                            "valid_from": t.valid_from,
+                            "valid_to": t.valid_to,
+                            "source_doc_id": t.source_doc_id,
+                            "source_passage_id": t.source_passage_id,
+                            "confidence": t.confidence,
+                            "created_at": now,
                         }
                     )
-                if t.ref_doc_id:
-                    all_ref_rows.append({"claim_id": cid, "ref_doc_id": t.ref_doc_id})
+                    all_attach_rows.append({"doc_id": doc_id, "claim_id": cid})
+                    for m in t.entity_mentions:
+                        all_mention_rows.append(
+                            {
+                                "entity_id": m.entity_id,
+                                "silo_id": silo_id,
+                                "name": m.name,
+                                "entity_type": m.entity_type,
+                                "created_at": now,
+                                "claim_id": cid,
+                            }
+                        )
+                    if t.ref_doc_id:
+                        all_ref_rows.append({"claim_id": cid, "ref_doc_id": t.ref_doc_id})
 
-            claims_created += len(triples)
+                claims_created += len(triples)
 
-        # Exactly 4 RTTs total for the whole batch (or fewer if some lists empty).
-        if all_claim_rows:
-            await client.execute_write(
-                queries.BATCH_UPSERT_CLAIMS,
-                {"claims": all_claim_rows, "silo_id": silo_id},
-            )
-            await client.execute_write(
-                queries.BATCH_ATTACH_CLAIMS_TO_DOCUMENT,
-                {"rows": all_attach_rows, "silo_id": silo_id},
-            )
-        if all_mention_rows:
-            await client.execute_write(
-                queries.BATCH_UPSERT_ENTITY_MENTIONS,
-                {"rows": all_mention_rows, "silo_id": silo_id},
-            )
-        if all_ref_rows:
-            await client.execute_write(
-                queries.BATCH_ATTACH_CLAIM_REFERENCES,
-                {"rows": all_ref_rows, "silo_id": silo_id},
-            )
+            # Exactly 4 RTTs per iteration batch (or fewer if some lists empty).
+            if all_claim_rows:
+                await client.execute_write(
+                    queries.BATCH_UPSERT_CLAIMS,
+                    {"claims": all_claim_rows, "silo_id": silo_id},
+                )
+                await client.execute_write(
+                    queries.BATCH_ATTACH_CLAIMS_TO_DOCUMENT,
+                    {"rows": all_attach_rows, "silo_id": silo_id},
+                )
+            if all_mention_rows:
+                await client.execute_write(
+                    queries.BATCH_UPSERT_ENTITY_MENTIONS,
+                    {"rows": all_mention_rows, "silo_id": silo_id},
+                )
+            if all_ref_rows:
+                await client.execute_write(
+                    queries.BATCH_ATTACH_CLAIM_REFERENCES,
+                    {"rows": all_ref_rows, "silo_id": silo_id},
+                )
+
+            if len(rows) < _BATCH_SIZE:
+                # Fetched fewer than a full page — queue is drained.
+                break
+
+            if iteration == max_iterations - 1:
+                context.log.warning(
+                    f"silo={silo_id} hit max_iterations={max_iterations}; "
+                    "pending documents may remain"
+                )
 
         return docs_processed, claims_created, tokens_used, 0.0
 

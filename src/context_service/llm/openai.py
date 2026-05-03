@@ -10,7 +10,7 @@ import httpx
 
 from context_service.config import get_settings
 from context_service.config.logging import get_logger
-from context_service.llm.base import LLMProvider, Usage, robust_json_loads
+from context_service.llm.base import LLMProvider, Usage, robust_json_loads, truncate
 
 logger = get_logger(__name__)
 
@@ -140,7 +140,7 @@ class OpenAIProvider(LLMProvider):
             logger.error(
                 "OpenAI API error",
                 status_code=e.response.status_code,
-                response_text=e.response.text,
+                response_text=truncate(e.response.text),
             )
             raise OpenAIError(f"OpenAI API request failed: {e}") from e
         except httpx.RequestError as e:
@@ -189,7 +189,7 @@ class OpenAIProvider(LLMProvider):
             logger.error(
                 "OpenAI API error",
                 status_code=e.response.status_code,
-                response_text=e.response.text,
+                response_text=truncate(e.response.text),
             )
             raise OpenAIError(f"OpenAI API request failed: {e}") from e
         except httpx.RequestError as e:

@@ -68,7 +68,7 @@ def register(mcp: FastMCP) -> None:
         description=(
             "Create a typed relationship between two context nodes. "
             "Relationship types: REFERENCES, SUPPORTS, CONTRADICTS, DERIVED_FROM, RELATED_TO, "
-            "CAUSES, CORROBORATES."
+            "CAUSES, CORROBORATES, PREVENTS."
         ),
     )
     async def context_link(
@@ -85,7 +85,7 @@ def register(mcp: FastMCP) -> None:
             silo_id: UUID of the silo.
             from_node: Source node ID.
             to_node: Target node ID.
-            relationship: REFERENCES|SUPPORTS|CONTRADICTS|DERIVED_FROM|RELATED_TO|CAUSES|CORROBORATES.
+            relationship: REFERENCES|SUPPORTS|CONTRADICTS|DERIVED_FROM|RELATED_TO|CAUSES|CORROBORATES|PREVENTS.
             weight: Edge weight 0.0-10.0 (default 1.0).
             note: Optional annotation on the edge.
 

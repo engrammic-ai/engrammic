@@ -153,12 +153,12 @@ async def apply_all_indexes(client: HyperGraphStore) -> None:
     """
     logger.info("applying_indexes", count=len(ALL_INDEX_QUERIES))
     applied = 0
-    for statement in ALL_INDEX_QUERIES:
-        try:
-            async with client.session() as session:
+    async with client.session() as session:
+        for statement in ALL_INDEX_QUERIES:
+            try:
                 result = await session.run(statement)
                 await result.consume()
-            applied += 1
-        except Exception as exc:
-            logger.debug("index_apply_skipped", statement=statement, error=str(exc))
+                applied += 1
+            except Exception as exc:
+                logger.debug("index_apply_skipped", statement=statement, error=str(exc))
     logger.info("indexes_applied", applied=applied, total=len(ALL_INDEX_QUERIES))

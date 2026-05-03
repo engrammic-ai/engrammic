@@ -34,14 +34,31 @@ _SPARQL_ESCAPES = (
     ("\t", "\\t"),
 )
 
+# Unicode bidi-override codepoints that could be used to mislead log readers or
+# bypass naive content filters.  We strip them outright; they have no legitimate
+# place in a SPARQL label query.
+_BIDI_OVERRIDES: frozenset[str] = frozenset(
+    "​‌‍‎‏"  # zero-width / directional marks
+    "‪‫‬‭‮"  # LRE, RLE, PDF, LRO, RLO
+    "⁦⁧⁨⁩"  # FSI, LRI, RLI, PDI
+    "﻿"  # BOM / zero-width no-break space
+)
+
 
 def _escape_sparql_literal(value: str) -> str:
     """Escape a string for safe inclusion inside a double-quoted SPARQL literal.
 
     Per SPARQL 1.1 §19.7 the string-literal escape set is \\, ", \\n, \\r, \\t,
-    \\u, \\U. We don't emit \\u/\\U sequences here, so the input set above is
-    sufficient to prevent breaking out of the literal.
+    \\u, \\U.  This function handles all of those *plus*:
+
+    - Bidi-override and zero-width characters (stripped; harmless in labels).
+    - The \\u / \\U escape sequences themselves: because we escape backslash
+      first, any literal \\u in the input becomes \\\\u, preventing injection
+      via ``\\u0022`` or similar sequences.
     """
+    # Strip bidi overrides and zero-width characters before other processing.
+    value = "".join(ch for ch in value if ch not in _BIDI_OVERRIDES)
+
     for needle, replacement in _SPARQL_ESCAPES:
         value = value.replace(needle, replacement)
     return value

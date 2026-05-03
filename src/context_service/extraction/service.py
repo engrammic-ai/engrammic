@@ -231,7 +231,7 @@ class ExtractionService:
                 {
                     "source_id": source_id,
                     "target_id": target_id,
-                    "rel_type": rel_type_enum.value,
+                    "rel_type": rel_type_enum,
                     "kind": rel.kind,
                     "directed": rel.directed,
                     "confidence": rel.confidence,
@@ -244,20 +244,20 @@ class ExtractionService:
         if rels_data:
             # Group relationships by rel_type so the edge label can be baked into
             # the Cypher (Memgraph does not support parameterized edge labels).
-            grouped: dict[str, list[dict[str, Any]]] = {}
+            grouped: dict[RelationshipType, list[dict[str, Any]]] = {}
             for rd in rels_data:
                 grouped.setdefault(rd["rel_type"], []).append(rd)
 
-            for rel_type, group_rels in grouped.items():
+            for rel_type_enum, group_rels in grouped.items():
                 try:
                     result_rows = await self._graph.execute_write(
-                        build_batch_entity_rel_query(rel_type),
+                        build_batch_entity_rel_query(rel_type_enum),
                         {"rels": group_rels, "silo_id": silo_id},
                     )
                     relationships_created += result_rows[0].get("created", 0) if result_rows else 0
                 except Exception as e:
                     logger.warning(
-                        f"Failed to batch create {rel_type} entity relationships: {e}",
+                        f"Failed to batch create {rel_type_enum} entity relationships: {e}",
                         exc_info=True,
                     )
 

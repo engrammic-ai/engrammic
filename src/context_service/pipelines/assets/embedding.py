@@ -81,58 +81,78 @@ def embedding_asset(
         engine_qdrant = EngineQdrantStore(store_qdrant)
 
         try:
-            rows = await mg_client.execute_query(
-                _SCAN_UNEMBEDDED_NODES,
-                {"silo_id": silo_id, "batch_size": _BATCH_SIZE},
-            )
-            if not rows:
-                return 0, 0, 0.0
-
             nodes_processed = 0
             vectors_upserted = 0
 
-            eligible = [
-                r for r in rows if r.get("content") and len(str(r["content"])) >= _MIN_CONTENT_LEN
-            ]
+            max_iterations = 10
+            for iteration in range(max_iterations):
+                rows = await mg_client.execute_query(
+                    _SCAN_UNEMBEDDED_NODES,
+                    {"silo_id": silo_id, "batch_size": _BATCH_SIZE},
+                )
+                if not rows:
+                    break
 
-            for batch_start in range(0, len(eligible), _BATCH_SIZE):
-                batch = eligible[batch_start : batch_start + _BATCH_SIZE]
-                texts = [str(r["content"]) for r in batch]
-
-                try:
-                    vectors = await embed_svc.embed(texts)
-                except Exception as exc:
-                    context.log.warning(f"embed batch failed at offset {batch_start}: {exc}")
-                    continue
-
-                items = [
-                    {
-                        "node_id": str(r["id"]),
-                        "vector": v,
-                        "silo_id": silo_id,
-                        "node_type": str(r.get("node_type") or "").lower(),
-                    }
-                    for r, v in zip(batch, vectors, strict=True)
+                eligible = [
+                    r
+                    for r in rows
+                    if r.get("content") and len(str(r["content"])) >= _MIN_CONTENT_LEN
                 ]
 
-                try:
-                    await engine_qdrant.batch_upsert(items, silo_id)
-                    vectors_upserted += len(items)
-                except Exception as exc:
-                    context.log.warning(f"qdrant batch upsert failed: {exc}")
-                    continue
+                for batch_start in range(0, len(eligible), _BATCH_SIZE):
+                    batch = eligible[batch_start : batch_start + _BATCH_SIZE]
+                    texts = [str(r["content"]) for r in batch]
 
-                embedded_ids = [str(r["id"]) for r in batch]
-                now_iso = datetime.now(UTC).isoformat()
-                try:
-                    await mg_client.execute_write(
-                        _MARK_EMBEDDED,
-                        {"node_ids": embedded_ids, "silo_id": silo_id, "embedded_at": now_iso},
+                    try:
+                        vectors = await embed_svc.embed(texts)
+                    except Exception as exc:
+                        context.log.warning(
+                            f"embed batch failed at iteration={iteration} offset={batch_start}: {exc}"
+                        )
+                        continue
+
+                    items = [
+                        {
+                            "node_id": str(r["id"]),
+                            "vector": v,
+                            "silo_id": silo_id,
+                            "node_type": str(r.get("node_type") or "").lower(),
+                        }
+                        for r, v in zip(batch, vectors, strict=True)
+                    ]
+
+                    try:
+                        await engine_qdrant.batch_upsert(items, silo_id)
+                        vectors_upserted += len(items)
+                    except Exception as exc:
+                        context.log.warning(f"qdrant batch upsert failed: {exc}")
+                        continue
+
+                    embedded_ids = [str(r["id"]) for r in batch]
+                    now_iso = datetime.now(UTC).isoformat()
+                    try:
+                        await mg_client.execute_write(
+                            _MARK_EMBEDDED,
+                            {
+                                "node_ids": embedded_ids,
+                                "silo_id": silo_id,
+                                "embedded_at": now_iso,
+                            },
+                        )
+                    except Exception as exc:
+                        context.log.warning(f"mark_embedded write failed: {exc}")
+
+                    nodes_processed += len(batch)
+
+                if len(rows) < _BATCH_SIZE:
+                    # Fetched fewer than a full page — queue is drained.
+                    break
+
+                if iteration == max_iterations - 1:
+                    context.log.warning(
+                        f"silo={silo_id} hit max_iterations={max_iterations}; "
+                        "unembedded nodes may remain"
                     )
-                except Exception as exc:
-                    context.log.warning(f"mark_embedded write failed: {exc}")
-
-                nodes_processed += len(batch)
 
             return nodes_processed, vectors_upserted, 0.0
         finally:

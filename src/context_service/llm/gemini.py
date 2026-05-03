@@ -10,11 +10,12 @@ import httpx
 
 from context_service.config import get_settings
 from context_service.config.logging import get_logger
-from context_service.llm.base import LLMProvider, Usage, robust_json_loads
+from context_service.llm.base import LLMProvider, Usage, robust_json_loads, truncate
 
 logger = get_logger(__name__)
 
-_RETRY_DELAYS = (0.5, 1.5)
+_RETRY_DELAYS = (1.0, 2.0, 4.0)
+_MAX_RETRIES = len(_RETRY_DELAYS)
 
 
 class GeminiError(Exception):
@@ -66,31 +67,50 @@ class GeminiProvider(LLMProvider):
         *,
         timeout: float | None = None,
     ) -> httpx.Response:
-        """POST to the Gemini API with retry on transient httpx.RequestError."""
+        """POST to the Gemini API with retry on transient errors and 429/5xx responses."""
         last_exc: httpx.RequestError | None = None
         post_kwargs: dict[str, Any] = {}
         if timeout is not None:
             post_kwargs["timeout"] = timeout
-        for attempt in range(len(_RETRY_DELAYS) + 1):
+        for attempt in range(_MAX_RETRIES + 1):
             try:
                 response = await client.post(self._api_url, json=payload, **post_kwargs)
+                if response.status_code == 429 and attempt < _MAX_RETRIES:
+                    delay = _RETRY_DELAYS[attempt]
+                    logger.warning(
+                        "gemini_rate_limited",
+                        wait_seconds=delay,
+                        attempt=attempt + 1,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                if 500 <= response.status_code < 600 and attempt < _MAX_RETRIES:
+                    delay = _RETRY_DELAYS[attempt]
+                    logger.warning(
+                        "gemini_server_error",
+                        status_code=response.status_code,
+                        wait_seconds=delay,
+                        attempt=attempt + 1,
+                    )
+                    await asyncio.sleep(delay)
+                    continue
                 response.raise_for_status()
                 return response
             except httpx.HTTPStatusError as e:
                 logger.error(
                     "Gemini API error",
                     status_code=e.response.status_code,
-                    response_text=e.response.text,
+                    response_text=truncate(e.response.text),
                 )
                 raise GeminiError(f"Gemini API request failed: {type(e).__name__}: {e!r}") from e
             except httpx.RequestError as e:
                 last_exc = e
-                if attempt < len(_RETRY_DELAYS):
+                if attempt < _MAX_RETRIES:
                     delay = _RETRY_DELAYS[attempt]
                     logger.warning(
                         "Gemini retry",
                         attempt=attempt + 1,
-                        max_attempts=len(_RETRY_DELAYS),
+                        max_attempts=_MAX_RETRIES,
                         error=str(e),
                     )
                     await asyncio.sleep(delay)

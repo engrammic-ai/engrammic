@@ -48,6 +48,7 @@ class RelationshipType(StrEnum):
     RELATED_TO = "RELATED_TO"
     CAUSES = "CAUSES"
     CORROBORATES = "CORROBORATES"
+    PREVENTS = "PREVENTS"
 
 
 class Layer(StrEnum):

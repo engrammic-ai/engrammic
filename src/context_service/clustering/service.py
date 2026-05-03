@@ -294,7 +294,7 @@ class ClusteringService:
 
         sem = asyncio.Semaphore(5)
 
-        async def _summarize(cluster: Cluster) -> None:
+        async def _summarize(cluster: Cluster) -> dict[str, object] | None:
             async with sem:
                 try:
                     members = await self._memgraph.execute_query(
@@ -310,7 +310,7 @@ class ClusteringService:
                             contents.append(content[:MAX_CONTENT_LENGTH])
 
                     if not contents:
-                        return
+                        return None
 
                     content_text = "\n\n".join(f"- {c}" for c in contents)
                     messages = [
@@ -329,16 +329,11 @@ class ClusteringService:
                     cluster.summary = raw.get("summary", "")
                     cluster.key_topics = raw.get("key_topics", [])
 
-                    await self._memgraph.execute_write(
-                        queries.UPDATE_CLUSTER_SUMMARY,
-                        {
-                            "id": cluster.id,
-                            "silo_id": silo_id,
-                            "summary": cluster.summary,
-                            "key_topics": dumps(cluster.key_topics),
-                            "updated_at": datetime.now(UTC).isoformat(),
-                        },
-                    )
+                    return {
+                        "id": cluster.id,
+                        "summary": cluster.summary,
+                        "key_topics": dumps(cluster.key_topics),
+                    }
 
                 except Exception as e:
                     logger.warning(
@@ -347,8 +342,19 @@ class ClusteringService:
                         error=str(e),
                         exc_info=True,
                     )
+                    return None
 
-        await asyncio.gather(*[_summarize(c) for c in clusters])
+        results = await asyncio.gather(*[_summarize(c) for c in clusters])
+        updates = [r for r in results if r is not None]
+        if updates:
+            await self._memgraph.execute_write(
+                queries.BATCH_UPDATE_CLUSTER_SUMMARIES,
+                {
+                    "silo_id": silo_id,
+                    "updates": updates,
+                    "updated_at": datetime.now(UTC).isoformat(),
+                },
+            )
 
     async def update_importance(self, silo_id: str) -> None:
         """Run PageRank and update importance scores on content and Entity vertices."""

@@ -129,7 +129,11 @@ class ContextService:
         if cache_key and self._cache:
             existing_id = await self._cache.get(cache_key)
             if existing_id:
-                existing = await self.get(uuid.UUID(existing_id.decode()), silo_id)
+                try:
+                    existing = await self.get(uuid.UUID(existing_id.decode()), silo_id)
+                except ValueError:
+                    # Corrupted cache entry — treat as a miss and proceed to write.
+                    existing = None
                 if existing:
                     logger.debug("store_idempotent_hit", key=idempotency_key)
                     return existing
@@ -149,14 +153,24 @@ class ContextService:
         if cache_key and self._cache:
             claimed = await self._cache.set_nx(cache_key, str(node.id), ttl_seconds=86400)
             if not claimed:
-                # Another request won the race — wait briefly for it to complete
-                await asyncio.sleep(0.05)
-                winner_id = await self._cache.get(cache_key)
-                if winner_id:
-                    winner = await self.get(uuid.UUID(winner_id.decode()), silo_id)
-                    if winner:
-                        logger.debug("store_idempotent_race_lost", key=idempotency_key)
-                        return winner
+                # Another request won the race — retry with exponential backoff
+                # waiting for the winner to finish its DB write.
+                _delays = [0.05, 0.1, 0.2, 0.4]
+                winner: Node | None = None
+                for _delay in _delays:
+                    await asyncio.sleep(_delay)
+                    winner_id = await self._cache.get(cache_key)
+                    if winner_id:
+                        try:
+                            candidate = await self.get(uuid.UUID(winner_id.decode()), silo_id)
+                        except ValueError:
+                            candidate = None
+                        if candidate:
+                            winner = candidate
+                            break
+                if winner:
+                    logger.debug("store_idempotent_race_lost", key=idempotency_key)
+                    return winner
 
         # node_type is validated against _ALLOWED_NODE_TYPES above — f-string is safe.
         extra_props = {k: v for k, v in (properties or {}).items() if k not in _CREATE_PROPS}
@@ -894,12 +908,10 @@ class ContextService:
         """
         from context_service.db.queries import GET_REFLECTIONS_FOR_NODE
 
-        async with self._memgraph.session() as session:
-            result = await session.run(
-                GET_REFLECTIONS_FOR_NODE,
-                {"node_id": node_id, "silo_id": silo_id},
-            )
-            records = await result.data()
+        records = await self._memgraph.execute_query(
+            GET_REFLECTIONS_FOR_NODE,
+            {"node_id": node_id, "silo_id": silo_id},
+        )
 
         def _format_timestamp(ts: Any) -> str | None:
             if ts is None:

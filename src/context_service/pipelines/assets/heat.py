@@ -48,16 +48,6 @@ SET n.heat_score = u.heat_score,
     n.heat_updated_at = $now
 """
 
-_RECOMPUTE_TIERS_CYPHER = """
-MATCH (n)
-WHERE n.silo_id = $silo_id AND n.heat_score IS NOT NULL
-SET n.tier = CASE
-    WHEN n.heat_score >= $hot  THEN 'HOT'
-    WHEN n.heat_score >= $warm THEN 'WARM'
-    ELSE 'COLD'
-END
-"""
-
 
 def _decay_factor(age_seconds: float) -> float:
     """Exponential decay with HEAT_HALF_LIFE_DAYS half-life."""
@@ -152,12 +142,6 @@ def heat_asset(
         await mg_client.execute_write(
             _APPLY_HEAT_CYPHER,
             {"silo_id": silo_id, "updates": updates, "now": now_iso},
-        )
-
-        # Recompute tiers across all nodes with heat scores (not just this batch).
-        await mg_client.execute_write(
-            _RECOMPUTE_TIERS_CYPHER,
-            {"silo_id": silo_id, "hot": HOT_THRESHOLD, "warm": WARM_THRESHOLD},
         )
 
         await advance_heat_cursor(mg_client, silo_id, new_last_id)
