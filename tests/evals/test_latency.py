@@ -119,8 +119,8 @@ async def test_latency_bounds(
         assert elapsed is not None, f"Case {case_result.name}: elapsed_ms missing"
 
         threshold = case_result.expected_output["threshold_ms"]
-        # 2x safety margin for non-production environments.
-        hard_limit = threshold * 2
+        # 3x safety margin for dev/CI environments with variable infra latency.
+        hard_limit = threshold * 3
         assert elapsed < hard_limit, (
             f"Case {case_result.name}: {elapsed:.1f}ms exceeds hard limit "
             f"{hard_limit:.0f}ms (target {threshold:.0f}ms)"

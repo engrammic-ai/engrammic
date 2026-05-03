@@ -11,24 +11,24 @@ import pytest
 from context_service.services.models import ScopeContext
 
 
-def get_llm_service(provider: str):
-    """Factory for LLM service based on provider flag."""
-    from context_service.config.settings import get_settings
-
-    settings = get_settings()
-
+def get_llm_provider(provider: str):
+    """Factory for LLM provider based on provider flag."""
     if provider == "anthropic":
-        from context_service.llm.anthropic import AnthropicLLMService
+        from context_service.llm.anthropic import AnthropicProvider
 
-        return AnthropicLLMService.from_settings(settings)
+        return AnthropicProvider.from_settings()
     elif provider == "openai":
-        from context_service.llm.openai import OpenAILLMService
+        from context_service.llm.openai import OpenAIProvider
 
-        return OpenAILLMService.from_settings(settings)
-    elif provider in ("gemini", "vertex"):
-        from context_service.llm.vertex import VertexLLMService
+        return OpenAIProvider.from_settings()
+    elif provider == "gemini":
+        from context_service.llm.gemini import GeminiProvider
 
-        return VertexLLMService.from_settings(settings)
+        return GeminiProvider.from_settings()
+    elif provider == "vertex":
+        from context_service.llm.vertex_gemini import VertexGeminiProvider
+
+        return VertexGeminiProvider.from_settings()
     else:
         raise ValueError(f"Unknown provider: {provider}")
 
@@ -80,7 +80,7 @@ async def test_reasoning_chain_llm_judge(
 
     assert result.chain_id, "Reasoning chain was not stored"
 
-    llm = get_llm_service(llm_provider)
+    llm = get_llm_provider(llm_provider)
     steps_text = "\n".join(f"Step {s.step}: {s.reasoning}" for s in steps)
     prompt = JUDGE_PROMPT.format(steps=steps_text, conclusion=conclusion)
 
@@ -132,7 +132,7 @@ async def test_claim_coherence_llm_judge(
 
     assert claim_node.id, "Claim was not stored"
 
-    llm = get_llm_service(llm_provider)
+    llm = get_llm_provider(llm_provider)
     prompt = COHERENCE_PROMPT.format(
         claim="Python 3.12 includes enhanced error messages for debugging.",
         evidence="Python 3.12 was released in October 2023 with improved error messages.",

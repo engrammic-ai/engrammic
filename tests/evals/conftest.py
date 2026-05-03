@@ -36,8 +36,8 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     )
     parser.addoption(
         "--llm-provider",
-        default="anthropic",
-        choices=["anthropic", "openai", "gemini", "vertex"],
+        default="vertex",
+        choices=["vertex", "gemini", "anthropic", "openai"],
         help="LLM provider to use when --with-llm is active.",
     )
     parser.addoption(

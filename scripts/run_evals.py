@@ -8,7 +8,7 @@ import click
 
 REPO_ROOT = Path(__file__).parent.parent
 
-PROVIDER_CHOICES = click.Choice(["anthropic", "openai", "gemini", "vertex"])
+PROVIDER_CHOICES = click.Choice(["vertex", "gemini", "anthropic", "openai"])
 
 
 @click.command()
@@ -16,7 +16,7 @@ PROVIDER_CHOICES = click.Choice(["anthropic", "openai", "gemini", "vertex"])
 @click.option("--with-llm", is_flag=True, help="Enable eval cases that call live LLM APIs.")
 @click.option(
     "--provider",
-    default="anthropic",
+    default="vertex",
     show_default=True,
     type=PROVIDER_CHOICES,
     help="LLM provider to use when --with-llm is active.",
