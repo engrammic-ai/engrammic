@@ -20,6 +20,7 @@ from context_service.db.schema import (
 FIND_ENTITY_BY_NAME = """
 MATCH (e:Entity {silo_id: $silo_id})
 WHERE toLower(e.name) = toLower($name)
+  AND NOT exists(e.tombstoned_at)
 RETURN e
 """
 
@@ -337,6 +338,7 @@ RETURN count(*) as created
 FIND_ENTITIES_BY_NAME_TOKENS = """
 MATCH (e:Entity {silo_id: $silo_id})
 WHERE ANY(token IN $tokens WHERE toLower(e.name) CONTAINS token)
+  AND NOT exists(e.tombstoned_at)
 RETURN e.id AS id, e.name AS name, e.entity_type AS entity_type,
        e.description AS description, e.importance AS importance
 ORDER BY coalesce(e.importance, 0) DESC
@@ -384,8 +386,9 @@ LIMIT $limit
 # Entity queries with qualified_name support
 FIND_ENTITY_BY_QUALIFIED_NAME = """
 MATCH (e:Entity {silo_id: $silo_id})
-WHERE toLower(e.name) = toLower($name)
-   OR ($qualified_name IS NOT NULL AND toLower(e.qualified_name) = toLower($qualified_name))
+WHERE (toLower(e.name) = toLower($name)
+   OR ($qualified_name IS NOT NULL AND toLower(e.qualified_name) = toLower($qualified_name)))
+  AND NOT exists(e.tombstoned_at)
 RETURN e
 """
 
@@ -432,6 +435,7 @@ GET_SEED_HEAT_BATCH = """
 UNWIND $seed_ids AS sid
 MATCH (n {id: sid, silo_id: $silo_id})
 WHERE n.committed = true
+  AND NOT exists(n.tombstoned_at)
 OPTIONAL MATCH (n)-[:MEMBER_OF]->(c:Cluster {silo_id: $silo_id})
 RETURN n.id AS node_id,
        coalesce(n.heat_score, 0.0) AS heat,
@@ -514,8 +518,9 @@ RETURN
 
 BELIEF_HISTORY_BY_SUBJECT = """
 MATCH (n {silo_id: $silo_id})
-WHERE toLower(n.content) CONTAINS toLower($subject)
-   OR ($subject IS NOT NULL AND n.subject IS NOT NULL AND toLower(n.subject) CONTAINS toLower($subject))
+WHERE (toLower(n.content) CONTAINS toLower($subject)
+   OR ($subject IS NOT NULL AND n.subject IS NOT NULL AND toLower(n.subject) CONTAINS toLower($subject)))
+  AND NOT exists(n.tombstoned_at)
 WITH n
 ORDER BY coalesce(n.valid_from, 0) ASC
 RETURN
@@ -593,6 +598,7 @@ TEMPORAL_QUERY = (
     "  AND n.valid_from <= $as_of "
     "  AND (n.valid_to IS NULL OR n.valid_to > $as_of) "
     "  AND n.content IS NOT NULL "
+    "  AND NOT exists(n.tombstoned_at) "
     "RETURN n.id AS id, n.content AS content, labels(n) AS labels, "
     "       n.confidence AS confidence, n.valid_from AS valid_from, "
     "       n.valid_to AS valid_to, n.created_at AS created_at "
@@ -692,6 +698,7 @@ CHECK_BELIEF_COVERAGE = """
 MATCH (b:Belief {silo_id: $silo_id})
 WHERE toLower(b.content) CONTAINS toLower($subject)
   AND (b.valid_to IS NULL OR b.valid_to > $as_of)
+  AND NOT exists(b.tombstoned_at)
 RETURN b.id AS belief_id, b.content AS content, b.confidence AS confidence
 LIMIT 1
 """
@@ -766,6 +773,7 @@ GET_PATTERN_BY_TYPE_AND_SUBJECT = """
 MATCH (p:Pattern {silo_id: $silo_id, pattern_type: $pattern_type})
 WHERE toLower(p.description) CONTAINS toLower($subject)
   AND (p.valid_to IS NULL OR p.valid_to > $as_of)
+  AND NOT exists(p.tombstoned_at)
 RETURN p.id AS pattern_id, p.description AS description,
        p.frequency AS frequency, p.confidence AS confidence,
        p.first_observed AS first_observed, p.last_observed AS last_observed
