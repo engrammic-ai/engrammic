@@ -14,21 +14,14 @@ from context_service.mcp.server import create_mcp_server
 from context_service.mcp.tools import register_all
 
 EXPECTED_TOOLS = {
-    "context_remember",
-    "context_assert",
-    "context_commit",
-    "context_reflect",
+    "context_store",
+    "context_recall",
+    "context_admin",
     "context_link",
     "context_query",
     "context_get",
     "context_graph",
-    "context_provenance",
-    "context_get_reflections",
     "context_history",
-    "context_belief_history",
-    "context_reason",
-    "silo_create",
-    "silo_list",
 }
 
 _DEV_AUTH = AuthContext(
@@ -95,19 +88,19 @@ class TestMCPProtocol:
     @pytest.mark.asyncio
     async def test_error_on_invalid_silo(self) -> None:
         """Invalid (unowned) silo_id returns an error response."""
-        from context_service.mcp.tools.context_remember import _context_remember
+        from context_service.mcp.tools.context_store import _context_remember
 
         with (
             patch(
-                "context_service.mcp.tools.context_remember.get_mcp_auth_context",
+                "context_service.mcp.tools.context_store.get_mcp_auth_context",
                 new=AsyncMock(return_value=_DEV_AUTH),
             ),
             patch(
-                "context_service.mcp.tools.context_remember.get_silo_service",
+                "context_service.mcp.tools.context_store.get_silo_service",
                 return_value=MagicMock(),
             ),
             patch(
-                "context_service.mcp.tools.context_remember.validate_silo_ownership",
+                "context_service.mcp.tools.context_store.validate_silo_ownership",
                 new=AsyncMock(return_value={"error": "silo_not_found"}),
             ),
         ):

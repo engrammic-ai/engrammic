@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from context_service.services.context_meta import ProvenanceResult, ProvenanceStep
+
 
 @pytest.fixture
 def mock_deps():
@@ -187,3 +189,53 @@ async def test_graph_with_relationship_types_and_layers(mock_deps):
     call_kwargs = mock_deps["svc"].graph_traversal.call_args.kwargs
     assert call_kwargs["relationship_types"] == ["REFERENCES", "SUPPORTS"]
     assert call_kwargs["layers"] == ["memory", "knowledge"]
+
+
+@pytest.mark.asyncio
+async def test_graph_provenance_mode(mock_deps):
+    from context_service.mcp.tools.context_graph import _context_graph
+
+    seed_id = str(uuid.uuid4())
+    prov_result = ProvenanceResult(
+        chain=[
+            ProvenanceStep(
+                node_id=seed_id,
+                layer="knowledge",
+                relationship="DERIVED_FROM",
+                confidence=0.9,
+            ),
+            ProvenanceStep(
+                node_id=str(uuid.uuid4()),
+                layer="memory",
+                relationship="EXTRACTED_FROM",
+                confidence=1.0,
+            ),
+        ],
+        root_sources=[{"node_id": str(uuid.uuid4()), "layer": "memory", "content": "source doc"}],
+    )
+    mock_deps["svc"].provenance = AsyncMock(return_value=prov_result)
+
+    result = await _context_graph(
+        silo_id=str(uuid.uuid5(uuid.NAMESPACE_DNS, "silo:test-org")),
+        seed_nodes=[seed_id],
+        mode="provenance",
+    )
+
+    assert "chain" in result
+    assert "root_sources" in result
+    assert "chain_length" in result
+    assert result["chain_length"] == 2
+    assert len(result["chain"]) == 2
+    mock_deps["svc"].provenance.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_graph_provenance_mode_no_seed_nodes(mock_deps):
+    from context_service.mcp.tools.context_graph import _context_graph
+
+    result = await _context_graph(
+        silo_id=str(uuid.uuid5(uuid.NAMESPACE_DNS, "silo:test-org")),
+        mode="provenance",
+    )
+
+    assert result["error"] == "missing_seed"

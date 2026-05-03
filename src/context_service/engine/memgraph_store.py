@@ -31,11 +31,10 @@ if TYPE_CHECKING:
 logger = get_logger(__name__)
 
 # Labels that represent addressable content nodes in the graph.
-# "Node" is retained for legacy test fabrications; remove once all tests migrate.
 _CONTENT_LABEL_SET: frozenset[str] = frozenset(
     {LABEL_DOCUMENT, LABEL_PASSAGE, LABEL_CLAIM, LABEL_ENTITY}
 )
-_PATH_LABEL_SET: frozenset[str] = _CONTENT_LABEL_SET | {"Node"}
+_PATH_LABEL_SET: frozenset[str] = _CONTENT_LABEL_SET
 
 
 def _node_to_knowledge_node(node: Node) -> KnowledgeNode:

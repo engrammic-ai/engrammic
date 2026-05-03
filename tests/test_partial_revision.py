@@ -52,7 +52,12 @@ async def test_flag_cascade_flags_referencing_beliefs() -> None:
     store = FakeGraphStore()
     store.seed_query_result(
         [
-            {"belief_id": REF_BELIEF_ID, "content": "downstream belief", "confidence": 0.8, "wisdom_status": "active"},
+            {
+                "belief_id": REF_BELIEF_ID,
+                "content": "downstream belief",
+                "confidence": 0.8,
+                "wisdom_status": "active",
+            },
         ]
     )
 
@@ -71,9 +76,24 @@ async def test_flag_cascade_multiple_referencing_beliefs() -> None:
     store = FakeGraphStore()
     store.seed_query_result(
         [
-            {"belief_id": "b1", "content": "b1 content", "confidence": 0.7, "wisdom_status": "active"},
-            {"belief_id": "b2", "content": "b2 content", "confidence": 0.6, "wisdom_status": "active"},
-            {"belief_id": "b3", "content": "b3 content", "confidence": 0.9, "wisdom_status": "active"},
+            {
+                "belief_id": "b1",
+                "content": "b1 content",
+                "confidence": 0.7,
+                "wisdom_status": "active",
+            },
+            {
+                "belief_id": "b2",
+                "content": "b2 content",
+                "confidence": 0.6,
+                "wisdom_status": "active",
+            },
+            {
+                "belief_id": "b3",
+                "content": "b3 content",
+                "confidence": 0.9,
+                "wisdom_status": "active",
+            },
         ]
     )
 
@@ -163,10 +183,19 @@ def _make_embedding_mock(n: int = 1) -> Any:
     return embed
 
 
-def _seed_belief(store: FakeGraphStore, content: str = "original belief", confidence: float = 0.8) -> None:
+def _seed_belief(
+    store: FakeGraphStore, content: str = "original belief", confidence: float = 0.8
+) -> None:
     """Seed execute_query results for split_belief internals."""
     store.seed_query_result(
-        [{"belief_id": BELIEF_ID, "content": content, "confidence": confidence, "wisdom_status": "active"}]
+        [
+            {
+                "belief_id": BELIEF_ID,
+                "content": content,
+                "confidence": confidence,
+                "wisdom_status": "active",
+            }
+        ]
     )
 
 
@@ -227,7 +256,14 @@ async def test_partial_revise_belief_with_cascade() -> None:
 
     # flag_cascade's execute_query call returns one downstream belief
     store.seed_query_result(
-        [{"belief_id": REF_BELIEF_ID, "content": "dependent belief", "confidence": 0.7, "wisdom_status": "active"}]
+        [
+            {
+                "belief_id": REF_BELIEF_ID,
+                "content": "dependent belief",
+                "confidence": 0.7,
+                "wisdom_status": "active",
+            }
+        ]
     )
 
     llm = _make_llm_mock(["Revised.", "Retained."])
@@ -244,10 +280,7 @@ async def test_partial_revise_belief_with_cascade() -> None:
 
     assert result.cascade_flagged_count == 1
     # Check that FLAG_CASCADE_PENDING write was issued
-    flag_writes = [
-        (c, p) for c, p in store.write_log
-        if "revision_cascade_pending" in c
-    ]
+    flag_writes = [(c, p) for c, p in store.write_log if "revision_cascade_pending" in c]
     assert len(flag_writes) == 1
     assert flag_writes[0][1]["belief_ids"] == [REF_BELIEF_ID]
 

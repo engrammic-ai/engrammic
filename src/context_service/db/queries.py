@@ -665,6 +665,26 @@ TEMPORAL_QUERY = (
     "LIMIT $limit"
 )
 
+# --- Temporal query with semantic pre-filter ---
+# candidate_ids comes from a Qdrant pre-filter (top 3*top_k by vector similarity).
+# Results are still ordered by valid_from DESC — Qdrant ranking is discarded here.
+
+TEMPORAL_QUERY_FILTERED = (
+    "MATCH (n) "
+    "WHERE n.silo_id = $silo_id "
+    "  AND n.id IN $candidate_ids "
+    "  AND ($type_filter IS NULL OR any(label IN labels(n) WHERE label = $type_filter)) "
+    "  AND n.valid_from <= $as_of "
+    "  AND (n.valid_to IS NULL OR n.valid_to > $as_of) "
+    "  AND n.content IS NOT NULL "
+    "  AND NOT exists(n.tombstoned_at) "
+    "RETURN n.id AS id, n.content AS content, labels(n) AS labels, "
+    "       n.confidence AS confidence, n.valid_from AS valid_from, "
+    "       n.valid_to AS valid_to, n.created_at AS created_at "
+    "ORDER BY n.valid_from DESC "
+    "LIMIT $limit"
+)
+
 # --- Supersession chain traversal (belief history) ---
 
 # ---------------------------------------------------------------------------

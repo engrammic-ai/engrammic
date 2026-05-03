@@ -6,6 +6,8 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from primitives.protocols import Layer
+
 from context_service.clustering import queries
 from context_service.clustering.models import (
     LEVEL_GAMMA_MAP,
@@ -50,7 +52,12 @@ class ClusteringService:
         self._embedding = embedding
         self._cluster_qdrant = cluster_qdrant
 
-    async def run_clustering(self, silo_id: str, job: ClusteringJob) -> None:
+    async def run_clustering(
+        self,
+        silo_id: str,
+        job: ClusteringJob,
+        target_layers: list[Layer] | None = None,
+    ) -> None:
         """Run the full clustering pipeline.
 
         1. Clear existing clusters
@@ -59,11 +66,16 @@ class ClusteringService:
         4. Generate summaries for each cluster
         5. Run PageRank and update importance scores
 
-        # TODO(EAG scoping): Should clustering target all content nodes or only
-        # :Fact nodes for Wisdom-layer synthesis? Current queries include
-        # Document, Passage, Claim, and Entity. Revisit when EAG layer
-        # promotion stabilizes and Wisdom synthesis is designed.
+        Args:
+            silo_id: Silo identifier (storage scope).
+            job: ClusteringJob to track status and results.
+            target_layers: Cognitive layers to include in clustering. Defaults
+                to [Layer.KNOWLEDGE] (Fact + Claim nodes). Pass
+                [Layer.MEMORY, Layer.KNOWLEDGE] to include Document/Passage nodes.
         """
+        resolved_layers = target_layers if target_layers is not None else [Layer.KNOWLEDGE]
+        node_labels = queries.layer_label_list(resolved_layers)
+
         job.status = ClusteringStatus.RUNNING
         await self._job_store.save(job)
 
@@ -73,7 +85,7 @@ class ClusteringService:
             level_assignments: dict[ClusterLevel, list[dict[str, Any]]] = {}
             for level in ClusterLevel:
                 gamma = LEVEL_GAMMA_MAP[level]
-                assignments = await self.detect_communities(silo_id, gamma)
+                assignments = await self.detect_communities(silo_id, gamma, node_labels=node_labels)
                 level_assignments[level] = assignments
                 logger.info(
                     "leiden level complete",
@@ -82,13 +94,15 @@ class ClusteringService:
                     communities=len({a["community_id"] for a in assignments}),
                 )
 
-            all_clusters = await self.build_hierarchy(silo_id, level_assignments)
+            all_clusters = await self.build_hierarchy(
+                silo_id, level_assignments, node_labels=node_labels
+            )
 
             await self.generate_cluster_summaries(silo_id, all_clusters)
 
             await self.embed_cluster_summaries(silo_id, all_clusters)
 
-            await self.update_importance(silo_id)
+            await self.update_importance(silo_id, node_labels=node_labels)
 
             level_counts: dict[int, int] = {}
             for level_int, clusters in self._group_by_level(all_clusters).items():
@@ -107,26 +121,41 @@ class ClusteringService:
 
         await self._job_store.save(job)
 
-    async def detect_communities(self, silo_id: str, gamma: float) -> list[dict[str, Any]]:
+    async def detect_communities(
+        self,
+        silo_id: str,
+        gamma: float,
+        node_labels: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
         """Run Leiden community detection at a given resolution.
 
         Args:
             silo_id: Silo identifier (storage scope).
             gamma: Leiden resolution parameter (higher = more communities).
+            node_labels: Node labels to include (e.g. ["Fact", "Claim"]). When
+                provided, uses the scoped query variant. When None, falls back
+                to the legacy unscoped query (all content node types).
 
         Returns:
             List of {node_id, community_id} assignments.
         """
-        results = await self._memgraph.execute_query(
-            queries.RUN_LEIDEN,
-            {"gamma": gamma, "silo_id": silo_id},
-        )
+        if node_labels is not None:
+            results = await self._memgraph.execute_query(
+                queries.RUN_LEIDEN_SCOPED,
+                {"gamma": gamma, "silo_id": silo_id, "node_labels": node_labels},
+            )
+        else:
+            results = await self._memgraph.execute_query(
+                queries.RUN_LEIDEN,
+                {"gamma": gamma, "silo_id": silo_id},
+            )
         return results
 
     async def build_hierarchy(
         self,
         silo_id: str,
         level_assignments: dict[ClusterLevel, list[dict[str, Any]]],
+        node_labels: list[str] | None = None,
     ) -> list[Cluster]:
         """Build cluster hierarchy from Leiden results at multiple resolutions.
 
@@ -192,16 +221,30 @@ class ClusteringService:
 
             for _community_id, node_ids, cluster in level_cluster_list:
                 try:
-                    await self._memgraph.execute_write(
-                        queries.BATCH_CREATE_MEMBER_OF,
-                        {
+                    if node_labels is not None:
+                        member_of_params: dict[str, Any] = {
                             "node_ids": node_ids,
                             "cluster_id": cluster.id,
                             "silo_id": silo_id,
                             "weight": 1.0,
                             "created_at": now.isoformat(),
-                        },
-                    )
+                            "node_labels": node_labels,
+                        }
+                        await self._memgraph.execute_write(
+                            queries.BATCH_CREATE_MEMBER_OF_SCOPED,
+                            member_of_params,
+                        )
+                    else:
+                        await self._memgraph.execute_write(
+                            queries.BATCH_CREATE_MEMBER_OF,
+                            {
+                                "node_ids": node_ids,
+                                "cluster_id": cluster.id,
+                                "silo_id": silo_id,
+                                "weight": 1.0,
+                                "created_at": now.isoformat(),
+                            },
+                        )
                 except Exception as e:
                     logger.warning(
                         "failed to batch create MEMBER_OF for cluster",
@@ -354,10 +397,22 @@ class ClusteringService:
                 },
             )
 
-    async def update_importance(self, silo_id: str) -> None:
+    async def update_importance(
+        self,
+        silo_id: str,
+        node_labels: list[str] | None = None,
+    ) -> None:
         """Run PageRank and update importance scores on content and Entity vertices."""
         try:
-            results = await self._memgraph.execute_query(queries.RUN_PAGERANK, {"silo_id": silo_id})
+            if node_labels is not None:
+                results = await self._memgraph.execute_query(
+                    queries.RUN_PAGERANK_SCOPED,
+                    {"silo_id": silo_id, "node_labels": node_labels},
+                )
+            else:
+                results = await self._memgraph.execute_query(
+                    queries.RUN_PAGERANK, {"silo_id": silo_id}
+                )
             updates = [
                 {"node_id": r["node_id"], "rank": float(r["rank"])}
                 for r in results
@@ -441,7 +496,9 @@ class ClusteringService:
 
     async def clear_clusters(self, silo_id: str) -> None:
         """Delete all existing clusters and their relationships for this silo."""
-        result = await self._memgraph.execute_write(queries.DELETE_ALL_CLUSTERS, {"silo_id": silo_id})
+        result = await self._memgraph.execute_write(
+            queries.DELETE_ALL_CLUSTERS, {"silo_id": silo_id}
+        )
         deleted = result[0].get("deleted", 0) if result else 0
         if deleted > 0:
             logger.info("cleared existing clusters", count=deleted)
@@ -456,6 +513,7 @@ class ClusteringService:
         self,
         silo_id: str,
         level_assignments: dict[ClusterLevel, list[dict[str, Any]]],
+        node_labels: list[str] | None = None,
     ) -> list[Cluster]:
         """Atomic variant of clear_clusters + build_hierarchy.
 
@@ -464,10 +522,19 @@ class ClusteringService:
         empty cluster state. Called from the Dagster `leiden_clusters`
         multi_asset body where partial-failure atomicity is required.
 
+        Args:
+            silo_id: Silo identifier (storage scope).
+            level_assignments: Leiden assignments per ClusterLevel.
+            node_labels: Node labels to restrict membership edges to. Defaults
+                to ["Fact", "Claim"] (Knowledge layer). Pass None to fall back
+                to legacy unscoped behaviour (all content node types).
+
         Qdrant collection delete is NOT inside the bolt tx (different system)
         and is deferred to `embed_cluster_summaries` which re-creates the
         collection lazily via `ensure_cluster_collection`.
         """
+        if node_labels is None:
+            node_labels = ["Fact", "Claim"]
         now = datetime.now(UTC)
         all_clusters: list[Cluster] = []
         level_clusters: dict[int, dict[int, Cluster]] = {}
@@ -518,12 +585,13 @@ class ClusteringService:
                     )
 
                     await tx.run(
-                        queries.BATCH_CREATE_MEMBER_OF,
+                        queries.BATCH_CREATE_MEMBER_OF_SCOPED,
                         node_ids=node_ids,
                         cluster_id=cluster.id,
                         silo_id=silo_id,
                         weight=1.0,
                         created_at=now.isoformat(),
+                        node_labels=node_labels,
                     )
 
                     all_clusters.append(cluster)

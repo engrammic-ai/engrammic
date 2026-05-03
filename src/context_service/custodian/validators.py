@@ -44,10 +44,6 @@ if TYPE_CHECKING:
 # Rejection reasons -- use layer-split enums from rejection_reasons.py
 # ---------------------------------------------------------------------------
 
-# CitationRejectionReason is kept as a backward-compatible alias so existing
-# call sites (metrics, tests) that reference it by name continue to work.
-CitationRejectionReason = CitationRejection
-
 
 # ---------------------------------------------------------------------------
 # Metrics protocol -- decoupled from the concrete backend (Task 14)

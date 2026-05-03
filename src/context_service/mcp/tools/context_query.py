@@ -1,11 +1,11 @@
-"""MCP tool: context_query - Semantic search with layer filtering."""
+"""Internal: context_query implementation. Exposed via context_recall."""
 
 from __future__ import annotations
 
 import asyncio
 import time
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 import structlog
 
@@ -22,10 +22,6 @@ from context_service.models.mcp import Layer, QueryFilters
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 from context_service.signals import emit_access_event
-
-if TYPE_CHECKING:
-    from fastmcp import FastMCP
-
 
 logger = structlog.get_logger(__name__)
 
@@ -166,65 +162,3 @@ async def _context_query(
         "reflection_suggested": compute_reflection_suggested(result_dicts),
         "metadata": metadata,
     }
-
-
-def register(mcp: FastMCP) -> None:
-    """Register the context_query tool."""
-
-    @mcp.tool(
-        name="context_query",
-        description=(
-            "Semantic search across Memory, Knowledge, and Wisdom layers. "
-            "Supports layer filtering, time-travel (as_of), and metadata filters. "
-            "Replaces context_lookup with EAG-aware layer semantics."
-        ),
-    )
-    async def context_query(
-        query: str,
-        layers: list[str] | None = None,
-        filters: dict[str, Any] | None = None,
-        top_k: int = 10,
-        include_superseded: bool = False,
-        as_of: str | None = None,
-        search_mode: str = "hybrid",
-        silo_id: str | None = None,
-    ) -> dict[str, Any]:
-        """Semantic search with layer filtering.
-
-        Args:
-            query: Natural language search query.
-            layers: Filter to layers: memory, knowledge, wisdom, intelligence.
-            filters: QueryFilters: tags, source_type, min_confidence, created_after, created_before.
-            top_k: Maximum results (default 10).
-            include_superseded: Include superseded nodes (default False).
-            as_of: ISO 8601 datetime for time-travel. When provided, returns only nodes
-                whose validity window covers this timestamp (valid_from <= as_of and
-                valid_to is null or valid_to > as_of). Enables point-in-time queries
-                against the Memgraph store.
-            search_mode: Retrieval mode — "hybrid" (dense+sparse RRF, default),
-                "dense" (dense-only), or "sparse" (SPLADE-only).
-            silo_id: UUID of the silo. Optional; defaults to the org's primary silo
-                derived from auth.
-
-        Returns:
-            {results, total_candidates, search_time_ms, search_mode}
-        """
-        auth = await get_mcp_auth_context()
-        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
-        # Validate search_mode before passing to the typed internal function.
-        if search_mode not in _VALID_SEARCH_MODES:
-            return {
-                "error": "invalid_search_mode",
-                "valid": sorted(_VALID_SEARCH_MODES),
-            }
-        validated_mode: Literal["hybrid", "dense", "sparse"] = search_mode  # type: ignore[assignment]
-        return await _context_query(
-            silo_id=resolved_silo_id,
-            query=query,
-            layers=layers,
-            filters=filters,
-            top_k=top_k,
-            include_superseded=include_superseded,
-            as_of=as_of,
-            search_mode=validated_mode,
-        )

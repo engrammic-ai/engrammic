@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 
+from context_service.extraction.type_classifier import TypeClass, TypeClassifier
+
 
 class ExtractionStatus(StrEnum):
     """Status of an extraction job."""
@@ -39,30 +41,54 @@ class RelationshipType(StrEnum):
     RELATED_TO = "RELATED_TO"  # fallback, unclear but related (symmetric)
 
 
+_ANY: frozenset[TypeClass] = frozenset(TypeClass)
+
+# (source_classes, edge_label, target_classes)
+# None in source/target position means ANY class (or unclassifiable) is accepted.
+def _build_matrix() -> list[
+    tuple[frozenset[TypeClass] | None, RelationshipType, frozenset[TypeClass] | None]
+]:
+    artifact_org = frozenset({TypeClass.ARTIFACT, TypeClass.ORGANIZATION})
+    artifact_concept = frozenset({TypeClass.ARTIFACT, TypeClass.CONCEPT})
+    event_agent = frozenset({TypeClass.EVENT, TypeClass.AGENT})
+    agent_artifact_concept = frozenset({TypeClass.AGENT, TypeClass.ARTIFACT, TypeClass.CONCEPT})
+    event_concept = frozenset({TypeClass.EVENT, TypeClass.CONCEPT})
+
+    return [
+        (None, RelationshipType.COMPOSES, artifact_org),
+        (artifact_concept, RelationshipType.DEPENDS_ON, artifact_concept),
+        (None, RelationshipType.DERIVES_FROM, None),
+        (None, RelationshipType.SPECIALIZES, None),
+        (None, RelationshipType.INSTANTIATES, frozenset({TypeClass.CONCEPT})),
+        (event_agent, RelationshipType.CAUSES, None),
+        (agent_artifact_concept, RelationshipType.PREVENTS, event_concept),
+        (None, RelationshipType.CORROBORATES, None),
+        (None, RelationshipType.CONTRADICTS, None),
+        (None, RelationshipType.REFERENCES, None),
+        (None, RelationshipType.RELATED_TO, None),
+    ]
+
+
+_CLASS_MATRIX = _build_matrix()
+
+_CLASSIFIER = TypeClassifier()
+
+
 class ExtractionSchema:
     """Source of truth for allowed ``(source_type, edge_label, target_type)`` tuples.
 
-    The 10-vocab :class:`RelationshipType` enum defines the closed set of edge labels.
-    The extraction prompt describes the semantics of each label but does **not** encode
-    which node-type pairings are allowed per label — ``entity_type`` is a free-form
-    noun chosen by the LLM ("person", "module", "decision", "metric", ...), so there
-    is no fixed matrix to parse.
+    Uses an embedding classifier (:class:`TypeClassifier`) to map free-form
+    ``entity_type`` strings to one of six :class:`TypeClass` values, then validates
+    against :data:`_CLASS_MATRIX`.
 
-    Until a curated matrix exists, this schema is intentionally permissive: every
-    :class:`RelationshipType` allows ``(ANY, label, ANY)``. The Custodian
-    ``ProposedEdge.validate_all`` validator calls :meth:`is_valid` so the moment a
-    stricter matrix lands, rejection kicks in automatically without touching the
-    agent surface.
-
-    TODO: Tighten per-label source/target type pairings once a curated matrix is agreed.
+    ``ALLOWED_TUPLES`` is retained for backward-compatibility but is no longer
+    consulted — the matrix always applies.
     """
 
     #: Sentinel meaning "any ``entity_type`` string is allowed in this slot".
     ANY: str = "*"
 
-    #: Currently every edge label maps to ``(ANY, label, ANY)``. Replace with a
-    #: concrete ``frozenset[tuple[str, RelationshipType, str]]`` once the matrix
-    #: is curated; :meth:`is_valid` will then fall through to exact-tuple lookup.
+    #: Kept for backward compatibility; not consulted by :meth:`is_valid`.
     ALLOWED_TUPLES: frozenset[tuple[str, RelationshipType, str]] = frozenset()
 
     @classmethod
@@ -70,14 +96,27 @@ class ExtractionSchema:
         """Return True if ``(source_type, edge_label, target_type)`` is permitted."""
         if not source_type or not target_type:
             return False
+
+        # Normalise edge_label to enum member (may arrive as a plain string).
         if not isinstance(edge_label, RelationshipType):
             try:
-                RelationshipType(edge_label)
+                edge_label = RelationshipType(edge_label)
             except ValueError:
                 return False
-        if cls.ALLOWED_TUPLES:
-            return (source_type, edge_label, target_type) in cls.ALLOWED_TUPLES
-        return True
+
+        src_class = _CLASSIFIER.classify(source_type)
+        tgt_class = _CLASSIFIER.classify(target_type)
+
+        for src_allowed, label, tgt_allowed in _CLASS_MATRIX:
+            if label != edge_label:
+                continue
+            src_ok = src_allowed is None or (src_class is not None and src_class in src_allowed)
+            tgt_ok = tgt_allowed is None or (tgt_class is not None and tgt_class in tgt_allowed)
+            if src_ok and tgt_ok:
+                return True
+
+        # Edge label not in matrix — reject.
+        return False
 
 
 #: Module-level singleton used by the Custodian ProposedEdge validator.

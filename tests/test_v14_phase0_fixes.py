@@ -88,11 +88,11 @@ class TestSiloApiCleanup:
 
         assert "register_silo_create" not in __all__
 
-    def test_silo_list_exported(self) -> None:
-        """silo_list remains available."""
-        from context_service.mcp.tools import register_silo_list
+    def test_context_admin_exported(self) -> None:
+        """context_admin is available in public API."""
+        from context_service.mcp.tools import register_admin
 
-        assert callable(register_silo_list)
+        assert callable(register_admin)
 
     @pytest.mark.asyncio
     async def test_silo_list_auto_creates(self) -> None:
@@ -111,12 +111,12 @@ class TestSiloApiCleanup:
 
         with (
             patch(
-                "context_service.mcp.tools.silo.get_mcp_auth_context",
+                "context_service.mcp.tools.context_admin.get_mcp_auth_context",
                 new=AsyncMock(return_value=auth),
             ),
-            patch("context_service.mcp.tools.silo.get_silo_service", return_value=svc),
+            patch("context_service.mcp.tools.context_admin.get_silo_service", return_value=svc),
         ):
-            from context_service.mcp.tools.silo import _silo_list_impl
+            from context_service.mcp.tools.context_admin import _silo_list_impl
 
             result = await _silo_list_impl()
 

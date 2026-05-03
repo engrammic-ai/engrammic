@@ -56,10 +56,12 @@ async def test_attach_chain_to_session_writes_edge() -> None:
 async def test_close_session_multi_chain_creates_references() -> None:
     store = FakeGraphStore()
     # GET_SESSION_CHAINS returns 2 chains
-    store.seed_query_result([
-        {"chain_id": "chain-1", "status": "open", "compacted": False},
-        {"chain_id": "chain-2", "status": "open", "compacted": False},
-    ])
+    store.seed_query_result(
+        [
+            {"chain_id": "chain-1", "status": "open", "compacted": False},
+            {"chain_id": "chain-2", "status": "open", "compacted": False},
+        ]
+    )
     # CREATE_CROSS_CHAIN_REFERENCES returns edges_created=1
     store.seed_write_result([{"edges_created": 1}])
 
@@ -80,9 +82,11 @@ async def test_close_session_multi_chain_creates_references() -> None:
 @pytest.mark.asyncio
 async def test_close_session_single_chain_skips_references() -> None:
     store = FakeGraphStore()
-    store.seed_query_result([
-        {"chain_id": "chain-1", "status": "open", "compacted": False},
-    ])
+    store.seed_query_result(
+        [
+            {"chain_id": "chain-1", "status": "open", "compacted": False},
+        ]
+    )
 
     from context_service.engine.sessions import close_session
 

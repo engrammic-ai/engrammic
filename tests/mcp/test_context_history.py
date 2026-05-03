@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from context_service.engine.history import BeliefHistory, BeliefState
 from context_service.services.context_meta import HistoryEntry, HistoryResult
 
 SILO_ID = str(uuid.uuid5(uuid.NAMESPACE_DNS, "silo:test-org"))
@@ -143,3 +145,48 @@ async def test_history_timeline_shape(mock_auth, mock_context_service):
     assert "content" in first
     assert "confidence" in first
     assert "supersession_reason" in first
+
+
+@pytest.mark.asyncio
+async def test_history_include_confidence_trend(mock_auth, mock_context_service):
+    from context_service.mcp.tools.context_history import _context_history
+
+    node_id = "node-new"
+    belief = BeliefHistory(
+        subject=node_id,
+        timeline=[
+            BeliefState(
+                node_id="node-old",
+                content="OAuth tokens expire in 7 days",
+                confidence=0.9,
+                valid_from=datetime(2024, 1, 1, tzinfo=UTC),
+                valid_to=datetime(2024, 6, 1, tzinfo=UTC),
+                status="superseded",
+                superseded_by="node-new",
+            ),
+            BeliefState(
+                node_id="node-new",
+                content="OAuth tokens expire in 30 days",
+                confidence=0.95,
+                valid_from=datetime(2024, 6, 1, tzinfo=UTC),
+                valid_to=None,
+                status="current",
+                superseded_by=None,
+            ),
+        ],
+        total_versions=2,
+        confidence_trend="increasing",
+    )
+    mock_context_service.belief_history = AsyncMock(return_value=belief)
+
+    result = await _context_history(
+        silo_id=SILO_ID,
+        node_id=node_id,
+        include_confidence_trend=True,
+    )
+
+    assert "confidence_trend" in result
+    assert "belief_timeline" in result
+    assert result["confidence_trend"] == "increasing"
+    assert len(result["belief_timeline"]) == 2
+    mock_context_service.belief_history.assert_called_once()

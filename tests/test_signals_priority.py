@@ -34,13 +34,3 @@ def test_agent_count_caps_at_five() -> None:
 def test_confidence_clamped_to_unit_interval() -> None:
     assert compute_consensus_priority(-0.5, 0.5, 3) == compute_consensus_priority(0.0, 0.5, 3)
     assert compute_consensus_priority(2.0, 0.5, 3) == compute_consensus_priority(1.0, 0.5, 3)
-
-
-def test_back_compat_re_export() -> None:
-    """custodian.priority must still expose compute_consensus_priority for legacy callers."""
-    from context_service.custodian.priority import (
-        compute_consensus_priority as legacy,
-    )
-    from context_service.signals.priority import compute_consensus_priority as canonical
-
-    assert legacy is canonical

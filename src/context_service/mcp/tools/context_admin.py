@@ -1,14 +1,10 @@
-"""MCP tool: context_close_reasoning - Explicitly close a reasoning session.
-
-Gated behind settings.session_compaction_enabled. When the feature flag is off
-the tool returns a feature_disabled error so callers can handle gracefully.
-"""
+"""MCP tool: context_admin - Admin and utility actions."""
 
 from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from context_service.config.settings import get_settings
 from context_service.db.queries import (
@@ -18,11 +14,42 @@ from context_service.db.queries import (
 )
 from context_service.engine.compaction import compact_reasoning_chain
 from context_service.engine.summarization import inline_summary, summarize_reasoning_steps
+from context_service.mcp.server import (
+    get_context_service,
+    get_mcp_auth_context,
+    get_silo_service,
+)
+from context_service.mcp.tools.context_graph import _context_graph
+from context_service.mcp.tools.context_history import _context_history
+from context_service.services.models import derive_silo_id
+from context_service.services.silo import ensure_silo, validate_silo_ownership
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
     from context_service.engine.protocols import HyperGraphStore
+
+_VALID_ACTIONS = ("silo_list", "close_session", "provenance", "history")
+
+
+async def _silo_list_impl() -> dict[str, Any]:
+    """Internal implementation for silo_list (testable)."""
+    auth = await get_mcp_auth_context()
+    silo_svc = get_silo_service()
+
+    silo = await ensure_silo(silo_svc, org_id=auth.org_id)
+
+    return {
+        "silos": [
+            {
+                "silo_id": str(silo.id),
+                "name": silo.name,
+                "org_id": silo.org_id,
+                "description": silo.description,
+                "dissolvability": silo.dissolvability,
+            }
+        ],
+    }
 
 
 async def close_reasoning_chain(
@@ -31,7 +58,7 @@ async def close_reasoning_chain(
     silo_id: str,
     referenced_chain_ids: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Core session-close logic — fully unit-testable with a FakeGraphStore.
+    """Core session-close logic -- fully unit-testable with a FakeGraphStore.
 
     Parameters
     ----------
@@ -52,7 +79,6 @@ async def close_reasoning_chain(
     settings = get_settings()
     now = datetime.now(UTC).isoformat()
 
-    # Cap referenced_chain_ids to prevent unbounded writes
     MAX_REFERENCES = 50
     if referenced_chain_ids and len(referenced_chain_ids) > MAX_REFERENCES:
         referenced_chain_ids = referenced_chain_ids[:MAX_REFERENCES]
@@ -75,7 +101,6 @@ async def close_reasoning_chain(
             "message": f"ReasoningChain {chain_id!r} is already closed",
         }
 
-    # Set session_state to closed
     await store.execute_write(
         SET_CHAIN_SESSION_STATE,
         {
@@ -86,7 +111,6 @@ async def close_reasoning_chain(
         },
     )
 
-    # Create REFERENCES edges to any linked chains
     refs_created: list[str] = []
     for ref_chain_id in referenced_chain_ids or []:
         ref_rows = await store.execute_write(
@@ -102,7 +126,6 @@ async def close_reasoning_chain(
         if ref_rows:
             refs_created.append(ref_chain_id)
 
-    # Determine whether to compact (summarize)
     threshold = settings.compaction_step_threshold
 
     raw_steps = chain.get("steps")
@@ -122,7 +145,6 @@ async def close_reasoning_chain(
     if summarization_triggered and not chain.get("compacted"):
         try:
             event_id = await compact_reasoning_chain(store, chain_id, silo_id, outcome="committed")
-            # Advance state to summarized
             await store.execute_write(
                 SET_CHAIN_SESSION_STATE,
                 {
@@ -132,7 +154,6 @@ async def close_reasoning_chain(
                     "updated_at": datetime.now(UTC).isoformat(),
                 },
             )
-            # Build summary for the response
             if steps_list:
                 try:
                     from context_service.llm import build_llm_provider
@@ -179,14 +200,6 @@ async def _context_close_reasoning(
     referenced_chain_ids: list[str] | None = None,
 ) -> dict[str, Any]:
     """MCP-layer wrapper: auth check + feature gate, then delegates to core logic."""
-    from context_service.mcp.server import (
-        get_context_service,
-        get_mcp_auth_context,
-        get_silo_service,
-    )
-    from context_service.services.models import derive_silo_id
-    from context_service.services.silo import validate_silo_ownership
-
     settings = get_settings()
     if not settings.session_compaction_enabled:
         return {
@@ -209,50 +222,78 @@ async def _context_close_reasoning(
         silo_id=expected_silo_id,
         referenced_chain_ids=referenced_chain_ids,
     )
-    # Inject silo_id into result for callers (not exposed from core logic)
     if "error" not in result:
         result["silo_id"] = expected_silo_id
     return result
 
 
+async def _context_admin(
+    action: str,
+    silo_id: str,
+    ref: str | None = None,
+    name: str | None = None,  # noqa: ARG001
+) -> dict[str, Any]:
+    """Internal implementation for testing."""
+    if action == "silo_list":
+        return await _silo_list_impl()
+
+    if action == "close_session":
+        if not ref:
+            return {"error": "missing_ref", "message": "ref (chain_id) required for close_session"}
+        return await _context_close_reasoning(silo_id=silo_id, chain_id=ref)
+
+    if action == "provenance":
+        if not ref:
+            return {"error": "missing_ref", "message": "ref (node_id) required for provenance"}
+        return await _context_graph(silo_id=silo_id, seed_nodes=[ref], mode="provenance")
+
+    if action == "history":
+        if not ref:
+            return {
+                "error": "missing_ref",
+                "message": "ref (node_id or subject) required for history",
+            }
+        return await _context_history(silo_id=silo_id, node_id=ref)
+
+    return {"error": "unknown_action", "valid": list(_VALID_ACTIONS)}
+
+
 def register(mcp: FastMCP) -> None:
-    """Register the context_close_reasoning tool."""
+    """Register the context_admin tool."""
 
     @mcp.tool(
-        name="context_close_reasoning",
+        name="context_admin",
         description=(
-            "Explicitly close a reasoning session (Intelligence layer). "
-            "Sets the chain session_state to 'closed' and, if the chain exceeds "
-            "compaction_step_threshold steps, triggers summarization and compaction. "
-            "Optionally links this chain to related chains via REFERENCES edges. "
-            "Requires session_compaction_enabled=true."
+            "Admin and utility actions: silo_list, close_session, provenance, history. "
+            "silo_list: list org silos. "
+            "close_session: close a reasoning chain (ref=chain_id). "
+            "provenance: trace citation chain for a node (ref=node_id). "
+            "history: show belief evolution for a node (ref=node_id or subject)."
         ),
     )
-    async def context_close_reasoning(
-        chain_id: str,
-        referenced_chain_ids: list[str] | None = None,
+    async def context_admin(
+        action: Literal["silo_list", "close_session", "provenance", "history"],
+        ref: str | None = None,
+        name: str | None = None,
         silo_id: str | None = None,
     ) -> dict[str, Any]:
-        """Explicitly close a reasoning session.
+        """Admin and utility actions.
 
         Args:
-            chain_id: ID of the ReasoningChain to close.
-            referenced_chain_ids: Optional list of chain IDs this session references.
-                Creates REFERENCES edges between chains for cross-session traversal.
+            action: silo_list|close_session|provenance|history.
+            ref: Node ID for provenance/history, chain_id for close_session.
+            name: Reserved for future use.
             silo_id: UUID of the silo. Optional; defaults to the org's primary silo
                 derived from auth.
 
         Returns:
-            {chain_id, silo_id, session_state, summarization_triggered, step_count,
-             closed_at, summary?, event_id?, references_created?}
+            Action-specific response dict.
         """
-        from context_service.mcp.server import get_mcp_auth_context
-        from context_service.services.models import derive_silo_id
-
         auth = await get_mcp_auth_context()
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
-        return await _context_close_reasoning(
+        return await _context_admin(
+            action=action,
             silo_id=resolved_silo_id,
-            chain_id=chain_id,
-            referenced_chain_ids=referenced_chain_ids,
+            ref=ref,
+            name=name,
         )

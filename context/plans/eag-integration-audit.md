@@ -81,7 +81,7 @@ All changes are mechanical string-to-constant substitutions. The generated Cyphe
 TODOs #1 and #2 closed by phase-eag-b-edge-migration on 2026-04-28.
 
 ### Clear follow-ups
-1. **Prompts README** — `config/prompts/custodian/` has no README. Add a brief one explaining the two-mechanism split (custodian YAML with lenses vs extraction/clustering provider presets).
+1. **Prompts README** — CLOSED 2026-05-03. README added at `config/prompts/custodian/README.md`.
 
 TODO #2 (was #4) closed by P1 review fixes — see PR #1.
 
@@ -92,4 +92,4 @@ TODO #2 (was #4) closed by P1 review fixes — see PR #1.
 
 ## Open Questions
 
-- Is `:Finding` intentionally kept as the RAG-era output label for the Custodian cycle, with `:Fact` reserved for the future structured promotion pipeline? If yes, this should be documented in `architecture/README.md` to prevent future confusion.
+All resolved. See `context/architecture/README.md` for the Finding vs Fact label mapping decision.
