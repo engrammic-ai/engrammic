@@ -69,8 +69,36 @@ class BinaryEdge(BaseModel):
     type: str = Field(min_length=1, max_length=255)
     source_id: uuid.UUID
     target_id: uuid.UUID
+    silo_id: str | None = Field(default=None)
     properties: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    # Causal edge fields (v1.2c)
+    inferred: bool | None = Field(
+        default=None,
+        description="True for transitivity-derived edges, None/False for direct extraction.",
+    )
+    extraction_confidence: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="LLM confidence in the extracted relationship.",
+    )
+    consensus_confidence: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Custodian-validated confidence (set after promotion).",
+    )
+    inferred_from_edge_ids: list[str] | None = Field(
+        default=None,
+        description="Source edge IDs for transitivity chain (for invalidation).",
+    )
+    depth: int | None = Field(
+        default=None,
+        ge=1,
+        description="Hop count for inferred edges (e.g., 2 for A->B->C).",
+    )
 
     @model_validator(mode="after")
     def no_self_loop(self) -> BinaryEdge:
