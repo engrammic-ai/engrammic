@@ -133,7 +133,7 @@ def heat_asset(
         settings = get_settings()
 
         # Accumulate raw access counts and track layer per node.
-        raw_counts: dict[str, int] = defaultdict(int)
+        raw_counts: dict[str, float] = defaultdict(float)
         node_layers: dict[str, str | None] = {}
         new_last_id = last_id
         total_events = 0
@@ -153,7 +153,13 @@ def heat_asset(
                     node_id = (
                         node_id_raw.decode() if isinstance(node_id_raw, bytes) else node_id_raw
                     )
-                    raw_counts[node_id] += 1
+                    event_type = parse_event_type(fields)
+                    weight = (
+                        settings.heat_read_weight
+                        if event_type == "read"
+                        else settings.heat_write_weight
+                    )
+                    raw_counts[node_id] += weight
                     layer = parse_layer(fields)
                     if layer is not None:
                         node_layers[node_id] = layer

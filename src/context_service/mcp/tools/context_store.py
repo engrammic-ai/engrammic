@@ -93,7 +93,7 @@ async def _context_remember(
         tags=tags,
         decay_class=decay,
         observed_from=observed_from,
-        agent_id=getattr(auth, "agent_id", None),
+        agent_id=auth.agent_id,
     )
     CONTEXT_STORE_LATENCY.labels(tool="context_remember").observe(time.perf_counter() - _start)
 
@@ -180,7 +180,7 @@ async def _context_assert(
         confidence=confidence,
         metadata=metadata,
         tags=tags,
-        agent_id=getattr(auth, "agent_id", None),
+        agent_id=auth.agent_id,
         source_tier=source_tier,
     )
 
@@ -236,7 +236,7 @@ async def _context_commit(
     if not about:
         return {"error": "missing_about", "message": "about must reference at least one node"}
 
-    agent_id = getattr(auth, "agent_id", None) or auth.org_id
+    agent_id = auth.agent_id or auth.org_id
 
     scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
     node = await ctx_svc.commit_belief(
@@ -307,7 +307,7 @@ async def _context_reflect(
             "valid": [e.value for e in ObservationType],
         }
 
-    agent_id = getattr(auth, "agent_id", None) or auth.org_id
+    agent_id = auth.agent_id or auth.org_id
 
     scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
     node = await ctx_svc.reflect(
@@ -363,8 +363,8 @@ async def _context_reason(
 
     ctx_svc = get_context_service()
 
-    resolved_session_id = session_id or getattr(auth, "session_id", None) or str(uuid.uuid4())
-    agent_id = getattr(auth, "agent_id", None)
+    resolved_session_id = session_id or auth.session_id or str(uuid.uuid4())
+    agent_id = auth.agent_id
 
     store = ctx_svc.graph_store
     await create_or_join_session(store, resolved_session_id, str(expected_silo_id))

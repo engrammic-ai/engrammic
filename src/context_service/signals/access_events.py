@@ -51,13 +51,21 @@ async def emit_access_event(
     from context_service.config.settings import get_settings
 
     try:
+        settings = get_settings()
+
+        # Dedup: skip if same node was accessed within the cooldown window
+        dedup_key = f"heat:dedup:{silo_id}:{node_id}"
+        is_new = await redis.set_nx(dedup_key, "1", ttl_seconds=settings.heat_dedup_window_seconds)
+        if not is_new:
+            return
+
         fields: dict[str, str | bytes] = {"node_id": str(node_id), "event_type": event_type}
         if layer is not None:
             fields["layer"] = layer
         await redis.xadd(
             access_stream_key(silo_id),
             fields,
-            maxlen=get_settings().access_stream_maxlen,
+            maxlen=settings.access_stream_maxlen,
             approximate=True,
         )
     except Exception as exc:

@@ -16,6 +16,7 @@ from context_service.signals.access_events import (
 @pytest.mark.asyncio
 async def test_emit_calls_xadd_with_expected_shape() -> None:
     redis = AsyncMock()
+    redis.set_nx = AsyncMock(return_value=True)
     redis.xadd = AsyncMock(return_value="1700000000-0")
 
     await emit_access_event(redis, "silo-a", "node-42")
@@ -30,6 +31,7 @@ async def test_emit_calls_xadd_with_expected_shape() -> None:
 @pytest.mark.asyncio
 async def test_emit_includes_layer_when_provided() -> None:
     redis = AsyncMock()
+    redis.set_nx = AsyncMock(return_value=True)
     redis.xadd = AsyncMock(return_value="1700000000-0")
 
     await emit_access_event(redis, "silo-a", "node-42", layer="Fact")
@@ -41,12 +43,24 @@ async def test_emit_includes_layer_when_provided() -> None:
 @pytest.mark.asyncio
 async def test_emit_write_event_type() -> None:
     redis = AsyncMock()
+    redis.set_nx = AsyncMock(return_value=True)
     redis.xadd = AsyncMock(return_value="1700000000-0")
 
     await emit_access_event(redis, "silo-a", "node-42", event_type="write", layer="Claim")
 
     args, _kwargs = redis.xadd.call_args
     assert args[1] == {"node_id": "node-42", "event_type": "write", "layer": "Claim"}
+
+
+@pytest.mark.asyncio
+async def test_emit_skips_duplicate_within_dedup_window() -> None:
+    redis = AsyncMock()
+    redis.set_nx = AsyncMock(return_value=False)  # Key already exists
+    redis.xadd = AsyncMock()
+
+    await emit_access_event(redis, "silo-a", "node-42")
+
+    redis.xadd.assert_not_awaited()  # Should skip emit
 
 
 @pytest.mark.asyncio

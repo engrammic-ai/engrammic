@@ -1,6 +1,6 @@
 # v1d Signals Enhancement Plan
 
-**Status:** IN PROGRESS (Phase 1-3 complete, Phase 4 pending)
+**Status:** COMPLETE (all phases shipped)
 **Goal:** Extend the signals subsystem with query-time heat ranking, unified decay model, and write-side access events.
 **Branch:** `phase-signals-enhancement`
 
@@ -140,7 +140,7 @@ This revision addresses findings from the adversarial review:
 
 ### Tasks
 
-- [ ] **4.1** Add dedup logic to `emit_access_event`:
+- [x] **4.1** Add dedup logic to `emit_access_event`:
   ```python
   dedup_key = f"heat:dedup:{silo_id}:{node_id}"
   if await redis.exists(dedup_key):
@@ -150,12 +150,12 @@ This revision addresses findings from the adversarial review:
 - [x] **4.2** Emit write event from `context_link` (target node only, after successful link)
 - [x] **4.3** Emit write event from `context_store` (one event for the created node, gated by write_events_enabled)
 - [ ] **4.4** Emit write event from `context_commit` (one event for the commitment node itself, not per about_node)
-- [ ] **4.5** Update heat asset to weight by event_type:
+- [x] **4.5** Update heat asset to weight by event_type:
   ```python
   weight = settings.heat_read_weight if event_type == "read" else settings.heat_write_weight
   ```
-- [ ] **4.6** Gate all write emissions behind `write_events_enabled` flag
-- [ ] **4.7** Add tests:
+- [x] **4.6** Gate all write emissions behind `write_events_enabled` flag
+- [x] **4.7** Add tests:
   - Write event has `event_type="write"`
   - Dedup prevents spam within window
   - Failed write does not emit event
