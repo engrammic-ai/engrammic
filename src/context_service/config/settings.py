@@ -318,6 +318,23 @@ class AutoReflectConfig(BaseModel):
         default=False,
         description="Gate for v1.3d auto-reflection triggers (confidence shift, contradiction, uncertainty)",
     )
+    confidence_shift_threshold: float = Field(
+        default=0.2,
+        ge=0.0,
+        le=1.0,
+        description="Minimum confidence delta to trigger a confidence-shift auto-reflection",
+    )
+    uncertainty_threshold: float = Field(
+        default=0.4,
+        ge=0.0,
+        le=1.0,
+        description="Max average result confidence below which reflection_suggested is set",
+    )
+    max_reflections_per_hour: int = Field(
+        default=10,
+        ge=1,
+        description="Rate-limit cap: maximum auto-reflections per silo per hour",
+    )
 
 
 class FeaturesConfig(BaseModel):
@@ -445,6 +462,12 @@ class CausalConfig(BaseModel):
         default=500,
         ge=1,
         description="Anchor nodes per batch in transitivity asset.",
+    )
+    max_invalidation_depth: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Maximum cascade depth when tombstoning derived inferred edges on supersession.",
     )
 
 

@@ -11,6 +11,7 @@ import structlog
 
 from context_service.api.metrics import CONTEXT_QUERY_LATENCY
 from context_service.config.settings import get_settings
+from context_service.engine.reflection_triggers import compute_reflection_suggested
 from context_service.mcp.server import (
     get_context_service,
     get_mcp_auth_context,
@@ -143,23 +144,26 @@ async def _context_query(
             if coverage_from is not None:
                 metadata["causal_coverage_from"] = coverage_from
 
+    result_dicts = [
+        {
+            "node_id": str(r.node_id),
+            "layer": r.layer,
+            "content": r.content,
+            "summary": r.summary,
+            "confidence": r.confidence,
+            "relevance_score": r.relevance_score,
+            "tags": r.tags or [],
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in results
+    ]
+
     return {
-        "results": [
-            {
-                "node_id": str(r.node_id),
-                "layer": r.layer,
-                "content": r.content,
-                "summary": r.summary,
-                "confidence": r.confidence,
-                "relevance_score": r.relevance_score,
-                "tags": r.tags or [],
-                "created_at": r.created_at.isoformat() if r.created_at else None,
-            }
-            for r in results
-        ],
+        "results": result_dicts,
         "total_candidates": len(results),
         "search_time_ms": elapsed_ms,
         "search_mode": search_mode,
+        "reflection_suggested": compute_reflection_suggested(result_dicts),
         "metadata": metadata,
     }
 

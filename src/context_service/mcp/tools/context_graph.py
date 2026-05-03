@@ -58,6 +58,11 @@ async def _context_graph(
             for ct in causal_types:
                 if ct not in effective_rel_types:
                     effective_rel_types.append(ct)
+    if settings.session_compaction_enabled:
+        if effective_rel_types is None:
+            effective_rel_types = ["REFERENCES"]
+        elif "REFERENCES" not in effective_rel_types:
+            effective_rel_types.append("REFERENCES")
 
     result = await ctx_svc.graph_traversal(
         silo_id=str(expected_silo_id),
@@ -71,6 +76,7 @@ async def _context_graph(
 
     metadata: dict[str, Any] = {
         "causal_edges_enabled": settings.causal.query_enabled,
+        "references_edges_enabled": settings.session_compaction_enabled,
     }
 
     if settings.causal.query_enabled:

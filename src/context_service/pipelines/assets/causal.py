@@ -1,4 +1,8 @@
-"""Dagster asset: causal_transitivity — infer transitive CAUSES edges per silo."""
+"""Dagster asset: causal_transitivity — infer transitive CAUSES edges per silo.
+
+Transitive invalidation helper lives in engine/causal_invalidation.py so it
+can be imported without pulling in the Dagster runtime.
+"""
 
 import asyncio
 import concurrent.futures
@@ -35,6 +39,20 @@ WHERE a.silo_id = $silo_id
 RETURN a.id AS source_id, c.id AS target_id, relationships(path) AS edges
 SKIP $skip
 LIMIT $batch_size
+"""
+
+_FIND_DERIVED_EDGES = """
+MATCH (r:CAUSES {silo_id: $silo_id})
+WHERE $superseded_edge_id IN r.inferred_from_edge_ids
+  AND r.inferred = true
+RETURN r.id AS derived_edge_id
+"""
+
+_TOMBSTONE_DERIVED_EDGE = """
+MATCH ()-[r:CAUSES {id: $edge_id, silo_id: $silo_id}]->()
+SET r.invalidated = true,
+    r.invalidated_at = $invalidated_at,
+    r.invalidation_reason = $reason
 """
 
 _UPSERT_INFERRED_CAUSES = """

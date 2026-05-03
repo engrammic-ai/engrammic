@@ -159,6 +159,27 @@ def retention_schedule(
         )
 
 
+@dg.schedule(
+    cron_schedule="0 5 * * *",
+    name="pattern_detection_schedule",
+    target=dg.AssetSelection.assets("pattern_detection"),
+    description="Daily pattern detection (05:00 UTC): co_occurrence, causal_chain, and decay.",
+    execution_timezone="UTC",
+)
+def pattern_detection_schedule(
+    context: ScheduleEvaluationContext,
+    memgraph: MemgraphResource,
+) -> Iterator[dg.RunRequest]:
+    """Yield one pattern_detection RunRequest per active silo."""
+    silo_ids = _fetch_silo_ids(memgraph)
+    for silo_id in silo_ids:
+        yield dg.RunRequest(
+            run_key=f"pattern_detection:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            partition_key=silo_id,
+            tags={"dagster/concurrency_key": silo_id},
+        )
+
+
 all_schedules: list[Any] = [
     clustering_schedule,
     fact_promotion_schedule,
@@ -166,6 +187,7 @@ all_schedules: list[Any] = [
     heat_schedule,
     reasoning_compaction_schedule,
     retention_schedule,
+    pattern_detection_schedule,
 ]
 
 __all__ = [
@@ -176,4 +198,5 @@ __all__ = [
     "heat_schedule",
     "reasoning_compaction_schedule",
     "retention_schedule",
+    "pattern_detection_schedule",
 ]

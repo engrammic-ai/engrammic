@@ -12,6 +12,7 @@ from context_service.pipelines.assets.embedding import embedding_asset as embedd
 from context_service.pipelines.assets.extraction import extraction
 from context_service.pipelines.assets.fact_promotion import claim_to_fact_promotion
 from context_service.pipelines.assets.heat import heat_asset
+from context_service.pipelines.assets.pattern_detection import pattern_detection
 from context_service.pipelines.assets.retention import retention_sweep
 
 all_assets: list[Any] = [
@@ -26,4 +27,5 @@ all_assets: list[Any] = [
     reasoning_compaction,
     belief_synthesis_asset,
     retention_sweep,
+    pattern_detection,
 ]

@@ -657,6 +657,39 @@ ORDER BY chain.created_at ASC
 LIMIT $limit
 """
 
+# ---------------------------------------------------------------------------
+# Session state management (v1.3c)
+# ---------------------------------------------------------------------------
+
+SET_CHAIN_SESSION_STATE = """
+MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+SET chain.session_state = $session_state,
+    chain.session_state_updated_at = $updated_at
+RETURN chain.id AS chain_id, chain.session_state AS session_state
+"""
+
+GET_CHAIN_FOR_CLOSE = """
+MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+RETURN
+    chain.id AS id,
+    chain.steps AS steps,
+    chain.compact_summary AS compact_summary,
+    chain.produced_by_agent_id AS agent_id,
+    chain.session_state AS session_state,
+    coalesce(chain.compacted, false) AS compacted,
+    coalesce(size(coalesce(chain.steps, [])), 0) AS step_count
+"""
+
+CREATE_CHAIN_REFERENCES_EDGE = """
+MATCH (from_chain:ReasoningChain {id: $from_chain_id, silo_id: $silo_id})
+MATCH (to_chain:ReasoningChain {id: $to_chain_id, silo_id: $silo_id})
+MERGE (from_chain)-[r:REFERENCES {silo_id: $silo_id}]->(to_chain)
+ON CREATE SET
+    r.created_at = $created_at,
+    r.reason = $reason
+RETURN from_chain.id AS from_id, to_chain.id AS to_id
+"""
+
 # --- Supersession chain traversal (belief history) ---
 
 # ---------------------------------------------------------------------------
@@ -796,6 +829,55 @@ RETURN a.id AS fact_id_a, b.id AS fact_id_b,
        a.valid_from AS valid_from_a, b.valid_from AS valid_from_b
 ORDER BY a.valid_from DESC
 LIMIT $limit
+"""
+
+# Detect co-occurring facts: pairs of :Fact nodes sharing the same Leiden cluster.
+# Returns up to $limit distinct unordered pairs along with the shared cluster id.
+DETECT_CO_OCCURRING_FACTS = """
+MATCH (a:Fact {silo_id: $silo_id})-[:MEMBER_OF]->(c:Cluster {silo_id: $silo_id})
+MATCH (b:Fact {silo_id: $silo_id})-[:MEMBER_OF]->(c)
+WHERE id(a) < id(b)
+RETURN a.id AS fact_id_a, b.id AS fact_id_b,
+       a.content AS content_a, b.content AS content_b,
+       c.id AS cluster_id
+ORDER BY c.id
+LIMIT $limit
+"""
+
+# Detect causal chains: paths of min_hops..max_hops nodes connected by :CAUSES edges.
+# min_hops and max_hops are substituted as literals (Cypher requires literal bounds).
+# Returns the first and last node of each distinct chain along with chain length.
+DETECT_CAUSAL_CHAINS = """
+MATCH path = (a)-[:CAUSES*{min_hops}..{max_hops}]->(z)
+WHERE a.silo_id = $silo_id
+  AND z.silo_id = $silo_id
+  AND a <> z
+  AND ALL(n IN nodes(path) WHERE n.silo_id = $silo_id)
+RETURN a.id AS chain_start, z.id AS chain_end,
+       [n IN nodes(path) | n.id] AS chain_node_ids,
+       length(path) AS chain_length
+ORDER BY chain_length DESC
+LIMIT $limit
+"""
+
+# Apply exponential confidence decay to stale :Pattern nodes.
+# Patterns not re-observed since $stale_before get their confidence multiplied by $decay_factor.
+DECAY_STALE_PATTERNS = """
+MATCH (p:Pattern {silo_id: $silo_id})
+WHERE p.last_observed < $stale_before
+  AND NOT exists(p.tombstoned_at)
+SET p.confidence = p.confidence * $decay_factor,
+    p.decayed_at = $now
+RETURN count(p) AS patterns_decayed
+"""
+
+# Tombstone patterns whose confidence has fallen below the minimum threshold.
+TOMBSTONE_LOW_CONFIDENCE_PATTERNS = """
+MATCH (p:Pattern {silo_id: $silo_id})
+WHERE p.confidence < $min_confidence
+  AND NOT exists(p.tombstoned_at)
+SET p.tombstoned_at = $now
+RETURN count(p) AS patterns_tombstoned
 """
 
 GET_SUPERSESSION_CHAIN = (

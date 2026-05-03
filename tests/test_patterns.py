@@ -113,19 +113,44 @@ async def test_detect_patterns_temporal_empty_result() -> None:
 
 
 @pytest.mark.asyncio
-async def test_detect_patterns_co_occurrence_noop() -> None:
+async def test_detect_patterns_co_occurrence_returns_rows() -> None:
     store = FakeGraphStore()
+    rows = [
+        {
+            "fact_id_a": "f-a",
+            "fact_id_b": "f-b",
+            "content_a": "Content A",
+            "content_b": "Content B",
+            "cluster_id": "cluster-1",
+        }
+    ]
+    store.seed_query_result(rows)
     result = await detect_patterns(store, "silo-1", "co_occurrence")
-    assert result == []
-    assert store.query_log == []
+    assert result == rows
+    assert len(store.query_log) == 1
+    cypher, params = store.query_log[0]
+    assert "MEMBER_OF" in cypher
+    assert params["silo_id"] == "silo-1"
 
 
 @pytest.mark.asyncio
-async def test_detect_patterns_causal_chain_noop() -> None:
+async def test_detect_patterns_causal_chain_returns_rows() -> None:
     store = FakeGraphStore()
+    rows = [
+        {
+            "chain_start": "n-start",
+            "chain_end": "n-end",
+            "chain_node_ids": ["n-start", "n-mid", "n-end"],
+            "chain_length": 2,
+        }
+    ]
+    store.seed_query_result(rows)
     result = await detect_patterns(store, "silo-1", "causal_chain")
-    assert result == []
-    assert store.query_log == []
+    assert result == rows
+    assert len(store.query_log) == 1
+    cypher, params = store.query_log[0]
+    assert "CAUSES" in cypher
+    assert params["silo_id"] == "silo-1"
 
 
 # ---------------------------------------------------------------------------

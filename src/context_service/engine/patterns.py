@@ -4,8 +4,8 @@ A pattern is a recurring structural shape observed across :Fact, :Belief, or
 :Event nodes.  The three supported pattern types are:
 
 - ``temporal_correlation`` -- facts that occur within a configurable time window
-- ``co_occurrence``         -- facts that share entity mentions (not yet implemented)
-- ``causal_chain``          -- facts linked by :CAUSES edges (not yet implemented)
+- ``co_occurrence``         -- facts that share a Leiden cluster (same community)
+- ``causal_chain``          -- A->B->C paths of 3+ hops via :CAUSES edges
 
 Public API
 ----------
@@ -17,6 +17,10 @@ create_or_update_pattern(store, pattern_type, description, observed_node_ids, si
     Persist a :Pattern node (MERGE) and attach OBSERVED_IN edges.  If a
     matching pattern already exists the frequency counter is incremented and
     the new observed_node_ids are linked.  Returns the pattern id.
+
+decay_patterns(store, silo_id, *, decay_factor, stale_before_iso, min_confidence)
+    Apply exponential decay to stale :Pattern nodes and tombstone any that fall
+    below min_confidence.  Returns (patterns_decayed, patterns_tombstoned).
 """
 
 from __future__ import annotations
@@ -29,8 +33,12 @@ import structlog
 
 from context_service.db.queries import (
     CREATE_PATTERN,
+    DECAY_STALE_PATTERNS,
+    DETECT_CAUSAL_CHAINS,
+    DETECT_CO_OCCURRING_FACTS,
     DETECT_TEMPORAL_CORRELATIONS,
     GET_PATTERN_BY_TYPE_AND_SUBJECT,
+    TOMBSTONE_LOW_CONFIDENCE_PATTERNS,
     UPDATE_PATTERN_FREQUENCY,
 )
 
@@ -46,6 +54,17 @@ DEFAULT_TEMPORAL_WINDOW_SECONDS: int = 3600
 
 # Default cap on the number of candidate pairs returned per detection run.
 DEFAULT_DETECTION_LIMIT: int = 50
+
+# Minimum chain length (hops) required for a causal_chain pattern.
+# A 2-hop path is just one direct edge; below 3 there is no real chain.
+CAUSAL_CHAIN_MIN_HOPS: int = 2  # means A->B->C (3 nodes, 2 edges)
+CAUSAL_CHAIN_MAX_HOPS: int = 6
+
+# Decay factor applied per scheduled period (exponential: confidence *= 0.9).
+DEFAULT_DECAY_FACTOR: float = 0.9
+
+# Patterns below this threshold after decay are tombstoned.
+DEFAULT_MIN_CONFIDENCE: float = 0.1
 
 
 def _make_pattern_id(pattern_type: str, description: str, silo_id: str) -> str:
@@ -103,13 +122,46 @@ async def detect_patterns(
         )
         return rows
 
-    # co_occurrence and causal_chain are placeholders for future detection
-    # passes; return empty lists so callers can wire them without errors.
-    logger.debug(
-        "pattern_detection_noop",
+    if pattern_type == "co_occurrence":
+        rows = await store.execute_query(
+            DETECT_CO_OCCURRING_FACTS,
+            {
+                "silo_id": silo_id,
+                "limit": limit,
+            },
+        )
+        logger.debug(
+            "pattern_detection_run",
+            pattern_type=pattern_type,
+            silo_id=silo_id,
+            candidates=len(rows),
+        )
+        return rows
+
+    if pattern_type == "causal_chain":
+        query = DETECT_CAUSAL_CHAINS.format(
+            min_hops=CAUSAL_CHAIN_MIN_HOPS,
+            max_hops=CAUSAL_CHAIN_MAX_HOPS,
+        )
+        rows = await store.execute_query(
+            query,
+            {
+                "silo_id": silo_id,
+                "limit": limit,
+            },
+        )
+        logger.debug(
+            "pattern_detection_run",
+            pattern_type=pattern_type,
+            silo_id=silo_id,
+            candidates=len(rows),
+        )
+        return rows
+
+    logger.warning(
+        "pattern_detection_unknown_type",
         pattern_type=pattern_type,
         silo_id=silo_id,
-        reason="not_yet_implemented",
     )
     return []
 
@@ -207,3 +259,173 @@ async def create_or_update_pattern(
         )
 
     return pattern_id
+
+
+def _description_for_co_occurrence(row: dict[str, Any]) -> str:
+    """Build a stable description string for a co_occurrence pattern row."""
+    a = str(row.get("content_a", row.get("fact_id_a", "?")))[:80]
+    b = str(row.get("content_b", row.get("fact_id_b", "?")))[:80]
+    cluster_id = str(row.get("cluster_id", "unknown"))
+    # Sort so the description is symmetric (same pair regardless of row order).
+    pair = sorted([a, b])
+    return f"co_occurrence:{cluster_id}:{pair[0]}|{pair[1]}"
+
+
+def _description_for_causal_chain(row: dict[str, Any]) -> str:
+    """Build a stable description string for a causal_chain pattern row."""
+    start = str(row.get("chain_start", "?"))
+    end = str(row.get("chain_end", "?"))
+    length = int(row.get("chain_length", 0))
+    return f"causal_chain:len{length}:{start}->{end}"
+
+
+async def process_co_occurrence_candidates(
+    store: HyperGraphStore,
+    silo_id: str,
+    candidates: list[dict[str, Any]],
+) -> int:
+    """Materialise :Pattern nodes from co_occurrence candidate rows.
+
+    Parameters
+    ----------
+    store:
+        A HyperGraphStore implementation.
+    silo_id:
+        Silo scope.
+    candidates:
+        Rows returned by :func:`detect_patterns` for ``"co_occurrence"``.
+
+    Returns
+    -------
+    int
+        Number of patterns created or updated.
+    """
+    count = 0
+    for row in candidates:
+        description = _description_for_co_occurrence(row)
+        node_ids = [
+            str(row["fact_id_a"]),
+            str(row["fact_id_b"]),
+        ]
+        await create_or_update_pattern(
+            store,
+            "co_occurrence",
+            description,
+            node_ids,
+            silo_id,
+        )
+        count += 1
+    return count
+
+
+async def process_causal_chain_candidates(
+    store: HyperGraphStore,
+    silo_id: str,
+    candidates: list[dict[str, Any]],
+) -> int:
+    """Materialise :Pattern nodes from causal_chain candidate rows.
+
+    Only chains with at least 3 nodes (2+ hops) are materialised.
+
+    Parameters
+    ----------
+    store:
+        A HyperGraphStore implementation.
+    silo_id:
+        Silo scope.
+    candidates:
+        Rows returned by :func:`detect_patterns` for ``"causal_chain"``.
+
+    Returns
+    -------
+    int
+        Number of patterns created or updated.
+    """
+    count = 0
+    for row in candidates:
+        chain_length = int(row.get("chain_length", 0))
+        # chain_length is the number of edges; we need at least 2 edges (3 nodes).
+        if chain_length < 2:
+            continue
+        description = _description_for_causal_chain(row)
+        chain_node_ids: list[str] = [str(n) for n in row.get("chain_node_ids", [])]
+        if not chain_node_ids:
+            chain_node_ids = [str(row["chain_start"]), str(row["chain_end"])]
+        await create_or_update_pattern(
+            store,
+            "causal_chain",
+            description,
+            chain_node_ids,
+            silo_id,
+        )
+        count += 1
+    return count
+
+
+async def decay_patterns(
+    store: HyperGraphStore,
+    silo_id: str,
+    *,
+    decay_factor: float = DEFAULT_DECAY_FACTOR,
+    stale_before_iso: str,
+    min_confidence: float = DEFAULT_MIN_CONFIDENCE,
+) -> tuple[int, int]:
+    """Apply exponential confidence decay to stale :Pattern nodes.
+
+    Patterns not re-observed since *stale_before_iso* have their ``confidence``
+    multiplied by *decay_factor*.  Patterns whose confidence drops below
+    *min_confidence* are tombstoned.
+
+    Parameters
+    ----------
+    store:
+        A HyperGraphStore implementation.
+    silo_id:
+        Silo scope.
+    decay_factor:
+        Multiplier applied to each stale pattern's confidence (default 0.9).
+    stale_before_iso:
+        ISO-8601 datetime string; patterns last observed before this are
+        considered stale.
+    min_confidence:
+        Patterns with confidence below this value after decay are tombstoned.
+
+    Returns
+    -------
+    tuple[int, int]
+        ``(patterns_decayed, patterns_tombstoned)``
+    """
+    now = datetime.now(UTC).isoformat()
+
+    decay_rows = await store.execute_write(
+        DECAY_STALE_PATTERNS,
+        {
+            "silo_id": silo_id,
+            "stale_before": stale_before_iso,
+            "decay_factor": decay_factor,
+            "now": now,
+        },
+    )
+    patterns_decayed = int(decay_rows[0].get("patterns_decayed", 0)) if decay_rows else 0
+
+    tombstone_rows = await store.execute_write(
+        TOMBSTONE_LOW_CONFIDENCE_PATTERNS,
+        {
+            "silo_id": silo_id,
+            "min_confidence": min_confidence,
+            "now": now,
+        },
+    )
+    patterns_tombstoned = (
+        int(tombstone_rows[0].get("patterns_tombstoned", 0)) if tombstone_rows else 0
+    )
+
+    logger.info(
+        "pattern_decay_run",
+        silo_id=silo_id,
+        patterns_decayed=patterns_decayed,
+        patterns_tombstoned=patterns_tombstoned,
+        decay_factor=decay_factor,
+        stale_before=stale_before_iso,
+    )
+    return patterns_decayed, patterns_tombstoned

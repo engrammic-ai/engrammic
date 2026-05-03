@@ -56,6 +56,53 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
+_SPLIT_SYSTEM_PROMPT = """You are a belief-revision assistant.
+
+Given a belief that is only partially invalidated by new evidence, your job is
+to split it into two or more child beliefs:
+  - one that reflects what remains valid
+  - one (or more) that reflects what has changed or is no longer supported
+
+Rules:
+- Each child belief must be a self-contained, falsifiable statement.
+- Do not fabricate claims; only use information present in the original belief and the revision note.
+- Keep each child belief concise (one sentence).
+- Return JSON with exactly one key: "children", which is an array of strings.
+  Example: {"children": ["A is still true.", "B has been revised to C."]}
+"""
+
+
+def _build_split_prompt(original_content: str, revision_note: str) -> str:
+    return (
+        f"Original belief:\n{original_content}\n\n"
+        f"Revision note (what changed):\n{revision_note}\n\n"
+        "Split the original belief into child beliefs."
+    )
+
+
+_CREATE_CHILD_BELIEF = """
+MERGE (b:Belief {id: $belief_id, silo_id: $silo_id})
+ON CREATE SET
+    b.content = $content,
+    b.confidence = $confidence,
+    b.evidence_count = $evidence_count,
+    b.created_at = $created_at,
+    b.valid_from = $valid_from,
+    b.valid_to = null,
+    b.wisdom_status = 'active'
+RETURN b.id AS belief_id
+"""
+
+_CREATE_REVISED_FROM = """
+MATCH (child:Belief {id: $child_id, silo_id: $silo_id})
+MATCH (parent:Belief {id: $parent_id, silo_id: $silo_id})
+MERGE (child)-[r:REVISED_FROM {
+    created_at: $created_at,
+    revision_note: $revision_note
+}]->(parent)
+RETURN r.created_at AS created_at
+"""
+
 
 def _get_revision_threshold() -> float:
     """Get revision threshold, supporting hot-reload."""
@@ -396,3 +443,140 @@ async def revise_belief(
         )
 
     return new_belief_id
+
+
+@dataclass(frozen=True)
+class SplitBeliefResult:
+    """Outcome of split_belief."""
+
+    parent_belief_id: str
+    child_belief_ids: list[str]
+    child_count: int
+
+
+async def split_belief(
+    store: HyperGraphStore,
+    belief_id: str,
+    silo_id: str,
+    revision_note: str,
+    llm_client: LLMProvider,
+    embedding_client: EmbeddingService,
+) -> SplitBeliefResult:
+    """Split a belief into child beliefs when only part of it is being revised.
+
+    Uses an LLM to decompose the original belief content into distinct child
+    beliefs based on the revision note.  Each child is persisted as a new
+    :Belief node and linked to the parent via a :REVISED_FROM edge.  The
+    parent belief is NOT marked stale — it remains active unless the caller
+    explicitly supersedes it.
+
+    Parameters
+    ----------
+    store:
+        HyperGraphStore implementation.
+    belief_id:
+        ID of the :Belief to split.
+    silo_id:
+        Silo scope.
+    revision_note:
+        Human-readable description of what changed and why.
+    llm_client:
+        LLM provider for generating child belief text.
+    embedding_client:
+        Used to compute centroid embeddings for child beliefs.
+
+    Returns
+    -------
+    SplitBeliefResult
+        Contains the parent belief id and the list of new child belief ids.
+    """
+    import json
+
+    belief_rows = await store.execute_query(
+        _GET_BELIEF_FOR_REVISION,
+        {"belief_id": belief_id, "silo_id": silo_id},
+    )
+    if not belief_rows:
+        raise ValueError(f"Belief {belief_id!r} not found in silo {silo_id!r}.")
+
+    belief = belief_rows[0]
+    original_content = str(belief.get("content") or "")
+    parent_confidence = float(belief.get("confidence") or 0.5)
+
+    prompt = _build_split_prompt(original_content, revision_note)
+    raw_response, _usage = await llm_client.complete(
+        messages=[
+            {"role": "system", "content": _SPLIT_SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=0.2,
+    )
+
+    try:
+        parsed = json.loads(raw_response.strip())
+        children_text: list[str] = [str(s) for s in parsed.get("children", [])]
+    except (json.JSONDecodeError, AttributeError):
+        # Fallback: treat non-JSON response as a single child.
+        children_text = [raw_response.strip()]
+
+    if not children_text:
+        raise ValueError("LLM returned no child beliefs for split.")
+
+    now = datetime.now(UTC)
+    child_belief_ids: list[str] = []
+
+    for i, child_text in enumerate(children_text):
+        child_id = _make_revised_belief_id(belief_id, i + 1)
+        child_embedding = await embedding_client.embed([child_text])
+        child_centroid = child_embedding[0] if child_embedding else []
+
+        async with store.transaction():
+            await store.execute_write(
+                _CREATE_CHILD_BELIEF,
+                {
+                    "belief_id": child_id,
+                    "silo_id": silo_id,
+                    "content": child_text,
+                    "confidence": parent_confidence,
+                    "evidence_count": 1,
+                    "created_at": now.isoformat(),
+                    "valid_from": now.isoformat(),
+                },
+            )
+
+            await store.execute_write(
+                UPDATE_BELIEF_CENTROID,
+                {
+                    "belief_id": child_id,
+                    "silo_id": silo_id,
+                    "centroid_embedding": child_centroid,
+                    "last_revision_check": now.isoformat(),
+                    "revision_count": 0,
+                },
+            )
+
+            await store.execute_write(
+                _CREATE_REVISED_FROM,
+                {
+                    "child_id": child_id,
+                    "parent_id": belief_id,
+                    "silo_id": silo_id,
+                    "created_at": now.isoformat(),
+                    "revision_note": revision_note,
+                },
+            )
+
+        child_belief_ids.append(child_id)
+
+    logger.info(
+        "belief_split",
+        parent_belief_id=belief_id,
+        silo_id=silo_id,
+        child_count=len(child_belief_ids),
+    )
+
+    return SplitBeliefResult(
+        parent_belief_id=belief_id,
+        child_belief_ids=child_belief_ids,
+        child_count=len(child_belief_ids),
+    )

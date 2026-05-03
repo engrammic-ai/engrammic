@@ -12,6 +12,9 @@ from context_service.mcp.tools.belief_history import register as register_belief
 
 # Write tools (intent verbs)
 from context_service.mcp.tools.context_assert import register as register_assert
+
+# Intelligence tools
+from context_service.mcp.tools.context_close_reasoning import register as register_close_reasoning
 from context_service.mcp.tools.context_commit import register as register_commit
 from context_service.mcp.tools.context_get import register as register_get
 
@@ -26,8 +29,6 @@ from context_service.mcp.tools.context_provenance import register as register_pr
 
 # Read tools
 from context_service.mcp.tools.context_query import register as register_query
-
-# Intelligence tools
 from context_service.mcp.tools.context_reason import register as register_reason
 from context_service.mcp.tools.context_reflect import register as register_reflect
 from context_service.mcp.tools.context_remember import register as register_remember
@@ -58,6 +59,7 @@ def register_all(mcp: FastMCP) -> None:
 
     # Intelligence tools
     register_reason(mcp)
+    register_close_reasoning(mcp)
 
     # Silo management
     register_silo_create(mcp)
@@ -67,6 +69,7 @@ def register_all(mcp: FastMCP) -> None:
 __all__ = [
     "register_all",
     "register_belief_history",
+    "register_close_reasoning",
     "register_remember",
     "register_assert",
     "register_commit",
