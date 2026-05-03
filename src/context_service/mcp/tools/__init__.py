@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from fastmcp import FastMCP
 
 # Write tools (intent verbs)
+from context_service.mcp.tools.context_admin import register as register_admin
 from context_service.mcp.tools.context_assert import register as register_assert
 
 # Intelligence tools
@@ -22,8 +23,10 @@ from context_service.mcp.tools.context_link import register as register_link
 # Read tools
 from context_service.mcp.tools.context_query import register as register_query
 from context_service.mcp.tools.context_reason import register as register_reason
+from context_service.mcp.tools.context_recall import register as register_recall
 from context_service.mcp.tools.context_reflect import register as register_reflect
 from context_service.mcp.tools.context_remember import register as register_remember
+from context_service.mcp.tools.context_store import register as register_store
 
 # Silo management
 from context_service.mcp.tools.silo import register_silo_list
@@ -51,10 +54,17 @@ def register_all(mcp: FastMCP) -> None:
     # Silo management
     register_silo_list(mcp)
 
+    # Consolidated tools
+    register_store(mcp)
+    register_recall(mcp)
+    register_admin(mcp)
+
 
 __all__ = [
     "register_all",
+    "register_admin",
     "register_close_reasoning",
+    "register_recall",
     "register_remember",
     "register_assert",
     "register_commit",
@@ -66,4 +76,5 @@ __all__ = [
     "register_history",
     "register_reason",
     "register_silo_list",
+    "register_store",
 ]
