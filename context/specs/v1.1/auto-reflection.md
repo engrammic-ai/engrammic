@@ -1,6 +1,6 @@
 # Auto-Reflection
 
-**Status:** Draft
+**Status:** Complete (2026-05-03)
 **Priority:** P2
 **Roadmap:** [v1.1-roadmap.md](../../plans/v1.1-roadmap.md)
 **Depends on:** T4 (Belief Revision)
