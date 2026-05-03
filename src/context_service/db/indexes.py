@@ -111,7 +111,8 @@ REGISTRY_INDEX_QUERIES: tuple[str, ...] = (
     f"CREATE INDEX ON :{RegistryLabel.ENTITY}(id);",
     f"CREATE INDEX ON :{RegistryLabel.ENTITY}(silo_id);",
     f"CREATE INDEX ON :{RegistryLabel.ENTITY}(name);",
-    f"CREATE INDEX ON :{RegistryLabel.AGENT}(id);",
+    f"CREATE INDEX ON :{RegistryLabel.AGENT}(agent_id);",
+    f"CREATE INDEX ON :{RegistryLabel.AGENT}(agent_id, silo_id);",
     f"CREATE INDEX ON :{RegistryLabel.PREDICATE}(id);",
 )
 

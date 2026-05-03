@@ -491,13 +491,42 @@ RETURN n.id AS node_id,
 # Edge type constant for agent lineage.
 EDGE_SPAWNED_BY = "SPAWNED_BY"
 
+# ---------------------------------------------------------------------------
+# Chain handoff queries (v1.5 phase 5c)
+# ---------------------------------------------------------------------------
+
+# Edge type constant for reasoning chain continuation.
+EDGE_CONTINUES = "CONTINUES"
+
+# Validate that a :ReasoningChain exists in the same silo before writing a
+# CONTINUES edge.  Returns the chain id if found.
+GET_REASONING_CHAIN_IN_SILO = """
+MATCH (c:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+RETURN c.id AS chain_id
+"""
+
+# Create a CONTINUES edge from a child chain to its parent chain.
+# Direction: child_chain -[:CONTINUES]-> parent_chain.
+# Single-inheritance enforced by the caller (one CONTINUES per child).
+# Caller must verify parent exists in the same silo first
+# (GET_REASONING_CHAIN_IN_SILO).
+CREATE_CONTINUES_EDGE = """
+MATCH (child:ReasoningChain {id: $child_chain_id, silo_id: $silo_id})
+MATCH (parent:ReasoningChain {id: $parent_chain_id, silo_id: $silo_id})
+MERGE (child)-[r:CONTINUES {created_at: $created_at}]->(parent)
+RETURN child.id AS child_id, parent.id AS parent_id
+"""
+
 # Upsert an :Agent node. Returns the agent_id on both create and match.
+# Role is updated on both create and match to allow role changes.
 UPSERT_AGENT = """
 MERGE (a:Agent {agent_id: $agent_id, silo_id: $silo_id})
 ON CREATE SET
     a.role = $role,
     a.lineage_root_id = $lineage_root_id,
     a.created_at = $created_at
+ON MATCH SET
+    a.role = $role
 RETURN a.agent_id AS agent_id
 """
 
@@ -571,21 +600,6 @@ RETURN
     ancestor.confidence AS confidence,
     ancestor.supersession_reason AS supersession_reason
 ORDER BY depth DESC
-"""
-
-# Meta-memory: reflections about a node
-# Returns MetaObservations linked via ABOUT edge to the target node.
-GET_REFLECTIONS_FOR_NODE = """
-MATCH (obs:MetaObservation)-[:ABOUT]->(n {id: $node_id, silo_id: $silo_id})
-WHERE obs.silo_id = $silo_id AND NOT exists(obs.tombstoned_at)
-RETURN
-    obs.id AS node_id,
-    obs.content AS content,
-    obs.observation_type AS observation_type,
-    obs.confidence AS confidence,
-    obs.agent_id AS agent_id,
-    obs.created_at AS created_at
-ORDER BY obs.created_at DESC
 """
 
 # Meta-memory: reflections about a node filtered by agent_id.

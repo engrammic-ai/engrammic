@@ -349,8 +349,10 @@ async def _context_reason(
     evidence_used: list[str] | None = None,
     crystallizations: list[dict[str, Any]] | None = None,
     session_id: str | None = None,
+    parent_chain_id: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
+    from context_service.db import queries as q
     from context_service.engine.sessions import attach_chain_to_session, create_or_join_session
 
     auth = await get_mcp_auth_context()
@@ -397,6 +399,27 @@ async def _context_reason(
                 agent_id=agent_id,
             )
 
+    # Validate parent_chain_id before chain creation so we can fail fast.
+    if parent_chain_id is not None:
+        try:
+            parent_rows = await store.execute_query(
+                q.GET_REASONING_CHAIN_IN_SILO,
+                {"chain_id": parent_chain_id, "silo_id": str(expected_silo_id)},
+            )
+        except Exception:
+            logger.warning(
+                "context_reason_parent_chain_lookup_failed",
+                exc_info=True,
+                parent_chain_id=parent_chain_id,
+            )
+            parent_rows = []
+
+        if not parent_rows:
+            return {
+                "error": "invalid_parent_chain_id",
+                "message": f"parent_chain_id {parent_chain_id!r} not found in silo",
+            }
+
     result = await ctx_svc.reason(
         silo_id=str(expected_silo_id),
         steps=parsed_steps,
@@ -411,7 +434,28 @@ async def _context_reason(
         store, str(result.chain_id), resolved_session_id, str(expected_silo_id)
     )
 
-    return {
+    continues_parent: str | None = None
+    if parent_chain_id is not None:
+        try:
+            await store.execute_write(
+                q.CREATE_CONTINUES_EDGE,
+                {
+                    "child_chain_id": str(result.chain_id),
+                    "parent_chain_id": parent_chain_id,
+                    "silo_id": str(expected_silo_id),
+                    "created_at": datetime.now(UTC).isoformat(),
+                },
+            )
+            continues_parent = parent_chain_id
+        except Exception:
+            logger.warning(
+                "context_reason_continues_edge_failed",
+                exc_info=True,
+                child_chain_id=str(result.chain_id),
+                parent_chain_id=parent_chain_id,
+            )
+
+    response: dict[str, Any] = {
         "chain_id": str(result.chain_id),
         "layer": "intelligence",
         "steps_count": len(steps),
@@ -419,6 +463,9 @@ async def _context_reason(
         "session_id": resolved_session_id,
         "created_at": datetime.now(UTC).isoformat(),
     }
+    if continues_parent is not None:
+        response["continues_chain_id"] = continues_parent
+    return response
 
 
 async def _context_store(
@@ -435,6 +482,7 @@ async def _context_store(
     metadata: dict[str, Any] | None = None,
     tags: list[str] | None = None,
     decay_class: str = "standard",
+    parent_chain_id: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     if layer == "memory":
@@ -501,6 +549,7 @@ async def _context_store(
             steps=steps,
             conclusion=content,
             evidence_used=evidence,
+            parent_chain_id=parent_chain_id,
         )
         if "layer" not in result:
             result["layer"] = "intelligence"
@@ -563,6 +612,7 @@ def register(mcp: FastMCP) -> None:
         tags: list[str] | None = None,
         decay_class: str = "standard",
         silo_id: str | None = None,
+        parent_chain_id: str | None = None,
     ) -> dict[str, Any]:
         """Store to any EAG layer.
 
@@ -581,9 +631,13 @@ def register(mcp: FastMCP) -> None:
             decay_class: ephemeral|standard|durable|permanent (memory layer only).
             silo_id: UUID of the silo. Optional; defaults to the org's primary silo
                 derived from auth.
+            parent_chain_id: Intelligence layer only. UUID of an existing ReasoningChain
+                in the same silo that this chain continues. Creates a CONTINUES edge
+                (child_chain -> parent_chain). One chain can continue only one parent.
 
         Returns:
             Layer-specific response dict with at minimum {node_id, layer, created_at}.
+            Intelligence layer includes continues_chain_id when parent_chain_id is set.
         """
         auth = await get_mcp_auth_context()
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
@@ -602,6 +656,7 @@ def register(mcp: FastMCP) -> None:
             metadata=metadata,
             tags=tags,
             decay_class=decay_class,
+            parent_chain_id=parent_chain_id,
         )
 
         if "error" not in result and get_settings().write_events_enabled:
