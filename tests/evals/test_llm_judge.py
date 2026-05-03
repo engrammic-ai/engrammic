@@ -143,4 +143,279 @@ async def test_claim_coherence_llm_judge(
     judgment, _usage = await llm.complete(messages, max_tokens=10)
     verdict = judgment.strip().upper()
 
-    assert verdict == "PASS", f"LLM judge verdict: {verdict}"
+    assert verdict == "PASS", f"Claim coherence: {verdict}"
+
+
+EXTRACTION_PROMPT = """You are evaluating whether an extracted claim accurately represents the source content.
+
+Source content:
+{source}
+
+Extracted claim:
+{claim}
+
+The extraction is correct if:
+1. The claim is factually present in or directly implied by the source
+2. The claim does not add information not in the source
+3. The claim does not distort or misrepresent the source
+
+Respond with exactly one word: PASS or FAIL"""
+
+
+@pytest.mark.evals
+@pytest.mark.integration
+async def test_extraction_quality_llm_judge(
+    with_llm: bool,
+    llm_provider: str,
+    context_service,
+    scope_context: ScopeContext,
+    cleanup_silo,
+) -> None:
+    """Use LLM to judge if extracted claims match source content."""
+    if not with_llm:
+        pytest.skip("--with-llm not set")
+
+    source_content = (
+        "The Eiffel Tower was completed in 1889 for the World's Fair. "
+        "It stands 330 meters tall and was designed by Gustave Eiffel."
+    )
+    extracted_claim = "The Eiffel Tower was completed in 1889 and is 330 meters tall."
+
+    source_node = await context_service.remember(
+        scope=scope_context,
+        content=source_content,
+        content_type="text",
+    )
+
+    await context_service.assert_claim(
+        scope=scope_context,
+        claim=extracted_claim,
+        evidence=[f"node:{source_node.id}"],
+        source_type="document",
+        confidence=0.9,
+    )
+
+    llm = get_llm_provider(llm_provider)
+    prompt = EXTRACTION_PROMPT.format(source=source_content, claim=extracted_claim)
+    messages = [{"role": "user", "content": prompt}]
+
+    judgment, _usage = await llm.complete(messages, max_tokens=10)
+    verdict = judgment.strip().upper()
+
+    assert verdict == "PASS", f"Extraction quality: {verdict}"
+
+
+RELEVANCE_PROMPT = """You are evaluating whether search results are relevant to a query.
+
+Query: {query}
+
+Results:
+{results}
+
+The results are relevant if:
+1. They contain information that helps answer or relate to the query
+2. The connection between results and query is clear and direct
+3. At least one result is highly relevant (not just tangentially related)
+
+Respond with exactly one word: PASS or FAIL"""
+
+
+@pytest.mark.evals
+@pytest.mark.integration
+async def test_relevance_judgment_llm_judge(
+    with_llm: bool,
+    llm_provider: str,
+    context_service,
+    scope_context: ScopeContext,
+    cleanup_silo,
+) -> None:
+    """Use LLM to judge if query results are actually relevant."""
+    if not with_llm:
+        pytest.skip("--with-llm not set")
+
+    docs = [
+        "Redis is an in-memory data structure store used as a database and cache.",
+        "PostgreSQL is a relational database with strong ACID compliance.",
+        "MongoDB is a document-oriented NoSQL database.",
+    ]
+    for doc in docs:
+        await context_service.remember(
+            scope=scope_context, content=doc, content_type="text"
+        )
+
+    query = "in-memory caching database"
+    results = await context_service.query(scope_context, query, top_k=3)
+
+    results_text = "\n".join(f"- {r.content[:100]}" for r in results if r.content)
+
+    llm = get_llm_provider(llm_provider)
+    prompt = RELEVANCE_PROMPT.format(query=query, results=results_text)
+    messages = [{"role": "user", "content": prompt}]
+
+    judgment, _usage = await llm.complete(messages, max_tokens=10)
+    verdict = judgment.strip().upper()
+
+    assert verdict == "PASS", f"Relevance judgment: {verdict}"
+
+
+CONTRADICTION_PROMPT = """You are evaluating whether two claims contradict each other.
+
+Claim A: {claim_a}
+Claim B: {claim_b}
+
+Claims contradict if:
+1. They make assertions that cannot both be true
+2. One directly negates or conflicts with the other
+3. Accepting one as true requires rejecting the other
+
+Do these claims contradict? Respond with exactly one word: YES or NO"""
+
+
+@pytest.mark.evals
+@pytest.mark.integration
+async def test_contradiction_detection_llm_judge(
+    with_llm: bool,
+    llm_provider: str,
+    context_service,
+    scope_context: ScopeContext,
+    cleanup_silo,
+) -> None:
+    """Use LLM to detect contradicting claims."""
+    if not with_llm:
+        pytest.skip("--with-llm not set")
+
+    claim_a = "Python is a statically typed programming language."
+    claim_b = "Python is a dynamically typed programming language."
+
+    for claim in [claim_a, claim_b]:
+        await context_service.assert_claim(
+            scope=scope_context,
+            claim=claim,
+            evidence=[],
+            source_type="document",
+            confidence=0.8,
+        )
+
+    llm = get_llm_provider(llm_provider)
+    prompt = CONTRADICTION_PROMPT.format(claim_a=claim_a, claim_b=claim_b)
+    messages = [{"role": "user", "content": prompt}]
+
+    judgment, _usage = await llm.complete(messages, max_tokens=10)
+    verdict = judgment.strip().upper()
+
+    assert verdict == "YES", f"Should detect contradiction: {verdict}"
+
+
+EVIDENCE_SUFFICIENCY_PROMPT = """You are evaluating whether evidence sufficiently supports a claim.
+
+Claim: {claim}
+
+Evidence:
+{evidence}
+
+The evidence is sufficient if:
+1. It directly supports the claim's core assertion
+2. There are no obvious gaps that would require additional proof
+3. A reasonable person would accept the claim based on this evidence
+
+Respond with exactly one word: PASS or FAIL"""
+
+
+@pytest.mark.evals
+@pytest.mark.integration
+async def test_evidence_sufficiency_llm_judge(
+    with_llm: bool,
+    llm_provider: str,
+    context_service,
+    scope_context: ScopeContext,
+    cleanup_silo,
+) -> None:
+    """Use LLM to judge if evidence supports a claim."""
+    if not with_llm:
+        pytest.skip("--with-llm not set")
+
+    evidence_content = (
+        "A 2023 study by MIT researchers found that code review catches "
+        "an average of 65% of bugs before they reach production."
+    )
+    claim = "Code review is effective at catching bugs before production."
+
+    evidence_node = await context_service.remember(
+        scope=scope_context,
+        content=evidence_content,
+        content_type="text",
+    )
+
+    await context_service.assert_claim(
+        scope=scope_context,
+        claim=claim,
+        evidence=[f"node:{evidence_node.id}"],
+        source_type="document",
+        confidence=0.9,
+    )
+
+    llm = get_llm_provider(llm_provider)
+    prompt = EVIDENCE_SUFFICIENCY_PROMPT.format(claim=claim, evidence=evidence_content)
+    messages = [{"role": "user", "content": prompt}]
+
+    judgment, _usage = await llm.complete(messages, max_tokens=10)
+    verdict = judgment.strip().upper()
+
+    assert verdict == "PASS", f"Evidence sufficiency: {verdict}"
+
+
+SUMMARY_FIDELITY_PROMPT = """You are evaluating whether a summary accurately captures key points without hallucination.
+
+Original content:
+{original}
+
+Summary:
+{summary}
+
+The summary is faithful if:
+1. All facts in the summary are present in the original
+2. Key points from the original are captured
+3. No information is fabricated or distorted
+
+Respond with exactly one word: PASS or FAIL"""
+
+
+@pytest.mark.evals
+@pytest.mark.integration
+async def test_summary_fidelity_llm_judge(
+    with_llm: bool,
+    llm_provider: str,
+    context_service,
+    scope_context: ScopeContext,
+    cleanup_silo,
+) -> None:
+    """Use LLM to judge if summaries are faithful to original content."""
+    if not with_llm:
+        pytest.skip("--with-llm not set")
+
+    original = (
+        "Kubernetes is an open-source container orchestration platform. "
+        "It was originally developed by Google and released in 2014. "
+        "Kubernetes automates deployment, scaling, and management of containerized applications. "
+        "It uses a declarative configuration model and supports multiple cloud providers."
+    )
+    summary = (
+        "Kubernetes is a Google-developed open-source platform from 2014 "
+        "that automates container deployment and scaling across cloud providers."
+    )
+
+    await context_service.remember(
+        scope=scope_context,
+        content=original,
+        content_type="text",
+        metadata={"summary": summary},
+    )
+
+    llm = get_llm_provider(llm_provider)
+    prompt = SUMMARY_FIDELITY_PROMPT.format(original=original, summary=summary)
+    messages = [{"role": "user", "content": prompt}]
+
+    judgment, _usage = await llm.complete(messages, max_tokens=10)
+    verdict = judgment.strip().upper()
+
+    assert verdict == "PASS", f"Summary fidelity: {verdict}"
