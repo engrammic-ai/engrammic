@@ -77,3 +77,19 @@ class TestEnsureSilo:
         assert silo is not None
         assert str(silo.id) == expected_id
         mock_store.execute_write.assert_not_called()
+
+
+class TestSiloApiCleanup:
+    """Silo API reflects 1:1 org-to-silo model."""
+
+    def test_silo_create_not_exported(self) -> None:
+        """silo_create is removed from public API."""
+        from context_service.mcp.tools import __all__
+
+        assert "register_silo_create" not in __all__
+
+    def test_silo_list_exported(self) -> None:
+        """silo_list remains available."""
+        from context_service.mcp.tools import register_silo_list
+
+        assert callable(register_silo_list)

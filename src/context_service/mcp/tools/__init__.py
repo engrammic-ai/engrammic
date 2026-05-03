@@ -34,7 +34,7 @@ from context_service.mcp.tools.context_reflect import register as register_refle
 from context_service.mcp.tools.context_remember import register as register_remember
 
 # Silo management
-from context_service.mcp.tools.silo import register_silo_create, register_silo_list
+from context_service.mcp.tools.silo import register_silo_list
 
 
 def register_all(mcp: FastMCP) -> None:
@@ -62,7 +62,6 @@ def register_all(mcp: FastMCP) -> None:
     register_close_reasoning(mcp)
 
     # Silo management
-    register_silo_create(mcp)
     register_silo_list(mcp)
 
 
@@ -82,6 +81,5 @@ __all__ = [
     "register_get_reflections",
     "register_history",
     "register_reason",
-    "register_silo_create",
     "register_silo_list",
 ]
