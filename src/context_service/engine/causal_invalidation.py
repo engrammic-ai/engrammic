@@ -54,7 +54,7 @@ async def invalidate_derived_edges(
     silo_id:
         Silo scope for all queries.
     max_depth:
-        Maximum cascade hops.  Defaults to CausalConfig.max_invalidation_depth.
+        Maximum cascade hops.  Callers should pass CausalConfig.max_invalidation_depth.
     reason:
         Reason string stored on the tombstoned edge for auditability.
 

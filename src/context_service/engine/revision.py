@@ -470,6 +470,10 @@ async def split_belief(
     parent belief is NOT marked stale — it remains active unless the caller
     explicitly supersedes it.
 
+    NOTE: This function has no feature flag gate — it runs LLM inference when
+    called.  Callers are responsible for gating if needed (e.g., custodian
+    should check its own enabled flags before invoking).
+
     Parameters
     ----------
     store:
