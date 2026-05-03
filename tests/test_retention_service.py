@@ -1,8 +1,10 @@
-import pytest
 from unittest.mock import AsyncMock
 
-from context_service.retention.service import RetentionService
+import pytest
+
 from context_service.retention.policy import RetentionPolicy
+from context_service.retention.service import RetentionService
+
 
 @pytest.fixture
 def mock_store():

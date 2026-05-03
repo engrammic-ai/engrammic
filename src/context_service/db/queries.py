@@ -492,7 +492,7 @@ ORDER BY depth DESC
 # Returns MetaObservations linked via ABOUT edge to the target node.
 GET_REFLECTIONS_FOR_NODE = """
 MATCH (obs:MetaObservation)-[:ABOUT]->(n {id: $node_id, silo_id: $silo_id})
-WHERE obs.silo_id = $silo_id
+WHERE obs.silo_id = $silo_id AND NOT exists(obs.tombstoned_at)
 RETURN
     obs.id AS node_id,
     obs.content AS content,

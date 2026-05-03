@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -10,12 +10,12 @@ import structlog
 
 from context_service.retention.policy import RetentionPolicy
 from context_service.retention.queries import (
-    FIND_TOMBSTONE_CANDIDATES,
-    TOMBSTONE_NODE,
-    FIND_HARD_DELETE_CANDIDATES,
-    HARD_DELETE_NODE,
     FIND_EXCESS_META_OBSERVATIONS,
+    FIND_HARD_DELETE_CANDIDATES,
+    FIND_TOMBSTONE_CANDIDATES,
+    HARD_DELETE_NODE,
     MARK_HEAT_DIRTY,
+    TOMBSTONE_NODE,
 )
 
 if TYPE_CHECKING:
@@ -51,9 +51,14 @@ class RetentionService:
 
         eligible_ids: list[str] = []
         for row in rows:
-            created_at = row.get("created_at")
-            if isinstance(created_at, str):
-                created_at = datetime.fromisoformat(created_at)
+            raw = row.get("created_at")
+            if isinstance(raw, str):
+                created_at: datetime = datetime.fromisoformat(raw)
+            elif isinstance(raw, datetime):
+                created_at = raw
+            else:
+                logger.warning("skipping_node_missing_created_at", node_id=row.get("id"))
+                continue
 
             if self._policy.is_eligible_for_tombstone(
                 decay_class=row["decay_class"],
@@ -74,6 +79,7 @@ class RetentionService:
         """Tombstone nodes by setting tombstoned_at timestamp."""
         now = datetime.now(UTC)
         count = 0
+        tombstoned_ids: list[str] = []
 
         for node_id in node_ids:
             result = await self._store.execute_query(
@@ -87,11 +93,12 @@ class RetentionService:
             )
             if result:
                 count += 1
+                tombstoned_ids.append(node_id)
 
-        if node_ids:
+        if tombstoned_ids:
             await self._store.execute_query(
                 MARK_HEAT_DIRTY,
-                {"silo_id": silo_id, "node_ids": node_ids},
+                {"silo_id": silo_id, "node_ids": tombstoned_ids},
             )
 
         logger.info("tombstoned_nodes", silo_id=silo_id, count=count, run_id=run_id)
@@ -112,11 +119,12 @@ class RetentionService:
         """Permanently delete tombstoned nodes."""
         count = 0
         for node_id in node_ids:
-            await self._store.execute_query(
+            result = await self._store.execute_query(
                 HARD_DELETE_NODE,
                 {"id": node_id, "silo_id": silo_id},
             )
-            count += 1
+            if result:
+                count += 1
 
         logger.info("hard_deleted_nodes", silo_id=silo_id, count=count)
         return count
