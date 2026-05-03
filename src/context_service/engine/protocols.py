@@ -19,6 +19,12 @@ class HealthCheckable(Protocol):
     async def health_check(self) -> bool: ...
 
 
+class Closeable(Protocol):
+    """Protocol for resources that need explicit cleanup."""
+
+    async def close(self) -> None: ...
+
+
 class HyperGraphStore(Protocol):
     """Domain-agnostic graph storage interface.
 
@@ -77,18 +83,18 @@ class HyperGraphStore(Protocol):
 
     async def find_nodes(
         self,
-        silo_id: uuid.UUID,
+        silo_id: str,
         *,
         type: str | None = None,
         limit: int = 100,
         cursor: str | None = None,
     ) -> tuple[list[Node], str | None]: ...
 
-    async def count_nodes(self, silo_id: uuid.UUID) -> int: ...
+    async def count_nodes(self, silo_id: str) -> int: ...
 
-    async def count_edges_in_silo(self, silo_id: uuid.UUID) -> int: ...
+    async def count_edges_in_silo(self, silo_id: str) -> int: ...
 
-    async def sum_content_bytes_in_silo(self, silo_id: uuid.UUID) -> int: ...
+    async def sum_content_bytes_in_silo(self, silo_id: str) -> int: ...
 
     # --- Binary Edge CRUD ---
 
@@ -152,7 +158,7 @@ class HyperGraphStore(Protocol):
         *,
         max_depth: int = 2,
         max_nodes: int = 100,
-        silo_scope: list[uuid.UUID] | None = None,
+        silo_scope: list[str] | None = None,
     ) -> SubGraph: ...
 
     async def shared_participation(

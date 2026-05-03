@@ -472,7 +472,7 @@ class MemgraphStore(EAGKnowledgeStore):
 
     async def find_nodes(
         self,
-        silo_id: uuid.UUID,
+        silo_id: str,
         *,
         type: str | None = None,
         limit: int = 100,
@@ -482,7 +482,7 @@ class MemgraphStore(EAGKnowledgeStore):
         result = await self._client.execute_query(
             queries.FIND_NODES,
             {
-                "silo_id": str(silo_id),
+                "silo_id": silo_id,
                 "type": type,
                 "offset": offset,
                 "limit": limit + 1,
@@ -492,26 +492,26 @@ class MemgraphStore(EAGKnowledgeStore):
         next_cursor = str(offset + limit) if len(result) > limit else None
         return nodes, next_cursor
 
-    async def count_nodes(self, silo_id: uuid.UUID) -> int:
+    async def count_nodes(self, silo_id: str) -> int:
         result = await self._client.execute_query(
             queries.COUNT_NODES,
-            {"silo_id": str(silo_id)},
+            {"silo_id": silo_id},
         )
         count: int = result[0]["count"] if result else 0
         return count
 
-    async def count_edges_in_silo(self, silo_id: uuid.UUID) -> int:
+    async def count_edges_in_silo(self, silo_id: str) -> int:
         result = await self._client.execute_query(
             queries.COUNT_EDGES_IN_SILO,
-            {"silo_id": str(silo_id)},
+            {"silo_id": silo_id},
         )
         count: int = result[0]["count"] if result else 0
         return count
 
-    async def sum_content_bytes_in_silo(self, silo_id: uuid.UUID) -> int:
+    async def sum_content_bytes_in_silo(self, silo_id: str) -> int:
         result = await self._client.execute_query(
             queries.SUM_CONTENT_BYTES_IN_SILO,
-            {"silo_id": str(silo_id)},
+            {"silo_id": silo_id},
         )
         if not result:
             return 0
@@ -754,7 +754,7 @@ class MemgraphStore(EAGKnowledgeStore):
         *,
         max_depth: int = 2,
         max_nodes: int = 100,
-        silo_scope: list[uuid.UUID] | None = None,
+        silo_scope: list[str] | None = None,
     ) -> SubGraph:
         capped_depth = min(max_depth, 5)  # hard cap
         capped_nodes = min(max_nodes, 500)  # hard cap
@@ -770,7 +770,7 @@ class MemgraphStore(EAGKnowledgeStore):
         nodes: dict[uuid.UUID, Node] = {}
         for r in result:
             node = self._node_from_record({"n": r["other"]})
-            if silo_scope is None or node.silo_id in silo_scope:
+            if silo_scope is None or str(node.silo_id) in silo_scope:
                 nodes[node.id] = node
 
         # Fetch edges between the discovered nodes
