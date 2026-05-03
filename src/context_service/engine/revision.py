@@ -58,9 +58,10 @@ logger = structlog.get_logger(__name__)
 
 # Cosine *distance* threshold above which a belief is considered stale.
 # Distance = 1 - cosine_similarity.  0.15 corresponds to ~8.6 degrees of
-# angular drift — conservative enough to suppress noise while catching real
+# angular drift -- conservative enough to suppress noise while catching real
 # topic shifts.
-REVISION_THRESHOLD: float = 0.15
+# Reads from settings so it can be tuned via REVISION_COSINE_THRESHOLD env var.
+REVISION_THRESHOLD: float = get_settings().revision_cosine_threshold
 
 _GET_BELIEF_FOR_REVISION = """
 MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})

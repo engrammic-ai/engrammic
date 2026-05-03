@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from context_service.config.settings import get_settings
 from context_service.db.queries import (
     CHECK_BELIEF_COVERAGE,
     CREATE_BELIEF_FROM_FACTS,
@@ -40,7 +41,8 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 # Minimum number of facts required to synthesise a belief.
-MIN_FACTS_FOR_BELIEF: int = 3
+# Reads from settings so it can be tuned via BELIEF_DENSITY_THRESHOLD env var.
+MIN_FACTS_FOR_BELIEF: int = get_settings().belief_density_threshold
 
 _SYNTHESIS_SYSTEM_PROMPT = (
     "You are a knowledge synthesis agent. Given a list of verified facts, "

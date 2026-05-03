@@ -733,6 +733,27 @@ class Settings(BaseSettings):
     summarization_max_tokens: int = Field(default=500)
 
     # =========================================================================
+    # Engine Tuning
+    # =========================================================================
+
+    belief_density_threshold: int = Field(
+        default=3,
+        ge=1,
+        description="Minimum number of facts required to synthesise a Wisdom-layer belief",
+    )
+    revision_cosine_threshold: float = Field(
+        default=0.15,
+        ge=0.0,
+        le=1.0,
+        description="Cosine distance above which a belief centroid is considered stale",
+    )
+    compaction_step_threshold: int = Field(
+        default=5,
+        ge=1,
+        description="Chains with <= this many steps are inlined; longer chains use LLM summarization",
+    )
+
+    # =========================================================================
     # Signals — heat / freshness / priority
     # =========================================================================
 
