@@ -114,6 +114,11 @@ class TestTypeClassifierClassify:
         assert self.clf.classify("Person") == TypeClass.AGENT
         assert self.clf.classify("COMPANY") == TypeClass.ORGANIZATION
 
+    def test_classify_uses_ngram_fallback_for_misspelling(self) -> None:
+        # "persn" is close enough to "person" via trigram similarity
+        result = self.clf.classify("persn")
+        assert result == TypeClass.AGENT
+
 
 # ---------------------------------------------------------------------------
 # TypeClassifier.classify_batch()

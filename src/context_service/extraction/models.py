@@ -45,36 +45,31 @@ _ANY: frozenset[TypeClass] = frozenset(TypeClass)
 
 # (source_classes, edge_label, target_classes)
 # None in source/target position means ANY class (or unclassifiable) is accepted.
-_CLASS_MATRIX: list[
+def _build_matrix() -> list[
     tuple[frozenset[TypeClass] | None, RelationshipType, frozenset[TypeClass] | None]
-] = []
-
-
-def _build_matrix() -> None:
+]:
     artifact_org = frozenset({TypeClass.ARTIFACT, TypeClass.ORGANIZATION})
     artifact_concept = frozenset({TypeClass.ARTIFACT, TypeClass.CONCEPT})
     event_agent = frozenset({TypeClass.EVENT, TypeClass.AGENT})
     agent_artifact_concept = frozenset({TypeClass.AGENT, TypeClass.ARTIFACT, TypeClass.CONCEPT})
     event_concept = frozenset({TypeClass.EVENT, TypeClass.CONCEPT})
 
-    _CLASS_MATRIX.extend(
-        [
-            (None, RelationshipType.COMPOSES, artifact_org),
-            (artifact_concept, RelationshipType.DEPENDS_ON, artifact_concept),
-            (None, RelationshipType.DERIVES_FROM, None),
-            (None, RelationshipType.SPECIALIZES, None),
-            (None, RelationshipType.INSTANTIATES, frozenset({TypeClass.CONCEPT})),
-            (event_agent, RelationshipType.CAUSES, None),
-            (agent_artifact_concept, RelationshipType.PREVENTS, event_concept),
-            (None, RelationshipType.CORROBORATES, None),
-            (None, RelationshipType.CONTRADICTS, None),
-            (None, RelationshipType.REFERENCES, None),
-            (None, RelationshipType.RELATED_TO, None),
-        ]
-    )
+    return [
+        (None, RelationshipType.COMPOSES, artifact_org),
+        (artifact_concept, RelationshipType.DEPENDS_ON, artifact_concept),
+        (None, RelationshipType.DERIVES_FROM, None),
+        (None, RelationshipType.SPECIALIZES, None),
+        (None, RelationshipType.INSTANTIATES, frozenset({TypeClass.CONCEPT})),
+        (event_agent, RelationshipType.CAUSES, None),
+        (agent_artifact_concept, RelationshipType.PREVENTS, event_concept),
+        (None, RelationshipType.CORROBORATES, None),
+        (None, RelationshipType.CONTRADICTS, None),
+        (None, RelationshipType.REFERENCES, None),
+        (None, RelationshipType.RELATED_TO, None),
+    ]
 
 
-_build_matrix()
+_CLASS_MATRIX = _build_matrix()
 
 _CLASSIFIER = TypeClassifier()
 
@@ -117,7 +112,8 @@ class ExtractionSchema:
                 continue
             src_ok = src_allowed is None or (src_class is not None and src_class in src_allowed)
             tgt_ok = tgt_allowed is None or (tgt_class is not None and tgt_class in tgt_allowed)
-            return src_ok and tgt_ok
+            if src_ok and tgt_ok:
+                return True
 
         # Edge label not in matrix — reject.
         return False
