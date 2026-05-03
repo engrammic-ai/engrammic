@@ -6,14 +6,14 @@ import pytest
 
 from context_service.engine.compaction import (
     _make_event_id,
-    _summarise_steps,
     batch_compact_chains,
     compact_reasoning_chain,
 )
+from context_service.engine.summarization import inline_summary
 from tests.fakes.fake_graph_store import FakeGraphStore
 
 # ---------------------------------------------------------------------------
-# _summarise_steps unit tests
+# inline_summary unit tests (fallback path, no LLM required)
 # ---------------------------------------------------------------------------
 
 
@@ -24,45 +24,40 @@ def _make_steps(n: int) -> list[dict]:
     ]
 
 
-def test_summarise_steps_empty() -> None:
-    assert _summarise_steps([]) == "(no steps)"
+def test_inline_summary_empty() -> None:
+    assert inline_summary([]) == "(no steps)"
 
 
-def test_summarise_steps_inline_small() -> None:
+def test_inline_summary_small() -> None:
     steps = _make_steps(3)
-    result = _summarise_steps(steps)
+    result = inline_summary(steps)
     for i in range(3):
         assert f"conclusion {i}" in result
 
 
-def test_summarise_steps_inline_at_threshold() -> None:
+def test_inline_summary_at_threshold() -> None:
     steps = _make_steps(5)
-    result = _summarise_steps(steps)
+    result = inline_summary(steps)
     assert "elided" not in result
     for i in range(5):
         assert f"conclusion {i}" in result
 
 
-def test_summarise_steps_elided_above_threshold() -> None:
+def test_inline_summary_large_chain() -> None:
+    # inline_summary is the fallback: it always inlines all steps, never elides
     steps = _make_steps(8)
-    result = _summarise_steps(steps)
-    assert "elided" in result
-    # first two and last two conclusions should appear
-    assert "conclusion 0" in result
-    assert "conclusion 1" in result
-    assert "conclusion 6" in result
-    assert "conclusion 7" in result
-    # middle ones should be absent
-    assert "conclusion 3" not in result
+    result = inline_summary(steps)
+    for i in range(8):
+        assert f"conclusion {i}" in result
 
 
-def test_summarise_steps_unsorted_input() -> None:
+def test_inline_summary_unsorted_input() -> None:
     steps = [
         {"step_index": 2, "operation": "analogy", "conclusion": "C"},
         {"step_index": 0, "operation": "deduction", "conclusion": "A"},
         {"step_index": 1, "operation": "synthesis", "conclusion": "B"},
     ]
-    result = _summarise_steps(steps)
+    result = inline_summary(steps)
     # Should appear in step_index order
     a_pos = result.index("A")
     b_pos = result.index("B")

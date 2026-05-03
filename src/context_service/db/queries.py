@@ -622,7 +622,8 @@ ON CREATE SET
     e.created_at = $created_at,
     e.source_chain_id = $chain_id,
     e.step_count = $step_count,
-    e.outcome = $outcome
+    e.outcome = $outcome,
+    e.summarization_pending = $summarization_pending
 MERGE (e)-[:DERIVED_FROM]->(chain)
 RETURN e.id AS event_id
 """

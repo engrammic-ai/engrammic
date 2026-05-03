@@ -29,6 +29,7 @@ from context_service.db.queries import (
     GET_REASONING_CHAIN_FOR_COMPACTION,
     TOMBSTONE_REASONING_CHAIN,
 )
+from context_service.engine.summarization import inline_summary, summarize_reasoning_steps
 
 if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
@@ -37,46 +38,11 @@ logger = structlog.get_logger(__name__)
 
 OutcomeT = Literal["committed", "abandoned", "expired"]
 
-_INLINE_STEP_THRESHOLD = 5
-
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-
-def _summarise_steps(steps: list[dict[str, Any]]) -> str:
-    """Produce a human-readable summary of reasoning steps.
-
-    For chains with <= _INLINE_STEP_THRESHOLD steps all conclusions are
-    inlined verbatim.  For longer chains the first two and last two steps
-    are shown with a count of elided steps in the middle.
-    """
-    if not steps:
-        return "(no steps)"
-
-    sorted_steps = sorted(steps, key=lambda s: s.get("step_index", 0))
-
-    if len(sorted_steps) <= _INLINE_STEP_THRESHOLD:
-        lines = [
-            f"[{s.get('step_index', i)}] {s.get('operation', 'step')}: {s.get('conclusion', '')}"
-            for i, s in enumerate(sorted_steps)
-        ]
-        return "; ".join(lines)
-
-    head = sorted_steps[:2]
-    tail = sorted_steps[-2:]
-    elided = len(sorted_steps) - 4
-    lines = [
-        f"[{s.get('step_index', i)}] {s.get('operation', 'step')}: {s.get('conclusion', '')}"
-        for i, s in enumerate(head)
-    ]
-    lines.append(f"... ({elided} steps elided) ...")
-    lines.extend(
-        f"[{s.get('step_index', i + 2 + elided)}] {s.get('operation', 'step')}: {s.get('conclusion', '')}"
-        for i, s in enumerate(tail)
-    )
-    return "; ".join(lines)
 
 
 def _make_event_id(chain_id: str, silo_id: str) -> str:
@@ -143,11 +109,23 @@ async def compact_reasoning_chain(
     compact_summary: str | None = chain.get("compact_summary")
     agent_id: str = chain.get("agent_id") or ""
 
+    summarization_pending = False
     if raw_steps:
         # Hot form: steps is a list of dicts (serialised from ChainStep)
         # Memgraph may return steps as a JSON string rather than a list.
         steps = raw_steps if isinstance(raw_steps, list) else json.loads(raw_steps)
-        content = _summarise_steps(steps)
+        try:
+            from context_service.config.settings import get_settings
+            from context_service.llm.anthropic import AnthropicProvider
+
+            settings = get_settings()
+            llm_client = AnthropicProvider.from_settings(model=settings.summarization_model)
+            content = await summarize_reasoning_steps(steps, llm_client=llm_client)
+            summarization_pending = False
+        except Exception as exc:
+            logger.warning("summarization_failed", chain_id=chain_id, error=str(exc))
+            content = inline_summary(steps)
+            summarization_pending = True
         step_count = len(steps)
     elif compact_summary:
         # Cold form: already has a summary stored
@@ -171,6 +149,7 @@ async def compact_reasoning_chain(
                 "created_at": now.isoformat(),
                 "step_count": step_count,
                 "outcome": outcome,
+                "summarization_pending": summarization_pending,
             },
         )
 
