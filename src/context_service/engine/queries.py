@@ -104,6 +104,7 @@ WHERE {content_union_predicate("n")}
   AND n.id = $id
   AND n.silo_id = $silo_id
   AND n.committed = true
+  AND NOT exists(n.tombstoned_at)
 RETURN n, labels(n) AS _labels
 """
 
