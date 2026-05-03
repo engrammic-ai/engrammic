@@ -14,8 +14,6 @@ Fail-safes:
 - Confidence < 0.3: pattern discarded (hallucination filter).
 """
 
-from __future__ import annotations
-
 import asyncio
 import concurrent.futures
 import time

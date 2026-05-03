@@ -5,8 +5,6 @@ engine/tombstone.py.  The asset can be triggered manually via the Dagster UI
 (run config) or from the admin API endpoint POST /admin/tombstone.
 """
 
-from __future__ import annotations
-
 import asyncio
 import concurrent.futures
 import time
@@ -14,6 +12,7 @@ from datetime import datetime
 from typing import Any
 
 import dagster as dg
+from dagster import AssetExecutionContext
 
 
 def _run_async_dict(coro: Any) -> dict[str, int]:
@@ -70,7 +69,7 @@ def _run_async_dict(coro: Any) -> dict[str, int]:
     },
 )
 def causal_tombstone(
-    context: dg.AssetExecutionContext,
+    context: AssetExecutionContext,
     memgraph: Any,
 ) -> dg.Output[dict[str, Any]]:
     """Tombstone matching CAUSES edges and cascade to derived inferences."""

@@ -1,12 +1,11 @@
 """Retention sweep Dagster asset."""
 
-from __future__ import annotations
-
 import asyncio
 import concurrent.futures
 from typing import Any
 
 import dagster as dg
+from dagster import AssetExecutionContext
 
 from context_service.pipelines.resources import MemgraphResource
 
@@ -28,7 +27,7 @@ def _run_async(coro: Any) -> Any:
     group_name="maintenance",
 )
 def retention_sweep(
-    context: dg.AssetExecutionContext,
+    context: AssetExecutionContext,
     memgraph: MemgraphResource,
 ) -> dg.Output[dict[str, Any]]:
     """Run retention sweep for all silos per retention policy.

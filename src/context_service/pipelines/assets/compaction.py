@@ -6,8 +6,6 @@ Scans for completed :ReasoningChain nodes (status in "published" or
 while preserving provenance via :DERIVED_FROM edges.
 """
 
-from __future__ import annotations
-
 import asyncio
 import concurrent.futures
 import time

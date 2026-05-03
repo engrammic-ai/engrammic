@@ -21,7 +21,9 @@ from datetime import UTC, datetime
 from typing import Any
 
 import dagster as dg
-from dagster import AssetExecutionContext
+from dagster import (
+    AssetExecutionContext,  # noqa: F401 (re-exported for Dagster annotation resolution)
+)
 
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import MemgraphResource, RedisResource
@@ -73,6 +75,14 @@ def _tier(heat: float) -> str:
     if heat >= WARM_THRESHOLD:
         return "WARM"
     return "COLD"
+
+
+def parse_event_type(fields: dict[str | bytes, str | bytes]) -> str:
+    """Extract event_type from stream entry, defaulting to 'read'."""
+    raw = fields.get(b"event_type") or fields.get("event_type")
+    if raw is None:
+        return "read"
+    return raw.decode() if isinstance(raw, bytes) else raw
 
 
 @dg.asset(
@@ -192,4 +202,5 @@ __all__ = [
     "WARM_THRESHOLD",
     "XREAD_COUNT",
     "heat_asset",
+    "parse_event_type",
 ]
