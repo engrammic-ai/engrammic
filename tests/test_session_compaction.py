@@ -7,10 +7,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from context_service.mcp.tools.context_close_reasoning import close_reasoning_chain
+from context_service.mcp.tools.context_admin import close_reasoning_chain
 from tests.fakes.fake_graph_store import FakeGraphStore
 
-_MOD = "context_service.mcp.tools.context_close_reasoning"
+_MOD = "context_service.mcp.tools.context_admin"
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +52,7 @@ def _make_chain_row(
 @pytest.mark.asyncio
 async def test_feature_flag_off_returns_error() -> None:
     """When session_compaction_enabled=False the MCP wrapper returns feature_disabled."""
-    from context_service.mcp.tools.context_close_reasoning import _context_close_reasoning
+    from context_service.mcp.tools.context_admin import _context_close_reasoning
 
     settings = MagicMock(session_compaction_enabled=False)
     with patch(f"{_MOD}.get_settings", return_value=settings):
