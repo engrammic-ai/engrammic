@@ -66,9 +66,7 @@ async def test_reasoning_chain_llm_judge(
     steps = [
         ReasoningStep(step=1, reasoning="All mammals are warm-blooded.", confidence=0.95),
         ReasoningStep(step=2, reasoning="Whales are mammals.", confidence=0.95),
-        ReasoningStep(
-            step=3, reasoning="Therefore, whales are warm-blooded.", confidence=0.90
-        ),
+        ReasoningStep(step=3, reasoning="Therefore, whales are warm-blooded.", confidence=0.90),
     ]
     conclusion = "Whales are warm-blooded because they are mammals."
 
