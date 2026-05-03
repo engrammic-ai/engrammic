@@ -3,6 +3,7 @@
 from typing import Any
 
 from context_service.pipelines.assets.belief_synthesis import belief_synthesis_asset
+from context_service.pipelines.assets.causal import causal_transitivity
 from context_service.pipelines.assets.clustering import clustering
 from context_service.pipelines.assets.compaction import reasoning_compaction
 from context_service.pipelines.assets.custodian_finalize import custodian_finalize
@@ -19,6 +20,7 @@ all_assets: list[Any] = [
     custodian_visit,
     custodian_finalize,
     claim_to_fact_promotion,
+    causal_transitivity,
     clustering,
     heat_asset,
     reasoning_compaction,
