@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from context_service import __version__
 from context_service.api.metrics import metrics_endpoint
 from context_service.api.middleware import PrometheusTimingMiddleware
-from context_service.api.routes import health
+from context_service.api.routes import admin, health
 from context_service.config.logging import configure_logging, get_logger
 from context_service.config.settings import get_settings
 from context_service.core.service_registry import ServiceRegistry
@@ -178,6 +178,7 @@ def create_app() -> FastAPI:
     app.add_middleware(PrometheusTimingMiddleware)
 
     app.include_router(health.router)
+    app.include_router(admin.router)
     app.add_route("/metrics", metrics_endpoint, include_in_schema=False)
 
     return app

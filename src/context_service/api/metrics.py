@@ -64,6 +64,28 @@ CONTEXT_GET_LATENCY = Histogram(
 )
 
 # ---------------------------------------------------------------------------
+# Confidence distribution metrics
+# ---------------------------------------------------------------------------
+
+_CONFIDENCE_BUCKETS = (0.1, 0.3, 0.5, 0.7, 0.9, float("inf"))
+
+EDGE_CONFIDENCE_DISTRIBUTION = Histogram(
+    "edge_confidence_distribution",
+    "Distribution of edge confidence values at write time",
+    labelnames=["silo_id", "edge_type"],
+    buckets=_CONFIDENCE_BUCKETS,
+    registry=REGISTRY,
+)
+
+BELIEF_CONFIDENCE_DISTRIBUTION = Histogram(
+    "belief_confidence_distribution",
+    "Distribution of belief confidence values at write time",
+    labelnames=["silo_id", "edge_type"],
+    buckets=_CONFIDENCE_BUCKETS,
+    registry=REGISTRY,
+)
+
+# ---------------------------------------------------------------------------
 # Business metrics
 # ---------------------------------------------------------------------------
 
@@ -101,6 +123,33 @@ async def metrics_endpoint(_request: Request) -> Response:
     )
 
 
+def record_edge_confidence(
+    confidence: float,
+    *,
+    silo_id: str,
+    edge_type: str,
+) -> None:
+    """Observe a confidence value on the edge histogram.
+
+    Call this from write paths (context_assert, context_link, causal assets)
+    after persisting an edge.
+    """
+    EDGE_CONFIDENCE_DISTRIBUTION.labels(silo_id=silo_id, edge_type=edge_type).observe(confidence)
+
+
+def record_belief_confidence(
+    confidence: float,
+    *,
+    silo_id: str,
+    edge_type: str,
+) -> None:
+    """Observe a confidence value on the belief histogram.
+
+    Call this from belief-synthesis and commit write paths.
+    """
+    BELIEF_CONFIDENCE_DISTRIBUTION.labels(silo_id=silo_id, edge_type=edge_type).observe(confidence)
+
+
 __all__ = [
     "REGISTRY",
     "HTTP_REQUEST_LATENCY",
@@ -111,5 +160,9 @@ __all__ = [
     "EXTRACTION_CLAIMS_TOTAL",
     "CUSTODIAN_PROMOTIONS_TOTAL",
     "CUSTODIAN_REJECTIONS_TOTAL",
+    "EDGE_CONFIDENCE_DISTRIBUTION",
+    "BELIEF_CONFIDENCE_DISTRIBUTION",
+    "record_edge_confidence",
+    "record_belief_confidence",
     "metrics_endpoint",
 ]
