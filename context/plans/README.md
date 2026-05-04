@@ -4,9 +4,10 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 ## Current state (2026-05-04)
 
-**Shipped this session:**
-- v1d Signals Enhancement (heat ranking, unified decay, write events)
+**Shipped:**
 - v1.5 Agent Identity (agent nodes, reflection filtering, chain continuity, per-silo config)
+- v1.4.1 MCP QoL (consolidated to 4 tools: store, recall, link, admin; removed 4 legacy tool files)
+- v1d Signals Enhancement (heat ranking, unified decay, write events)
 
 ## Active plans
 

@@ -99,3 +99,4 @@ terraform.tfvars
 *.log
 logs/
 CLAUDE.md
+evals-output.json
