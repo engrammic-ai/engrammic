@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from context_service.services.context import ContextService
     from context_service.services.evidence import EvidenceValidator
     from context_service.services.silo import SiloService
-    from context_service.stores import MemgraphClient, QdrantClient, RedisClient
+    from context_service.stores import QdrantClient, RedisClient
 
 logger = structlog.get_logger(__name__)
 
@@ -26,7 +26,7 @@ _services: dict[str, Any] = {}
 
 
 def configure_services(
-    memgraph: MemgraphClient,
+    memgraph: HyperGraphStore,
     qdrant: QdrantClient,
     redis: RedisClient | None = None,
     embedding: EmbeddingService | None = None,
@@ -42,19 +42,15 @@ def configure_services(
     from context_service.services.silo import SiloService
 
     _services["context"] = ContextService(
-        # MemgraphClient only implements escape-hatch methods (execute_query/write, session)
-        # currently; cast removable once full HyperGraphStore implementation lands.
-        memgraph=cast("HyperGraphStore", memgraph),
+        memgraph=memgraph,
         qdrant=qdrant,
         embedding=embedding,
         cache=redis,
         splade=splade,
     )
     ownership_cache = SiloOwnershipCache(redis) if redis is not None else None
-    _services["silo"] = SiloService(
-        memgraph=cast("HyperGraphStore", memgraph), ownership_cache=ownership_cache
-    )
-    _services["evidence"] = EvidenceValidator(store=cast("HyperGraphStore", memgraph))
+    _services["silo"] = SiloService(memgraph=memgraph, ownership_cache=ownership_cache)
+    _services["evidence"] = EvidenceValidator(store=memgraph)
     _services["redis"] = redis
     logger.info("MCP services configured")
 

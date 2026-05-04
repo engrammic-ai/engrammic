@@ -17,6 +17,8 @@ services:
     volumes:
       - ./secrets:/app/secrets:ro
       - ./src:/app/src
+      - ./pyproject.toml:/app/pyproject.toml:ro
+      - ./config:/app/config:ro
     depends_on:
       memgraph:
         condition: service_healthy
@@ -30,6 +32,9 @@ services:
       timeout: 5s
       start_period: 15s
       retries: 3
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
     restart: unless-stopped
 
   memgraph:

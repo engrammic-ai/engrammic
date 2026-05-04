@@ -30,6 +30,8 @@ COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /primitives /primitives
 
 # Copy application code
+COPY context-service/pyproject.toml ./
+COPY context-service/config/ /app/config/
 COPY context-service/src/ /app/src/
 COPY context-service/docker/app-entrypoint.sh /app/entrypoint.sh
 

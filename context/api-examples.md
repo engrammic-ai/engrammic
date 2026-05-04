@@ -22,13 +22,18 @@ Write content to any cognitive layer. The `layer` param selects the target; laye
 
 | Param | Type | Default | Notes |
 |---|---|---|---|
-| `content` | str | required | The content to store |
+| `content` | str | required | The content to store. For `intelligence` layer, this is the conclusion. |
 | `layer` | str | `"memory"` | One of `memory \| knowledge \| wisdom \| intelligence \| meta` |
-| `evidence` | str or list[str] | null | Required for `knowledge` layer. `node:<uuid>` refs or URIs |
-| `about` | list[str] | null | Required for `wisdom` and `meta` layers. Node IDs this entry concerns |
+| `evidence` | list[str] | null | Required for `knowledge` layer. `node:<uuid>` refs or URIs (http/https/file) |
+| `source_type` | str | null | Required for `knowledge` layer. One of `document \| user \| external \| agent` |
+| `confidence` | float | `0.8` | Agent confidence, 0.0–1.0 |
+| `about` | list[str] | null | Required for `wisdom` and `meta` layers. Node IDs this entry concerns. Must be non-empty. |
+| `reasoning` | str | null | Optional. Reasoning behind a wisdom-layer belief |
 | `steps` | list[dict] | null | Required for `intelligence` layer. Each dict: `{step, reasoning, confidence?}` |
+| `observation_type` | str | null | Required for `meta` layer. One of `belief_change \| confidence_shift \| contradiction \| uncertainty \| correction \| insight` |
+| `decay_class` | str | `"standard"` | Memory layer only. One of `ephemeral \| standard \| durable \| permanent` |
+| `parent_chain_id` | str | null | Intelligence layer only. UUID of an existing chain this one continues (creates a CONTINUES edge) |
 | `tags` | list[str] | null | Optional labels |
-| `session` | str | null | Optional session ID for grouping intelligence chains |
 
 ---
 
@@ -70,6 +75,7 @@ Claims that persist until contradicted. Evidence is required.
     "content": "The async connection pool uses a maximum of 20 connections by default.",
     "layer": "knowledge",
     "evidence": ["node:node-abc-123"],
+    "source_type": "document",
     "tags": ["database", "async", "config"]
   }
 }
@@ -84,6 +90,7 @@ Structured (SPO) content also accepted as a string or via tags; evidence must re
     "content": "async-pool max_connections is 20",
     "layer": "knowledge",
     "evidence": ["node:node-abc-123", "node:node-def-456"],
+    "source_type": "agent",
     "tags": ["database", "config"]
   }
 }
@@ -179,6 +186,7 @@ Meta-observations about cognition: belief changes, contradictions, confidence sh
   "arguments": {
     "content": "My earlier confidence in approach A was too high; incident data contradicts it.",
     "layer": "meta",
+    "observation_type": "contradiction",
     "about": ["node-abc-123", "node-claim-789"],
     "tags": ["contradiction"]
   }
@@ -420,9 +428,9 @@ Create a typed relationship between two context nodes.
 
 | Param | Type | Default | Notes |
 |---|---|---|---|
-| `from_id` | str | required | Source node ID |
-| `to_id` | str | required | Target node ID |
-| `rel` | str | required | One of `supports \| contradicts \| derives \| supersedes \| references` |
+| `from_node` | str | required | Source node ID |
+| `to_node` | str | required | Target node ID |
+| `relationship` | str | required | One of `REFERENCES \| SUPPORTS \| CONTRADICTS \| DERIVED_FROM \| RELATED_TO \| CAUSES \| CORROBORATES \| PREVENTS` |
 | `weight` | float | 1.0 | Edge weight, range 0.0-10.0 |
 | `note` | str | null | Optional annotation on the edge |
 
@@ -430,9 +438,9 @@ Create a typed relationship between two context nodes.
 {
   "tool": "context_link",
   "arguments": {
-    "from_id": "node-abc-123",
-    "to_id": "node-def-456",
-    "rel": "references",
+    "from_node": "node-abc-123",
+    "to_node": "node-def-456",
+    "relationship": "REFERENCES",
     "weight": 1.0,
     "note": "Connection pool implementation references the asyncpg docs"
   }
@@ -444,9 +452,9 @@ Response:
 ```json
 {
   "edge_id": "edge-uuid-xyz",
-  "from_id": "node-abc-123",
-  "to_id": "node-def-456",
-  "rel": "references",
+  "from_node": "node-abc-123",
+  "to_node": "node-def-456",
+  "relationship": "REFERENCES",
   "created_at": "2026-04-28T09:05:00+00:00"
 }
 ```
@@ -576,6 +584,7 @@ await mcp.call("context_store", {
     "content": "The retry helper uses exponential backoff with jitter.",
     "layer": "knowledge",
     "evidence": [f"node:{node_id}"],
+    "source_type": "agent",
     "tags": ["retry", "error-handling"],
 })
 ```
