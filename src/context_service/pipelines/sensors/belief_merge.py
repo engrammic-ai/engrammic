@@ -2,23 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
-import concurrent.futures
 from typing import Any
 
 import dagster as dg
 
 from context_service.pipelines.resources import MemgraphResource
-
-
-def _run_async(coro: Any) -> Any:
-    """Run a coroutine, handling cases where an event loop is already running."""
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        return pool.submit(asyncio.run, coro).result(timeout=300)
+from context_service.pipelines.utils import run_async
 
 # Query beliefs grouped by subject to find silos with overlap candidates.
 # Returns one row per silo that has at least two active beliefs sharing a subject token.
@@ -86,7 +75,7 @@ def belief_merge_sensor(
 
         return triggers
 
-    triggers = _run_async(_poll())
+    triggers = run_async(_poll())
     if not triggers:
         return dg.SensorResult(run_requests=[])
 

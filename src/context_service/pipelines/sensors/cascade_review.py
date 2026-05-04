@@ -2,25 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
-import concurrent.futures
 import time
 from typing import Any
 
 import dagster as dg
 
 from context_service.pipelines.resources import MemgraphResource
-
-
-def _run_async(coro: Any) -> Any:
-    """Run a coroutine, handling cases where an event loop is already running."""
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        return pool.submit(asyncio.run, coro).result(timeout=300)
-
+from context_service.pipelines.utils import run_async
 
 _LIST_ACTIVE_SILOS = """
 MATCH (b:Belief)
@@ -65,7 +53,7 @@ def cascade_review_sensor(
 
         return triggers
 
-    triggers = _run_async(_poll())
+    triggers = run_async(_poll())
     if not triggers:
         return dg.SensorResult(run_requests=[])
 
@@ -79,8 +67,6 @@ def cascade_review_sensor(
                 tags={"dagster/concurrency_key": silo_id},
             )
         )
-        context.log.info(
-            f"triggering cascade_review silo={silo_id} pending={t['pending_count']}"
-        )
+        context.log.info(f"triggering cascade_review silo={silo_id} pending={t['pending_count']}")
 
     return dg.SensorResult(run_requests=run_requests)

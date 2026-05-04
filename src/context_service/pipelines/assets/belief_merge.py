@@ -1,7 +1,5 @@
 """Dagster asset: deduplicate overlapping :Belief nodes by merging them."""
 
-import asyncio
-import concurrent.futures
 import time
 from typing import Any
 
@@ -10,16 +8,7 @@ from dagster import AssetExecutionContext
 
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import LLMResource, MemgraphResource
-
-
-def _run_async(coro: Any) -> Any:
-    """Run a coroutine, handling cases where an event loop is already running."""
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        return pool.submit(asyncio.run, coro).result(timeout=300)
+from context_service.pipelines.utils import run_async
 
 
 @dg.asset(
@@ -61,7 +50,7 @@ def belief_merge_asset(
         merged_id = await merge_beliefs(store, silo_id, overlaps, llm_client)
         return {"merged": True, "merged_belief_id": merged_id, "source_count": len(overlaps)}
 
-    result = _run_async(_run())
+    result = run_async(_run())
     duration_s = time.monotonic() - t0
 
     merged: bool = result["merged"]
@@ -76,8 +65,7 @@ def belief_merge_asset(
         )
     else:
         context.log.info(
-            f"no_overlap_found silo={silo_id} subject={subject!r} "
-            f"duration={duration_s:.2f}s"
+            f"no_overlap_found silo={silo_id} subject={subject!r} duration={duration_s:.2f}s"
         )
 
     metadata: dict[str, dg.MetadataValue] = {

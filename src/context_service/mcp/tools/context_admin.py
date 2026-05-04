@@ -278,11 +278,17 @@ async def _context_admin(
 
     if action == "temporal_query":
         if not ref:
-            return {"error": "missing_ref", "message": "ref (ISO datetime) required for temporal_query"}
+            return {
+                "error": "missing_ref",
+                "message": "ref (ISO datetime) required for temporal_query",
+            }
         try:
             as_of = datetime.fromisoformat(ref)
         except ValueError:
-            return {"error": "invalid_ref", "message": f"ref must be a valid ISO 8601 datetime, got {ref!r}"}
+            return {
+                "error": "invalid_ref",
+                "message": f"ref must be a valid ISO 8601 datetime, got {ref[:50]!r}{'...' if len(ref) > 50 else ''}",
+            }
         ctx_svc = get_context_service()
         rows = await ctx_svc.temporal_query(silo_id, as_of, query=name or "", top_k=20)
         return {"results": rows, "as_of": ref, "query": name or ""}
@@ -312,9 +318,15 @@ async def _context_admin(
 
     if action == "partial_revise":
         if not ref:
-            return {"error": "missing_ref", "message": "ref (belief_id) required for partial_revise"}
+            return {
+                "error": "missing_ref",
+                "message": "ref (belief_id) required for partial_revise",
+            }
         if not name:
-            return {"error": "missing_name", "message": "name (revision_note) required for partial_revise"}
+            return {
+                "error": "missing_name",
+                "message": "name (revision_note) required for partial_revise",
+            }
         settings = get_settings()
         ctx_svc = get_context_service()
         store = ctx_svc.graph_store

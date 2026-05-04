@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from typing import Any, Protocol, TypeVar
+from typing import Any, Protocol
 
 from primitives.eag.epistemology.supersession import (
     ContradictionResult,
@@ -75,10 +75,7 @@ class StructuredSupersessionPair:
     reason: str
 
 
-_T = TypeVar("_T")
-
-
-def filter_cyclic_pairs(pairs: list[_T]) -> list[_T]:
+def filter_cyclic_pairs[T](pairs: list[T]) -> list[T]:
     """Filter out pairs that would create cycles in supersession graph.
 
     Works with any object that has superseding_id and superseded_id attributes.
@@ -86,7 +83,7 @@ def filter_cyclic_pairs(pairs: list[_T]) -> list[_T]:
     with already-accepted pairs.
     """
     edge_graph: dict[str, set[str]] = {}
-    result: list[_T] = []
+    result: list[T] = []
 
     for pair in pairs:
         from_id = str(pair.superseding_id)  # type: ignore[union-attr]
@@ -96,9 +93,7 @@ def filter_cyclic_pairs(pairs: list[_T]) -> list[_T]:
             result.append(pair)
             edge_graph.setdefault(from_id, set()).add(to_id)
         else:
-            logger.warning(
-                "Filtering cyclic supersession pair: %s -> %s", from_id, to_id
-            )
+            logger.warning("Filtering cyclic supersession pair: %s -> %s", from_id, to_id)
 
     return result
 

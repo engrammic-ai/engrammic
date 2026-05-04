@@ -1,7 +1,5 @@
 """Dagster asset: cascade_review — process revision-cascade-pending beliefs per silo."""
 
-import asyncio
-import concurrent.futures
 import contextlib
 import time
 from typing import Any
@@ -11,16 +9,7 @@ from dagster import AssetExecutionContext
 
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import EmbeddingResource, LLMResource, MemgraphResource
-
-
-def _run_async(coro: Any) -> Any:
-    """Run a coroutine, handling cases where an event loop is already running."""
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        return asyncio.run(coro)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        return pool.submit(asyncio.run, coro).result(timeout=300)
+from context_service.pipelines.utils import run_async
 
 
 @dg.asset(
@@ -69,9 +58,7 @@ def cascade_review_asset(
         for belief_row in pending:
             belief_id: str = str(belief_row["belief_id"])
             try:
-                result = await check_belief_revision(
-                    store, belief_id, silo_id, embedding_client
-                )
+                result = await check_belief_revision(store, belief_id, silo_id, embedding_client)
                 if result.needs_revision:
                     await revise_belief(store, belief_id, silo_id, llm_client, embedding_client)
                     revised += 1
@@ -100,7 +87,7 @@ def cascade_review_asset(
 
         return {"processed": processed, "revised": revised, "skipped": skipped, "errors": errors}
 
-    counts = _run_async(_run())
+    counts = run_async(_run())
     duration_s = time.monotonic() - t0
 
     context.log.info(
