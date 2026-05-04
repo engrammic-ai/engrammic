@@ -22,7 +22,7 @@ from context_service.db.custodian_queries import (
 )
 
 if TYPE_CHECKING:
-    from context_service.engine.protocols import HyperGraphStore
+    pass
 
 logger = get_logger(__name__)
 

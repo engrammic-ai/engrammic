@@ -239,9 +239,7 @@ async def test_relevance_judgment_llm_judge(
         "MongoDB is a document-oriented NoSQL database.",
     ]
     for doc in docs:
-        await context_service.remember(
-            scope=scope_context, content=doc, content_type="text"
-        )
+        await context_service.remember(scope=scope_context, content=doc, content_type="text")
 
     query = "in-memory caching database"
     results = await context_service.query(scope_context, query, top_k=3)

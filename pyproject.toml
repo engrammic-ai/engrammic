@@ -1,7 +1,7 @@
 [project]
 name = "context-service"
 version = "1.4.1"
-description = "Delta Prime context service - production backend"
+description = "Delta Prime - cognitive substrate for AI agents"
 readme = "README.md"
 requires-python = ">=3.13"
 license = { text = "Proprietary" }

@@ -1,12 +1,8 @@
-# context-service
+# Delta Prime
 
-Delta Prime production backend. Private repo.
+Cognitive substrate for AI agents. Context infrastructure that understands, not just stores.
 
-## Provenance
-
-Ported from [NovusEdge/CTXR](https://github.com/NovusEdge/CTXR) (the `prototype` research prototype) on 2026-04-26 in a single session (~150 files, 0 lint/type errors on completion). The port moved architecture docs, EAG specs, RAG-era specs, and all service source into the `delta-prime` monorepo structure. `primitives` was separated into its own package during this session.
-
-Original prototype repo retains the full RAG-era development history (phases 1–8, brainstorms, benchmarks). This repo is the forward-moving production codebase.
+Private repo.
 
 ## Structure
 
@@ -55,4 +51,3 @@ Port from prototype completed 2026-04-26. The checklist below is retained for re
 6. pipelines/ - Dagster — done
 7. api/ - admin routes — done
 
-For deferred EAG integration items see `context/plans/eag-integration-audit.md`.

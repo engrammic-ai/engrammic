@@ -50,11 +50,9 @@ class _MCPDispatcher:
             await self.fastapi_app(scope, receive, send)
             return
         path = scope.get("path", "")
-        if scope["type"] == "http" and (
-            path == self.prefix or path.startswith(self.prefix + "/")
-        ):
+        if scope["type"] == "http" and (path == self.prefix or path.startswith(self.prefix + "/")):
             patched: dict[str, Any] = dict(scope)
-            patched["path"] = path[len(self.prefix):] or "/"
+            patched["path"] = path[len(self.prefix) :] or "/"
             patched["root_path"] = scope.get("root_path", "") + self.prefix
             await self.mcp_app(patched, receive, send)
             return

@@ -47,9 +47,7 @@ def test_chain_stitch_output_has_required_metadata_keys() -> None:
 
     memgraph_res.store = _fake_store
 
-    with patch(
-        "context_service.pipelines.assets.chain_stitch.asyncio.run"
-    ) as mock_run:
+    with patch("context_service.pipelines.assets.chain_stitch.asyncio.run") as mock_run:
         mock_run.return_value = (
             mock_result.chains_found,
             mock_result.terminals_found,
@@ -59,7 +57,14 @@ def test_chain_stitch_output_has_required_metadata_keys() -> None:
         result = _stitch_fn(ctx, memgraph=memgraph_res, custodian_finalize=None)
 
     assert isinstance(result, dg.Output)
-    for key in ("silo_id", "chains_found", "terminals_found", "edges_verified", "errors", "duration_s"):
+    for key in (
+        "silo_id",
+        "chains_found",
+        "terminals_found",
+        "edges_verified",
+        "errors",
+        "duration_s",
+    ):
         assert key in result.metadata, f"missing metadata key: {key}"
 
 
@@ -67,9 +72,7 @@ def test_chain_stitch_logs_errors_as_warnings() -> None:
     ctx = _make_context()
     memgraph_res = MagicMock(spec=MemgraphResource)
 
-    with patch(
-        "context_service.pipelines.assets.chain_stitch.asyncio.run"
-    ) as mock_run:
+    with patch("context_service.pipelines.assets.chain_stitch.asyncio.run") as mock_run:
         mock_run.return_value = (0, 0, 0, ["something went wrong"])
         _stitch_fn(ctx, memgraph=memgraph_res, custodian_finalize=None)
 

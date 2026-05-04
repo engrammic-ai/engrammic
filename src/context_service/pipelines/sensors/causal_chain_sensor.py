@@ -28,10 +28,14 @@ def causal_transitivity_sensor(
     """Yield a RunRequest for causal_transitivity on each claim_to_fact_promotion materialization."""
     partition_key = asset_event.dagster_event.partition if asset_event.dagster_event else None
     if not partition_key:
-        context.log.warning("causal_transitivity_sensor: no partition key on materialization event, skipping")
+        context.log.warning(
+            "causal_transitivity_sensor: no partition key on materialization event, skipping"
+        )
         return None
 
-    context.log.info(f"causal_transitivity_sensor: triggering causal_transitivity for partition={partition_key}")
+    context.log.info(
+        f"causal_transitivity_sensor: triggering causal_transitivity for partition={partition_key}"
+    )
     return dg.RunRequest(
         run_key=f"causal_transitivity:{partition_key}:{asset_event.run_id}",
         partition_key=partition_key,
@@ -56,7 +60,9 @@ def chain_stitch_sensor(
     """Yield a RunRequest for chain_stitch on each custodian_finalize materialization."""
     partition_key = asset_event.dagster_event.partition if asset_event.dagster_event else None
     if not partition_key:
-        context.log.warning("chain_stitch_sensor: no partition key on materialization event, skipping")
+        context.log.warning(
+            "chain_stitch_sensor: no partition key on materialization event, skipping"
+        )
         return None
 
     context.log.info(f"chain_stitch_sensor: triggering chain_stitch for partition={partition_key}")

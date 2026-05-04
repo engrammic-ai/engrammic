@@ -56,10 +56,7 @@ def compute_stability(runs: list[dict[str, int]]) -> float:
     all_nodes = set().union(*runs)
     if not all_nodes:
         return 1.0
-    stable = sum(
-        1 for n in all_nodes
-        if len({r.get(n) for r in runs if n in r}) == 1
-    )
+    stable = sum(1 for n in all_nodes if len({r.get(n) for r in runs if n in r}) == 1)
     return stable / len(all_nodes)
 
 
@@ -176,21 +173,25 @@ class TestClusteringAlgorithms:
         self, memgraph: MemgraphClient, benchmark_silo: str, silo_stats: dict[str, Any]
     ) -> None:
         """Leiden should produce stable community assignments across runs."""
-        print(f"\nSilo: {benchmark_silo} ({silo_stats['nodes']} nodes, {silo_stats['edges']} edges)")
+        print(
+            f"\nSilo: {benchmark_silo} ({silo_stats['nodes']} nodes, {silo_stats['edges']} edges)"
+        )
 
         for gamma in PRODUCTION_GAMMAS:
             result = await run_algorithm(memgraph, benchmark_silo, LEIDEN_QUERY, gamma, runs=5)
-            print(f"Leiden γ={gamma}: {result.mean_ms:.1f}ms, {result.stability*100:.0f}% stable")
+            print(f"Leiden γ={gamma}: {result.mean_ms:.1f}ms, {result.stability * 100:.0f}% stable")
             assert result.stability >= 0.95, f"Leiden unstable at γ={gamma}: {result.stability}"
 
     async def test_lpa_stability(
         self, memgraph: MemgraphClient, benchmark_silo: str, silo_stats: dict[str, Any]
     ) -> None:
         """LPA should produce reasonably stable assignments (known to be non-deterministic)."""
-        print(f"\nSilo: {benchmark_silo} ({silo_stats['nodes']} nodes, {silo_stats['edges']} edges)")
+        print(
+            f"\nSilo: {benchmark_silo} ({silo_stats['nodes']} nodes, {silo_stats['edges']} edges)"
+        )
 
         result = await run_algorithm(memgraph, benchmark_silo, LPA_QUERY, gamma=1.0, runs=10)
-        print(f"LPA: {result.mean_ms:.1f}ms, {result.stability*100:.0f}% stable")
+        print(f"LPA: {result.mean_ms:.1f}ms, {result.stability * 100:.0f}% stable")
         # LPA is non-deterministic, accept 80% stability
         assert result.stability >= 0.80, f"LPA too unstable: {result.stability}"
 

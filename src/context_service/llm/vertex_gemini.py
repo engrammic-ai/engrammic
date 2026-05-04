@@ -123,7 +123,9 @@ class VertexGeminiProvider(LLMProvider):
             project=settings.vertex_project or settings.vertex_project_id,
             location=settings.vertex_location,
             model=model or settings.default_llm_model,
-            credentials_path=settings.vertex_credentials_path or settings.google_application_credentials or None,
+            credentials_path=settings.vertex_credentials_path
+            or settings.google_application_credentials
+            or None,
         )
 
     async def _get_client(self) -> httpx.AsyncClient:
