@@ -5,6 +5,7 @@ from typing import Any
 from context_service.pipelines.assets.belief_synthesis import belief_synthesis_asset
 from context_service.pipelines.assets.causal import causal_transitivity
 from context_service.pipelines.assets.causal_tombstone import causal_tombstone
+from context_service.pipelines.assets.chain_stitch import chain_stitch
 from context_service.pipelines.assets.clustering import clustering
 from context_service.pipelines.assets.compaction import reasoning_compaction
 from context_service.pipelines.assets.custodian_finalize import custodian_finalize
@@ -32,4 +33,5 @@ all_assets: list[Any] = [
     retention_sweep,
     pattern_detection,
     llm_pattern_detection,
+    chain_stitch,
 ]
