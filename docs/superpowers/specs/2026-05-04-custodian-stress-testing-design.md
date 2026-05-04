@@ -96,7 +96,7 @@ Spawns 3-5 parallel sweep tasks targeting overlapping clusters.
 
 **Structured path (SPO nodes):**
 - `test_supersession_chain_terminal_only`: A supersedes B supersedes C within same cluster, only terminal promotes
-- `test_cross_cluster_supersession_chain`: A, B, C in different clusters - verify chain is NOT connected (documents current limitation)
+- `test_cross_cluster_supersession_chain`: A, B, C in different clusters - verify chain-stitching pass connects them, only terminal promotes
 
 **LLM fallback path:**
 - `test_llm_supersession_confidence_threshold`: verify confidence below threshold does not create edge
@@ -162,7 +162,7 @@ Tests `silo_synthesis.py` path (Pro model call, `[:SUMMARIZES]->(:Silo)` edge).
 | No duplicate `:SUPERSEDES` edges for same pair | concurrency |
 | No orphaned `:CITES` edges (Finding exists for each) | volume, concurrency |
 | Superseded chains resolve to terminal only (same cluster) | edge_cases |
-| Cross-cluster chains not auto-connected (documented limitation) | edge_cases |
+| Cross-cluster chains stitched and resolved to terminal | edge_cases |
 | Circular deps timeout or skip, no hang | edge_cases |
 | Partial progress preserved on validator failure | edge_cases |
 | Quality gate rejects low-score findings | edge_cases |
@@ -228,7 +228,7 @@ Before scenarios can run:
 - Real LLM client optional for smoke tests (flag: `--real-llm`)
 - Existing custodian modules: `consensus_promotion`, `supersession`, `validators`, `dispatch`, `write_path`, `visit`, `silo_synthesis`, `fingerprints`
 
-## Open Questions
+## Prerequisites (implement before harness)
 
-1. Should circular dep handling be a blocker (fix code first) or documented-limitation (test asserts current behavior)?
-2. Cross-cluster supersession chains: accept as limitation or add chain-stitching pass?
+1. **Circular dep cycle detection**: Add explicit cycle-breaking to `supersession.py`. Without this, `test_circular_dep_no_hang` cannot pass.
+2. **Cross-cluster chain stitching**: Add a chain-stitching pass that connects supersession chains spanning multiple clusters (A→B→C where nodes are in different clusters). Without this, `test_cross_cluster_supersession_chain` would only document a limitation rather than test correct behavior.
