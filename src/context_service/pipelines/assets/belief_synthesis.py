@@ -46,12 +46,27 @@ def belief_synthesis_asset(
             "was this triggered without the sensor?"
         )
 
+    subject: str = context.run_tags.get("subject", "")
     t0 = time.monotonic()
 
     async def _run() -> str:
-        from context_service.engine.synthesis import synthesize_belief
+        from context_service.engine.synthesis import (
+            check_belief_coverage,
+            synthesize_belief,
+        )
 
         store = await memgraph.store()
+
+        if subject:
+            existing = await check_belief_coverage(store, silo_id, subject)
+            if existing:
+                context.log.info(
+                    f"belief_synthesis skipped — existing coverage found "
+                    f"silo={silo_id} cluster={cluster_id} subject={subject!r} "
+                    f"existing_belief={existing['belief_id']}"
+                )
+                return str(existing["belief_id"])
+
         llm_client = llm.get_client()
 
         return await synthesize_belief(store, cluster_id, silo_id, llm_client)

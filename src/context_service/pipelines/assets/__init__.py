@@ -2,7 +2,9 @@
 
 from typing import Any
 
+from context_service.pipelines.assets.belief_merge import belief_merge_asset
 from context_service.pipelines.assets.belief_synthesis import belief_synthesis_asset
+from context_service.pipelines.assets.cascade_review import cascade_review_asset
 from context_service.pipelines.assets.causal import causal_transitivity
 from context_service.pipelines.assets.causal_tombstone import causal_tombstone
 from context_service.pipelines.assets.chain_stitch import chain_stitch
@@ -34,4 +36,6 @@ all_assets: list[Any] = [
     pattern_detection,
     llm_pattern_detection,
     chain_stitch,
+    belief_merge_asset,
+    cascade_review_asset,
 ]

@@ -13,13 +13,13 @@ from context_service.db.queries import (
     SET_CHAIN_SESSION_STATE,
 )
 from context_service.engine.compaction import compact_reasoning_chain
+from context_service.engine.revision import partial_revise_belief
 from context_service.engine.summarization import inline_summary, summarize_reasoning_steps
 from context_service.mcp.server import (
     get_context_service,
     get_mcp_auth_context,
     get_silo_service,
 )
-from context_service.mcp.tools.context_graph import _context_graph
 from context_service.mcp.tools.context_history import _context_history
 from context_service.services.models import derive_silo_id
 from context_service.services.silo import ensure_silo, validate_silo_ownership
@@ -29,7 +29,15 @@ if TYPE_CHECKING:
 
     from context_service.engine.protocols import HyperGraphStore
 
-_VALID_ACTIONS = ("silo_list", "close_session", "provenance", "history")
+_VALID_ACTIONS = (
+    "silo_list",
+    "close_session",
+    "provenance",
+    "history",
+    "temporal_query",
+    "belief_history",
+    "partial_revise",
+)
 
 
 async def _silo_list_impl() -> dict[str, Any]:
@@ -245,11 +253,20 @@ async def _context_admin(
     if action == "provenance":
         if not ref:
             return {"error": "missing_ref", "message": "ref (node_id) required for provenance"}
-        return await _context_graph(
-            silo_id=silo_id,
-            seed_nodes=[ref],
-            relationship_types=["DERIVED_FROM", "SUPPORTS", "EVIDENCES"],
-        )
+        ctx_svc = get_context_service()
+        result = await ctx_svc.provenance(silo_id, ref)
+        return {
+            "chain": [
+                {
+                    "node_id": step.node_id,
+                    "layer": step.layer,
+                    "relationship": step.relationship,
+                    "confidence": step.confidence,
+                }
+                for step in result.chain
+            ],
+            "root_sources": result.root_sources,
+        }
 
     if action == "history":
         if not ref:
@@ -258,6 +275,73 @@ async def _context_admin(
                 "message": "ref (node_id or subject) required for history",
             }
         return await _context_history(silo_id=silo_id, node_id=ref)
+
+    if action == "temporal_query":
+        if not ref:
+            return {"error": "missing_ref", "message": "ref (ISO datetime) required for temporal_query"}
+        try:
+            as_of = datetime.fromisoformat(ref)
+        except ValueError:
+            return {"error": "invalid_ref", "message": f"ref must be a valid ISO 8601 datetime, got {ref!r}"}
+        ctx_svc = get_context_service()
+        rows = await ctx_svc.temporal_query(silo_id, as_of, query=name or "", top_k=20)
+        return {"results": rows, "as_of": ref, "query": name or ""}
+
+    if action == "belief_history":
+        if not ref:
+            return {"error": "missing_ref", "message": "ref (node_id) required for belief_history"}
+        ctx_svc = get_context_service()
+        bh = await ctx_svc.belief_history(silo_id, ref)
+        return {
+            "subject": bh.subject,
+            "total_versions": bh.total_versions,
+            "confidence_trend": bh.confidence_trend,
+            "timeline": [
+                {
+                    "node_id": state.node_id,
+                    "content": state.content,
+                    "confidence": state.confidence,
+                    "status": state.status,
+                    "superseded_by": state.superseded_by,
+                    "valid_from": state.valid_from.isoformat() if state.valid_from else None,
+                    "valid_to": state.valid_to.isoformat() if state.valid_to else None,
+                }
+                for state in bh.timeline
+            ],
+        }
+
+    if action == "partial_revise":
+        if not ref:
+            return {"error": "missing_ref", "message": "ref (belief_id) required for partial_revise"}
+        if not name:
+            return {"error": "missing_name", "message": "name (revision_note) required for partial_revise"}
+        settings = get_settings()
+        ctx_svc = get_context_service()
+        store = ctx_svc.graph_store
+        try:
+            from context_service.llm import build_llm_provider
+
+            llm_client = build_llm_provider(
+                settings.summarization_provider, settings.summarization_model
+            )
+        except Exception as exc:
+            return {"error": "llm_unavailable", "message": str(exc)}
+        if ctx_svc._embedding is None:
+            return {"error": "embedding_unavailable", "message": "no embedding service configured"}
+        pr = await partial_revise_belief(
+            store=store,
+            belief_id=ref,
+            silo_id=silo_id,
+            revision_note=name,
+            llm_client=llm_client,
+            embedding_client=ctx_svc._embedding,
+        )
+        return {
+            "original_belief_id": pr.original_belief_id,
+            "revised_id": pr.revised_id,
+            "retained_id": pr.retained_id,
+            "cascade_flagged_count": pr.cascade_flagged_count,
+        }
 
     return {"error": "unknown_action", "valid": list(_VALID_ACTIONS)}
 
@@ -268,15 +352,27 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(
         name="context_admin",
         description=(
-            "Admin and utility actions: silo_list, close_session, provenance, history. "
+            "Admin and utility actions: silo_list, close_session, provenance, history, "
+            "temporal_query, belief_history, partial_revise. "
             "silo_list: list org silos. "
             "close_session: close a reasoning chain (ref=chain_id). "
             "provenance: trace citation chain for a node (ref=node_id). "
-            "history: show belief evolution for a node (ref=node_id or subject)."
+            "history: show belief evolution for a node (ref=node_id or subject). "
+            "temporal_query: return nodes valid at a point in time (ref=ISO datetime, name=query). "
+            "belief_history: return supersession chain for a fact node (ref=node_id). "
+            "partial_revise: partially revise a belief (ref=belief_id, name=revision_note)."
         ),
     )
     async def context_admin(
-        action: Literal["silo_list", "close_session", "provenance", "history"],
+        action: Literal[
+            "silo_list",
+            "close_session",
+            "provenance",
+            "history",
+            "temporal_query",
+            "belief_history",
+            "partial_revise",
+        ],
         ref: str | None = None,
         name: str | None = None,
         silo_id: str | None = None,
@@ -284,9 +380,10 @@ def register(mcp: FastMCP) -> None:
         """Admin and utility actions.
 
         Args:
-            action: silo_list|close_session|provenance|history.
-            ref: Node ID for provenance/history, chain_id for close_session.
-            name: Reserved for future use.
+            action: silo_list|close_session|provenance|history|temporal_query|belief_history|partial_revise.
+            ref: Node ID for provenance/history/belief_history, chain_id for close_session,
+                ISO datetime for temporal_query, belief_id for partial_revise.
+            name: Query text for temporal_query, revision_note for partial_revise.
             silo_id: UUID of the silo. Optional; defaults to the org's primary silo
                 derived from auth.
 
