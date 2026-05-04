@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from context_service.services.models import derive_silo_id
-
-if TYPE_CHECKING:
-    from fastmcp import FastMCP
 
 
 async def _context_history(
@@ -58,36 +55,3 @@ async def _context_history(
         "current": result.current,
         "entries_count": len(timeline),
     }
-
-
-def register(mcp: FastMCP) -> None:
-    """Register the context_history tool."""
-
-    @mcp.tool(
-        name="context_history",
-        description=(
-            "Show how a belief or fact evolved over time. "
-            "Traverses the SUPERSEDES chain from oldest to newest. "
-            "Accepts either a node_id (specific node) or subject (keyword search)."
-        ),
-    )
-    async def context_history(
-        silo_id: str,
-        subject: str | None = None,
-        node_id: str | None = None,
-    ) -> dict[str, Any]:
-        """Show belief evolution over time.
-
-        Args:
-            silo_id: UUID of the silo.
-            subject: Keyword to search for in content/subject field.
-            node_id: Specific node to trace history for.
-
-        Returns:
-            {timeline, current, entries_count}
-        """
-        return await _context_history(
-            silo_id=silo_id,
-            subject=subject,
-            node_id=node_id,
-        )

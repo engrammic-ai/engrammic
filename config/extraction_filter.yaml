@@ -1,0 +1,32 @@
+version: "1.0"
+enabled: true
+
+hard_drop_triples: []
+suspect_predicates:
+  - "is a"
+  - "has"
+public_entity_allowlist: []
+never_filter_predicates:
+  - "causes"
+  - "prevents"
+  - "corroborates"
+
+wikidata:
+  endpoint: "https://query.wikidata.org/sparql"
+  timeout_seconds: 5.0
+  cache_ttl_days: 7
+  circuit_breaker:
+    failure_threshold: 5
+    window_seconds: 60.0
+    cooldown_seconds: 300.0
+
+llm_classifier:
+  provider: "gemini"
+  threshold: 0.7
+  timeout_seconds: 10.0
+  circuit_breaker:
+    failure_threshold: 3
+    window_seconds: 60.0
+    cooldown_seconds: 300.0
+
+retention_days: 90

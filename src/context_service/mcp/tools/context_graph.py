@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from context_service.config.settings import get_settings
 from context_service.mcp.server import get_context_service, get_mcp_auth_context, get_silo_service
 from context_service.models.mcp import Layer
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
-
-if TYPE_CHECKING:
-    from fastmcp import FastMCP
 
 
 async def _context_graph(
@@ -97,51 +94,3 @@ async def _context_graph(
         },
         "metadata": metadata,
     }
-
-
-def register(mcp: FastMCP) -> None:
-    """Register the context_graph tool."""
-
-    @mcp.tool(
-        name="context_graph",
-        description=(
-            "Graph traversal from a semantic query or specific seed nodes. "
-            "Returns subgraph with nodes, edges, and traversal stats. "
-            "Target: < 500ms for depth 2."
-        ),
-    )
-    async def context_graph(
-        silo_id: str,
-        query: str | None = None,
-        seed_nodes: list[str] | None = None,
-        max_depth: int = 2,
-        max_nodes: int = 50,
-        relationship_types: list[str] | None = None,
-        layers: list[str] | None = None,
-    ) -> dict[str, Any]:
-        """Graph traversal from semantic seed.
-
-        Args:
-            silo_id: UUID of the silo.
-            query: Semantic query to find seed nodes (requires embedding service).
-            seed_nodes: Explicit starting node IDs (list of node ID strings).
-            max_depth: Traversal depth 1-5 (default 2).
-            max_nodes: Maximum nodes to return 1-200 (default 50).
-            relationship_types: Filter edges by type (e.g. REFERENCES, SUPPORTS).
-            layers: Filter nodes to specific layers (memory, knowledge, wisdom).
-
-        Returns:
-            {nodes, edges, traversal_stats, metadata}
-            edges include an ``inferred`` bool on causal edges.
-            metadata includes ``causal_edges_enabled`` and, when set on the silo,
-            ``causal_coverage_from`` (epoch from which causal coverage applies).
-        """
-        return await _context_graph(
-            silo_id=silo_id,
-            query=query,
-            seed_nodes=seed_nodes,
-            max_depth=max_depth,
-            max_nodes=max_nodes,
-            relationship_types=relationship_types,
-            layers=layers,
-        )

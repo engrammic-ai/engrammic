@@ -11,7 +11,7 @@ import dagster as dg
 from dagster import AssetExecutionContext
 
 from context_service.pipelines.partitions import silo_partitions
-from context_service.pipelines.resources import LLMResource, MemgraphResource
+from context_service.pipelines.resources import LLMResource, MemgraphResource, RedisResource
 
 
 def _run_async(coro: Any) -> Any:
@@ -45,13 +45,21 @@ def extraction(
     context: AssetExecutionContext,
     memgraph: MemgraphResource,
     llm: LLMResource,
+    redis: RedisResource,
 ) -> dg.Output[dict[str, Any]]:
     """Read pending :Document nodes for the partition's silo, run LLM extraction, write :Claim nodes."""
     silo_id: str = context.partition_key
     t0 = time.monotonic()
 
-    async def _run() -> tuple[int, int, int, float]:
+    async def _run() -> tuple[int, int, int, float, int]:
+        from pathlib import Path
+
         from context_service.db import queries
+        from context_service.extraction.filter.audit import FilterAuditor
+        from context_service.extraction.filter.config import load_filter_rule_set
+        from context_service.extraction.filter.llm_classifier import LLMClassifierRule
+        from context_service.extraction.filter.orchestrator import FilterOrchestrator
+        from context_service.extraction.filter.wikidata import WikidataRule
         from context_service.extraction.identity import claim_id as make_claim_id
         from context_service.extraction.models import (
             ClaimTriple,
@@ -60,13 +68,28 @@ def extraction(
         )
         from context_service.extraction.service import ExtractionService
         from context_service.stores import MemgraphClient
+        from context_service.stores.redis import RedisClient
 
         driver = await memgraph.driver()
         client = MemgraphClient(driver)
         llm_provider = llm.get_client()
+        redis_client = RedisClient(await redis.client())
+
+        config_path = Path(__file__).parents[4] / "config" / "extraction_filter.yaml"
+        rule_set = load_filter_rule_set(config_path, silo_override=None)
+
+        class _NoOpWriter:
+            def insert_many(self, rows: list[dict[str, object]]) -> None:
+                pass
+
+        auditor = FilterAuditor(_NoOpWriter())
+        wikidata_rule = WikidataRule(rule_set, redis_client, silo_id=silo_id)
+        llm_rule = LLMClassifierRule(rule_set, llm_provider, silo_id=silo_id)
+        filter_orchestrator = FilterOrchestrator(rule_set, wikidata_rule, llm_rule, auditor)
 
         docs_processed = 0
         claims_created = 0
+        claims_filtered = 0
         tokens_used = 0
 
         svc = ExtractionService.llm_only(llm_provider)
@@ -140,7 +163,16 @@ def extraction(
                 if not triples:
                     continue
 
-                for t in triples:
+                decisions = await filter_orchestrator.evaluate(triples, silo_id)
+                kept_triples = [
+                    t for t, d in zip(triples, decisions, strict=True) if d.action == "keep"
+                ]
+                claims_filtered += len(triples) - len(kept_triples)
+
+                if not kept_triples:
+                    continue
+
+                for t in kept_triples:
                     cid = make_claim_id(
                         t.subject,
                         t.predicate,
@@ -179,7 +211,7 @@ def extraction(
                     if t.ref_doc_id:
                         all_ref_rows.append({"claim_id": cid, "ref_doc_id": t.ref_doc_id})
 
-                claims_created += len(triples)
+                claims_created += len(kept_triples)
 
             # Exactly 4 RTTs per iteration batch (or fewer if some lists empty).
             if all_claim_rows:
@@ -212,13 +244,13 @@ def extraction(
                     "pending documents may remain"
                 )
 
-        return docs_processed, claims_created, tokens_used, 0.0
+        return docs_processed, claims_created, tokens_used, 0.0, claims_filtered
 
-    docs_processed, claims_created, tokens_used, cost_usd = _run_async(_run())
+    docs_processed, claims_created, tokens_used, cost_usd, claims_filtered = _run_async(_run())
     duration_s = time.monotonic() - t0
 
     context.log.info(
-        f"silo={silo_id} docs={docs_processed} claims={claims_created} "
+        f"silo={silo_id} docs={docs_processed} claims={claims_created} filtered={claims_filtered} "
         f"tokens={tokens_used} duration={duration_s:.2f}s"
     )
 
@@ -227,6 +259,7 @@ def extraction(
             "silo_id": silo_id,
             "docs_processed": docs_processed,
             "claims_created": claims_created,
+            "claims_filtered": claims_filtered,
             "tokens_used": tokens_used,
             "cost_usd": cost_usd,
             "duration_s": duration_s,
@@ -235,6 +268,7 @@ def extraction(
             "silo_id": dg.MetadataValue.text(silo_id),
             "docs_processed": dg.MetadataValue.int(docs_processed),
             "claims_created": dg.MetadataValue.int(claims_created),
+            "claims_filtered": dg.MetadataValue.int(claims_filtered),
             "tokens_used": dg.MetadataValue.int(tokens_used),
             "cost_usd": dg.MetadataValue.float(cost_usd),
             "duration_s": dg.MetadataValue.float(duration_s),
