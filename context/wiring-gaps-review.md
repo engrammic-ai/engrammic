@@ -31,7 +31,7 @@
 | `FilterOrchestrator` | `extraction/filter/orchestrator.py` | **WIRED** |
 | `WikidataRule` | `extraction/filter/wikidata.py` | **WIRED** |
 | `LLMClassifierRule` | `extraction/filter/llm_classifier.py` | **WIRED** |
-| `resolve_alias()` | `extraction/alias_lookup.py` | Still unwired (separate from filter) |
+| `resolve_alias()` | `extraction/alias_lookup.py` | **WIRED** via AliasCache in extraction |
 
 Config: `config/extraction_filter.yaml`
 
@@ -102,12 +102,12 @@ Config: `config/extraction_filter.yaml`
 4. ~~Service method exposure~~ **DONE**
 5. ~~Dagster asset triggers~~ **DONE**
 6. ~~Engine layer functions~~ **DONE**
-7. **resolve_alias()** - entity resolution still bypassed (low priority)
+7. ~~resolve_alias()~~ **DONE**
 
 ---
 
 ## Summary
 
-**All major wiring gaps addressed.** Commits: 369c50e, 4c62850, fa7cd3f, 10dbec7
+**All wiring gaps addressed.** Commits: 369c50e, 4c62850, fa7cd3f, 10dbec7, 95ee583
 
-Only remaining item is `resolve_alias()` in extraction/alias_lookup.py which is separate from the filter pipeline.
+No remaining items.
