@@ -54,7 +54,9 @@ def extraction(
     async def _run() -> tuple[int, int, int, float, int]:
         from pathlib import Path
 
+        from context_service.cache.alias_cache import AliasCache
         from context_service.db import queries
+        from context_service.extraction.alias_lookup import resolve_alias
         from context_service.extraction.filter.audit import FilterAuditor
         from context_service.extraction.filter.config import load_filter_rule_set
         from context_service.extraction.filter.llm_classifier import LLMClassifierRule
@@ -74,6 +76,7 @@ def extraction(
         client = MemgraphClient(driver)
         llm_provider = llm.get_client()
         redis_client = RedisClient(await redis.client())
+        alias_cache = AliasCache(redis_client)
 
         config_path = Path(__file__).parents[4] / "config" / "extraction_filter.yaml"
         rule_set = load_filter_rule_set(config_path, silo_override=None)
@@ -134,15 +137,37 @@ def extraction(
                     predicate = (rel.kind or rel.relationship_type.value).strip().lower()
                     if not predicate:
                         predicate = rel.relationship_type.value.lower()
+                    source_alias = await resolve_alias(
+                        cache=alias_cache, silo_id=silo_id, surface_form=rel.source
+                    )
+                    target_alias = await resolve_alias(
+                        cache=alias_cache, silo_id=silo_id, surface_form=rel.target
+                    )
                     mentions = [
                         EntityMention(
-                            entity_id=_stable_entity_id(silo_id, rel.source),
-                            name=rel.source,
+                            entity_id=(
+                                source_alias["entity_id"]
+                                if source_alias
+                                else _stable_entity_id(silo_id, rel.source)
+                            ),
+                            name=(
+                                source_alias["canonical_name"]
+                                if source_alias
+                                else rel.source
+                            ),
                             entity_type=entity_type_by_name.get(rel.source, "unknown"),
                         ),
                         EntityMention(
-                            entity_id=_stable_entity_id(silo_id, rel.target),
-                            name=rel.target,
+                            entity_id=(
+                                target_alias["entity_id"]
+                                if target_alias
+                                else _stable_entity_id(silo_id, rel.target)
+                            ),
+                            name=(
+                                target_alias["canonical_name"]
+                                if target_alias
+                                else rel.target
+                            ),
                             entity_type=entity_type_by_name.get(rel.target, "unknown"),
                         ),
                     ]

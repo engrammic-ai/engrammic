@@ -1218,6 +1218,30 @@ SET b.cascade_processed_at = $processed_at
 RETURN b.id AS belief_id
 """
 
+# ---------------------------------------------------------------------------
+# Alias resolution query (extraction pipeline — O-28 4a)
+# ---------------------------------------------------------------------------
+
+# Find the canonical entity for a given alias surface form.
+# Looks for committed :Claim nodes with predicate = 'is_alias_of' where the
+# subject matches the normalized form (case-insensitive). Returns the object
+# entity's id and name so the extraction pipeline can reuse it instead of
+# minting a new entity_id.
+# Parameters: silo_id (str), normalized_form (str).
+FIND_ENTITY_BY_ALIAS = """
+MATCH (c:Claim {silo_id: $silo_id})
+WHERE c.predicate = 'is_alias_of'
+  AND toLower(c.subject) = toLower($normalized_form)
+  AND c.committed = true
+  AND c.tombstoned_at IS NULL
+WITH c.object AS canonical_name
+MATCH (e:Entity {silo_id: $silo_id})
+WHERE toLower(e.name) = toLower(canonical_name)
+  AND e.tombstoned_at IS NULL
+RETURN e.id AS entity_id, e.name AS canonical_name
+LIMIT 1
+"""
+
 GET_SUPERSESSION_CHAIN = (
     "MATCH (start {id: $start_id, silo_id: $silo_id}) "
     "OPTIONAL MATCH path = (start)-[:SUPERSEDES*0..20]->(related) "
