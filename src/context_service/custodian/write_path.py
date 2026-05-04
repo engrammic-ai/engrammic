@@ -196,9 +196,10 @@ class WritePath:
         citation_validator: CitationValidator,
         metrics: RejectionMetrics | None = None,
         business_validator: BusinessRuleValidator | None = None,
+        validator_override: CitationValidator | None = None,
     ) -> None:
         self._client = memgraph_client
-        self._validator = citation_validator
+        self._validator = validator_override or citation_validator
         self._metrics = metrics
         self._business = business_validator or _default_business_validator
 
