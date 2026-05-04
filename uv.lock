@@ -460,7 +460,7 @@ wheels = [
 
 [[package]]
 name = "context-service"
-version = "1.3.0"
+version = "1.4.1"
 source = { editable = "." }
 dependencies = [
     { name = "dagster" },

@@ -7,6 +7,30 @@ candidates worth evaluating against it.
 
 **Branch:** `phase-clustering-algo-eval` (spike, no prod changes until decision made)
 
+**Status:** Harness complete, awaiting data with edge density
+
+---
+
+## 2026-05-04 Initial benchmark attempt
+
+Ran benchmarks on silo `885eb4f3-...` (56 Claim nodes, 0 edges between them).
+Graph too sparse for meaningful evaluation. Results:
+
+| Algorithm | Speed | Communities | Stability |
+|-----------|-------|-------------|-----------|
+| Leiden (all gammas) | 15-20ms | 51-52 (1:1 with nodes) | 100% |
+| LPA | 5ms | 3 | 100% |
+| Louvain | N/A | Not available in MAGE | N/A |
+
+**Findings:**
+- Louvain procedure (`louvain_community_detection.get`) does not exist in MAGE
+- LPA is 3-4x faster than Leiden
+- Need silo with >= 100 edges between clusterable nodes to evaluate quality
+
+**Artifacts created:**
+- `scripts/clustering_benchmark.py` - CLI benchmark tool
+- `tests/benchmarks/test_clustering_algorithms.py` - pytest harness (auto-skips if no data)
+
 ---
 
 ## Background
