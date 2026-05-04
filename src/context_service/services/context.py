@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     from context_service.embeddings.splade import SpladeEncoder
     from context_service.engine.history import BeliefHistory
     from context_service.engine.protocols import HyperGraphStore
+    from context_service.expansion.generator import ExpansionGenerator
     from context_service.services.context_meta import (
         HistoryResult,
         ProvenanceResult,
@@ -90,12 +91,14 @@ class ContextService:
         embedding: EmbeddingService | None = None,
         cache: RedisClient | None = None,
         splade: SpladeEncoder | None = None,
+        expansion_generator: ExpansionGenerator | None = None,
     ) -> None:
         self._memgraph = memgraph
         self._qdrant = qdrant
         self._embedding = embedding
         self._cache = cache
         self._splade = splade
+        self._expansion_generator = expansion_generator
 
     @property
     def graph_store(self) -> HyperGraphStore:
@@ -111,6 +114,7 @@ class ContextService:
         properties: dict[str, Any] | None = None,
         idempotency_key: str | None = None,
         source_uri: str | None = None,
+        expansion: str | None = None,
     ) -> Node:
         """Store context node to Memgraph + Qdrant.
 
@@ -121,6 +125,8 @@ class ContextService:
             properties: Optional metadata persisted to Memgraph via SET n += $props.
             idempotency_key: For deduplication.
             source_uri: Origin URI.
+            expansion: Optional predicted-query expansion text stored as a
+                Qdrant payload field for SPLADE encoding.
 
         Returns:
             Created or existing node.
@@ -215,11 +221,29 @@ class ContextService:
         if content and len(content) >= MIN_CONTENT_FOR_EMBEDDING and self._embedding:
             vector = await self._embedding.embed_single(content)
 
+            # Generate expansion for SPLADE if not already provided and generation is enabled.
+            settings = get_settings()
+            if expansion is None and settings.expansion_generation_enabled and self._expansion_generator is not None:
+                try:
+                    expansion = await self._expansion_generator.generate(content)
+                except Exception as exc:
+                    logger.warning(
+                        "expansion_generation_failed_in_store",
+                        node_id=str(node.id),
+                        error=str(exc),
+                    )
+                    expansion = None
+
             sparse_indices: list[int] | None = None
             sparse_values: list[float] | None = None
             if self._splade is not None:
+                # Concatenate expansion to content for SPLADE encoding only.
+                # Dense embedding always uses the original content (unchanged).
+                splade_input = content
+                if expansion:
+                    splade_input = content + " " + expansion
                 try:
-                    sparse = await self._splade.encode(content)
+                    sparse = await self._splade.encode(splade_input)
                     sparse_indices, sparse_values = self._splade.to_qdrant(sparse)
                 except Exception as exc:
                     logger.warning(
@@ -236,6 +260,7 @@ class ContextService:
                     silo_id=str(silo_id),
                     sparse_indices=sparse_indices,
                     sparse_values=sparse_values,
+                    expansion=expansion,
                 )
             except Exception as exc:
                 logger.error(

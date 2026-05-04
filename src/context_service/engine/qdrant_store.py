@@ -11,6 +11,7 @@ from qdrant_client.models import (
     Fusion,
     FusionQuery,
     MatchValue,
+    PayloadSchemaType,
     PointStruct,
     Prefetch,
     SparseVector,
@@ -104,6 +105,11 @@ class EngineQdrantStore:
                             distance=Distance.COSINE,
                         ),
                     )
+                await client.create_payload_index(
+                    collection_name=name,
+                    field_name="expansion",
+                    field_schema=PayloadSchemaType.TEXT,
+                )
                 logger.info(f"Created Qdrant collection: {name} (hybrid={self._hybrid})")
             self._ensured_collections.add(name)
         return name
@@ -116,12 +122,15 @@ class EngineQdrantStore:
         node_type: str | None = None,
         sparse_indices: list[int] | None = None,
         sparse_values: list[float] | None = None,
+        expansion: str | None = None,
     ) -> None:
         collection = await self._ensure_collection(silo_id)
         client = await self._qdrant._get_client()
         payload: dict[str, Any] = {"silo_id": silo_id}
         if node_type:
             payload["type"] = node_type
+        if expansion is not None:
+            payload["expansion"] = expansion
 
         if self._hybrid:
             vectors: dict[str, Any] = {
@@ -162,6 +171,7 @@ class EngineQdrantStore:
         - ``node_type`` (str | None, optional)
         - ``sparse_indices`` (list[int] | None, optional)
         - ``sparse_values`` (list[float] | None, optional)
+        - ``expansion`` (str | None, optional)
 
         Writes one PointStruct per item and sends a single ``client.upsert``
         request. Honors ``self._hybrid`` the same way ``upsert`` does.
@@ -179,10 +189,13 @@ class EngineQdrantStore:
             node_type = item.get("node_type")
             sparse_indices = item.get("sparse_indices")
             sparse_values = item.get("sparse_values")
+            expansion = item.get("expansion")
 
             payload: dict[str, Any] = {"silo_id": str(item_silo_id)}
             if node_type:
                 payload["type"] = node_type
+            if expansion is not None:
+                payload["expansion"] = expansion
 
             if self._hybrid:
                 vectors: dict[str, Any] = {self.DENSE_VECTOR_NAME: vector}

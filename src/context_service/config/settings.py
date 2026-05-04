@@ -843,6 +843,11 @@ class Settings(BaseSettings):
     access_stream_maxlen: int = Field(default=100_000)
 
     # Signals enhancement (v1d) — all default OFF for safe rollout
+    expansion_generation_enabled: bool = Field(
+        default=True,
+        description="When true, ExpansionGenerator runs during store() and the expansion is concatenated to the SPLADE input.",
+    )
+
     heat_ranking_enabled: bool = Field(default=False)
     unified_decay_enabled: bool = Field(default=False)
     write_events_enabled: bool = Field(default=False)

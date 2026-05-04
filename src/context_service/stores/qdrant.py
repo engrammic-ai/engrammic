@@ -165,6 +165,7 @@ class QdrantClient:
         silo_id: str | None = None,
         sparse_indices: list[int] | None = None,
         sparse_values: list[float] | None = None,
+        expansion: str | None = None,
     ) -> bool:
         """Insert or update a vector.
 
@@ -180,6 +181,8 @@ class QdrantClient:
             silo_id: Optional silo identifier for payload filtering.
             sparse_indices: Sparse-vector token indices (SPLADE output).
             sparse_values: Sparse-vector activation values (SPLADE output).
+            expansion: Optional predicted-query expansion text stored as a
+                payload field for SPLADE encoding at query time.
 
         Returns:
             True if successful.
@@ -193,6 +196,8 @@ class QdrantClient:
         point_payload["node_id"] = node_id
         if silo_id is not None:
             point_payload["silo_id"] = silo_id
+        if expansion is not None:
+            point_payload["expansion"] = expansion
 
         has_sparse = sparse_indices is not None and sparse_values is not None
 
