@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Protocol, TypeVar
 
 from primitives.eag.epistemology.supersession import (
     ContradictionResult,
@@ -73,6 +73,34 @@ class StructuredSupersessionPair:
     superseded_id: str
     confidence: float
     reason: str
+
+
+_T = TypeVar("_T")
+
+
+def filter_cyclic_pairs(pairs: list[_T]) -> list[_T]:
+    """Filter out pairs that would create cycles in supersession graph.
+
+    Works with any object that has superseding_id and superseded_id attributes.
+    Processes pairs in order, keeping only those that don't create cycles
+    with already-accepted pairs.
+    """
+    edge_graph: dict[str, set[str]] = {}
+    result: list[_T] = []
+
+    for pair in pairs:
+        from_id = str(pair.superseding_id)  # type: ignore[union-attr]
+        to_id = str(pair.superseded_id)  # type: ignore[union-attr]
+
+        if not _would_create_cycle(from_id, to_id, edge_graph):
+            result.append(pair)
+            edge_graph.setdefault(from_id, set()).add(to_id)
+        else:
+            logger.warning(
+                "Filtering cyclic supersession pair: %s -> %s", from_id, to_id
+            )
+
+    return result
 
 
 def _would_create_cycle(
@@ -289,10 +317,23 @@ async def run_supersession_pass(
             edges_written += 1
             written_pairs.append(pair)
 
+    # Build initial graph from structured pairs that were written
+    existing_edges: dict[str, set[str]] = {}
+    for pair in written_pairs:
+        existing_edges.setdefault(pair.superseding_id, set()).add(pair.superseded_id)
+
     # Process LLM pairs
     for pair in llm_pairs:
         if pair.confidence < confidence_threshold:
             dropped_low_conf += 1
+            continue
+
+        if _would_create_cycle(pair.superseding_id, pair.superseded_id, existing_edges):
+            logger.warning(
+                "Skipping LLM supersession pair that would create cycle: %s -> %s",
+                pair.superseding_id,
+                pair.superseded_id,
+            )
             continue
 
         if pair.superseding_id not in node_map or pair.superseded_id not in node_map:
@@ -331,6 +372,7 @@ async def run_supersession_pass(
         if written:
             edges_written += 1
             written_pairs.append(pair)
+            existing_edges.setdefault(pair.superseding_id, set()).add(pair.superseded_id)
 
     # Auto-reflection hook: fire-and-forget per supersession edge written.
     # Iterate only pairs for which an edge was actually written, not dropped pairs.
