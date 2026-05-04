@@ -13,6 +13,7 @@ and a VisitTrace is written to Redis (best-effort, never crashes the visit).
 from __future__ import annotations
 
 import time
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
@@ -66,6 +67,8 @@ from context_service.db import custodian_read_queries as read_q
 if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
     from context_service.stores.redis import RedisClient
+
+PhaseCallback = Callable[[str, str], Awaitable[None]]  # (phase_name, cluster_id) -> None
 
 logger = get_logger(__name__)
 
@@ -453,6 +456,7 @@ async def run_visit(
     child_finding_summaries: list[str],
     memgraph_client: HyperGraphStore,
     redis_client: RedisClient,
+    phase_callback: PhaseCallback | None = None,
 ) -> VisitResult:
     """Run a 4-phase visit against a single cluster.
 
@@ -477,6 +481,7 @@ async def run_visit(
             child_finding_summaries=child_finding_summaries,
             memgraph_client=memgraph_client,
             redis_client=redis_client,
+            phase_callback=phase_callback,
         )
 
 
@@ -492,6 +497,7 @@ async def _run_visit_body(
     child_finding_summaries: list[str],
     memgraph_client: HyperGraphStore,
     redis_client: RedisClient,
+    phase_callback: PhaseCallback | None = None,
 ) -> VisitResult:
     ov = get_settings().custodian
 
@@ -538,6 +544,8 @@ async def _run_visit_body(
             (usage_breakdown["fast"].input_tokens + usage_breakdown["fast"].output_tokens),
             elapsed,
         )
+        if phase_callback:
+            await phase_callback("fast", cluster_id)
     except UsageLimitExceeded as exc:
         logger.info(f"Fast pass budget exceeded for cluster={cluster_id}: {exc}")
         return await _finalize_visit(
@@ -592,6 +600,8 @@ async def _run_visit_body(
             elapsed,
         )
         record_visit_strategy(plan.strategy, cluster_level)
+        if phase_callback:
+            await phase_callback("plan", cluster_id)
     except UsageLimitExceeded as exc:
         logger.info(f"Plan phase budget exceeded for cluster={cluster_id}: {exc}")
         return await _finalize_visit(
@@ -682,6 +692,8 @@ async def _run_visit_body(
                 (usage_breakdown["deep"].input_tokens + usage_breakdown["deep"].output_tokens),
                 elapsed,
             )
+            if phase_callback:
+                await phase_callback("deep", cluster_id)
         except UsageLimitExceeded as exc:
             elapsed = time.monotonic() - t0
             logger.info(
@@ -755,6 +767,8 @@ async def _run_visit_body(
                 (usage_breakdown["stitch"].input_tokens + usage_breakdown["stitch"].output_tokens),
                 elapsed,
             )
+            if phase_callback:
+                await phase_callback("stitch", cluster_id)
         except UsageLimitExceeded as exc:
             elapsed = time.monotonic() - t0
             logger.info(f"Stitch budget exceeded for cluster={cluster_id}: {exc}")
@@ -816,6 +830,7 @@ async def _run_visit_body(
 
 
 __all__ = [
+    "PhaseCallback",
     "VisitResult",
     "run_visit",
 ]
