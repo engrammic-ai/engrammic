@@ -75,6 +75,29 @@ class StructuredSupersessionPair:
     reason: str
 
 
+def _would_create_cycle(
+    from_id: str,
+    to_id: str,
+    edge_graph: dict[str, set[str]],
+) -> bool:
+    """Return True if adding from_id -> to_id would create a cycle.
+
+    Uses DFS reachability: if to_id can already reach from_id, adding the
+    edge would close a cycle.
+    """
+    visited: set[str] = set()
+    stack = [to_id]
+    while stack:
+        node = stack.pop()
+        if node == from_id:
+            return True
+        if node in visited:
+            continue
+        visited.add(node)
+        stack.extend(edge_graph.get(node, set()))
+    return False
+
+
 def detect_structured_supersession(
     nodes: list[Any],
     dominance_threshold: float = 1.2,
@@ -83,12 +106,17 @@ def detect_structured_supersession(
 
     Compares all pairs of SPO nodes and returns pairs where one supersedes another.
     Only considers nodes that have subject/predicate/object fields.
+
+    Cycle detection: edges that would close a cycle in the supersession graph
+    are skipped and logged as warnings. This guards against contradictory
+    primitives decisions across three or more nodes where A > B > C > A.
     """
     spo_nodes = [n for n in nodes if _has_spo_structure(n)]
     if len(spo_nodes) < 2:
         return []
 
     pairs: list[StructuredSupersessionPair] = []
+    edge_graph: dict[str, set[str]] = {}
 
     for i, older in enumerate(spo_nodes):
         for newer in spo_nodes[i + 1 :]:
@@ -106,19 +134,37 @@ def detect_structured_supersession(
             decision = should_supersede(older_fact, newer_fact, dominance_threshold)
 
             if decision.result == ContradictionResult.NEW_SUPERSEDES_OLD:
+                superseding_id = str(newer.id)
+                superseded_id = str(older.id)
+                if _would_create_cycle(superseding_id, superseded_id, edge_graph):
+                    logger.warning(
+                        "Skipping supersession edge that would create a cycle: "
+                        f"superseding={superseding_id} superseded={superseded_id}"
+                    )
+                    continue
+                edge_graph.setdefault(superseding_id, set()).add(superseded_id)
                 pairs.append(
                     StructuredSupersessionPair(
-                        superseding_id=str(newer.id),
-                        superseded_id=str(older.id),
+                        superseding_id=superseding_id,
+                        superseded_id=superseded_id,
                         confidence=newer_fact.confidence,
                         reason=decision.reason or "structured_supersession",
                     )
                 )
             elif decision.result == ContradictionResult.OLD_SUPERSEDES_NEW:
+                superseding_id = str(older.id)
+                superseded_id = str(newer.id)
+                if _would_create_cycle(superseding_id, superseded_id, edge_graph):
+                    logger.warning(
+                        "Skipping supersession edge that would create a cycle: "
+                        f"superseding={superseding_id} superseded={superseded_id}"
+                    )
+                    continue
+                edge_graph.setdefault(superseding_id, set()).add(superseded_id)
                 pairs.append(
                     StructuredSupersessionPair(
-                        superseding_id=str(older.id),
-                        superseded_id=str(newer.id),
+                        superseding_id=superseding_id,
+                        superseded_id=superseded_id,
                         confidence=older_fact.confidence,
                         reason=decision.reason or "structured_supersession",
                     )
