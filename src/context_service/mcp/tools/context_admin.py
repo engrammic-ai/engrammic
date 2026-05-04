@@ -321,12 +321,16 @@ async def _context_admin(
         try:
             from context_service.llm import build_llm_provider
 
+            # No dedicated revision_provider/revision_model settings exist yet;
+            # reuse summarization_provider/summarization_model as a reasonable default
+            # until a separate revision LLM config is added to settings.
             llm_client = build_llm_provider(
                 settings.summarization_provider, settings.summarization_model
             )
         except Exception as exc:
             return {"error": "llm_unavailable", "message": str(exc)}
-        if ctx_svc._embedding is None:
+        embedding_svc = ctx_svc.embedding_client
+        if embedding_svc is None:
             return {"error": "embedding_unavailable", "message": "no embedding service configured"}
         pr = await partial_revise_belief(
             store=store,
@@ -334,7 +338,7 @@ async def _context_admin(
             silo_id=silo_id,
             revision_note=name,
             llm_client=llm_client,
-            embedding_client=ctx_svc._embedding,
+            embedding_client=embedding_svc,
         )
         return {
             "original_belief_id": pr.original_belief_id,

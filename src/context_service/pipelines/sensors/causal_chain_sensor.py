@@ -33,7 +33,7 @@ def causal_transitivity_sensor(
 
     context.log.info(f"causal_transitivity_sensor: triggering causal_transitivity for partition={partition_key}")
     return dg.RunRequest(
-        run_key=f"causal_transitivity:{partition_key}:{context.cursor or asset_event.run_id}",
+        run_key=f"causal_transitivity:{partition_key}:{asset_event.run_id}",
         partition_key=partition_key,
         asset_selection=[dg.AssetKey("causal_transitivity")],
         tags={"dagster/concurrency_key": partition_key},
@@ -61,7 +61,7 @@ def chain_stitch_sensor(
 
     context.log.info(f"chain_stitch_sensor: triggering chain_stitch for partition={partition_key}")
     return dg.RunRequest(
-        run_key=f"chain_stitch:{partition_key}:{context.cursor or asset_event.run_id}",
+        run_key=f"chain_stitch:{partition_key}:{asset_event.run_id}",
         partition_key=partition_key,
         asset_selection=[dg.AssetKey("chain_stitch")],
         tags={"dagster/concurrency_key": partition_key},

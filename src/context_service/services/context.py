@@ -105,6 +105,11 @@ class ContextService:
         """Expose the underlying HyperGraphStore for callers that need raw graph access."""
         return self._memgraph
 
+    @property
+    def embedding_client(self) -> EmbeddingService | None:
+        """Expose the embedding service for callers that need it without accessing private state."""
+        return self._embedding
+
     async def store(
         self,
         scope: ScopeContext,
@@ -223,7 +228,11 @@ class ContextService:
 
             # Generate expansion for SPLADE if not already provided and generation is enabled.
             settings = get_settings()
-            if expansion is None and settings.expansion_generation_enabled and self._expansion_generator is not None:
+            if (
+                expansion is None
+                and settings.expansion_generation_enabled
+                and self._expansion_generator is not None
+            ):
                 try:
                     expansion = await self._expansion_generator.generate(content)
                 except Exception as exc:
