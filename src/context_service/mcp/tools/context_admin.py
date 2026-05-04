@@ -245,7 +245,11 @@ async def _context_admin(
     if action == "provenance":
         if not ref:
             return {"error": "missing_ref", "message": "ref (node_id) required for provenance"}
-        return await _context_graph(silo_id=silo_id, seed_nodes=[ref], mode="provenance")
+        return await _context_graph(
+            silo_id=silo_id,
+            seed_nodes=[ref],
+            relationship_types=["DERIVED_FROM", "SUPPORTS", "EVIDENCES"],
+        )
 
     if action == "history":
         if not ref:
