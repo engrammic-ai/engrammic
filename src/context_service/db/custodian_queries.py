@@ -613,3 +613,49 @@ async def get_pass(
     if not rows:
         return None
     return dict(rows[0])
+
+
+# =============================================================================
+# Cross-cluster supersession queries (Phase 2 chain stitching)
+# =============================================================================
+
+# Find supersession chain endpoints that span clusters.
+# Returns pairs where node A supersedes node B but they are in different clusters.
+FIND_CROSS_CLUSTER_SUPERSESSION_GAPS = """
+MATCH (a)-[:SUPERSEDES]->(b)
+WHERE a.silo_id = $silo_id
+  AND b.silo_id = $silo_id
+  AND a.cluster_id IS NOT NULL
+  AND b.cluster_id IS NOT NULL
+  AND a.cluster_id <> b.cluster_id
+WITH a, b
+
+// Find if there's a chain: look for nodes that supersede 'a' in a different cluster
+OPTIONAL MATCH (upstream)-[:SUPERSEDES*1..5]->(a)
+WHERE upstream.cluster_id <> a.cluster_id
+  AND upstream.silo_id = $silo_id
+
+// Find if there's a chain: look for nodes that 'b' supersedes in a different cluster
+OPTIONAL MATCH (b)-[:SUPERSEDES*1..5]->(downstream)
+WHERE downstream.cluster_id <> b.cluster_id
+  AND downstream.silo_id = $silo_id
+
+RETURN DISTINCT
+    a.id AS superseding_id,
+    a.cluster_id AS superseding_cluster,
+    b.id AS superseded_id,
+    b.cluster_id AS superseded_cluster,
+    upstream.id AS upstream_id,
+    downstream.id AS downstream_id
+"""
+
+# Find terminal nodes in supersession chains (nodes that supersede others but are not superseded)
+FIND_CHAIN_TERMINALS = """
+MATCH (terminal)-[:SUPERSEDES*1..]->(superseded)
+WHERE terminal.silo_id = $silo_id
+  AND NOT EXISTS { MATCH (other)-[:SUPERSEDES]->(terminal) WHERE other.silo_id = $silo_id }
+WITH terminal, collect(DISTINCT superseded.id) AS chain_ids
+RETURN terminal.id AS terminal_id,
+       terminal.cluster_id AS terminal_cluster,
+       chain_ids
+"""
