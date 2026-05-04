@@ -5,8 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-import pytest
-
 from context_service.custodian.supersession import detect_structured_supersession
 
 
