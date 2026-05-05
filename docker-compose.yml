@@ -49,7 +49,7 @@ services:
     environment:
       - MEMGRAPH_USER=${MEMGRAPH_USER:-}
       - MEMGRAPH_PASSWORD=${MEMGRAPH_PASSWORD:-}
-    command: ["--log-level=WARNING"]
+    command: ["--log-level=WARNING", "--storage-properties-on-edges=true"]
     healthcheck:
       test: ["CMD", "echo", ">", "/dev/tcp/localhost/7687"]
       interval: 10s
