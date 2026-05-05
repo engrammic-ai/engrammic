@@ -86,8 +86,8 @@ def filter_cyclic_pairs[T](pairs: list[T]) -> list[T]:
     result: list[T] = []
 
     for pair in pairs:
-        from_id = str(pair.superseding_id)  # type: ignore[union-attr]
-        to_id = str(pair.superseded_id)  # type: ignore[union-attr]
+        from_id = str(pair.superseding_id)  # type: ignore[attr-defined]
+        to_id = str(pair.superseded_id)  # type: ignore[attr-defined]
 
         if not _would_create_cycle(from_id, to_id, edge_graph):
             result.append(pair)
