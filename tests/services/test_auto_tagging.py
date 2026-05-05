@@ -1,10 +1,10 @@
 """Tests for AutoTaggingService."""
 
 import uuid
+from unittest.mock import AsyncMock
 
 import numpy as np
 import pytest
-from unittest.mock import AsyncMock
 
 from context_service.services.auto_tagging import AutoTaggingService, VocabCache
 

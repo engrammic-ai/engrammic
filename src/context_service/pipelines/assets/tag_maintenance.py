@@ -86,8 +86,7 @@ def tag_maintenance(
             return {"silo_id": silo_id_str, "demoted": 0, "skipped": 0}
 
         cutoff = (
-            datetime.datetime.now(datetime.UTC)
-            - datetime.timedelta(days=demotion_days)
+            datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=demotion_days)
         ).isoformat()
 
         # Query Memgraph for tags active within the window.
@@ -116,8 +115,7 @@ def tag_maintenance(
             await svc.remove_dynamic_tags(silo_uuid, stale)
 
         context.log.info(
-            f"silo={silo_id_str} demotion_days={demotion_days} "
-            f"demoted={len(stale)} tags={stale}"
+            f"silo={silo_id_str} demotion_days={demotion_days} demoted={len(stale)} tags={stale}"
         )
         return {
             "silo_id": silo_id_str,

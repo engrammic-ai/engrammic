@@ -1,9 +1,10 @@
 """Tests for Postgres session infrastructure."""
 
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
-from context_service.db.postgres import get_session, Base
+import pytest
+
+from context_service.db.postgres import Base, get_session
 
 
 @pytest.mark.asyncio

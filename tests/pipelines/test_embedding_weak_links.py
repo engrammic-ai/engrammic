@@ -8,12 +8,13 @@ import pytest
 @pytest.mark.asyncio
 async def test_embedding_asset_creates_weak_links_when_enabled() -> None:
     """Verify embedding asset calls create_weak_links_for_node when enabled."""
-    with patch(
-        "context_service.pipelines.assets.embedding.create_weak_links_for_node",
-        new_callable=AsyncMock,
-    ) as mock_create, patch(
-        "context_service.pipelines.assets.embedding.get_settings"
-    ) as mock_settings:
+    with (
+        patch(
+            "context_service.pipelines.assets.embedding.create_weak_links_for_node",
+            new_callable=AsyncMock,
+        ) as mock_create,
+        patch("context_service.pipelines.assets.embedding.get_settings") as mock_settings,
+    ):
         mock_settings.return_value.weak_links.enabled = True
         mock_settings.return_value.weak_links.similarity_threshold = 0.75
         mock_settings.return_value.weak_links.max_links_per_node = 5
@@ -37,12 +38,13 @@ async def test_embedding_asset_creates_weak_links_when_enabled() -> None:
 @pytest.mark.asyncio
 async def test_embedding_asset_skips_weak_links_when_disabled() -> None:
     """Verify embedding asset skips create_weak_links_for_node when disabled."""
-    with patch(
-        "context_service.pipelines.assets.embedding.create_weak_links_for_node",
-        new_callable=AsyncMock,
-    ) as mock_create, patch(
-        "context_service.pipelines.assets.embedding.get_settings"
-    ) as mock_settings:
+    with (
+        patch(
+            "context_service.pipelines.assets.embedding.create_weak_links_for_node",
+            new_callable=AsyncMock,
+        ) as mock_create,
+        patch("context_service.pipelines.assets.embedding.get_settings") as mock_settings,
+    ):
         mock_settings.return_value.weak_links.enabled = False
 
         from context_service.pipelines.assets.embedding import _post_embed_hook
@@ -61,12 +63,13 @@ async def test_embedding_asset_skips_weak_links_when_disabled() -> None:
 @pytest.mark.asyncio
 async def test_post_embed_hook_passes_correct_params() -> None:
     """Verify hook passes settings values to create_weak_links_for_node."""
-    with patch(
-        "context_service.pipelines.assets.embedding.create_weak_links_for_node",
-        new_callable=AsyncMock,
-    ) as mock_create, patch(
-        "context_service.pipelines.assets.embedding.get_settings"
-    ) as mock_settings:
+    with (
+        patch(
+            "context_service.pipelines.assets.embedding.create_weak_links_for_node",
+            new_callable=AsyncMock,
+        ) as mock_create,
+        patch("context_service.pipelines.assets.embedding.get_settings") as mock_settings,
+    ):
         mock_settings.return_value.weak_links.enabled = True
         mock_settings.return_value.weak_links.similarity_threshold = 0.8
         mock_settings.return_value.weak_links.max_links_per_node = 3

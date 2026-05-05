@@ -124,9 +124,7 @@ class TestWeakLinksCycleMocked:
 
         assert created == 1
         # Second execute call is the MERGE
-        merge_calls = [
-            c for c in memgraph.execute.call_args_list if "MERGE" in str(c)
-        ]
+        merge_calls = [c for c in memgraph.execute.call_args_list if "MERGE" in str(c)]
         assert len(merge_calls) == 1
         kwargs = merge_calls[0][0][1]
         assert kwargs["silo_id"] == silo_id

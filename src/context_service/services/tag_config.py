@@ -66,9 +66,7 @@ class TagConfigService:
         await self._session.flush()
         return cfg
 
-    async def update_settings(
-        self, silo_id: UUID, updates: dict[str, Any]
-    ) -> SiloTagConfig:
+    async def update_settings(self, silo_id: UUID, updates: dict[str, Any]) -> SiloTagConfig:
         """Merge updates into settings. Raises KeyError if config does not exist."""
         cfg = await self.get(silo_id)
         if cfg is None:
@@ -78,9 +76,7 @@ class TagConfigService:
         await self._session.flush()
         return cfg
 
-    async def update_constraints(
-        self, silo_id: UUID, updates: dict[str, Any]
-    ) -> SiloTagConfig:
+    async def update_constraints(self, silo_id: UUID, updates: dict[str, Any]) -> SiloTagConfig:
         """Merge updates into constraints. Raises KeyError if config does not exist."""
         cfg = await self.get(silo_id)
         if cfg is None:

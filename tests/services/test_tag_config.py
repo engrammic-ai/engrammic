@@ -85,9 +85,7 @@ async def test_get_or_create_returns_new_config_when_not_exists(
 
 
 @pytest.mark.asyncio
-async def test_get_or_create_returns_existing_config(
-    service: TagConfigService, session: AsyncMock
-):
+async def test_get_or_create_returns_existing_config(service: TagConfigService, session: AsyncMock):
     cfg = _make_config(core_tags=["python"])
     session.get.return_value = cfg
 
@@ -169,9 +167,7 @@ async def test_add_dynamic_tags_deduplicates(service: TagConfigService, session:
 
 
 @pytest.mark.asyncio
-async def test_remove_dynamic_tags_removes_specified(
-    service: TagConfigService, session: AsyncMock
-):
+async def test_remove_dynamic_tags_removes_specified(service: TagConfigService, session: AsyncMock):
     cfg = _make_config(dynamic_tags=["async", "oop", "fp"])
     session.get.return_value = cfg
 
@@ -184,9 +180,7 @@ async def test_remove_dynamic_tags_removes_specified(
 
 
 @pytest.mark.asyncio
-async def test_remove_dynamic_tags_ignores_missing(
-    service: TagConfigService, session: AsyncMock
-):
+async def test_remove_dynamic_tags_ignores_missing(service: TagConfigService, session: AsyncMock):
     cfg = _make_config(dynamic_tags=["async"])
     session.get.return_value = cfg
 

@@ -12,7 +12,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from context_service.db.postgres import Base
 
-
 DEFAULT_SETTINGS: dict[str, Any] = {
     "min_tags": 2,
     "max_tags": 5,
@@ -35,21 +34,15 @@ class SiloTagConfig(Base):
     __tablename__ = "silo_tag_configs"
 
     silo_id: Mapped[UUID] = mapped_column(primary_key=True)
-    core_tags: Mapped[list[str]] = mapped_column(
-        ARRAY(String), default=list, server_default="{}"
-    )
+    core_tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=list, server_default="{}")
     dynamic_tags: Mapped[list[str]] = mapped_column(
         ARRAY(String), default=list, server_default="{}"
     )
-    settings: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, default=lambda: DEFAULT_SETTINGS.copy()
-    )
+    settings: Mapped[dict[str, Any]] = mapped_column(JSONB, default=lambda: DEFAULT_SETTINGS.copy())
     constraints: Mapped[dict[str, Any]] = mapped_column(
         JSONB, default=lambda: DEFAULT_CONSTRAINTS.copy()
     )
-    created_at: Mapped[datetime] = mapped_column(
-        default=func.now(), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(default=func.now(), server_default=func.now())
     updated_at: Mapped[datetime | None] = mapped_column(onupdate=func.now(), default=None)
 
     def all_tags(self) -> list[str]:

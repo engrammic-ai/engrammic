@@ -57,7 +57,7 @@ def test_parse_tag_response_valid():
 
 
 def test_parse_tag_response_strips_markdown_fences():
-    raw = "```json\n{\"n1\": [\"a\", \"b\"]}\n```"
+    raw = '```json\n{"n1": ["a", "b"]}\n```'
     result = _parse_tag_response(raw)
     assert result == {"n1": ["a", "b"]}
 

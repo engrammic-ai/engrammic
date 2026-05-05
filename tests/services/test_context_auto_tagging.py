@@ -10,7 +10,7 @@ import pytest
 
 from context_service.services.auto_tagging import AutoTaggingService
 from context_service.services.context import ContextService
-from context_service.services.models import Node, ScopeContext
+from context_service.services.models import ScopeContext
 
 
 def _make_scope() -> ScopeContext:
@@ -93,7 +93,9 @@ class TestContextServiceAutoTagging:
         )
         assert set_call is not None
         _, kwargs_or_args = set_call
-        call_params: dict[str, Any] = set_call.args[1] if set_call.args else set_call.kwargs.get("params", {})
+        call_params: dict[str, Any] = (
+            set_call.args[1] if set_call.args else set_call.kwargs.get("params", {})
+        )
         assert call_params.get("auto_tags") == ["database", "backend"]
 
     @pytest.mark.asyncio

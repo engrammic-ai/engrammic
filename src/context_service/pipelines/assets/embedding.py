@@ -192,9 +192,7 @@ def embedding_asset(
                                 silo_id=silo_id,
                             )
                         except Exception as exc:
-                            context.log.warning(
-                                f"post_embed_hook failed for node={r['id']}: {exc}"
-                            )
+                            context.log.warning(f"post_embed_hook failed for node={r['id']}: {exc}")
 
                 if len(rows) < _BATCH_SIZE:
                     # Fetched fewer than a full page — queue is drained.
