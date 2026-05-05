@@ -60,16 +60,17 @@ Settings exist but subsystem not implemented:
 - Purpose: External compression service for large content
 
 ### Unused Config Settings (Low Priority)
-47 settings identified as unused in audit. Categories:
+Some settings identified as potentially unused:
 - **Dead feature gates**: `entity_retrieval_enabled`, `cluster_retrieval_enabled`, `commitment_retrieval_enabled`, `walker_entity_graph_mode`
-- **Nested sub-configs**: `infra`, `server`, `embedding`, `llm`, `auth`, `prompts`, `features`, `cache`, `retrieval`, `clustering`, `extraction`, `external`, `retrieval_tuning` - all accessed via flat shims instead
-- **Decision needed**: Commit to nested configs OR flat shims, not both
+- Nested sub-configs were falsely flagged - they ARE used (see above)
 
-### Flat vs Nested Config Architecture
-Current state: Both nested sub-configs AND flat shims exist. Code only reads flat shims.
-Options:
-1. Remove nested configs, keep flat (simpler)
-2. Migrate code to use nested configs (cleaner organization)
+### Config Architecture (Resolved)
+Initial audit claimed nested configs were unused. On verification, they ARE used:
+- Re-exported from `core/__init__.py` for external access
+- Used in type signatures (e.g., `CustodianSettings` in visit.py)
+- Flat properties read from nested objects internally
+
+Architecture is correct: nested for organization, flat properties for convenience. Added `frozen=True` for immutability.
 
 ## Files Changed
 
