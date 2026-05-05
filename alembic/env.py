@@ -16,6 +16,14 @@ from context_service.db.postgres import Base  # noqa: F401
 
 # Import models to register them against Base.metadata before autogenerate runs.
 from context_service.models.tag_config import SiloTagConfig  # noqa: F401
+from context_service.models.postgres import (  # noqa: F401
+    AuditEvents,
+    Events,
+    OrgPreferences,
+    OrphanedChains,
+    ReasoningChainSteps,
+    SiloConfig,
+)
 
 config = context.config
 
