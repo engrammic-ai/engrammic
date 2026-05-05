@@ -33,11 +33,17 @@ dependencies = [
     "prometheus-client>=0.20",
     # Redis
     "redis>=5.0",
+    # Postgres (tag config)
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.29",
+    "alembic>=1.13",
     # Config
     "pyyaml>=6.0",
     "python-dotenv>=1.0",
     # JSON
     "orjson>=3.9",
+    # Numeric
+    "numpy>=1.26",
 ]
 
 [dependency-groups]
