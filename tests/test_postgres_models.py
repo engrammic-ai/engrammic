@@ -1,5 +1,7 @@
 from sqlalchemy import inspect
 
+from context_service.models.inference import Conclusion
+from context_service.models.postgres.audit import AuditEvents, Events
 from context_service.models.postgres.org import OrgPreferences, SiloConfig
 from context_service.models.postgres.reasoning import (
     OrphanedChains,
@@ -92,7 +94,23 @@ def test_orphaned_chains_columns():
     }
 
 
-from context_service.models.inference import Conclusion
+def test_events_columns():
+    """Events has required columns including expires_at for TTL."""
+    mapper = inspect(Events)
+    columns = {c.key for c in mapper.columns}
+    assert "expires_at" in columns
+    assert "silo_id" in columns
+    assert "event_type" in columns
+    assert "source_chain_id" in columns
+    assert "content" in columns
+
+
+def test_audit_events_has_actor_fields():
+    """AuditEvents tracks who triggered the event."""
+    mapper = inspect(AuditEvents)
+    columns = {c.key for c in mapper.columns}
+    assert "actor_id" in columns
+    assert "actor_type" in columns
 
 
 def test_conclusion_model_fields():
