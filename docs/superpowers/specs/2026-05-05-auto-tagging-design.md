@@ -4,6 +4,42 @@
 **Status:** Approved  
 **Review Flag:** Revisit 2026-06 to evaluate vocabulary bootstrapping approach
 
+## Storage Strategy Analysis
+
+### Current System Data Distribution
+
+| Store | Data | Access Pattern | Why Here |
+|-------|------|----------------|----------|
+| **Memgraph** | Content nodes, relationships, claims, facts | Graph traversal, semantic queries | Graph structure, relationship-heavy |
+| **Qdrant** | Embeddings, vectors | Similarity search | Purpose-built for vector search |
+| **Redis** | Sessions, caches, access events, streams | High-frequency read/write, TTL | Speed, ephemeral data |
+| **Postgres** | (planned) Silo config, tag config | CRUD, dashboard, audit | Relational, cheap, admin-friendly |
+
+### Cost at Scale
+
+| Store | Cost Driver | 1M Silos | 100M Nodes |
+|-------|-------------|----------|------------|
+| Memgraph | RAM (in-memory) | $$$ | $$$$ |
+| Qdrant | Disk + RAM cache | $$ | $$$ |
+| Redis | RAM | $$$ | $$ (TTL helps) |
+| Postgres | Disk | $ | $ |
+
+### Data Placement Principles
+
+1. **Graph data** (nodes, edges, traversals) → Memgraph
+2. **Vectors** (embeddings, similarity) → Qdrant  
+3. **Ephemeral** (sessions, caches, streams) → Redis
+4. **Config/metadata** (silo settings, tag vocab, audit) → Postgres
+5. **High-churn temp data** (tag candidates) → Redis with TTL
+
+### Why Postgres for Tag Config
+
+- Dashboard/UI: trivial CRUD APIs with SQLAlchemy
+- Schema enforcement: Pydantic + Alembic migrations
+- Audit trails: updated_at, version history
+- Cost: pennies at scale vs RAM-bound stores
+- Tooling: pgAdmin, Retool, countless admin UIs
+
 ## Overview
 
 Automatic tag suggestion for stored content using hybrid sync/async approach. Sync cosine matching provides immediate tags (~0.1ms), async LLM refinement adds nuanced tags within 30 minutes.
@@ -58,38 +94,46 @@ Automatic tag suggestion for stored content using hybrid sync/async approach. Sy
 
 ## Data Model
 
-### Silo Tag Config
+### Silo Tag Config (Postgres)
 
-```cypher
-(s:Silo {
-  id: "...",
-  tag_config: {
-    core_tags: [],           # Protected, user-defined
-    dynamic_tags: [],        # Auto-promoted
-    settings: {
-      min_tags: 2,
-      max_tags: 5,
-      cosine_threshold: 0.4,
-      promotion_threshold: 3,
-      demotion_days: 30,
-      synonym_threshold: 0.85
-    }
-  }
-})
+```python
+# models/silo_tag_config.py
+
+class SiloTagConfig(Base):
+    __tablename__ = "silo_tag_configs"
+    
+    silo_id: Mapped[UUID] = mapped_column(primary_key=True)
+    core_tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=[])
+    dynamic_tags: Mapped[list[str]] = mapped_column(ARRAY(String), default=[])
+    settings: Mapped[dict] = mapped_column(JSONB, default={
+        "min_tags": 2,
+        "max_tags": 5,
+        "cosine_threshold": 0.4,
+        "promotion_threshold": 3,
+        "demotion_days": 30,
+        "synonym_threshold": 0.85
+    })
+    constraints: Mapped[dict] = mapped_column(JSONB, default={
+        "hierarchy": {},
+        "layer_hints": {},
+        "mutual_exclusion": []
+    })
+    created_at: Mapped[datetime] = mapped_column(default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(onupdate=func.now())
 ```
 
-### Tag Candidate Tracking
+Dashboard-friendly: REST CRUD, Alembic migrations, audit trail via updated_at.
 
-```cypher
-(:TagCandidate {
-  silo_id: "...",
-  tag: "customer-feedback",
-  count: 2,
-  first_seen: timestamp(),
-  last_seen: timestamp(),
-  embedding: [...]
-})
+### Tag Candidate Tracking (Redis)
+
+```python
+# High-churn, TTL-based
+# Key: tag_candidate:{silo_id}:{tag_hash}
+# Value: {"tag": "...", "count": N, "first_seen": ts, "embedding": [...]}
+# TTL: 7 days (orphan candidates expire automatically)
 ```
+
+Redis handles the churn; promoted tags move to Postgres.
 
 ### Node Tag Fields
 
@@ -237,10 +281,13 @@ Daily at 03:00 UTC:
 
 | File | Purpose |
 |------|---------|
-| `config/tags.yaml` | System defaults |
-| `services/auto_tagging.py` | Sync cosine matching |
+| `config/tags.yaml` | System defaults (thresholds, no vocabulary) |
+| `models/silo_tag_config.py` | Postgres model for per-silo config |
+| `services/auto_tagging.py` | Sync cosine matching + vocab cache |
+| `services/tag_config.py` | CRUD for silo tag config (Postgres) |
 | `pipelines/assets/auto_tagging.py` | Async LLM refinement |
-| `pipelines/assets/tag_maintenance.py` | Vocabulary pruning |
+| `pipelines/assets/tag_maintenance.py` | Vocabulary pruning + candidate promotion |
+| `api/routes/tag_config.py` | REST endpoints for dashboard |
 
 ## Tag Precedence
 
