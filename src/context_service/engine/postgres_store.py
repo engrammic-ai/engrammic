@@ -33,7 +33,12 @@ class PostgresStore:
                 index_elements=["chain_id"],
                 set_={"steps": stmt.excluded.steps},
             )
-            await session.execute(stmt)
+            result: CursorResult[Any] = await session.execute(stmt)  # type: ignore[assignment]
+            if result.rowcount != 1:
+                raise RuntimeError(
+                    f"upsert_chain_steps expected rowcount=1, got {result.rowcount} "
+                    f"for chain_id={chain_id}"
+                )
 
     async def get_chain_steps(self, chain_id: UUID) -> list[dict[str, Any]] | None:
         """Fetch steps by chain_id. Returns None if not found."""
@@ -79,4 +84,9 @@ class PostgresStore:
                     "last_error": error,
                 },
             )
-            await session.execute(stmt)
+            result: CursorResult[Any] = await session.execute(stmt)  # type: ignore[assignment]
+            if result.rowcount != 1:
+                raise RuntimeError(
+                    f"add_orphaned_chain expected rowcount=1, got {result.rowcount} "
+                    f"for chain_id={chain_id}"
+                )

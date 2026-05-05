@@ -216,7 +216,7 @@ class RetrievalConfig(BaseModel):
 class ServerConfig(BaseModel):
     model_config = {"extra": "ignore"}
 
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 8000
     reload: bool = False
     workers: int = 4

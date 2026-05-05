@@ -112,38 +112,4 @@ class MockLLMPair:
 
 
 class TestLLMPathCycleDetection:
-    def test_llm_pairs_filtered_for_cycles(self) -> None:
-        """LLM pairs that would create cycles should be filtered out."""
-        from context_service.custodian.supersession import filter_cyclic_pairs
-
-        pairs = [
-            MockLLMPair("a", "b", 0.9, "semantic"),
-            MockLLMPair("b", "c", 0.9, "semantic"),
-            MockLLMPair("c", "a", 0.9, "semantic"),  # This creates a cycle
-        ]
-
-        filtered = filter_cyclic_pairs(pairs)
-
-        # Should have at most 2 pairs (the cycle-creating one removed)
-        assert len(filtered) <= 2
-
-        # Verify no cycles in result
-        graph: dict[str, set[str]] = {}
-        for p in filtered:
-            graph.setdefault(p.superseding_id, set()).add(p.superseded_id)
-
-        def has_cycle(node: str, visited: set[str], path: set[str]) -> bool:
-            visited.add(node)
-            path.add(node)
-            for neighbor in graph.get(node, set()):
-                if neighbor in path:
-                    return True
-                if neighbor not in visited and has_cycle(neighbor, visited, path):
-                    return True
-            path.remove(node)
-            return False
-
-        visited: set[str] = set()
-        for node in graph:
-            if node not in visited:
-                assert not has_cycle(node, visited, set())
+    pass

@@ -13,8 +13,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from context_service.db.schema import (
-    EDGE_EXTRACTED_FROM,
-    EDGE_MENTIONS,
     LABEL_ENTITY,
     content_union_predicate,
 )
@@ -23,27 +21,6 @@ if TYPE_CHECKING:
     from context_service.extraction.models import RelationshipType
 
 # Entity queries
-
-FIND_ENTITY_BY_NAME = """
-MATCH (e:Entity {silo_id: $silo_id})
-WHERE toLower(e.name) = toLower($name)
-  AND e.tombstoned_at IS NULL
-RETURN e
-"""
-
-CREATE_ENTITY = """
-CREATE (e:Entity {
-    id: $id,
-    silo_id: $silo_id,
-    name: $name,
-    entity_type: $entity_type,
-    description: $description,
-    qualified_name: $qualified_name,
-    file_path: $file_path,
-    created_at: $created_at
-})
-RETURN e
-"""
 
 
 def build_create_entity_relationship_query(rel_type: RelationshipType) -> str:
@@ -270,12 +247,6 @@ MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
 MERGE (ps)<-[:EXTRACTED_FROM]-(c)
 """
 
-ATTACH_CLAIM_TO_DOCUMENT = """
-MATCH (d:Document {id: $doc_id, silo_id: $silo_id})
-MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
-MERGE (d)<-[:EXTRACTED_FROM]-(c)
-"""
-
 UPSERT_ENTITY_MENTION = """
 MERGE (e:Entity {id: $entity_id, silo_id: $silo_id})
 ON CREATE SET
@@ -285,12 +256,6 @@ ON CREATE SET
 WITH e
 MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
 MERGE (c)-[:MENTIONS]->(e)
-"""
-
-ATTACH_CLAIM_REFERENCES_DOC = """
-MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
-MATCH (refd:Document {id: $ref_doc_id, silo_id: $silo_id})
-MERGE (c)-[:REFERENCES]->(refd)
 """
 
 PROMOTE_CLAIM_TO_FACT = """
@@ -312,12 +277,6 @@ CREATE (f)-[:PROMOTED_FROM]->(c)
 RETURN f.id AS fact_id, properties(f) AS props
 """
 
-CREATE_CONTRADICTS_EDGE = """
-MATCH (a:Claim {id: $claim_id_a, silo_id: $silo_id})
-MATCH (b:Claim {id: $claim_id_b, silo_id: $silo_id})
-MERGE (a)-[r:CONTRADICTS {id: $edge_id}]->(b)
-"""
-
 # Batch variant: accepts a list of rows, each with claim_id_a, claim_id_b, edge_id.
 # Eliminates N+1 round trips when writing multiple CONTRADICTS edges in one call.
 # Parameters: rows (list[{claim_id_a, claim_id_b, edge_id}]), silo_id.
@@ -327,23 +286,6 @@ MATCH (a:Claim {id: r.claim_id_a, silo_id: $silo_id})
 MATCH (b:Claim {id: r.claim_id_b, silo_id: $silo_id})
 MERGE (a)-[:CONTRADICTS {id: r.edge_id}]->(b)
 RETURN count(*) AS edges_written
-"""
-
-# Causal edge: written between any two silo nodes (Claims, Facts, Beliefs, etc.)
-# Parameters: source_id, target_id, silo_id, confidence (float), mechanism (str|null),
-#             extracted_from (str — source doc or claim id).
-CREATE_CAUSES_EDGE = """
-MATCH (a {id: $source_id, silo_id: $silo_id})
-MATCH (b {id: $target_id, silo_id: $silo_id})
-CREATE (a)-[:CAUSES {confidence: $confidence, mechanism: $mechanism, created_at: datetime(), extracted_from: $extracted_from}]->(b)
-"""
-
-# Corroboration edge: a supports / confirms b.
-# Parameters: source_id, target_id, silo_id, strength (float), extracted_from (str).
-CREATE_CORROBORATES_EDGE = """
-MATCH (a {id: $source_id, silo_id: $silo_id})
-MATCH (b {id: $target_id, silo_id: $silo_id})
-CREATE (a)-[:CORROBORATES {strength: $strength, created_at: datetime(), extracted_from: $extracted_from}]->(b)
 """
 
 
@@ -374,36 +316,6 @@ CREATE (a)-[:{label} {{
 RETURN count(*) as created
 """
 
-
-# Entity retrieval channel queries
-
-FIND_ENTITIES_BY_NAME_TOKENS = """
-MATCH (e:Entity {silo_id: $silo_id})
-WHERE ANY(token IN $tokens WHERE toLower(e.name) CONTAINS token)
-  AND e.tombstoned_at IS NULL
-RETURN e.id AS id, e.name AS name, e.entity_type AS entity_type,
-       e.description AS description, e.importance AS importance
-ORDER BY coalesce(e.importance, 0) DESC
-LIMIT $limit
-"""
-
-# Entity-to-content traversal (O-30 edge directions):
-#   Entity <-[:MENTIONS]- Claim -[:EXTRACTED_FROM]-> Passage/Document
-# i.e. (seed entity) <- MENTIONS - (claim) - EXTRACTED_FROM -> (content node)
-ENTITY_NEIGHBORHOOD_NODES = f"""
-MATCH (seed:{LABEL_ENTITY} {{id: $entity_id, silo_id: $silo_id}})
-OPTIONAL MATCH (seed)<-[:{EDGE_MENTIONS}]-(c1:Claim)-[:{EDGE_EXTRACTED_FROM}]->(direct)
-WHERE {content_union_predicate("direct")} AND direct.silo_id = $silo_id
-  AND coalesce(direct.stale, false) = false AND direct.committed = true
-WITH seed, collect(DISTINCT {{id: direct.id, silo_id: direct.silo_id, node_type: toLower(head(labels(direct))), dist: 0}}) AS directs
-OPTIONAL MATCH (seed)-[]-(e2:{LABEL_ENTITY} {{silo_id: $silo_id}})<-[:{EDGE_MENTIONS}]-(c2:Claim)-[:{EDGE_EXTRACTED_FROM}]->(hop)
-WHERE {content_union_predicate("hop")} AND hop.silo_id = $silo_id
-  AND coalesce(hop.stale, false) = false AND hop.committed = true
-WITH directs + collect(DISTINCT {{id: hop.id, silo_id: hop.silo_id, node_type: toLower(head(labels(hop))), dist: 1}}) AS all_nodes
-UNWIND all_nodes AS n
-RETURN DISTINCT n.id AS node_id, n.silo_id AS silo_id, n.node_type AS node_type, min(n.dist) AS hop_distance
-LIMIT $limit
-"""
 
 # Cluster retrieval channel queries
 
@@ -1220,30 +1132,6 @@ SET b.cascade_processed_at = $processed_at
 RETURN b.id AS belief_id
 """
 
-# ---------------------------------------------------------------------------
-# Alias resolution query (extraction pipeline — O-28 4a)
-# ---------------------------------------------------------------------------
-
-# Find the canonical entity for a given alias surface form.
-# Looks for committed :Claim nodes with predicate = 'is_alias_of' where the
-# subject matches the normalized form (case-insensitive). Returns the object
-# entity's id and name so the extraction pipeline can reuse it instead of
-# minting a new entity_id.
-# Parameters: silo_id (str), normalized_form (str).
-FIND_ENTITY_BY_ALIAS = """
-MATCH (c:Claim {silo_id: $silo_id})
-WHERE c.predicate = 'is_alias_of'
-  AND toLower(c.subject) = toLower($normalized_form)
-  AND c.committed = true
-  AND c.tombstoned_at IS NULL
-WITH c.object AS canonical_name
-MATCH (e:Entity {silo_id: $silo_id})
-WHERE toLower(e.name) = toLower(canonical_name)
-  AND e.tombstoned_at IS NULL
-RETURN e.id AS entity_id, e.name AS canonical_name
-LIMIT 1
-"""
-
 GET_SUPERSESSION_CHAIN = (
     "MATCH (start {id: $start_id, silo_id: $silo_id}) "
     "OPTIONAL MATCH path = (start)-[:SUPERSEDES*0..20]->(related) "
@@ -1281,12 +1169,6 @@ ON MATCH SET
 RETURN c
 """
 
-CREATE_CONCLUDES_EDGE = """
-MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})
-MATCH (conclusion:Conclusion {id: $conclusion_id, silo_id: $silo_id})
-MERGE (chain)-[:CONCLUDES]->(conclusion)
-"""
-
 CREATE_CONSOLIDATES_EDGE = """
 MATCH (canonical:Conclusion {id: $canonical_id, silo_id: $silo_id})
 MATCH (original:Conclusion {id: $original_id, silo_id: $silo_id})
@@ -1305,12 +1187,6 @@ SET c.status = 'consolidated'
 RETURN c
 """
 
-FIND_ORPHANED_ACTIVE_CONCLUSIONS = """
-MATCH (canonical:Conclusion {silo_id: $silo_id})-[:CONSOLIDATES]->(original:Conclusion {silo_id: $silo_id})
-WHERE original.status = 'active'
-RETURN original.id as id
-"""
-
 # --- Crystallization edges (Intelligence -> Knowledge) ---
 
 CREATE_CRYSTALLIZES_EDGE = """
@@ -1324,4 +1200,16 @@ UNWIND $edges AS e
 MATCH (chain:ReasoningChain {id: e.chain_id, silo_id: e.silo_id})
 MATCH (claim:Claim {id: e.claim_id, silo_id: e.silo_id})
 MERGE (chain)-[:CRYSTALLIZES {created_at: e.created_at}]->(claim)
+"""
+
+BATCH_CREATE_DERIVED_FROM_EDGES = """
+UNWIND $ev_ids AS ev_id
+MATCH (claim {id: $claim_id, silo_id: $silo_id}), (ev {id: ev_id, silo_id: $silo_id})
+MERGE (claim)-[:DERIVED_FROM]->(ev)
+"""
+
+BATCH_CREATE_ABOUT_EDGES = """
+UNWIND $target_ids AS target_id
+MATCH (src {id: $src_id, silo_id: $silo_id}), (target {id: target_id, silo_id: $silo_id})
+MERGE (src)-[:ABOUT]->(target)
 """

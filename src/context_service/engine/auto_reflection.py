@@ -69,7 +69,7 @@ async def create_auto_reflection(
     silo_id: str,
     *,
     confidence: float = 0.9,
-) -> str | None:
+) -> tuple[str | None, Exception | None]:
     """Create a system-generated MetaObservation node.
 
     Parameters
@@ -91,8 +91,8 @@ async def create_auto_reflection(
 
     Returns
     -------
-    str | None
-        The new MetaObservation's id string, or None on a non-fatal write error.
+    tuple[str | None, Exception | None]
+        ``(obs_id, None)`` on success, or ``(None, exc)`` on a non-fatal write error.
     """
     obs_id = str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
@@ -120,7 +120,7 @@ async def create_auto_reflection(
             error_type=type(exc).__name__,
             error=str(exc),
         )
-        return None
+        return None, exc
 
     logger.debug(
         "auto_reflection_created",
@@ -129,4 +129,4 @@ async def create_auto_reflection(
         silo_id=silo_id,
         about_node_ids=about_node_ids,
     )
-    return obs_id
+    return obs_id, None

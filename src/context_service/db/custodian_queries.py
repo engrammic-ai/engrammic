@@ -340,6 +340,49 @@ RETURN p.source_node_id AS source_node_id,
        p.type AS type
 """
 
+# Batch CITES edge creation via UNWIND.
+# Params:
+#   finding_id (str)
+#   pairs      (list[dict]) -- each has keys: node_id (str), kind (str)
+CITES_EDGE_CREATE_NODE_BATCH = f"""
+UNWIND $pairs AS pair
+MATCH (f:Finding {{id: $finding_id}})
+MATCH (n {{id: pair.node_id}})
+WHERE {content_union_predicate("n")}
+MERGE (f)-[e:CITES {{kind: pair.kind}}]->(n)
+RETURN e.kind AS kind
+"""
+
+# Batch PROPOSED_EDGE MERGE via UNWIND.
+# Params:
+#   edges (list[dict]) -- same keys as PROPOSED_EDGE_MERGE params minus $now_iso;
+#                         now_iso is passed as a top-level param
+#   now_iso (str)
+PROPOSED_EDGE_MERGE_BATCH = """
+UNWIND $edges AS edge
+MERGE (p:ProposedEdge {
+    source_node_id: edge.source_node_id,
+    target_node_id: edge.target_node_id,
+    type: edge.type,
+    pass_id: edge.pass_id
+})
+ON CREATE SET
+    p.source_type = edge.source_type,
+    p.target_type = edge.target_type,
+    p.confidence = edge.confidence,
+    p.rationale = edge.rationale,
+    p.supporting_node_ids = edge.supporting_node_ids,
+    p.org_id = edge.org_id,
+    p.silo_id = edge.silo_id,
+    p.source = 'custodian-v1',
+    p.status = 'draft',
+    p.created_at = $now_iso
+SET p.updated_at = $now_iso
+RETURN p.source_node_id AS source_node_id,
+       p.target_node_id AS target_node_id,
+       p.type AS type
+"""
+
 # Update :Cluster.last_custodian_pass_id and last_custodian_run_at. Cluster-
 # scope writes only; silo-scope findings do not touch this.
 #

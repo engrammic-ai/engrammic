@@ -16,16 +16,6 @@ def test_read_queries_exclude_tombstoned() -> None:
     assert "tombstoned_at" in all_queries or len(read_queries_to_check) == 0
 
 
-def test_find_entity_by_name_excludes_tombstoned() -> None:
-    """FIND_ENTITY_BY_NAME must filter tombstoned entities."""
-    assert "tombstoned_at" in queries.FIND_ENTITY_BY_NAME
-
-
-def test_find_entities_by_name_tokens_excludes_tombstoned() -> None:
-    """FIND_ENTITIES_BY_NAME_TOKENS must filter tombstoned entities."""
-    assert "tombstoned_at" in queries.FIND_ENTITIES_BY_NAME_TOKENS
-
-
 def test_find_entity_by_qualified_name_excludes_tombstoned() -> None:
     """FIND_ENTITY_BY_QUALIFIED_NAME must filter tombstoned entities."""
     assert "tombstoned_at" in queries.FIND_ENTITY_BY_QUALIFIED_NAME

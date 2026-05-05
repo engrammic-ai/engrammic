@@ -472,19 +472,27 @@ class ContextService:
                     properties=props,
                 )
                 result[row["id"]] = node
-                if self._cache:
-                    cache_key = f"node:{silo_id}:{row['id']}"
-                    cache_data = {
-                        "id": str(node.id),
-                        "type": node.type,
-                        "content": node.content,
-                        "silo_id": str(node.silo_id) if node.silo_id else None,
-                        "source_uri": node.source_uri,
-                        "content_hash": node.content_hash,
-                        "created_at": created_at_val.isoformat() if created_at_val else None,
-                        "properties": props,
-                    }
-                    await self._cache.set(cache_key, dumps(cache_data).encode())
+
+            if self._cache and result:
+                cache_mapping: dict[str, bytes] = {}
+                for row_id, node in result.items():
+                    if row_id not in miss_ids:
+                        continue
+                    n_created = node.created_at
+                    cache_mapping[f"node:{silo_id}:{row_id}"] = dumps(
+                        {
+                            "id": str(node.id),
+                            "type": node.type,
+                            "content": node.content,
+                            "silo_id": str(node.silo_id) if node.silo_id else None,
+                            "source_uri": node.source_uri,
+                            "content_hash": node.content_hash,
+                            "created_at": n_created.isoformat() if n_created else None,
+                            "properties": node.properties,
+                        }
+                    ).encode()
+                if cache_mapping:
+                    await self._cache.mset(cache_mapping)
 
         return result
 
@@ -582,13 +590,15 @@ class ContextService:
         from context_service.db import queries as q
         from context_service.services.context_meta import ProvenanceResult, ProvenanceStep
 
-        chain_rows = await self._memgraph.execute_query(
-            q.PROVENANCE_CHAIN,
-            {"node_id": node_id, "silo_id": silo_id},
-        )
-        root_rows = await self._memgraph.execute_query(
-            q.PROVENANCE_ROOT_SOURCES,
-            {"node_id": node_id, "silo_id": silo_id},
+        chain_rows, root_rows = await asyncio.gather(
+            self._memgraph.execute_query(
+                q.PROVENANCE_CHAIN,
+                {"node_id": node_id, "silo_id": silo_id},
+            ),
+            self._memgraph.execute_query(
+                q.PROVENANCE_ROOT_SOURCES,
+                {"node_id": node_id, "silo_id": silo_id},
+            ),
         )
 
         chain = [
@@ -623,13 +633,15 @@ class ContextService:
         from context_service.services.context_meta import HistoryEntry, HistoryResult
 
         if node_id:
-            rows = await self._memgraph.execute_query(
-                q.BELIEF_HISTORY_BY_NODE,
-                {"node_id": node_id, "silo_id": silo_id},
-            )
-            current_rows = await self._memgraph.execute_query(
-                q.BELIEF_HISTORY_CURRENT,
-                {"node_id": node_id, "silo_id": silo_id},
+            rows, current_rows = await asyncio.gather(
+                self._memgraph.execute_query(
+                    q.BELIEF_HISTORY_BY_NODE,
+                    {"node_id": node_id, "silo_id": silo_id},
+                ),
+                self._memgraph.execute_query(
+                    q.BELIEF_HISTORY_CURRENT,
+                    {"node_id": node_id, "silo_id": silo_id},
+                ),
             )
         else:
             rows = await self._memgraph.execute_query(
@@ -824,16 +836,18 @@ class ContextService:
             properties=props,
         )
 
-        for ev_ref in evidence:
-            if ev_ref.startswith("node:"):
-                ev_node_id = ev_ref[5:]
-                await self._memgraph.execute_write(
-                    """
-                    MATCH (claim {id: $claim_id}), (ev {id: $ev_id})
-                    MERGE (claim)-[:DERIVED_FROM]->(ev)
-                    """,
-                    {"claim_id": str(node.id), "ev_id": ev_node_id},
-                )
+        ev_node_ids = [ev_ref[5:] for ev_ref in evidence if ev_ref.startswith("node:")]
+        if ev_node_ids:
+            from context_service.db.queries import BATCH_CREATE_DERIVED_FROM_EDGES
+
+            await self._memgraph.execute_write(
+                BATCH_CREATE_DERIVED_FROM_EDGES,
+                {
+                    "claim_id": str(node.id),
+                    "silo_id": str(scope.silo_id),
+                    "ev_ids": ev_node_ids,
+                },
+            )
 
         return node
 
@@ -855,21 +869,24 @@ class ContextService:
         from context_service.db.queries import PROMOTE_CLAIM_TO_FACT
 
         if evidence_count is None:
-            count_rows = await self._memgraph.execute_query(
+            combined_rows = await self._memgraph.execute_query(
                 "MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})"
-                "-[:REFERENCES|DERIVED_FROM]->() RETURN count(*) AS cnt",
+                " OPTIONAL MATCH (c)-[:REFERENCES|DERIVED_FROM]->()"
+                " RETURN properties(c) AS props, count(*) AS cnt",
                 {"claim_id": claim_id, "silo_id": silo_id},
             )
-            evidence_count = int(count_rows[0]["cnt"]) if count_rows else 0
-
-        prop_rows = await self._memgraph.execute_query(
-            "MATCH (c:Claim {id: $claim_id, silo_id: $silo_id}) RETURN properties(c) AS props",
-            {"claim_id": claim_id, "silo_id": silo_id},
-        )
-        if not prop_rows:
-            return None
-
-        claim_props: dict[str, Any] = dict(prop_rows[0]["props"])
+            if not combined_rows:
+                return None
+            claim_props: dict[str, Any] = dict(combined_rows[0]["props"])
+            evidence_count = int(combined_rows[0]["cnt"])
+        else:
+            prop_rows = await self._memgraph.execute_query(
+                "MATCH (c:Claim {id: $claim_id, silo_id: $silo_id}) RETURN properties(c) AS props",
+                {"claim_id": claim_id, "silo_id": silo_id},
+            )
+            if not prop_rows:
+                return None
+            claim_props = dict(prop_rows[0]["props"])
 
         decision = evaluate_claim_for_fact(claim_props, evidence_count, corroborations)
         if not decision.should_promote:
@@ -946,14 +963,17 @@ class ContextService:
             {"commitment_id": str(node.id), "agent_id": agent_id},
         )
 
-        for about_ref in about:
-            node_id_str = about_ref[5:] if about_ref.startswith("node:") else about_ref
+        if about:
+            from context_service.db.queries import BATCH_CREATE_ABOUT_EDGES
+
+            about_ids = [ref[5:] if ref.startswith("node:") else ref for ref in about]
             await self._memgraph.execute_write(
-                """
-                MATCH (c {id: $commitment_id}), (n {id: $node_id})
-                MERGE (c)-[:ABOUT]->(n)
-                """,
-                {"commitment_id": str(node.id), "node_id": node_id_str},
+                BATCH_CREATE_ABOUT_EDGES,
+                {
+                    "src_id": str(node.id),
+                    "silo_id": str(scope.silo_id),
+                    "target_ids": about_ids,
+                },
             )
 
         return node
@@ -1008,16 +1028,16 @@ class ContextService:
             properties=props,
         )
 
-        # Create ABOUT edges to referenced nodes
-        silo_id = str(scope.silo_id)
-        for target_id in about:
+        if about:
+            from context_service.db.queries import BATCH_CREATE_ABOUT_EDGES
+
             await self._memgraph.execute_write(
-                """
-                MATCH (obs:MetaObservation {id: $obs_id, silo_id: $silo_id})
-                MATCH (target {id: $target_id, silo_id: $silo_id})
-                MERGE (obs)-[:ABOUT]->(target)
-                """,
-                {"obs_id": str(node.id), "target_id": target_id, "silo_id": silo_id},
+                BATCH_CREATE_ABOUT_EDGES,
+                {
+                    "src_id": str(node.id),
+                    "silo_id": str(scope.silo_id),
+                    "target_ids": list(about),
+                },
             )
 
         return node

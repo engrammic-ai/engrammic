@@ -4,8 +4,6 @@ from typing import Annotated
 
 from fastapi import Depends, Request
 
-from context_service.api.auth_dep import get_auth_context as get_auth_context
-from context_service.auth.context import AuthContext as AuthContext
 from context_service.engine.protocols import HyperGraphStore
 from context_service.stores import QdrantClient, RedisClient
 

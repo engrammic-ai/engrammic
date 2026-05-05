@@ -38,11 +38,12 @@ def test_get_tag_defaults_caches_result():
             "cache_ttl_seconds": 300,
         }
     }
-    with patch("context_service.config.tags.yaml.safe_load", return_value=parsed) as mock_load:
-        # Also patch read_text at the Path class level so the file isn't touched
-        with patch("pathlib.Path.read_text", return_value=""):
-            first = tags_module.get_tag_defaults()
-            second = tags_module.get_tag_defaults()
+    with (
+        patch("context_service.config.tags.yaml.safe_load", return_value=parsed) as mock_load,
+        patch("pathlib.Path.read_text", return_value=""),
+    ):
+        first = tags_module.get_tag_defaults()
+        second = tags_module.get_tag_defaults()
 
     assert first is second
     mock_load.assert_called_once()

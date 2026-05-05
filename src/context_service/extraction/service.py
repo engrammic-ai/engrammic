@@ -32,6 +32,7 @@ from context_service.extraction.prompts import (
     get_extraction_system_prompt,
     get_extraction_user_template,
 )
+from context_service.llm.base import truncate
 from context_service.llm.sanitize import escape_for_prompt
 
 if TYPE_CHECKING:
@@ -81,6 +82,9 @@ class ExtractionService:
         inst._filter = None
         return inst
 
+    MAX_CONTENT_SIZE = 100_000
+    MAX_RELATIONSHIPS = 500
+
     async def extract(self, content: str) -> tuple[ExtractionResult, Usage]:
         """Extract entities and relationships from content using LLM.
 
@@ -88,6 +92,12 @@ class ExtractionService:
             Tuple of ``(ExtractionResult, Usage)`` where ``Usage`` captures
             the single extraction LLM call's token/cost envelope.
         """
+        if len(content) > self.MAX_CONTENT_SIZE:
+            raise ExtractionError(
+                f"Content too large for extraction: {len(content)} chars "
+                f"(max {self.MAX_CONTENT_SIZE})"
+            )
+
         messages = [
             {"role": "system", "content": get_extraction_system_prompt()},
             {
@@ -105,7 +115,7 @@ class ExtractionService:
                 self._llm.extract_structured(messages, EXTRACTION_SCHEMA, timeout=90.0)
             )
         except Exception as e:
-            logger.error(f"LLM extraction failed: {e}", exc_info=True)
+            logger.error(f"LLM extraction failed: {truncate(str(e))}", exc_info=True)
             raise ExtractionError(f"LLM extraction failed: {e}") from e
 
         entities = [
@@ -179,6 +189,14 @@ class ExtractionService:
                 )
             except RelationshipValidationError as e:
                 logger.warning(f"Skipping invalid relationship {source} -> {target}: {e}")
+
+        if len(relationships) > self.MAX_RELATIONSHIPS:
+            logger.warning(
+                "extraction_relationships_truncated",
+                total=len(relationships),
+                limit=self.MAX_RELATIONSHIPS,
+            )
+            relationships = relationships[: self.MAX_RELATIONSHIPS]
 
         return ExtractionResult(entities=entities, relationships=relationships), usage
 
@@ -732,7 +750,7 @@ MERGE (ps)<-[:EXTRACTED_FROM]-(c)
                 await self._update_node_extraction_status(silo_id, job.node_id, "done")
         except Exception as e:
             job.status = ExtractionStatus.FAILED
-            job.error = str(e)
+            job.error = truncate(str(e))
             job.completed_at = datetime.now(UTC)
             await self._update_node_extraction_status(silo_id, job.node_id, "failed")
             logger.error(f"Extraction job {job.id} failed: {e}")

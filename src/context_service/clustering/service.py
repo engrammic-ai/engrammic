@@ -354,14 +354,23 @@ class ClusteringService:
                         return None
 
                     content_text = "\n\n".join(f"- {c}" for c in contents)
+                    system_prompt = get_clustering_system_prompt()
+                    user_content = get_clustering_user_template().format(
+                        count=len(contents), content=escape_for_prompt(content_text)
+                    )
+                    total_prompt_chars = len(system_prompt) + len(user_content)
+                    _MAX_PROMPT_CHARS = 32_000
+                    if total_prompt_chars > _MAX_PROMPT_CHARS:
+                        logger.warning(
+                            "clustering_prompt_too_large",
+                            cluster_id=cluster.id,
+                            chars=total_prompt_chars,
+                            limit=_MAX_PROMPT_CHARS,
+                        )
+                        return None
                     messages = [
-                        {"role": "system", "content": get_clustering_system_prompt()},
-                        {
-                            "role": "user",
-                            "content": get_clustering_user_template().format(
-                                count=len(contents), content=escape_for_prompt(content_text)
-                            ),
-                        },
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_content},
                     ]
 
                     raw, _usage = await with_llm_limit(

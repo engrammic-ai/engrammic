@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from context_service.db import queries as q
 from context_service.extraction.models import RelationshipType as ExtractionRelType
 from context_service.models.mcp import RelationshipType as McpRelType
 
@@ -45,40 +44,6 @@ class TestRelationshipTypeEnums:
         )
         assert rel.relationship_type is ExtractionRelType.CORROBORATES
         assert rel.directed is True  # not in SYMMETRIC set
-
-
-class TestCausalEdgeQueries:
-    """Smoke tests: verify query strings contain required Cypher clauses."""
-
-    def test_create_causes_edge_contains_label(self) -> None:
-        assert "CAUSES" in q.CREATE_CAUSES_EDGE
-        assert "$source_id" in q.CREATE_CAUSES_EDGE
-        assert "$target_id" in q.CREATE_CAUSES_EDGE
-        assert "$silo_id" in q.CREATE_CAUSES_EDGE
-        assert "$confidence" in q.CREATE_CAUSES_EDGE
-        assert "$mechanism" in q.CREATE_CAUSES_EDGE
-        assert "$extracted_from" in q.CREATE_CAUSES_EDGE
-
-    def test_create_corroborates_edge_contains_label(self) -> None:
-        assert "CORROBORATES" in q.CREATE_CORROBORATES_EDGE
-        assert "$source_id" in q.CREATE_CORROBORATES_EDGE
-        assert "$target_id" in q.CREATE_CORROBORATES_EDGE
-        assert "$silo_id" in q.CREATE_CORROBORATES_EDGE
-        assert "$strength" in q.CREATE_CORROBORATES_EDGE
-        assert "$extracted_from" in q.CREATE_CORROBORATES_EDGE
-
-    def test_create_causes_edge_is_directed_create(self) -> None:
-        # Must use CREATE (not MERGE) so duplicates are allowed (multi-evidence).
-        assert "CREATE (a)-[:CAUSES" in q.CREATE_CAUSES_EDGE
-
-    def test_create_corroborates_edge_is_directed_create(self) -> None:
-        assert "CREATE (a)-[:CORROBORATES" in q.CREATE_CORROBORATES_EDGE
-
-    def test_causes_edge_includes_created_at(self) -> None:
-        assert "created_at: datetime()" in q.CREATE_CAUSES_EDGE
-
-    def test_corroborates_edge_includes_created_at(self) -> None:
-        assert "created_at: datetime()" in q.CREATE_CORROBORATES_EDGE
 
 
 class TestMcpRelationshipTypeValidity:

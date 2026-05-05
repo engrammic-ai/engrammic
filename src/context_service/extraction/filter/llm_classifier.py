@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import TYPE_CHECKING
 
 import context_service.extraction.filter.circuit_breaker as cb_module
@@ -96,10 +97,17 @@ class LLMClassifierRule:
                 reason=f"llm_error:{type(e).__name__}",
             )
 
-        try:
-            score = float(text.strip().split()[0])
-        except (ValueError, IndexError):
+        match = re.search(r"\b(0(?:\.\d+)?|1(?:\.0+)?)\b", text)
+        if match is None:
             # Unparseable — fail-open, but don't penalise CB (model response drift, not infra)
+            return FilterDecision(
+                action="keep",
+                rule_fired=RuleFired.EXTERNAL_FAILURE,
+                reason=f"llm_unparseable:{text[:40]!r}",
+            )
+        try:
+            score = float(match.group(1))
+        except ValueError:
             return FilterDecision(
                 action="keep",
                 rule_fired=RuleFired.EXTERNAL_FAILURE,

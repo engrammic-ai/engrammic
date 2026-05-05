@@ -224,13 +224,6 @@ class TestInvalidateDerivedEdges:
 class TestCorroboratesSemantics:
     """CORROBORATES is directed (A supports B) in both queries and extraction config."""
 
-    def test_create_corroborates_edge_is_directed(self) -> None:
-        from context_service.db.queries import CREATE_CORROBORATES_EDGE
-
-        # Directed arrow from a to b, not symmetric.
-        assert "(a)-[:CORROBORATES" in CREATE_CORROBORATES_EDGE
-        assert "->(b)" in CREATE_CORROBORATES_EDGE
-
     def test_extraction_config_documents_direction(self) -> None:
         config_path = Path(__file__).parent.parent / "config" / "extraction.yaml"
         if not config_path.exists():

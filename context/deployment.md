@@ -2,27 +2,36 @@
 
 ## Current Setup (Demo/Pilot Phase)
 
-Single VPS with Coolify. Cost: ~$15-20/mo.
+Running on strata-finance devbox via Tailscale. Cost: $0 (existing infra).
 
 ### Stack
-- Hetzner CX32 (8GB RAM, 4 vCPU)
-- Coolify (self-hosted PaaS)
-- Auto-HTTPS, git push deploys, web dashboard
+- strata-finance devbox (19GB RAM, 8 vCPU)
+- Docker Compose
+- Portainer for monitoring
 
-### Setup
-See `deploy/coolify-setup.md` for full walkthrough.
-
-```bash
-# Install Coolify (as root on fresh Ubuntu 24.04)
-curl -fsSL https://cdn.coollabs.io/coolify/install.sh | bash
-
-# Then configure via web UI at http://<server-ip>:8000
+### Endpoints (via Tailscale)
+```
+http://strata-finance:8080        # Context Service API
+http://strata-finance:8080/docs   # Swagger UI
+http://strata-finance:8080/health # Health check
+http://strata-finance:9000        # Portainer (container monitoring)
+http://strata-finance:3001        # Memgraph Lab
 ```
 
 ### Daily Operations
-- Dashboard: `https://coolify.deltaprime.ai`
-- Deploy: push to `main` (auto) or click "Deploy" in UI
-- Logs: Coolify UI or `docker logs <service>`
+```bash
+# SSH to devbox
+ssh strata-finance
+
+# Service management
+cd ~/delta-prime/context-service
+docker compose ps
+docker compose logs -f app
+docker compose restart app
+
+# Full restart
+docker compose down && docker compose up -d
+```
 
 ### Resource Requirements
 | Service   | Memory | CPU  |
@@ -130,10 +139,10 @@ jobs:
 | **Kamal** | Free + VPS | Good for Docker devs | No monitoring; manual DB backups | Multi-server; escaping cloud lock-in |
 | **CapRover** | Free + VPS | Good (web UI) | Less polish than Coolify | Multi-app servers |
 
-### Recommendation
+### What We Chose
 
-**Current approach (manual Docker Compose + Caddy)** is right for pilot phase - minimal moving parts, full control.
+**Docker Compose + Portainer** - minimal overhead, Portainer provides container visibility without PaaS complexity.
 
-**Next step when needed:** Coolify for web UI monitoring (useful for non-technical cofounders) and easier deploys. One-click Redis/Postgres, manual compose for Memgraph/Qdrant.
+**Skipped Coolify** - requires git repo connection for deploys, overkill for current stage.
 
-**Skip Kamal** until multi-server orchestration is needed - overkill for single VPS.
+**Skip Kamal** until multi-server orchestration is needed.

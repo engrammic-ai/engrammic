@@ -62,6 +62,27 @@ class LLMProvider(abc.ABC):
     consistent with the Jina embedding pattern (no SDK deps).
     """
 
+    def __init__(self) -> None:
+        self._total_input_tokens: int = 0
+        self._total_output_tokens: int = 0
+        self._total_calls: int = 0
+
+    def _record_usage(self, usage: Usage) -> None:
+        """Accumulate token usage across calls for observability."""
+        self._total_input_tokens += usage.input_tokens
+        self._total_output_tokens += usage.output_tokens
+        self._total_calls += 1
+
+    @property
+    def cumulative_usage(self) -> dict[str, int]:
+        """Return cumulative token counts since this provider instance was created."""
+        return {
+            "input_tokens": self._total_input_tokens,
+            "output_tokens": self._total_output_tokens,
+            "total_tokens": self._total_input_tokens + self._total_output_tokens,
+            "calls": self._total_calls,
+        }
+
     @abc.abstractmethod
     async def complete(
         self,

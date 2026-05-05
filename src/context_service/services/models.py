@@ -81,27 +81,6 @@ class QueryResult:
 
 
 @dataclass
-class GraphNode:
-    """A node in graph traversal results."""
-
-    node_id: str
-    layer: str
-    content: str
-    type: str
-    properties: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class GraphEdge:
-    """An edge in graph traversal results."""
-
-    from_node: str
-    to_node: str
-    relationship: str
-    weight: float = 1.0
-
-
-@dataclass
 class GraphResult:
     """Result from graph traversal."""
 

@@ -107,11 +107,7 @@ async def pg_test_silo(pg_schema: None) -> AsyncGenerator[uuid.UUID, None]:
 
     async with get_session() as session:
         await session.execute(
-            text(
-                "INSERT INTO org_preferences (org_id)"
-                " VALUES (:org_id)"
-                " ON CONFLICT DO NOTHING"
-            ),
+            text("INSERT INTO org_preferences (org_id) VALUES (:org_id) ON CONFLICT DO NOTHING"),
             {"org_id": org_id},
         )
         await session.execute(
@@ -338,11 +334,14 @@ class TestSagaCompensation:
 
         # Patch PostgresStore.delete_chain_steps to always fail so compensation
         # exhausts all retries and falls back to the dead-letter table.
-        with patch.object(
-            postgres_store,
-            "delete_chain_steps",
-            AsyncMock(side_effect=RuntimeError("pg delete failed")),
-        ), pytest.raises(RuntimeError, match="memgraph down"):
+        with (
+            patch.object(
+                postgres_store,
+                "delete_chain_steps",
+                AsyncMock(side_effect=RuntimeError("pg delete failed")),
+            ),
+            pytest.raises(RuntimeError, match="memgraph down"),
+        ):
             await writer_for(postgres_store, failing_mg).write_chain(
                 chain_id=chain_id,
                 silo_id=silo_id,

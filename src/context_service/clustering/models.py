@@ -115,15 +115,6 @@ class Cluster:
 
 
 @dataclass
-class ClusterMembership:
-    """Tracks a node's membership in a cluster."""
-
-    node_id: str
-    cluster_id: str
-    weight: float = 1.0
-
-
-@dataclass
 class ClusteringJob:
     """Tracks the status of a clustering job."""
 

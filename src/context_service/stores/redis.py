@@ -313,6 +313,21 @@ class RedisClient:
             logger.error("redis_get_failed", key=key, error=str(e))
             raise RedisOperationError(f"Failed to get cache value: {e}") from e
 
+    async def mset(self, mapping: dict[str, bytes]) -> None:
+        """Set multiple cache values in one pipeline roundtrip.
+
+        Raises:
+            RedisOperationError: If the operation fails.
+        """
+        try:
+            pipeline = self._redis.pipeline(transaction=False)
+            for key, value in mapping.items():
+                pipeline.set(key, value)
+            await pipeline.execute()
+        except (RedisConnectionError, RedisError) as e:
+            logger.error("redis_mset_failed", key_count=len(mapping), error=str(e))
+            raise RedisOperationError(f"Failed to mset cache values: {e}") from e
+
     async def mget(self, keys: list[str]) -> list[bytes | None]:
         """Get multiple cache values in one roundtrip.
 

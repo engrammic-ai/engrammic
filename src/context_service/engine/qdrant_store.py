@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
+from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import (
     Distance,
     FieldCondition,
@@ -105,11 +107,21 @@ class EngineQdrantStore:
                             distance=Distance.COSINE,
                         ),
                     )
-                await client.create_payload_index(
-                    collection_name=name,
-                    field_name="expansion",
-                    field_schema=PayloadSchemaType.TEXT,
-                )
+                try:
+                    await client.create_payload_index(
+                        collection_name=name,
+                        field_name="expansion",
+                        field_schema=PayloadSchemaType.TEXT,
+                    )
+                except (UnexpectedResponse, ConnectionError) as e:
+                    logger.error(
+                        "Failed to create payload index; deleting collection to avoid partial state",
+                        collection=name,
+                        error=str(e),
+                    )
+                    with contextlib.suppress(Exception):
+                        await client.delete_collection(name)
+                    raise
                 logger.info(f"Created Qdrant collection: {name} (hybrid={self._hybrid})")
             self._ensured_collections.add(name)
         return name
@@ -152,10 +164,14 @@ class EngineQdrantStore:
                 payload=payload,
             )
 
-        await client.upsert(
-            collection_name=collection,
-            points=[point],
-        )
+        try:
+            await client.upsert(
+                collection_name=collection,
+                points=[point],
+            )
+        except (UnexpectedResponse, ConnectionError) as e:
+            logger.error("Qdrant upsert failed", node_id=str(node_id), error=str(e))
+            raise
 
     async def batch_upsert(
         self,

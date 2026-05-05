@@ -75,29 +75,6 @@ class StructuredSupersessionPair:
     reason: str
 
 
-def filter_cyclic_pairs[T](pairs: list[T]) -> list[T]:
-    """Filter out pairs that would create cycles in supersession graph.
-
-    Works with any object that has superseding_id and superseded_id attributes.
-    Processes pairs in order, keeping only those that don't create cycles
-    with already-accepted pairs.
-    """
-    edge_graph: dict[str, set[str]] = {}
-    result: list[T] = []
-
-    for pair in pairs:
-        from_id = str(pair.superseding_id)  # type: ignore[attr-defined]
-        to_id = str(pair.superseded_id)  # type: ignore[attr-defined]
-
-        if not _would_create_cycle(from_id, to_id, edge_graph):
-            result.append(pair)
-            edge_graph.setdefault(from_id, set()).add(to_id)
-        else:
-            logger.warning("Filtering cyclic supersession pair: %s -> %s", from_id, to_id)
-
-    return result
-
-
 def _would_create_cycle(
     from_id: str,
     to_id: str,

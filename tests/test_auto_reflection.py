@@ -63,7 +63,7 @@ async def test_create_auto_reflection_writes_correct_params() -> None:
     store = FakeGraphStore()
     store.seed_write_result([])
 
-    obs_id = await create_auto_reflection(
+    obs_id, error = await create_auto_reflection(
         store=store,
         observation_type="belief_change",
         content="some content",
@@ -72,6 +72,7 @@ async def test_create_auto_reflection_writes_correct_params() -> None:
     )
 
     assert obs_id is not None
+    assert error is None
     assert len(store.write_log) == 1
     _, params = store.write_log[0]
     assert params["observation_type"] == "belief_change"
@@ -95,7 +96,7 @@ async def test_create_auto_reflection_returns_none_on_error() -> None:
 
     store.execute_write = _raise  # type: ignore[method-assign]
 
-    obs_id = await create_auto_reflection(
+    obs_id, error = await create_auto_reflection(
         store=store,
         observation_type="belief_change",
         content="content",
@@ -104,6 +105,7 @@ async def test_create_auto_reflection_returns_none_on_error() -> None:
     )
 
     assert obs_id is None
+    assert error is not None
 
 
 @pytest.mark.asyncio
@@ -113,8 +115,8 @@ async def test_create_auto_reflection_unique_ids() -> None:
     store2 = FakeGraphStore()
     store2.seed_write_result([])
 
-    id_a = await create_auto_reflection(store1, "belief_change", "c", [], "s1")
-    id_b = await create_auto_reflection(store2, "belief_change", "c", [], "s1")
+    id_a, _ = await create_auto_reflection(store1, "belief_change", "c", [], "s1")
+    id_b, _ = await create_auto_reflection(store2, "belief_change", "c", [], "s1")
 
     assert id_a != id_b
 

@@ -35,14 +35,14 @@ from pydantic import BaseModel
 from context_service.custodian.business_rules import BusinessRuleValidator
 from context_service.custodian.pipeline import run_validation
 from context_service.db.custodian_queries import (
-    CITES_EDGE_CREATE_NODE,
+    CITES_EDGE_CREATE_NODE_BATCH,
     CLUSTER_LAST_CUSTODIAN_UPDATE,
     FINDING_HISTORY_CREATE,
     FINDING_HISTORY_TRIM,
     FINDING_MERGE_CLUSTER_SCOPE,
     FINDING_MERGE_SILO_SCOPE,
     PASS_CLAIMED_EDGE_MERGE,
-    PROPOSED_EDGE_MERGE,
+    PROPOSED_EDGE_MERGE_BATCH,
     fetch_current_finding,
 )
 from context_service.utils.json import dumps
@@ -358,36 +358,44 @@ class WritePath:
                     keep=HISTORY_KEEP_COUNT,
                 )
 
-            # 4e. Create :CITES edges to every cited :Node.
+            # 4e. Create :CITES edges to every cited :Node (single UNWIND query).
             cited_pairs: set[tuple[str, str]] = set()
+            cites_batch: list[dict[str, str]] = []
             for claim in surviving_claims:
                 for citation in claim.citations:
                     pair = (citation.node_id, citation.kind)
                     if pair in cited_pairs:
                         continue
                     cited_pairs.add(pair)
-                    await tx.run(
-                        CITES_EDGE_CREATE_NODE,
-                        finding_id=finding_id,
-                        node_id=citation.node_id,
-                        kind=citation.kind,
-                    )
-
-            # 4f. MERGE each surviving proposed edge.
-            for edge in surviving_edges:
+                    cites_batch.append({"node_id": citation.node_id, "kind": citation.kind})
+            if cites_batch:
                 await tx.run(
-                    PROPOSED_EDGE_MERGE,
-                    source_node_id=edge.source_node_id,
-                    target_node_id=edge.target_node_id,
-                    type=str(edge.type),
-                    pass_id=pass_id,
-                    source_type=edge.source_type,
-                    target_type=edge.target_type,
-                    confidence=float(edge.confidence),
-                    rationale=edge.rationale,
-                    supporting_node_ids=list(edge.supporting_node_ids),
-                    org_id=org_id,
-                    silo_id=finding.silo_id,
+                    CITES_EDGE_CREATE_NODE_BATCH,
+                    finding_id=finding_id,
+                    pairs=cites_batch,
+                )
+
+            # 4f. MERGE each surviving proposed edge (single UNWIND query).
+            if surviving_edges:
+                edges_batch = [
+                    {
+                        "source_node_id": edge.source_node_id,
+                        "target_node_id": edge.target_node_id,
+                        "type": str(edge.type),
+                        "pass_id": pass_id,
+                        "source_type": edge.source_type,
+                        "target_type": edge.target_type,
+                        "confidence": float(edge.confidence),
+                        "rationale": edge.rationale,
+                        "supporting_node_ids": list(edge.supporting_node_ids),
+                        "org_id": org_id,
+                        "silo_id": finding.silo_id,
+                    }
+                    for edge in surviving_edges
+                ]
+                await tx.run(
+                    PROPOSED_EDGE_MERGE_BATCH,
+                    edges=edges_batch,
                     now_iso=now_iso,
                 )
 

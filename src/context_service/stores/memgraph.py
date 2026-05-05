@@ -114,6 +114,8 @@ class MemgraphClient:
             code: str = getattr(e, "code", "") or ""
             if "ConnectionAcquisitionTimeout" in code:
                 logger.error("memgraph_pool_acquisition_timeout", error=str(e))
+                with contextlib.suppress(Exception):
+                    await self._driver.close()
             raise
         try:
             yield session
@@ -130,7 +132,22 @@ class MemgraphClient:
         Use :meth:`run_in_transaction` for callback-style retry on transient errors.
         """
         async with self.session() as session:
-            tx = await session.begin_transaction()
+            last_err: Exception | None = None
+            for attempt in range(_WRITE_RETRY_MAX_ATTEMPTS):
+                try:
+                    tx = await session.begin_transaction()
+                    break
+                except (ServiceUnavailable, ClientError) as e:
+                    last_err = e
+                    if attempt < _WRITE_RETRY_MAX_ATTEMPTS - 1:
+                        logger.warning(
+                            "memgraph_begin_transaction_retry",
+                            attempt=attempt + 1,
+                            error=str(e),
+                        )
+                        continue
+            else:
+                raise last_err  # type: ignore[misc]
             try:
                 yield tx
             except Exception:
@@ -304,7 +321,7 @@ class MemgraphClient:
                             max_attempts=_WRITE_RETRY_MAX_ATTEMPTS,
                         )
                     return await _run_once()
-            return []
+            raise MemgraphOperationError("Retry loop exhausted")
         except ServiceUnavailable as e:
             logger.error("memgraph_service_unavailable", error=str(e))
             raise MemgraphOperationError(f"Database unavailable: {e}") from e

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
@@ -86,10 +87,14 @@ class EvidenceValidator:
 
     async def _validate_uri(self, uri: str) -> EvidenceResult:
         """Check if URI is reachable."""
-        try:
-            async with httpx.AsyncClient(timeout=self._http_timeout) as client:
-                response = await client.head(uri, follow_redirects=True)
-
+        delays = [0.5, 1.0, 2.0]
+        last_error: str = ""
+        for attempt, delay in enumerate([0.0, *delays]):
+            if delay:
+                await asyncio.sleep(delay)
+            try:
+                async with httpx.AsyncClient(timeout=self._http_timeout) as client:
+                    response = await client.head(uri, follow_redirects=True)
                 if response.status_code < 400:
                     logger.debug("evidence_uri_valid", uri=uri, status=response.status_code)
                     return EvidenceResult(
@@ -97,16 +102,23 @@ class EvidenceValidator:
                         confidence=0.7,
                         reason=f"URI reachable (status {response.status_code})",
                     )
+                # 4xx/5xx — no retry
                 return EvidenceResult(
                     status="invalid",
                     reason=f"URI returned status {response.status_code}",
                 )
-        except httpx.RequestError as e:
-            logger.warning("evidence_uri_unreachable", uri=uri, error=str(e))
-            return EvidenceResult(
-                status="invalid",
-                reason=f"URI unreachable: {e}",
-            )
+            except httpx.RequestError as e:
+                last_error = str(e)
+                logger.warning(
+                    "evidence_uri_unreachable",
+                    uri=uri,
+                    attempt=attempt,
+                    error=last_error,
+                )
+        return EvidenceResult(
+            status="invalid",
+            reason=f"URI unreachable after retries: {last_error}",
+        )
 
     async def validate_all(self, refs: list[str], silo_id: str) -> list[EvidenceResult]:
         """Validate multiple evidence refs."""
