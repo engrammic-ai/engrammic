@@ -19,6 +19,7 @@ from context_service.pipelines.assets.heat import heat_asset
 from context_service.pipelines.assets.llm_pattern_detection import llm_pattern_detection
 from context_service.pipelines.assets.pattern_detection import pattern_detection
 from context_service.pipelines.assets.retention import retention_sweep
+from context_service.pipelines.assets.weak_link_creation import create_weak_links_for_node
 
 all_assets: list[Any] = [
     extraction,
