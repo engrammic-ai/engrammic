@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import ForeignKey, String, func
+from sqlalchemy import ForeignKey, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -20,9 +20,9 @@ class OrgPreferences(Base):
     __tablename__ = "org_preferences"
 
     org_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True)
-    default_llm: Mapped[str] = mapped_column(String(64))
-    embedding_model: Mapped[str] = mapped_column(String(64))
-    settings: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    default_llm: Mapped[str] = mapped_column(String(64), server_default="claude-haiku-4-5-20251001")
+    embedding_model: Mapped[str] = mapped_column(String(64), server_default="jina-embeddings-v3")
+    settings: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
@@ -53,8 +53,8 @@ class SiloConfig(Base):
         PG_UUID(as_uuid=True), ForeignKey("org_preferences.org_id"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    quotas: Mapped[dict[str, Any]] = mapped_column(JSONB)
-    feature_flags: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    quotas: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'"))
+    feature_flags: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
