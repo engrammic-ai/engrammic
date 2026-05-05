@@ -93,6 +93,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await qdrant_client.ensure_collection(hybrid=settings.hybrid_search_enabled)
         logger.info("qdrant_connected")
 
+        from context_service.db.postgres import init_postgres
+
+        await init_postgres()
+        logger.info("postgres_connected")
+
         async def rebuild_memgraph() -> MemgraphClient:
             driver = await create_memgraph_driver(settings)
             return MemgraphClient(driver)
@@ -150,14 +155,30 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             logger.info("splade_encoder_configured")
 
         from context_service.engine.memgraph_store import MemgraphStore
+        from context_service.services.auto_tagging import AutoTaggingService
 
         memgraph_store = MemgraphStore(memgraph_client)
+
+        auto_tagging: AutoTaggingService | None = None
+        if embedding_service is not None:
+            from context_service.db.postgres import get_session
+            from context_service.services.tag_config import TagConfigService
+
+            async with get_session() as session:
+                tag_config_svc = TagConfigService(session)
+                auto_tagging = AutoTaggingService(
+                    embedding=embedding_service,
+                    tag_config=tag_config_svc,
+                )
+            logger.info("auto_tagging_configured")
+
         configure_services(
             memgraph=memgraph_store,
             qdrant=qdrant_client,
             redis=redis_client,
             embedding=embedding_service,
             splade=splade_encoder,
+            auto_tagging=auto_tagging,
         )
         logger.info("mcp_services_configured")
 
@@ -182,6 +203,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if hasattr(app.state, "qdrant"):
         await app.state.qdrant.close()
         logger.info("qdrant_closed")
+
+    from context_service.db.postgres import close_postgres
+
+    await close_postgres()
+    logger.info("postgres_closed")
 
 
 def create_app() -> ASGIApp:
