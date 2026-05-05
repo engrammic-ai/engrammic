@@ -63,6 +63,14 @@ SET n.heat_score = u.heat_score,
     n.heat_updated_at = $now
 """
 
+_FETCH_EXISTING_HEAT_CYPHER = """
+UNWIND $node_ids AS nid
+MATCH (n {id: nid, silo_id: $silo_id})
+RETURN n.id AS node_id,
+       coalesce(n.heat_score, 0.0) AS heat_score,
+       n.heat_updated_at AS heat_updated_at
+"""
+
 
 def _decay_factor(age_seconds: float) -> float:
     """Exponential decay with HEAT_HALF_LIFE_DAYS half-life."""
@@ -114,12 +122,34 @@ def heat_asset(
     t0 = time.monotonic()
 
     async def _run() -> tuple[int, int, str]:
+        from uuid import UUID
+
+        from sqlalchemy import select
+
+        from context_service.db import get_session
         from context_service.engine.protocols import HyperGraphStore
+        from context_service.models.postgres.org import SiloConfig as PGSiloConfig
         from context_service.signals.cursor import (
             advance_heat_cursor,
             fetch_or_init_heat_cursor,
         )
         from context_service.stores import MemgraphClient
+
+        # Check if heat processing is enabled for this silo.
+        silo_uuid = UUID(silo_id)
+        async with get_session() as session:
+            result = await session.execute(
+                select(PGSiloConfig.feature_flags).where(
+                    PGSiloConfig.silo_id == silo_uuid
+                )
+            )
+            row = result.scalar_one_or_none()
+            feature_flags: dict[str, Any] = row if row is not None else {}
+            heat_enabled: bool = bool(feature_flags.get("heat_enabled", True))
+
+        if not heat_enabled:
+            context.log.info(f"silo={silo_id} heat disabled via feature_flags, skipping")
+            return 0, 0, "0-0"
 
         driver = await memgraph.driver()
         mg_client: HyperGraphStore = MemgraphClient(driver)  # type: ignore[assignment]
@@ -172,26 +202,54 @@ def heat_asset(
                 await advance_heat_cursor(mg_client, silo_id, new_last_id)
             return 0, total_events, new_last_id
 
-        # Convert raw counts to decay-weighted heat scores.
-        # For simplicity we treat all events in this batch as "now" (no
-        # per-entry timestamp decay). A future improvement can parse
-        # entry IDs (millisecond timestamps) for finer-grained decay.
+        # Fetch existing heat scores so we can apply time decay before combining
+        # with the new contribution from this batch.
+        existing_heat: dict[str, float] = {}
+        existing_updated_at: dict[str, str | None] = {}
+        existing_rows = await mg_client.execute_query(
+            _FETCH_EXISTING_HEAT_CYPHER,
+            {"silo_id": silo_id, "node_ids": list(raw_counts.keys())},
+        )
+        for row in existing_rows:
+            nid = row["node_id"]
+            existing_heat[nid] = float(row["heat_score"])
+            existing_updated_at[nid] = row.get("heat_updated_at")
+
+        now_dt = datetime.now(UTC)
+        now_iso = now_dt.isoformat()
+
+        # Convert raw counts to decay-weighted heat scores, blending with
+        # time-decayed existing values.
         updates: list[dict[str, Any]] = []
         for node_id, count in raw_counts.items():
-            # Normalise: log(1 + count) / log(1 + XREAD_COUNT)
-            heat = min(1.0, math.log1p(count) / math.log1p(XREAD_COUNT))
+            # New contribution: normalise log(1 + count) / log(1 + XREAD_COUNT).
+            new_contribution = min(1.0, math.log1p(count) / math.log1p(XREAD_COUNT))
 
             # Apply layer-based decay multiplier when unified decay is enabled.
             # Higher layers (Wisdom, Intelligence) retain heat longer.
             if settings.unified_decay_enabled:
                 layer = node_layers.get(node_id)
                 multiplier = get_decay_multiplier(layer)
-                # Scale heat by multiplier (normalized to 1.0-2.0 range for stability)
-                heat = min(1.0, heat * (1.0 + (multiplier - 1.0) * 0.25))
+                # Scale contribution by multiplier (normalised to 1.0-2.0 range).
+                new_contribution = min(1.0, new_contribution * (1.0 + (multiplier - 1.0) * 0.25))
+
+            # Decay the existing score based on time since last update.
+            prior_heat = existing_heat.get(node_id, 0.0)
+            prior_updated_at = existing_updated_at.get(node_id)
+            if prior_heat > 0.0 and prior_updated_at is not None:
+                try:
+                    prior_dt = datetime.fromisoformat(prior_updated_at)
+                    age_seconds = (now_dt - prior_dt).total_seconds()
+                    decayed_prior = prior_heat * _decay_factor(max(0.0, age_seconds))
+                except (ValueError, TypeError):
+                    decayed_prior = 0.0
+            else:
+                decayed_prior = prior_heat
+
+            heat = min(1.0, decayed_prior + new_contribution)
 
             updates.append({"node_id": node_id, "heat_score": heat, "tier": _tier(heat)})
 
-        now_iso = datetime.now(UTC).isoformat()
         await mg_client.execute_write(
             _APPLY_HEAT_CYPHER,
             {"silo_id": silo_id, "updates": updates, "now": now_iso},
