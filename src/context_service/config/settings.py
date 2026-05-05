@@ -510,6 +510,7 @@ class Settings(BaseSettings):
         case_sensitive=False,
         env_ignore_empty=True,
         extra="ignore",
+        frozen=True,
     )
 
     # Nested sub-configs
