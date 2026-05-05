@@ -12,6 +12,7 @@ from context_service.pipelines.assets.clustering import clustering
 from context_service.pipelines.assets.compaction import reasoning_compaction
 from context_service.pipelines.assets.custodian_finalize import custodian_finalize
 from context_service.pipelines.assets.custodian_visit import custodian_visit
+from context_service.pipelines.assets.edge_heat import edge_heat_asset
 from context_service.pipelines.assets.embedding import embedding_asset as embedding
 from context_service.pipelines.assets.extraction import extraction
 from context_service.pipelines.assets.fact_promotion import claim_to_fact_promotion
@@ -19,7 +20,10 @@ from context_service.pipelines.assets.heat import heat_asset
 from context_service.pipelines.assets.llm_pattern_detection import llm_pattern_detection
 from context_service.pipelines.assets.pattern_detection import pattern_detection
 from context_service.pipelines.assets.retention import retention_sweep
-from context_service.pipelines.assets.weak_link_creation import create_weak_links_for_node
+from context_service.pipelines.assets.weak_link_creation import (
+    create_weak_links_for_node as create_weak_links_for_node,
+)
+from context_service.pipelines.assets.weak_link_review import weak_link_review_asset
 
 all_assets: list[Any] = [
     extraction,
@@ -31,6 +35,7 @@ all_assets: list[Any] = [
     causal_tombstone,
     clustering,
     heat_asset,
+    edge_heat_asset,
     reasoning_compaction,
     belief_synthesis_asset,
     retention_sweep,
@@ -39,4 +44,5 @@ all_assets: list[Any] = [
     chain_stitch,
     belief_merge_asset,
     cascade_review_asset,
+    weak_link_review_asset,
 ]
