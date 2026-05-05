@@ -23,7 +23,8 @@ Split storage between Memgraph (graph-native data) and Postgres (relational/conf
 | Events (compacted traces) | Postgres | Append-only audit logs, TTL cleanup |
 | Audit events | Postgres | Erasure, calibration, bootstrap state |
 | **Memgraph** | | |
-| ReasoningChain node | Memgraph | Summary fields + edges (SPAWNED_BY, PART_OF_SESSION) |
+| ReasoningChain node | Memgraph | Summary fields + edges (SPAWNED_BY, PART_OF_SESSION, CONCLUDES) |
+| Conclusion node | Memgraph | Aggregates reasoning chains, consolidation target |
 | MetaObservation | Memgraph | ABOUT edges for traversal |
 | Belief, Fact, Claim, Entity | Memgraph | Graph-native: provenance chains, synthesis edges |
 | Cluster, Document, Passage | Memgraph | Traversal, MEMBER_OF, EXTRACTED_FROM |
@@ -148,6 +149,56 @@ Postgres-first ordering ensures we never have a Memgraph summary pointing to mis
 
 - Default: return Memgraph node (summary only)
 - `include_steps=true`: join from Postgres by chain_id
+- If Memgraph node missing, treat as not-found (don't fetch orphaned Postgres steps)
+
+## Conclusion Node (Multi-Writer Pattern)
+
+Multiple agents may reason about the same query in parallel, producing independent ReasoningChains that converge on similar conclusions. Rather than contending on a single chain, each agent writes their own chain and Conclusion, with async consolidation.
+
+### Conclusion Schema (Memgraph)
+
+```cypher
+(:Conclusion {
+  id: STRING,
+  silo_id: STRING,
+  query_context_hash: STRING,
+  content: STRING,
+  confidence: FLOAT,
+  status: "active" | "consolidated",
+  created_by_agent_id: STRING,
+  created_at: TIMESTAMP,
+  valid_from: TIMESTAMP
+})
+```
+
+### Edges
+
+```
+(:ReasoningChain)-[:CONCLUDES]->(:Conclusion)  // chain reaches this conclusion
+(:Conclusion)-[:CONSOLIDATES]->(:Conclusion)   // canonical consolidates originals
+```
+
+### Write Path (No Contention)
+
+1. Agent writes ReasoningChain (single-writer, no conflict)
+2. Agent writes Conclusion with `query_context_hash`
+3. Agent creates `CONCLUDES` edge from chain to conclusion
+4. No locks required on hot path
+
+### Consolidation (Custodian)
+
+Runs as a separate pass in the custodian worker loop:
+
+**Trigger (threshold):** When 2+ Conclusions share the same `query_context_hash`
+- Create canonical Conclusion with merged confidence (agreement boost)
+- Create `CONSOLIDATES` edges from canonical to originals
+- Mark originals `status: consolidated`
+
+**Fallback (periodic):** Every 5-10 minutes, sweep for unconsolidated Conclusions
+- Cluster by embedding similarity (catches paraphrased queries without hash match)
+- Same consolidation logic
+
+**Provenance:** Original Conclusions are preserved, not deleted. Full reasoning paths remain traversable.
 
 ## API Changes
 
@@ -206,6 +257,24 @@ context_recall(
 | Event insert | < 50ms | Postgres append |
 | Config CRUD | < 30ms | Postgres indexed |
 
+## Race Condition Mitigations
+
+| Issue | Mitigation |
+|-------|------------|
+| Saga TOCTOU (reader sees Postgres steps for missing Memgraph node) | Read path checks Memgraph first; if node missing, don't fetch Postgres steps |
+| Lost update on steps (concurrent upserts) | Chains are single-writer; multi-writer scenarios use separate chains + Conclusion consolidation |
+| Summary/payload split (Postgres updated, Memgraph stale) | Saga always writes both or neither; no partial retry path |
+| Event expiry phantom read | Event reads use explicit transaction via `get_session()` context manager |
+
+### System-Level Fixes (Separate from This Spec)
+
+These pre-existing issues should be addressed independently:
+
+- `db/postgres.py:67-68`: Add `asyncio.Lock` around lazy init of `_session_factory`
+- `embeddings/splade.py:56-57`: Fix lock creation race with class-level lock
+- `engine/memgraph_store.py:333-341`: Document non-atomic version check limitation
+- `db/postgres.py:44`: Increase pool size or add `pool_timeout` configuration
+
 ## Implementation Notes
 
 ### Existing Infrastructure
@@ -218,9 +287,13 @@ context_recall(
 
 - `src/context_service/models/postgres/` - SQLAlchemy models for tables above
 - `src/context_service/engine/postgres_store.py` - repository layer
+- `src/context_service/models/inference.py` - add Conclusion model
+- `src/context_service/db/queries.py` - add Conclusion Cypher queries
+- `src/context_service/custodian/consolidation.py` - Conclusion consolidation logic
 - Migration files via Alembic
 
 ### Dependencies
 
 - References auto-tagging spec for tag config tables
 - Compaction pipeline (`engine/compaction.py`) needs update to write Events to Postgres
+- Custodian worker loop needs consolidation pass after validation pass
