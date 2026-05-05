@@ -70,7 +70,7 @@ CREATE INDEX idx_chain_steps_silo ON reasoning_chain_steps(silo_id);
 -- Events (compacted traces)
 CREATE TABLE events (
     id UUID PRIMARY KEY,
-    silo_id UUID NOT NULL,
+    silo_id UUID NOT NULL REFERENCES silo_config(silo_id),
     event_type VARCHAR(64) NOT NULL,
     source_chain_id UUID,
     content TEXT NOT NULL,
@@ -86,7 +86,7 @@ CREATE INDEX idx_events_expiry ON events(expires_at) WHERE expires_at IS NOT NUL
 -- Audit events
 CREATE TABLE audit_events (
     id UUID PRIMARY KEY,
-    silo_id UUID NOT NULL,
+    silo_id UUID NOT NULL REFERENCES silo_config(silo_id),
     event_type VARCHAR(64) NOT NULL,
     actor_id VARCHAR(255) NOT NULL,      -- who triggered (agent_id or user_id)
     actor_type VARCHAR(32) NOT NULL,     -- "agent" | "user" | "system"
@@ -95,6 +95,15 @@ CREATE TABLE audit_events (
 );
 CREATE INDEX idx_audit_silo_time ON audit_events(silo_id, created_at DESC);
 CREATE INDEX idx_audit_actor ON audit_events(actor_id, created_at DESC);
+
+-- Dead-letter for failed saga compensations
+CREATE TABLE orphaned_chains (
+    chain_id UUID PRIMARY KEY,
+    silo_id UUID NOT NULL,
+    failed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    retry_count INT NOT NULL DEFAULT 0,
+    last_error TEXT
+);
 ```
 
 Tag config tables defined in auto-tagging spec - not duplicated here.
@@ -141,9 +150,16 @@ reasoning_chain_steps.steps = [
 2. Compute summary: `step_count`, `first_step`, `final_step`, `outcome`, flatten `all_premise_refs`
 3. **Postgres first**: upsert steps JSON (ON CONFLICT UPDATE)
 4. **Memgraph second**: upsert node with summary fields + create edges
-5. **On Memgraph failure**: delete Postgres row (compensating transaction)
+5. **On Memgraph failure**: 
+   - Attempt compensating delete of Postgres row (3 retries, exponential backoff)
+   - If delete fails after retries, log to `orphaned_chains` dead-letter table for async cleanup
 
 Postgres-first ordering ensures we never have a Memgraph summary pointing to missing steps. Retry-safe via ON CONFLICT.
+
+**Reconciliation GC (periodic):** Dagster job runs every 15 minutes:
+- Scan `reasoning_chain_steps` for rows where `chain_id` has no matching Memgraph node
+- Delete orphaned rows older than 5 minutes (grace period for in-flight writes)
+- Also processes `orphaned_chains` dead-letter table
 
 ### Read Path
 
@@ -167,7 +183,8 @@ Multiple agents may reason about the same query in parallel, producing independe
   status: "active" | "consolidated",
   created_by_agent_id: STRING,
   created_at: TIMESTAMP,
-  valid_from: TIMESTAMP
+  valid_from: TIMESTAMP,
+  valid_to: TIMESTAMP | NULL  // for time-travel queries
 })
 ```
 
@@ -189,14 +206,23 @@ Multiple agents may reason about the same query in parallel, producing independe
 
 Runs as a separate pass in the custodian worker loop:
 
-**Trigger (threshold):** When 2+ Conclusions share the same `query_context_hash`
+**Grouping key:** `(silo_id, query_context_hash)` - never consolidate across silos.
+
+**Trigger (threshold):** When 2+ Conclusions share the same grouping key
+- Acquire Redis lock: `consolidation:{silo_id}:{query_context_hash}` (10s TTL)
+- Skip if any originals already have `status: consolidated` (idempotency guard)
 - Create canonical Conclusion with merged confidence (agreement boost)
 - Create `CONSOLIDATES` edges from canonical to originals
 - Mark originals `status: consolidated`
+- Release lock
 
 **Fallback (periodic):** Every 5-10 minutes, sweep for unconsolidated Conclusions
-- Cluster by embedding similarity (catches paraphrased queries without hash match)
-- Same consolidation logic
+- Cluster by embedding similarity within silo (cosine threshold > 0.85)
+- Same consolidation logic with lock per cluster
+
+**Failure handling:** If crash occurs between canonical creation and marking originals:
+- Periodic sweep detects originals with `status: active` that have incoming `CONSOLIDATES` edge
+- Marks them `status: consolidated` (idempotent repair)
 
 **Provenance:** Original Conclusions are preserved, not deleted. Full reasoning paths remain traversable.
 
@@ -245,7 +271,7 @@ context_recall(
 }
 ```
 
-**Scope:** `include_steps` only applies to node_id fetch mode (depth=0). For semantic search and graph traversal modes, ReasoningChain nodes return summary only; agents must follow up with explicit node_id fetch if full steps needed.
+**Scope:** `include_steps` only applies to node_id fetch mode (depth=0). For semantic search and graph traversal modes, the parameter is silently ignored and ReasoningChain nodes return summary only. Agents must follow up with explicit node_id fetch if full steps needed. This is intentional: bulk search/traversal results should stay lightweight.
 
 ## Performance Targets
 
@@ -262,9 +288,13 @@ context_recall(
 | Issue | Mitigation |
 |-------|------------|
 | Saga TOCTOU (reader sees Postgres steps for missing Memgraph node) | Read path checks Memgraph first; if node missing, don't fetch Postgres steps |
+| Compensating delete fails | Retry 3x with backoff, then dead-letter to `orphaned_chains`; reconciliation GC cleans up |
 | Lost update on steps (concurrent upserts) | Chains are single-writer; multi-writer scenarios use separate chains + Conclusion consolidation |
 | Summary/payload split (Postgres updated, Memgraph stale) | Saga always writes both or neither; no partial retry path |
 | Event expiry phantom read | Event reads use explicit transaction via `get_session()` context manager |
+| Consolidation race (two workers create canonicals) | Redis lock per `(silo_id, query_context_hash)` with idempotency guard |
+| Consolidation crash (canonical created, originals not marked) | Periodic sweep repairs: detects active originals with incoming CONSOLIDATES edge |
+| Cross-silo hash collision | Grouping key includes `silo_id`; never consolidate across silos |
 
 ### System-Level Fixes (Separate from This Spec)
 
