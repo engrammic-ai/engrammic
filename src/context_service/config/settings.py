@@ -16,7 +16,7 @@ from typing import Any
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, SecretStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 load_dotenv(override=False)
@@ -25,7 +25,7 @@ load_dotenv(override=False)
 class CustodianSettings(BaseModel):
     """Custodian phase settings: budgets, flags, and model identifiers."""
 
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     enabled: bool = Field(default=False, description="Master gate for the Custodian subsystem")
     auto_publish_after_pass: bool = Field(
@@ -74,7 +74,7 @@ class CustodianSettings(BaseModel):
 class RetrievalTuning(BaseModel):
     """Retrieval-ranking tuning knobs."""
 
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     walker_alpha: float = Field(default=0.4)
     walker_beta: float = Field(default=0.3)
@@ -95,7 +95,7 @@ class RetrievalTuning(BaseModel):
 
 
 class MemgraphConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     host: str = "localhost"
     port: int = 7687
@@ -105,7 +105,7 @@ class MemgraphConfig(BaseModel):
 
 
 class QdrantConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     host: str = "localhost"
     port: int = 6333
@@ -114,7 +114,7 @@ class QdrantConfig(BaseModel):
 
 
 class RedisConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     host: str = "localhost"
     port: int = 6379
@@ -123,7 +123,7 @@ class RedisConfig(BaseModel):
 
 
 class PostgresConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     host: str = "localhost"
     port: int = 5432
@@ -139,7 +139,7 @@ class PostgresConfig(BaseModel):
 
 
 class InfraConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     memgraph: MemgraphConfig = Field(default_factory=MemgraphConfig)
     qdrant: QdrantConfig = Field(default_factory=QdrantConfig)
@@ -148,7 +148,7 @@ class InfraConfig(BaseModel):
 
 
 class WalkerTuning(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     alpha: float = 0.4
     beta: float = 0.3
@@ -163,7 +163,7 @@ class WalkerTuning(BaseModel):
 
 
 class TiebreakConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     enabled: bool = False
     similarity_threshold: float = 0.85
@@ -171,7 +171,7 @@ class TiebreakConfig(BaseModel):
 
 
 class EntityRetrievalConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     enabled: bool = False
     max_entities: int = 10
@@ -181,7 +181,7 @@ class EntityRetrievalConfig(BaseModel):
 
 
 class ClusterRetrievalConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     enabled: bool = False
     level: int | None = 1
@@ -189,7 +189,7 @@ class ClusterRetrievalConfig(BaseModel):
 
 
 class SupersessionConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     enabled: bool = False
     confidence_threshold: float = 0.75
@@ -198,7 +198,7 @@ class SupersessionConfig(BaseModel):
 
 
 class RetrievalConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     walker: WalkerTuning = Field(default_factory=WalkerTuning)
     rrf_k: int = 60
@@ -214,7 +214,7 @@ class RetrievalConfig(BaseModel):
 
 
 class ServerConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     host: str = "127.0.0.1"
     port: int = 8000
@@ -224,7 +224,7 @@ class ServerConfig(BaseModel):
 
 
 class JinaConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     api_key: SecretStr | None = None
     model: str = ""
@@ -233,7 +233,7 @@ class JinaConfig(BaseModel):
 
 
 class VertexConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     project: str | None = None
     region: str = "us-central1"
@@ -244,13 +244,13 @@ class VertexConfig(BaseModel):
 
 
 class SpladeConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     model: str = "prithivida/Splade_PP_en_v1"
 
 
 class EmbeddingConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     provider: str = "jina"
     jina: JinaConfig = Field(default_factory=JinaConfig)
@@ -259,13 +259,13 @@ class EmbeddingConfig(BaseModel):
 
 
 class ProviderConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     api_url: str = ""
 
 
 class LLMConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     provider: str = ""
     model: str = ""
@@ -283,7 +283,7 @@ class LLMConfig(BaseModel):
 
 
 class WorkosConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     api_key: SecretStr | None = None
     client_id: str | None = None
@@ -291,13 +291,13 @@ class WorkosConfig(BaseModel):
 
 
 class AuthConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     workos: WorkosConfig = Field(default_factory=WorkosConfig)
 
 
 class PromptsConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     preset: str = "gemini"
     mcp_preset: str | None = None
@@ -306,7 +306,7 @@ class PromptsConfig(BaseModel):
 class AutoReflectConfig(BaseModel):
     """Feature flags for automatic MetaObservation generation."""
 
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     enabled: bool = Field(default=False, description="Master gate for auto-reflection")
     on_supersession: bool = Field(
@@ -337,7 +337,7 @@ class AutoReflectConfig(BaseModel):
 
 
 class FeaturesConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     mcp_enabled: bool = True
     otel_enabled: bool = False
@@ -346,7 +346,7 @@ class FeaturesConfig(BaseModel):
 
 
 class CacheConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     enabled: bool = True
     node_ttl: int = 3600
@@ -355,27 +355,27 @@ class CacheConfig(BaseModel):
 
 
 class ClusteringConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     auto_trigger_enabled: bool = False
     post_ingest_threshold: int = 50
 
 
 class ExtractionConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     mode: str = "eager"
     batch_concurrency: int = 8
 
 
 class RateLimitConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     requests_per_minute: int = 1000
 
 
 class SecurityConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
     rate_limit: RateLimitConfig = Field(default_factory=RateLimitConfig)
@@ -387,7 +387,7 @@ class SecurityConfig(BaseModel):
 
 
 class BearConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     api_key: SecretStr | None = None
     api_url: str = "https://api.thetokencompany.com/v1/compress"
@@ -396,7 +396,7 @@ class BearConfig(BaseModel):
 
 
 class StripeConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     secret_key: SecretStr | None = None
     webhook_secret: SecretStr | None = None
@@ -408,7 +408,7 @@ class StripeConfig(BaseModel):
 
 
 class ExternalConfig(BaseModel):
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     bear: BearConfig = Field(default_factory=BearConfig)
 
@@ -416,7 +416,7 @@ class ExternalConfig(BaseModel):
 class PatternConfig(BaseModel):
     """Configuration for pattern detection (v1.3a/b)."""
 
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     detection_enabled: bool = Field(
         default=False,
@@ -431,7 +431,7 @@ class PatternConfig(BaseModel):
 class CausalConfig(BaseModel):
     """Configuration for causal edge extraction, inference, and query exposure."""
 
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     extraction_enabled: bool = Field(
         default=False,
@@ -477,7 +477,7 @@ class CausalConfig(BaseModel):
 class WeakLinksSettings(BaseModel):
     """Weak links (speculative RELATED_TO edges) configuration."""
 
-    model_config = {"extra": "ignore"}
+    model_config = ConfigDict(frozen=True, extra="ignore")
 
     enabled: bool = Field(default=True, description="Enable weak link creation")
 
