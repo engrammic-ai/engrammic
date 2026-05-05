@@ -13,6 +13,7 @@ services:
       - MEMGRAPH_HOST=memgraph
       - QDRANT_HOST=qdrant
       - REDIS_HOST=redis
+      - INFRA__POSTGRES__DSN=postgresql://context:context@postgres:5432/context_service
       - GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-sa.json
     volumes:
       - ./secrets:/app/secrets:ro
@@ -25,6 +26,8 @@ services:
       qdrant:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -89,6 +92,24 @@ services:
       retries: 5
     restart: unless-stopped
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: context-service-postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=context
+      - POSTGRES_PASSWORD=context
+      - POSTGRES_DB=context_service
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U context"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   memgraph-lab:
     image: memgraph/lab:latest
     container_name: context-service-memgraph-lab
@@ -106,3 +127,4 @@ volumes:
   memgraph-log:
   qdrant-data:
   redis-data:
+  postgres-data:
