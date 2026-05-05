@@ -125,7 +125,17 @@ class RedisConfig(BaseModel):
 class PostgresConfig(BaseModel):
     model_config = {"extra": "ignore"}
 
-    dsn: SecretStr = SecretStr("postgresql://user:password@localhost:5432/context_service")
+    host: str = "localhost"
+    port: int = 5432
+    user: str = "context"
+    password: SecretStr = SecretStr("context")
+    database: str = "context_service"
+
+    @property
+    def dsn(self) -> str:
+        """Build PostgreSQL DSN from components."""
+        pwd = self.password.get_secret_value()
+        return f"postgresql://{self.user}:{pwd}@{self.host}:{self.port}/{self.database}"
 
 
 class InfraConfig(BaseModel):

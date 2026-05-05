@@ -13,7 +13,10 @@ services:
       - MEMGRAPH_HOST=memgraph
       - QDRANT_HOST=qdrant
       - REDIS_HOST=redis
-      - INFRA__POSTGRES__DSN=postgresql://context:context@postgres:5432/context_service
+      - INFRA__POSTGRES__HOST=postgres
+      - INFRA__POSTGRES__USER=context
+      - INFRA__POSTGRES__PASSWORD=context
+      - INFRA__POSTGRES__DATABASE=context_service
       - GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-sa.json
     volumes:
       - ./secrets:/app/secrets:ro
