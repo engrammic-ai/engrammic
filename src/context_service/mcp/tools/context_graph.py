@@ -5,10 +5,16 @@ from __future__ import annotations
 from typing import Any
 
 from context_service.config.settings import get_settings
-from context_service.mcp.server import get_context_service, get_mcp_auth_context, get_silo_service
+from context_service.mcp.server import (
+    get_context_service,
+    get_mcp_auth_context,
+    get_redis,
+    get_silo_service,
+)
 from context_service.models.mcp import Layer
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
+from context_service.signals.edge_access_events import emit_edge_access_event
 
 
 async def _context_graph(
@@ -70,6 +76,18 @@ async def _context_graph(
         relationship_types=effective_rel_types,
         layers=layers,
     )
+
+    redis = get_redis()
+    if redis is not None:
+        for edge in result.edges:
+            await emit_edge_access_event(
+                redis=redis,
+                silo_id=silo_id,
+                from_node=edge["from_node"],
+                to_node=edge["to_node"],
+                edge_type=edge["relationship"],
+                traversal_context="recall",
+            )
 
     metadata: dict[str, Any] = {
         "causal_edges_enabled": settings.causal.query_enabled,
