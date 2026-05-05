@@ -1257,3 +1257,54 @@ GET_SUPERSESSION_CHAIN = (
     "ORDER BY n.valid_from DESC "
     "LIMIT $limit"
 )
+
+# --- Conclusion queries ---
+
+UPSERT_CONCLUSION = """
+MERGE (c:Conclusion {id: $id})
+ON CREATE SET
+    c.silo_id = $silo_id,
+    c.query_context_hash = $query_context_hash,
+    c.content = $content,
+    c.confidence = $confidence,
+    c.status = $status,
+    c.created_by_agent_id = $created_by_agent_id,
+    c.created_at = $created_at,
+    c.valid_from = $valid_from,
+    c.valid_to = null
+ON MATCH SET
+    c.content = $content,
+    c.confidence = $confidence,
+    c.status = $status
+RETURN c
+"""
+
+CREATE_CONCLUDES_EDGE = """
+MATCH (chain:ReasoningChain {id: $chain_id})
+MATCH (conclusion:Conclusion {id: $conclusion_id})
+MERGE (chain)-[:CONCLUDES]->(conclusion)
+"""
+
+CREATE_CONSOLIDATES_EDGE = """
+MATCH (canonical:Conclusion {id: $canonical_id})
+MATCH (original:Conclusion {id: $original_id})
+MERGE (canonical)-[:CONSOLIDATES]->(original)
+"""
+
+GET_CONCLUSIONS_BY_HASH = """
+MATCH (c:Conclusion {silo_id: $silo_id, query_context_hash: $query_context_hash})
+WHERE c.status = 'active'
+RETURN c
+"""
+
+MARK_CONCLUSION_CONSOLIDATED = """
+MATCH (c:Conclusion {id: $id})
+SET c.status = 'consolidated'
+RETURN c
+"""
+
+FIND_ORPHANED_ACTIVE_CONCLUSIONS = """
+MATCH (canonical:Conclusion)-[:CONSOLIDATES]->(original:Conclusion)
+WHERE original.status = 'active'
+RETURN original.id as id
+"""
