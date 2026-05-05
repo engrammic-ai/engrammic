@@ -2,18 +2,18 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-04)
+## Current state (2026-05-05)
 
 **Shipped:**
+- v1.7 Auto-Tagging (tag config, cosine matching, Dagster pipelines)
+- v1.6 Hybrid Storage (Postgres+Memgraph saga, consolidation, crystallization, GC)
 - v1.5 Agent Identity (agent nodes, reflection filtering, chain continuity, per-silo config)
 - v1.4.1 MCP QoL (consolidated to 4 tools: store, recall, link, admin; removed 4 legacy tool files)
 - v1d Signals Enhancement (heat ranking, unified decay, write events)
 
 ## Active plans
 
-| Plan | Branch | Status |
-|------|--------|--------|
-| [2026-05-05-hybrid-storage.md](./2026-05-05-hybrid-storage.md) | `feature/hybrid-storage-spec` | In progress |
+None currently active.
 
 Next candidates:
 - OSS launch prep (primitives + engine open-source)
@@ -45,6 +45,8 @@ Next candidates:
 ## Archive
 
 Completed plans in `archive/`:
+- v1.7 Auto-Tagging
+- v1.6 Hybrid Storage
 - v1.5 Agent Identity (5.0-5d)
 - v1.4.1 MCP QoL
 - v1d Signals Enhancement
