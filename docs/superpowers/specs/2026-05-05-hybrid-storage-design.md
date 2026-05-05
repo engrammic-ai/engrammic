@@ -55,11 +55,16 @@ CREATE TABLE silo_config (
 -- ReasoningChain steps (hot payload)
 CREATE TABLE reasoning_chain_steps (
     chain_id UUID PRIMARY KEY,
-    silo_id UUID NOT NULL,
+    silo_id UUID NOT NULL REFERENCES silo_config(silo_id),
     steps JSONB NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_chain_steps_silo ON reasoning_chain_steps(silo_id);
+
+-- Upsert pattern for retries:
+-- INSERT INTO reasoning_chain_steps (...) VALUES (...)
+-- ON CONFLICT (chain_id) DO UPDATE SET steps = EXCLUDED.steps, updated_at = NOW();
 
 -- Events (compacted traces)
 CREATE TABLE events (
@@ -71,19 +76,24 @@ CREATE TABLE events (
     agent_id VARCHAR(255),
     step_count INT,
     outcome VARCHAR(32),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at TIMESTAMPTZ  -- NULL = no expiry; cleanup job deletes WHERE expires_at < NOW()
 );
 CREATE INDEX idx_events_silo_type ON events(silo_id, event_type, created_at DESC);
+CREATE INDEX idx_events_expiry ON events(expires_at) WHERE expires_at IS NOT NULL;
 
 -- Audit events
 CREATE TABLE audit_events (
     id UUID PRIMARY KEY,
     silo_id UUID NOT NULL,
     event_type VARCHAR(64) NOT NULL,
+    actor_id VARCHAR(255) NOT NULL,      -- who triggered (agent_id or user_id)
+    actor_type VARCHAR(32) NOT NULL,     -- "agent" | "user" | "system"
     payload JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_audit_silo_time ON audit_events(silo_id, created_at DESC);
+CREATE INDEX idx_audit_actor ON audit_events(actor_id, created_at DESC);
 ```
 
 Tag config tables defined in auto-tagging spec - not duplicated here.
@@ -108,8 +118,8 @@ Tag config tables defined in auto-tagging spec - not duplicated here.
   
   // Summary fields (computed on write, stored)
   step_count: INT,
-  first_step: JSON,      // {premise_refs, operation, conclusion, confidence}
-  final_step: JSON,
+  first_step: STRING,    // JSON-serialized {premise_refs, operation, conclusion, confidence}
+  final_step: STRING,    // JSON-serialized (Memgraph has no native JSON type)
   outcome: "success" | "failure" | "inconclusive" | NULL,
   all_premise_refs: LIST  // flattened from all steps
 })
@@ -124,13 +134,15 @@ reasoning_chain_steps.steps = [
 ]
 ```
 
-### Write Path
+### Write Path (Saga Pattern)
 
 1. Agent calls `context_store(layer="intelligence", steps=[...])`
 2. Compute summary: `step_count`, `first_step`, `final_step`, `outcome`, flatten `all_premise_refs`
-3. Upsert Memgraph node with summary fields
-4. Insert steps JSON to Postgres
-5. Create edges (SPAWNED_BY, PART_OF_SESSION) in Memgraph
+3. **Postgres first**: upsert steps JSON (ON CONFLICT UPDATE)
+4. **Memgraph second**: upsert node with summary fields + create edges
+5. **On Memgraph failure**: delete Postgres row (compensating transaction)
+
+Postgres-first ordering ensures we never have a Memgraph summary pointing to missing steps. Retry-safe via ON CONFLICT.
 
 ### Read Path
 
@@ -170,6 +182,11 @@ context_recall(
 {
   "node_id": "chain_123",
   "layer": "intelligence",
+  "step_count": 7,
+  "first_step": {"operation": "retrieve", "conclusion": "Found 3 relevant facts"},
+  "final_step": {"operation": "synthesize", "conclusion": "User prefers X because Y"},
+  "outcome": "success",
+  "all_premise_refs": ["fact_1", "fact_2", "claim_5"],
   "steps": [
     {"step_index": 0, "premise_refs": [...], "operation": "...", "conclusion": "...", "confidence": 0.9},
     ...
@@ -177,11 +194,13 @@ context_recall(
 }
 ```
 
+**Scope:** `include_steps` only applies to node_id fetch mode (depth=0). For semantic search and graph traversal modes, ReasoningChain nodes return summary only; agents must follow up with explicit node_id fetch if full steps needed.
+
 ## Performance Targets
 
 | Operation | Target | Notes |
 |-----------|--------|-------|
-| `context_store` (intelligence) | < 150ms p95 | Memgraph + Postgres write |
+| `context_store` (intelligence) | < 200ms p95 | Postgres + Memgraph write (saga) |
 | `context_recall` (summary) | < 20ms cached, < 100ms uncached | Memgraph only |
 | `context_recall` (include_steps) | < 120ms | Memgraph + Postgres PK lookup |
 | Event insert | < 50ms | Postgres append |
