@@ -206,6 +206,23 @@ class ReasoningChain(BaseModel):
         return self
 
 
+class Conclusion(BaseModel):
+    """A :Conclusion node - aggregates reasoning chains with consolidation."""
+
+    model_config = {"extra": "forbid"}
+
+    node_label: str = "Conclusion"
+    silo_id: str
+    query_context_hash: str
+    content: str
+    confidence: float = Field(ge=0.0, le=1.0)
+    status: Literal["active", "consolidated"] = "active"
+    created_by_agent_id: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    valid_from: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    valid_to: datetime | None = None
+
+
 class Commitment(BaseModel):
     """A :Claim:Commitment node — interpretive frame with reserved predicates.
 
@@ -271,5 +288,6 @@ __all__ = [
     "ChainStep",
     "Commitment",
     "CommitmentScope",
+    "Conclusion",
     "ReasoningChain",
 ]

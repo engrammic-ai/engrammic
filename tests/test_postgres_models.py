@@ -1,6 +1,10 @@
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect
 
 from context_service.models.postgres.org import OrgPreferences, SiloConfig
+from context_service.models.postgres.reasoning import (
+    OrphanedChains,
+    ReasoningChainSteps,
+)
 
 
 def test_org_preferences_columns():
@@ -60,3 +64,46 @@ def test_org_preferences_server_defaults():
     assert table.c["default_llm"].server_default is not None
     assert table.c["embedding_model"].server_default is not None
     assert table.c["settings"].server_default is not None
+
+
+def test_reasoning_chain_steps_columns():
+    """ReasoningChainSteps has required columns."""
+    mapper = inspect(ReasoningChainSteps)
+    columns = {c.key for c in mapper.columns}
+    assert columns == {
+        "chain_id",
+        "silo_id",
+        "steps",
+        "created_at",
+        "updated_at",
+    }
+
+
+def test_orphaned_chains_columns():
+    """OrphanedChains has required columns for dead-letter."""
+    mapper = inspect(OrphanedChains)
+    columns = {c.key for c in mapper.columns}
+    assert columns == {
+        "chain_id",
+        "silo_id",
+        "failed_at",
+        "retry_count",
+        "last_error",
+    }
+
+
+from context_service.models.inference import Conclusion
+
+
+def test_conclusion_model_fields():
+    """Conclusion has required fields including valid_to."""
+    conclusion = Conclusion(
+        silo_id="test-silo",
+        query_context_hash="abc123",
+        content="User prefers X",
+        confidence=0.9,
+        created_by_agent_id="agent-1",
+    )
+    assert conclusion.status == "active"
+    assert conclusion.valid_to is None
+    assert hasattr(conclusion, "valid_from")
