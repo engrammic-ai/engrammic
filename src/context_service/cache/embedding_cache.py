@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 from typing import TYPE_CHECKING
 
+from context_service.config import get_settings
 from context_service.config.logging import get_logger
 from context_service.utils.json import dumps, loads
 
@@ -19,9 +20,9 @@ class EmbeddingCache:
 
     KEY_PREFIX = "cache:embed"
 
-    def __init__(self, redis: RedisClient, ttl: int = 604800) -> None:
+    def __init__(self, redis: RedisClient, ttl: int | None = None) -> None:
         self._redis = redis
-        self._ttl = ttl
+        self._ttl = ttl if ttl is not None else get_settings().embedding_cache_ttl
 
     @staticmethod
     def _hash_text(text: str) -> str:

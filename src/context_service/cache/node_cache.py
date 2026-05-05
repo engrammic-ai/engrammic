@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any
 
+from context_service.config import get_settings
 from context_service.config.logging import get_logger
 from context_service.utils.json import JSONDecodeError, loads
 
@@ -27,9 +28,9 @@ class NodeCache:
 
     KEY_PREFIX = "cache:node"
 
-    def __init__(self, redis: RedisClient, ttl: int = 3600) -> None:
+    def __init__(self, redis: RedisClient, ttl: int | None = None) -> None:
         self._redis = redis
-        self._ttl = ttl
+        self._ttl = ttl if ttl is not None else get_settings().node_cache_ttl
 
     def _key(self, silo_id: str, node_id: str) -> str:
         return f"{self.KEY_PREFIX}:{silo_id}:{node_id}"

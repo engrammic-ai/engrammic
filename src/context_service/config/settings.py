@@ -658,9 +658,6 @@ class Settings(BaseSettings):
     # =========================================================================
 
     llm_provider: str = Field(default="")
-    llm_api_key: SecretStr | None = Field(default=None)
-    llm_model: str = Field(default="")
-    llm_api_url: str | None = Field(default=None)
     default_llm_model: str = Field(default="gemini-2.0-flash")
 
     # Per-provider API keys (used by llm/ providers)
@@ -777,6 +774,7 @@ class Settings(BaseSettings):
 
     # =========================================================================
     # BEAR Compression Settings
+    # TODO: BEAR compression subsystem - implement in future
     # =========================================================================
 
     bear_api_key: SecretStr | None = Field(default=None)
