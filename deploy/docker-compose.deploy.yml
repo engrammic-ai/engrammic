@@ -1,0 +1,33 @@
+# Production deployment compose - extends base + prod configs
+# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml -f deploy/docker-compose.deploy.yml up -d
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: context-service-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+    depends_on:
+      - app
+    restart: always
+
+  app:
+    ports: !reset []  # Remove host port binding, Caddy handles it
+    volumes: !reset
+      - ./secrets:/app/secrets:ro
+      - ./config:/app/config:ro
+
+  # Remove memgraph-lab in production
+  memgraph-lab:
+    profiles: ["dev"]
+
+volumes:
+  caddy-data:
+  caddy-config:

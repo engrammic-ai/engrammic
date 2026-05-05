@@ -1,0 +1,18 @@
+{$DOMAIN:localhost} {
+    reverse_proxy app:8000
+
+    # MCP endpoint
+    handle /mcp/* {
+        reverse_proxy app:8000
+    }
+
+    # Health check bypass (no TLS required)
+    handle /health {
+        reverse_proxy app:8000
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}
