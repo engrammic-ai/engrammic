@@ -11,7 +11,11 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 ## Active plans
 
-None currently active. Next candidates:
+| Plan | Branch | Status |
+|------|--------|--------|
+| [2026-05-05-hybrid-storage.md](./2026-05-05-hybrid-storage.md) | `feature/hybrid-storage-spec` | In progress |
+
+Next candidates:
 - OSS launch prep (primitives + engine open-source)
 - Clustering algorithm evaluation (spike)
 
