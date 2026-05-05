@@ -464,6 +464,32 @@ class CausalConfig(BaseModel):
     )
 
 
+class WeakLinksSettings(BaseModel):
+    """Weak links (speculative RELATED_TO edges) configuration."""
+
+    model_config = {"extra": "ignore"}
+
+    enabled: bool = Field(default=True, description="Enable weak link creation")
+
+    # Ingest-time creation
+    similarity_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
+    max_links_per_node: int = Field(default=5, ge=1)
+    top_k_candidates: int = Field(default=10, ge=1)
+    initial_weight_multiplier: float = Field(default=0.5, ge=0.0, le=1.0)
+
+    # Promotion thresholds
+    promotion_min_weight: float = Field(default=0.6, ge=0.0, le=1.0)
+    promotion_min_edge_heat: float = Field(default=0.3, ge=0.0)
+    promotion_require_fact_endpoints: bool = Field(default=True)
+
+    # Pruning thresholds
+    pruning_max_age_days: int = Field(default=30, ge=1)
+    pruning_min_edge_heat: float = Field(default=0.1, ge=0.0)
+
+    # Embedding model tracking
+    embedding_model_version: str = Field(default="jina-v3")
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -496,6 +522,7 @@ class Settings(BaseSettings):
     auto_reflect: AutoReflectConfig = Field(default_factory=AutoReflectConfig)
     causal: CausalConfig = Field(default_factory=CausalConfig)
     pattern: PatternConfig = Field(default_factory=PatternConfig)
+    weak_links: WeakLinksSettings = Field(default_factory=WeakLinksSettings)
 
     # =========================================================================
     # Application Meta
