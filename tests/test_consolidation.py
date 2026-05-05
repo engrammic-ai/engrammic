@@ -5,8 +5,9 @@ TDD: write tests first, then implement consolidation.py.
 
 from __future__ import annotations
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from context_service.custodian.consolidation import ConclusionConsolidator
 
@@ -122,8 +123,7 @@ async def test_consolidate_marks_originals_consolidated(
 
     assert mock_memgraph.mark_conclusion_consolidated.call_count == 2
     called_ids = {
-        call.args[0]
-        for call in mock_memgraph.mark_conclusion_consolidated.call_args_list
+        call.args[0] for call in mock_memgraph.mark_conclusion_consolidated.call_args_list
     }
     assert called_ids == {"c1", "c2"}
 

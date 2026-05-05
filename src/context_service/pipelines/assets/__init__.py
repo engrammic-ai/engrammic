@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from context_service.pipelines.assets.auto_tagging import auto_tagging
 from context_service.pipelines.assets.belief_merge import belief_merge_asset
 from context_service.pipelines.assets.belief_synthesis import belief_synthesis_asset
 from context_service.pipelines.assets.cascade_review import cascade_review_asset
@@ -19,12 +20,12 @@ from context_service.pipelines.assets.fact_promotion import claim_to_fact_promot
 from context_service.pipelines.assets.heat import heat_asset
 from context_service.pipelines.assets.llm_pattern_detection import llm_pattern_detection
 from context_service.pipelines.assets.pattern_detection import pattern_detection
+from context_service.pipelines.assets.reconciliation_gc import reconciliation_gc
 from context_service.pipelines.assets.retention import retention_sweep
+from context_service.pipelines.assets.tag_maintenance import tag_maintenance
 from context_service.pipelines.assets.weak_link_creation import (
     create_weak_links_for_node as create_weak_links_for_node,
 )
-from context_service.pipelines.assets.auto_tagging import auto_tagging
-from context_service.pipelines.assets.tag_maintenance import tag_maintenance
 from context_service.pipelines.assets.weak_link_review import weak_link_review_asset
 
 all_assets: list[Any] = [
@@ -49,4 +50,5 @@ all_assets: list[Any] = [
     weak_link_review_asset,
     auto_tagging,
     tag_maintenance,
+    reconciliation_gc,
 ]

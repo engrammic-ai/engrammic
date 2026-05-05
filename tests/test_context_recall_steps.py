@@ -29,9 +29,7 @@ async def test_context_recall_includes_steps_when_requested() -> None:
             ]
         }
 
-        with patch(
-            "context_service.mcp.tools.context_recall._fetch_chain_steps"
-        ) as mock_fetch:
+        with patch("context_service.mcp.tools.context_recall._fetch_chain_steps") as mock_fetch:
             mock_fetch.return_value = {chain_id: mock_steps}
 
             result = await _context_recall(
@@ -63,9 +61,7 @@ async def test_context_recall_skips_steps_when_not_requested() -> None:
             ]
         }
 
-        with patch(
-            "context_service.mcp.tools.context_recall._fetch_chain_steps"
-        ) as mock_fetch:
+        with patch("context_service.mcp.tools.context_recall._fetch_chain_steps") as mock_fetch:
             result = await _context_recall(
                 silo_id=silo_id,
                 node_ids=[chain_id],
@@ -102,9 +98,7 @@ async def test_context_recall_only_fetches_intelligence_steps() -> None:
             ]
         }
 
-        with patch(
-            "context_service.mcp.tools.context_recall._fetch_chain_steps"
-        ) as mock_fetch:
+        with patch("context_service.mcp.tools.context_recall._fetch_chain_steps") as mock_fetch:
             mock_fetch.return_value = {chain_id: mock_steps}
 
             result = await _context_recall(
@@ -113,12 +107,8 @@ async def test_context_recall_only_fetches_intelligence_steps() -> None:
                 include_steps=True,
             )
 
-            intelligence_node = next(
-                n for n in result["nodes"] if n["node_id"] == chain_id
-            )
-            memory_node = next(
-                n for n in result["nodes"] if n["node_id"] == memory_id
-            )
+            intelligence_node = next(n for n in result["nodes"] if n["node_id"] == chain_id)
+            memory_node = next(n for n in result["nodes"] if n["node_id"] == memory_id)
 
             assert intelligence_node["steps"] == mock_steps
             assert "steps" not in memory_node
@@ -139,9 +129,7 @@ async def test_context_recall_steps_ignored_in_search_mode() -> None:
     with patch("context_service.mcp.tools.context_recall._context_query") as mock_query:
         mock_query.return_value = {"results": [], "total_candidates": 0}
 
-        with patch(
-            "context_service.mcp.tools.context_recall._fetch_chain_steps"
-        ) as mock_fetch:
+        with patch("context_service.mcp.tools.context_recall._fetch_chain_steps") as mock_fetch:
             result = await _context_recall(
                 silo_id=silo_id,
                 query="some query",

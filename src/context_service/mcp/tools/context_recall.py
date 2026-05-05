@@ -16,20 +16,24 @@ if TYPE_CHECKING:
 
 async def _fetch_chain_steps(
     chain_ids: list[str],
+    postgres_store: Any | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     """Fetch reasoning chain steps from Postgres for the given chain IDs.
 
     Returns a mapping of chain_id -> steps list. Chain IDs with no stored
     steps are omitted from the result.
     """
-    from context_service.engine.postgres_store import PostgresStore
+    if postgres_store is None:
+        from context_service.engine.postgres_store import PostgresStore
 
-    store = PostgresStore()
+        postgres_store = PostgresStore()
+
     result: dict[str, list[dict[str, Any]]] = {}
-    for chain_id in chain_ids:
-        steps = await store.get_chain_steps(UUID(chain_id))
-        if steps is not None:
-            result[chain_id] = steps
+    uuids = [UUID(cid) for cid in chain_ids]
+    steps_map = await postgres_store.get_chain_steps_batch(uuids)
+    for chain_id, steps in steps_map.items():
+        if steps:
+            result[str(chain_id)] = steps
     return result
 
 

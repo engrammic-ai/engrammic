@@ -24,7 +24,6 @@ class ReasoningChainSteps(Base):
         PG_UUID(as_uuid=True),
         ForeignKey("silo_config.silo_id"),
         nullable=False,
-        index=True,
     )
     steps: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())

@@ -28,7 +28,7 @@ class ChainSagaWriter:
     If compensation also fails: dead-letter via add_orphaned_chain.
     """
 
-    def __init__(self, postgres_store: "PostgresStore", memgraph_store: Any) -> None:
+    def __init__(self, postgres_store: PostgresStore, memgraph_store: Any) -> None:
         self._pg = postgres_store
         self._mg = memgraph_store
 
@@ -36,12 +36,14 @@ class ChainSagaWriter:
         self,
         chain_id: UUID,
         silo_id: UUID,
-        steps: list["ChainStep"],
+        steps: list[ChainStep],
         produced_by_model: str,
         produced_by_agent_id: str,
         query_context_hash: str | None = None,
         status: str = "draft",
         source: str = "agent_explicit",
+        conclusion: str | None = None,
+        evidence_used: list[str] | None = None,
     ) -> None:
         """Write chain with saga pattern: Postgres first, then Memgraph.
 
@@ -50,14 +52,19 @@ class ChainSagaWriter:
         falling back to the dead-letter table.
         """
         step_count = len(steps)
-        first_step = json.dumps(steps[0].model_dump()) if steps else None
-        final_step = json.dumps(steps[-1].model_dump()) if steps else None
-        all_premise_refs: list[str] = []
+        all_premise_refs: list[str] = list(evidence_used) if evidence_used else []
         for step in steps:
             all_premise_refs.extend(step.premise_refs)
         outcome = self._derive_outcome(steps)
 
-        steps_data = [s.model_dump() for s in steps]
+        try:
+            steps_data = [s.model_dump(mode="json") for s in steps]
+            first_step = json.dumps(steps_data[0]) if steps_data else None
+            final_step = json.dumps(steps_data[-1]) if steps_data else None
+        except (TypeError, ValueError) as exc:
+            log.error("saga_serialization_failed", chain_id=str(chain_id), error=str(exc))
+            raise
+
         await self._pg.upsert_chain_steps(chain_id, silo_id, steps_data)
 
         try:
@@ -74,6 +81,7 @@ class ChainSagaWriter:
                 query_context_hash=query_context_hash,
                 status=status,
                 source=source,
+                conclusion=conclusion,
             )
         except Exception as exc:
             await self._compensate(chain_id, silo_id, str(exc))
@@ -97,7 +105,7 @@ class ChainSagaWriter:
         log.error("saga_compensation_failed", chain_id=str(chain_id), error=error)
         await self._pg.add_orphaned_chain(chain_id, silo_id, error)
 
-    def _derive_outcome(self, steps: list["ChainStep"]) -> str | None:
+    def _derive_outcome(self, steps: list[ChainStep]) -> str | None:
         """Derive outcome label from final step confidence."""
         if not steps:
             return None

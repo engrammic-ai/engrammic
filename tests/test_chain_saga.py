@@ -1,8 +1,9 @@
 """Tests for ChainSagaWriter: Postgres-first saga with Memgraph compensation."""
 
-import pytest
 from unittest.mock import AsyncMock
 from uuid import uuid4
+
+import pytest
 
 from context_service.engine.chain_saga import ChainSagaWriter
 from context_service.models.inference import ChainStep

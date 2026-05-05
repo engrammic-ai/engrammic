@@ -50,16 +50,15 @@ class ConclusionStore(Protocol):
     ) -> None: ...
 
     async def create_consolidates_edge(
-        self, canonical_id: str, original_id: str
+        self, canonical_id: str, original_id: str, silo_id: str
     ) -> None: ...
 
-    async def mark_conclusion_consolidated(self, conclusion_id: str) -> None: ...
+    async def mark_conclusion_consolidated(self, conclusion_id: str, silo_id: str) -> None: ...
 
-    async def find_orphaned_active_conclusions(
-        self, silo_id: str
-    ) -> list[str]: ...
+    async def find_orphaned_active_conclusions(self, silo_id: str) -> list[str]: ...
 
-_LOCK_TTL_SECONDS = 10
+
+_LOCK_TTL_SECONDS = 30
 _AGREEMENT_BOOST_PER_EXTRA = 0.02
 _MAX_AGREEMENT_BOOST = 0.1
 
@@ -76,9 +75,7 @@ class ConclusionConsolidator:
         self._mg = memgraph
         self._redis = redis
 
-    async def consolidate_by_hash(
-        self, silo_id: str, query_context_hash: str
-    ) -> str | None:
+    async def consolidate_by_hash(self, silo_id: str, query_context_hash: str) -> str | None:
         """Consolidate conclusions with matching (silo_id, query_context_hash).
 
         Returns the canonical conclusion ID when consolidation occurred, or
@@ -90,9 +87,7 @@ class ConclusionConsolidator:
         lock_key = f"consolidation:{silo_id}:{query_context_hash}"
 
         async with self._redis.lock(lock_key, timeout=_LOCK_TTL_SECONDS):
-            conclusions = await self._mg.get_conclusions_by_hash(
-                silo_id, query_context_hash
-            )
+            conclusions = await self._mg.get_conclusions_by_hash(silo_id, query_context_hash)
 
             # Idempotency guard: skip if consolidation was already started.
             if any(c.get("status") == "consolidated" for c in conclusions):
@@ -144,8 +139,8 @@ class ConclusionConsolidator:
         )
 
         for orig in originals:
-            await self._mg.create_consolidates_edge(canonical_id, orig["id"])
-            await self._mg.mark_conclusion_consolidated(orig["id"])
+            await self._mg.create_consolidates_edge(canonical_id, orig["id"], silo_id)
+            await self._mg.mark_conclusion_consolidated(orig["id"], silo_id)
 
         log.info(
             "consolidation_complete",
@@ -164,12 +159,10 @@ class ConclusionConsolidator:
 
         Returns the count of repaired (re-marked) conclusions.
         """
-        orphaned_ids: list[str] = await self._mg.find_orphaned_active_conclusions(
-            silo_id
-        )
+        orphaned_ids: list[str] = await self._mg.find_orphaned_active_conclusions(silo_id)
 
         for conclusion_id in orphaned_ids:
-            await self._mg.mark_conclusion_consolidated(conclusion_id)
+            await self._mg.mark_conclusion_consolidated(conclusion_id, silo_id)
 
         if orphaned_ids:
             log.info(

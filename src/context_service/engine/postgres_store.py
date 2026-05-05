@@ -38,9 +38,7 @@ class PostgresStore:
     async def get_chain_steps(self, chain_id: UUID) -> list[dict[str, Any]] | None:
         """Fetch steps by chain_id. Returns None if not found."""
         async with get_session() as session:
-            stmt = select(ReasoningChainSteps.steps).where(
-                ReasoningChainSteps.chain_id == chain_id
-            )
+            stmt = select(ReasoningChainSteps.steps).where(ReasoningChainSteps.chain_id == chain_id)
             result = await session.execute(stmt)
             row: list[dict[str, Any]] | None = result.scalar_one_or_none()
             return row
@@ -48,15 +46,24 @@ class PostgresStore:
     async def delete_chain_steps(self, chain_id: UUID) -> bool:
         """Delete chain steps. Returns True if row existed."""
         async with get_session() as session:
-            stmt = delete(ReasoningChainSteps).where(
-                ReasoningChainSteps.chain_id == chain_id
-            )
+            stmt = delete(ReasoningChainSteps).where(ReasoningChainSteps.chain_id == chain_id)
             result: CursorResult[Any] = await session.execute(stmt)  # type: ignore[assignment]
             return result.rowcount > 0
 
-    async def add_orphaned_chain(
-        self, chain_id: UUID, silo_id: UUID, error: str
-    ) -> None:
+    async def get_chain_steps_batch(
+        self, chain_ids: list[UUID]
+    ) -> dict[UUID, list[dict[str, Any]]]:
+        """Fetch steps for multiple chains in one query."""
+        if not chain_ids:
+            return {}
+        async with get_session() as session:
+            stmt = select(ReasoningChainSteps.chain_id, ReasoningChainSteps.steps).where(
+                ReasoningChainSteps.chain_id.in_(chain_ids)
+            )
+            result = await session.execute(stmt)
+            return {row.chain_id: row.steps for row in result}
+
+    async def add_orphaned_chain(self, chain_id: UUID, silo_id: UUID, error: str) -> None:
         """Add chain to dead-letter table."""
         async with get_session() as session:
             stmt = insert(OrphanedChains).values(

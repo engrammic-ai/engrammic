@@ -295,3 +295,21 @@ class FakeGraphStore:
 
     async def health_check(self) -> bool:
         raise NotImplementedError("FakeGraphStore.health_check not implemented")
+
+    async def upsert_reasoning_chain(
+        self,
+        chain_id: str,
+        silo_id: str,
+        step_count: int,
+        first_step: str | None,
+        final_step: str | None,
+        outcome: str | None,
+        all_premise_refs: list[str],
+        produced_by_model: str,
+        produced_by_agent_id: str,
+        query_context_hash: str | None = None,
+        status: str = "draft",
+        source: str = "agent_explicit",
+        conclusion: str | None = None,
+    ) -> None:
+        raise NotImplementedError("FakeGraphStore.upsert_reasoning_chain not implemented")

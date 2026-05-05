@@ -353,7 +353,10 @@ async def _context_reason(
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     from context_service.db import queries as q
+    from context_service.engine.chain_saga import ChainSagaWriter
+    from context_service.engine.postgres_store import PostgresStore
     from context_service.engine.sessions import attach_chain_to_session, create_or_join_session
+    from context_service.models.inference import ChainStep
 
     auth = await get_mcp_auth_context()
 
@@ -420,19 +423,40 @@ async def _context_reason(
                 "message": f"parent_chain_id {parent_chain_id!r} not found in silo",
             }
 
-    result = await ctx_svc.reason(
-        silo_id=str(expected_silo_id),
-        steps=parsed_steps,
+    # Generate chain_id here so it can be passed to both the saga and session
+    # attachment. The saga writes Postgres first (full steps), then the Memgraph
+    # summary projection via upsert_reasoning_chain. Compensation rolls back
+    # the Postgres row on Memgraph failure.
+    chain_id = uuid.uuid4()
+    produced_by_model = "unknown"
+    produced_by_agent_id = agent_id or auth.org_id
+
+    chain_steps = [
+        ChainStep(
+            step_index=s.step,
+            operation=s.reasoning[:80] if len(s.reasoning) > 80 else s.reasoning,
+            conclusion=s.reasoning,
+            confidence=s.confidence if s.confidence is not None else 0.8,
+        )
+        for s in parsed_steps
+    ]
+
+    postgres_store = PostgresStore()
+    saga = ChainSagaWriter(postgres_store, store)
+
+    await saga.write_chain(
+        chain_id=chain_id,
+        silo_id=expected_silo_id,
+        steps=chain_steps,
+        produced_by_model=produced_by_model,
+        produced_by_agent_id=produced_by_agent_id,
+        status="draft",
+        source="agent_explicit",
         conclusion=conclusion,
         evidence_used=evidence_used,
-        crystallizations=parsed_cryst,
-        session_id=resolved_session_id,
-        agent_id=agent_id,
     )
 
-    await attach_chain_to_session(
-        store, str(result.chain_id), resolved_session_id, str(expected_silo_id)
-    )
+    await attach_chain_to_session(store, str(chain_id), resolved_session_id, str(expected_silo_id))
 
     continues_parent: str | None = None
     if parent_chain_id is not None:
@@ -440,7 +464,7 @@ async def _context_reason(
             await store.execute_write(
                 q.CREATE_CONTINUES_EDGE,
                 {
-                    "child_chain_id": str(result.chain_id),
+                    "child_chain_id": str(chain_id),
                     "parent_chain_id": parent_chain_id,
                     "silo_id": str(expected_silo_id),
                     "created_at": datetime.now(UTC).isoformat(),
@@ -451,15 +475,61 @@ async def _context_reason(
             logger.warning(
                 "context_reason_continues_edge_failed",
                 exc_info=True,
-                child_chain_id=str(result.chain_id),
+                child_chain_id=str(chain_id),
                 parent_chain_id=parent_chain_id,
             )
 
+    # Crystallize claims from reasoning (Intelligence -> Knowledge)
+    # Parallel claim creation + batch edge write for performance
+    crystallized_ids: list[str] = []
+    if parsed_cryst:
+        import asyncio
+
+        scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
+
+        async def create_claim(cryst: Crystallization) -> str | None:
+            try:
+                claim_node = await ctx_svc.assert_claim(
+                    scope=scope,
+                    claim=cryst.claim,
+                    evidence=[str(chain_id)],
+                    source_type=SourceType.AGENT,
+                    confidence=cryst.confidence,
+                    agent_id=agent_id,
+                    source_tier="validated",
+                )
+                return str(claim_node.id)
+            except Exception:
+                logger.warning(
+                    "context_reason_crystallization_failed",
+                    exc_info=True,
+                    chain_id=str(chain_id),
+                    claim=str(cryst.claim)[:100],
+                )
+                return None
+
+        results = await asyncio.gather(*[create_claim(c) for c in parsed_cryst])
+        crystallized_ids = [r for r in results if r is not None]
+
+        # Batch create all edges in one query
+        if crystallized_ids:
+            now = datetime.now(UTC).isoformat()
+            edges = [
+                {
+                    "chain_id": str(chain_id),
+                    "claim_id": claim_id,
+                    "silo_id": str(expected_silo_id),
+                    "created_at": now,
+                }
+                for claim_id in crystallized_ids
+            ]
+            await store.execute_write(q.BATCH_CREATE_CRYSTALLIZES_EDGES, {"edges": edges})
+
     response: dict[str, Any] = {
-        "chain_id": str(result.chain_id),
+        "chain_id": str(chain_id),
         "layer": "intelligence",
         "steps_count": len(steps),
-        "crystallizations_queued": len(parsed_cryst),
+        "crystallized_claim_ids": crystallized_ids,
         "session_id": resolved_session_id,
         "created_at": datetime.now(UTC).isoformat(),
     }

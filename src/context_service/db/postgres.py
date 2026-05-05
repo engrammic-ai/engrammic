@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -24,6 +25,14 @@ class Base(DeclarativeBase):
 
 _engine: AsyncEngine | None = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
+_init_lock: asyncio.Lock | None = None
+
+
+def _get_init_lock() -> asyncio.Lock:
+    global _init_lock
+    if _init_lock is None:
+        _init_lock = asyncio.Lock()
+    return _init_lock
 
 
 async def init_postgres() -> AsyncEngine:
@@ -64,8 +73,11 @@ async def close_postgres() -> None:
 @asynccontextmanager
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     """Get an async session from the pool."""
+    global _session_factory
     if _session_factory is None:
-        await init_postgres()
+        async with _get_init_lock():
+            if _session_factory is None:
+                await init_postgres()
 
     assert _session_factory is not None
     async with _session_factory() as session:

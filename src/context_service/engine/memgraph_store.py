@@ -967,6 +967,75 @@ class MemgraphStore(EAGKnowledgeStore):
 
         return agent_id
 
+    # --- ReasoningChain Projection (hybrid storage) ---
+
+    async def upsert_reasoning_chain(
+        self,
+        chain_id: str,
+        silo_id: str,
+        step_count: int,
+        first_step: str | None,
+        final_step: str | None,
+        outcome: str | None,
+        all_premise_refs: list[str],
+        produced_by_model: str,
+        produced_by_agent_id: str,
+        query_context_hash: str | None = None,
+        status: str = "draft",
+        source: str = "agent_explicit",
+        conclusion: str | None = None,
+    ) -> None:
+        """Upsert a :ReasoningChain summary projection.
+
+        Writes the summary fields needed for graph traversal and custodian
+        scoring. Full steps are stored in Postgres by ChainSagaWriter before
+        this method is called.
+        """
+        now = datetime.now(UTC).isoformat()
+        await self._client.execute_write(
+            """
+            MERGE (n:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+            ON CREATE SET
+                n.step_count = $step_count,
+                n.first_step = $first_step,
+                n.final_step = $final_step,
+                n.outcome = $outcome,
+                n.conclusion = $conclusion,
+                n.all_premise_refs = $all_premise_refs,
+                n.produced_by_model = $produced_by_model,
+                n.produced_by_agent_id = $produced_by_agent_id,
+                n.query_context_hash = $query_context_hash,
+                n.status = $status,
+                n.source = $source,
+                n.created_at = $now
+            ON MATCH SET
+                n.step_count = $step_count,
+                n.first_step = $first_step,
+                n.final_step = $final_step,
+                n.outcome = $outcome,
+                n.conclusion = $conclusion,
+                n.all_premise_refs = $all_premise_refs,
+                n.status = $status,
+                n.query_context_hash = $query_context_hash
+            """,
+            {
+                "chain_id": chain_id,
+                "silo_id": silo_id,
+                "step_count": step_count,
+                "first_step": first_step,
+                "final_step": final_step,
+                "outcome": outcome,
+                "conclusion": conclusion,
+                "all_premise_refs": all_premise_refs,
+                "produced_by_model": produced_by_model,
+                "produced_by_agent_id": produced_by_agent_id,
+                "query_context_hash": query_context_hash,
+                "status": status,
+                "source": source,
+                "now": now,
+            },
+        )
+
     # --- Bulk Operations ---
 
     async def batch_upsert_nodes(self, nodes: list[Node]) -> None:

@@ -243,6 +243,22 @@ def tag_maintenance_schedule(
         )
 
 
+@dg.schedule(
+    cron_schedule="*/15 * * * *",
+    name="reconciliation_gc_schedule",
+    target=dg.AssetSelection.assets("reconciliation_gc"),
+    description="Every 15 minutes: re-reconcile orphaned chains and clean dangling Postgres rows.",
+    execution_timezone="UTC",
+)
+def reconciliation_gc_schedule(
+    context: ScheduleEvaluationContext,
+) -> dg.RunRequest:
+    """Emit a single RunRequest for the global reconciliation GC sweep."""
+    return dg.RunRequest(
+        run_key=f"reconciliation_gc:{context.scheduled_execution_time.isoformat()}",
+    )
+
+
 all_schedules: list[Any] = [
     clustering_schedule,
     fact_promotion_schedule,
@@ -254,6 +270,7 @@ all_schedules: list[Any] = [
     llm_pattern_detection_schedule,
     auto_tagging_schedule,
     tag_maintenance_schedule,
+    reconciliation_gc_schedule,
 ]
 
 __all__ = [
@@ -266,6 +283,7 @@ __all__ = [
     "llm_pattern_detection_schedule",
     "pattern_detection_schedule",
     "reasoning_compaction_schedule",
+    "reconciliation_gc_schedule",
     "retention_schedule",
     "tag_maintenance_schedule",
 ]
