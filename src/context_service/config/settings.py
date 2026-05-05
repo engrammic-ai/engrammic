@@ -812,9 +812,16 @@ class Settings(BaseSettings):
     # Postgres Settings
     # =========================================================================
 
-    postgres_dsn: SecretStr = Field(
-        default=SecretStr("postgresql://user:password@localhost:5432/context_service")
-    )
+    postgres_host: str = Field(default="localhost")
+    postgres_port: int = Field(default=5432)
+    postgres_user: str = Field(default="context")
+    postgres_password: SecretStr = Field(default=SecretStr("context"))
+    postgres_database: str = Field(default="context_service")
+
+    @property
+    def postgres_dsn(self) -> str:
+        pwd = self.postgres_password.get_secret_value()
+        return f"postgresql://{self.postgres_user}:{pwd}@{self.postgres_host}:{self.postgres_port}/{self.postgres_database}"
 
     # =========================================================================
     # Retention Policy Defaults

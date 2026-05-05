@@ -31,7 +31,7 @@ async def init_postgres() -> AsyncEngine:
     global _engine, _session_factory
 
     settings = get_settings()
-    dsn = settings.infra.postgres.dsn
+    dsn = settings.postgres_dsn
 
     if dsn.startswith("postgresql://"):
         dsn = dsn.replace("postgresql://", "postgresql+asyncpg://", 1)
