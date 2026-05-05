@@ -14,6 +14,8 @@ from typing import Any
 import dagster as dg
 from dagster import AssetExecutionContext
 
+from context_service.pipelines.resources import MemgraphResource
+
 
 def _run_async_dict(coro: Any) -> dict[str, int]:
     try:
@@ -70,7 +72,7 @@ def _run_async_dict(coro: Any) -> dict[str, int]:
 )
 def causal_tombstone(
     context: AssetExecutionContext,
-    memgraph: Any,
+    memgraph: MemgraphResource,
 ) -> dg.Output[dict[str, Any]]:
     """Tombstone matching CAUSES edges and cascade to derived inferences."""
     from context_service.engine.tombstone import run_tombstone

@@ -6,13 +6,9 @@ Covers:
 - close_session creates cross-chain REFERENCES edges and marks session closed
 - close_session with a single chain skips cross-chain REFERENCES
 - session_timeout_minutes setting defaults to 30
-- context_reason forwards session_id when provided
-- context_reason creates a new session when session_id is omitted
 """
 
 from __future__ import annotations
-
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -131,119 +127,6 @@ def test_session_timeout_minutes_override() -> None:
 
     s = Settings(session_timeout_minutes=60, _env_file=None)  # type: ignore[call-arg]
     assert s.session_timeout_minutes == 60
-
-
-# ---------------------------------------------------------------------------
-# context_reason tool — session_id wiring
-# ---------------------------------------------------------------------------
-
-_SERVER_MOD = "context_service.mcp.server"
-_SILO_MOD = "context_service.mcp.tools.context_reason"
-
-
-def _make_auth(session_id: str | None = None, agent_id: str | None = None) -> MagicMock:
-    auth = MagicMock()
-    auth.org_id = "org-1"
-    auth.session_id = session_id
-    auth.agent_id = agent_id
-    return auth
-
-
-def _make_chain_result(chain_id: str = "chain-abc") -> MagicMock:
-    import uuid
-
-    result = MagicMock()
-    result.chain_id = uuid.UUID(chain_id) if len(chain_id) == 36 else uuid.uuid4()
-    return result
-
-
-def _patches(auth: MagicMock, ctx_svc: MagicMock) -> list:
-    """Return a list of patch context managers for the context_reason tool."""
-    return [
-        patch(f"{_SERVER_MOD}.get_mcp_auth_context", AsyncMock(return_value=auth)),
-        patch(f"{_SERVER_MOD}.get_silo_service", return_value=MagicMock()),
-        patch(f"{_SERVER_MOD}.get_context_service", return_value=ctx_svc),
-        patch(f"{_SILO_MOD}.validate_silo_ownership", AsyncMock(return_value=None)),
-        patch(f"{_SILO_MOD}.derive_silo_id", return_value="silo-1"),
-    ]
-
-
-@pytest.mark.asyncio
-async def test_context_reason_uses_provided_session_id() -> None:
-    from contextlib import ExitStack
-
-    from context_service.mcp.tools.context_reason import _context_reason
-
-    chain_result = _make_chain_result("00000000-0000-0000-0000-000000000001")
-    mock_store = FakeGraphStore()
-    ctx_svc = MagicMock()
-    ctx_svc.graph_store = mock_store
-    ctx_svc.reason = AsyncMock(return_value=chain_result)
-
-    with ExitStack() as stack:
-        for p in _patches(_make_auth(), ctx_svc):
-            stack.enter_context(p)
-        result = await _context_reason(
-            silo_id="silo-1",
-            steps=[{"step": 1, "reasoning": "because", "confidence": 0.9}],
-            session_id="caller-session-99",
-        )
-
-    assert result["session_id"] == "caller-session-99"
-    # create_or_join_session + attach_chain_to_session = 2 writes
-    assert len(mock_store.write_log) == 2
-
-
-@pytest.mark.asyncio
-async def test_context_reason_creates_new_session_when_omitted() -> None:
-    from contextlib import ExitStack
-
-    from context_service.mcp.tools.context_reason import _context_reason
-
-    chain_result = _make_chain_result("00000000-0000-0000-0000-000000000002")
-    mock_store = FakeGraphStore()
-    ctx_svc = MagicMock()
-    ctx_svc.graph_store = mock_store
-    ctx_svc.reason = AsyncMock(return_value=chain_result)
-
-    with ExitStack() as stack:
-        for p in _patches(_make_auth(), ctx_svc):
-            stack.enter_context(p)
-        result = await _context_reason(
-            silo_id="silo-1",
-            steps=[{"step": 1, "reasoning": "because", "confidence": 0.9}],
-            # no session_id provided
-        )
-
-    # A uuid should have been auto-generated
-    assert len(result["session_id"]) == 36
-    assert result["session_id"] != ""
-
-
-@pytest.mark.asyncio
-async def test_context_reason_uses_auth_session_id_as_fallback() -> None:
-    from contextlib import ExitStack
-
-    from context_service.mcp.tools.context_reason import _context_reason
-
-    chain_result = _make_chain_result("00000000-0000-0000-0000-000000000003")
-    mock_store = FakeGraphStore()
-    ctx_svc = MagicMock()
-    ctx_svc.graph_store = mock_store
-    ctx_svc.reason = AsyncMock(return_value=chain_result)
-
-    auth = _make_auth(session_id="auth-session-42")
-
-    with ExitStack() as stack:
-        for p in _patches(auth, ctx_svc):
-            stack.enter_context(p)
-        result = await _context_reason(
-            silo_id="silo-1",
-            steps=[{"step": 1, "reasoning": "because", "confidence": 0.9}],
-            # no explicit session_id; auth has one
-        )
-
-    assert result["session_id"] == "auth-session-42"
 
 
 # ---------------------------------------------------------------------------

@@ -799,7 +799,9 @@ GET_REASONING_CHAIN_FOR_COMPACTION = """
 MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})
 RETURN
     chain.id AS id,
-    chain.steps AS steps,
+    chain.step_count AS step_count,
+    chain.first_step AS first_step,
+    chain.final_step AS final_step,
     chain.compact_summary AS compact_summary,
     chain.produced_by_agent_id AS agent_id,
     chain.tier AS tier,
@@ -1257,3 +1259,69 @@ GET_SUPERSESSION_CHAIN = (
     "ORDER BY n.valid_from DESC "
     "LIMIT $limit"
 )
+
+# --- Conclusion queries ---
+
+UPSERT_CONCLUSION = """
+MERGE (c:Conclusion {id: $id, silo_id: $silo_id})
+ON CREATE SET
+    c.silo_id = $silo_id,
+    c.query_context_hash = $query_context_hash,
+    c.content = $content,
+    c.confidence = $confidence,
+    c.status = $status,
+    c.created_by_agent_id = $created_by_agent_id,
+    c.created_at = $created_at,
+    c.valid_from = $valid_from,
+    c.valid_to = null
+ON MATCH SET
+    c.content = $content,
+    c.confidence = $confidence,
+    c.status = $status
+RETURN c
+"""
+
+CREATE_CONCLUDES_EDGE = """
+MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+MATCH (conclusion:Conclusion {id: $conclusion_id, silo_id: $silo_id})
+MERGE (chain)-[:CONCLUDES]->(conclusion)
+"""
+
+CREATE_CONSOLIDATES_EDGE = """
+MATCH (canonical:Conclusion {id: $canonical_id, silo_id: $silo_id})
+MATCH (original:Conclusion {id: $original_id, silo_id: $silo_id})
+MERGE (canonical)-[:CONSOLIDATES]->(original)
+"""
+
+GET_CONCLUSIONS_BY_HASH = """
+MATCH (c:Conclusion {silo_id: $silo_id, query_context_hash: $query_context_hash})
+WHERE c.status = 'active'
+RETURN c
+"""
+
+MARK_CONCLUSION_CONSOLIDATED = """
+MATCH (c:Conclusion {id: $id, silo_id: $silo_id})
+SET c.status = 'consolidated'
+RETURN c
+"""
+
+FIND_ORPHANED_ACTIVE_CONCLUSIONS = """
+MATCH (canonical:Conclusion {silo_id: $silo_id})-[:CONSOLIDATES]->(original:Conclusion {silo_id: $silo_id})
+WHERE original.status = 'active'
+RETURN original.id as id
+"""
+
+# --- Crystallization edges (Intelligence -> Knowledge) ---
+
+CREATE_CRYSTALLIZES_EDGE = """
+MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+MATCH (claim:Claim {id: $claim_id, silo_id: $silo_id})
+MERGE (chain)-[:CRYSTALLIZES {created_at: $created_at}]->(claim)
+"""
+
+BATCH_CREATE_CRYSTALLIZES_EDGES = """
+UNWIND $edges AS e
+MATCH (chain:ReasoningChain {id: e.chain_id, silo_id: e.silo_id})
+MATCH (claim:Claim {id: e.claim_id, silo_id: e.silo_id})
+MERGE (chain)-[:CRYSTALLIZES {created_at: e.created_at}]->(claim)
+"""

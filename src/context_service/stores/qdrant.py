@@ -42,7 +42,7 @@ class QdrantClient:
         self,
         url: str = "http://localhost:6333",
         api_key: str | None = None,
-        vector_size: int = 1024,
+        vector_size: int = 768,
     ) -> None:
         """Initialize the Qdrant client.
 
@@ -71,7 +71,7 @@ class QdrantClient:
         return cls(
             url=settings.qdrant_url,
             api_key=api_key,
-            vector_size=1024,  # Default Jina dimensions
+            vector_size=768,  # Default Jina dimensions
         )
 
     async def _get_client(self) -> AsyncQdrantClient:

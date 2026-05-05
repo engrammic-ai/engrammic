@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from context_service.embeddings import EmbeddingService
     from context_service.embeddings.splade import SpladeEncoder
     from context_service.engine.protocols import HyperGraphStore
+    from context_service.services.auto_tagging import AutoTaggingService
     from context_service.services.context import ContextService
     from context_service.services.evidence import EvidenceValidator
     from context_service.services.silo import SiloService
@@ -31,6 +32,7 @@ def configure_services(
     redis: RedisClient | None = None,
     embedding: EmbeddingService | None = None,
     splade: SpladeEncoder | None = None,
+    auto_tagging: AutoTaggingService | None = None,
 ) -> None:
     """Configure MCP service dependencies.
 
@@ -47,6 +49,7 @@ def configure_services(
         embedding=embedding,
         cache=redis,
         splade=splade,
+        auto_tagging=auto_tagging,
     )
     ownership_cache = SiloOwnershipCache(redis) if redis is not None else None
     _services["silo"] = SiloService(memgraph=memgraph, ownership_cache=ownership_cache)

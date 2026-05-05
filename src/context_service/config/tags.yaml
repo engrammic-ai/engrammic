@@ -1,0 +1,8 @@
+defaults:
+  min_tags: 2
+  max_tags: 5
+  cosine_threshold: 0.4
+  promotion_threshold: 3
+  demotion_days: 30
+  synonym_threshold: 0.85
+  cache_ttl_seconds: 300

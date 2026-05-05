@@ -209,6 +209,32 @@ class HyperGraphStore(Protocol):
         """
         ...
 
+    # --- ReasoningChain Projection (hybrid storage) ---
+
+    async def upsert_reasoning_chain(
+        self,
+        chain_id: str,
+        silo_id: str,
+        step_count: int,
+        first_step: str | None,
+        final_step: str | None,
+        outcome: str | None,
+        all_premise_refs: list[str],
+        produced_by_model: str,
+        produced_by_agent_id: str,
+        query_context_hash: str | None = None,
+        status: str = "draft",
+        source: str = "agent_explicit",
+        conclusion: str | None = None,
+    ) -> None:
+        """Upsert a :ReasoningChain summary projection to Memgraph.
+
+        Called by ChainSagaWriter after the full steps have been persisted to
+        Postgres. Writes only the summary fields needed for graph traversal and
+        custodian scoring; full steps remain in Postgres.
+        """
+        ...
+
     # --- Bulk Operations ---
 
     async def batch_upsert_nodes(self, nodes: list[Node]) -> None: ...

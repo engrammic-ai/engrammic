@@ -1,81 +1,53 @@
 # Context Skills
 
-Prompt templates for working with delta-prime context-service MCP tools.
-
-## What are Skills?
-
-Skills are agent-side prompt templates that compose the core MCP tools. They're not executable code - they're patterns that agents learn to follow.
-
-**Core MCP Tools (3):**
-- `context_store` - write to epistemic memory
-- `context_recall` - read from epistemic memory
-- `context_link` - create relationships
-
-**Skills (9):** Prompt templates that teach agents when and how to use those tools.
+Skills for working with delta-prime context-service MCP tools.
 
 ## Installation
 
-### Claude Code / CLAUDE.md
+### Claude Code
 
-Append to your project's CLAUDE.md:
-
-```bash
-curl -s https://raw.githubusercontent.com/delta-prime/context-service/main/skills/context-skills.md >> CLAUDE.md
-```
-
-Or copy the relevant sections manually.
-
-### Python / LangGraph
-
-```python
-from pathlib import Path
-
-# Load skills as system prompt addition
-skills_prompt = Path("skills/context-skills.md").read_text()
-
-agent = Agent(
-    system_prompt=f"{your_base_prompt}\n\n{skills_prompt}",
-    tools=[context_store, context_recall, context_link]
-)
-```
-
-### Pi Agent
+Copy skills to your Claude Code skills directory:
 
 ```bash
-# Copy to Pi skills directory
-curl -o ~/.pi/skills/context-skills.md \
-  https://raw.githubusercontent.com/delta-prime/context-service/main/skills/context-skills.md
+cp -r skills/delta-prime:* ~/.claude/skills/
 ```
 
-## Skills Overview
+Skills appear in your session as `delta-prime:observe`, `delta-prime:learn`, etc. Invoke via `/delta-prime:observe` or the `Skill` tool.
 
-### Core (always use)
+### Other Agents
 
-| Skill | Trigger | What it does |
-|-------|---------|--------------|
-| observe | "remember this" | Store to memory layer |
-| learn | "I learned" | Store fact with evidence |
-| recall | "what do I know" | Search/retrieve |
-| trace | "why do I believe" | Provenance chain |
-| reflect | "I notice a pattern" | Meta-observation |
-| reason | "let me think through" | Structured reasoning |
+Load skill content from `{skill}/SKILL.md` into your agent's system prompt on-demand.
 
-### Workflow-Adjacent (defer to gsd/superpowers for complex work)
+## Skills
 
-| Skill | Trigger | What it does |
-|-------|---------|--------------|
-| research | "research this" | Deep dive on topic |
-| fact_check | "is this true" | Verify against knowledge |
-| connect | "how does X relate to Y" | Link concepts |
+| Skill | Trigger | Layer |
+|-------|---------|-------|
+| `observe` | "remember this", "note that" | memory |
+| `learn` | "assert that", "we know that" | knowledge |
+| `recall` | "what do I know", "search for" | read |
+| `reason` | "figure out", "derive" | intelligence |
+| `reflect` | "I was wrong", "update belief" | meta |
+| `trace` | "why do I believe", "provenance" | admin |
+| `connect` | "X relates to Y", "link these" | link |
+
+## Tagging Guidelines
+
+Always include `tags` when storing context (2-5 tags per node).
+
+**Categories:**
+- **Domain:** `api`, `database`, `auth`, `ui`, `infra`
+- **Type:** `bug-fix`, `feature`, `decision`, `spec`, `checkpoint`
+- **Scope:** `session`, `project`
+
+**Rules:** lowercase, hyphenated, specific over generic.
 
 ## Token Cost
 
-Skills add ~70 tokens each to system prompt. Full skills file is ~1200 tokens.
-
-Compare to 15 MCP tool schemas at ~2250 tokens - skills are more efficient and more learnable.
+- Index in system-reminder: ~30 tokens/skill (~210 total)
+- On-demand load: ~100-150 tokens per skill when invoked
+- MCP tool schemas: ~300 tokens/tool (~1,200 total)
 
 ## Prerequisites
 
 1. Context-service MCP server running
-2. MCP tools connected (`context_store`, `context_recall`, `context_link`)
-3. Skills file in agent's system prompt or context
+2. MCP tools connected (`context_store`, `context_recall`, `context_link`, `context_admin`)

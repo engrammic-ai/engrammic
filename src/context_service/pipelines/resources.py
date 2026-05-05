@@ -40,6 +40,18 @@ def _close_async(coro: object) -> None:
         f.result(timeout=30)
 
 
+def _build_llm_provider(provider: str, model: str | None) -> LLMProvider:
+    from context_service.llm import build_llm_provider
+
+    return build_llm_provider(provider, model)
+
+
+def _build_embedding_service(provider: str) -> EmbeddingService:
+    from context_service.embeddings import build_embedding_service
+
+    return build_embedding_service(provider)
+
+
 class MemgraphResource(dg.ConfigurableResource):  # type: ignore[type-arg]
     """Wraps context_service.stores.memgraph.create_memgraph_driver.
 
@@ -169,9 +181,7 @@ class LLMResource(dg.ConfigurableResource):  # type: ignore[type-arg]
 
     def get_client(self) -> LLMProvider:
         if self._llm is None:
-            from context_service.llm import build_llm_provider
-
-            self._llm = build_llm_provider(self.provider, self.model or None)
+            self._llm = _build_llm_provider(self.provider, self.model or None)
         return self._llm
 
     def teardown_after_execution(self, _context: dg.InitResourceContext) -> None:
@@ -193,9 +203,7 @@ class EmbeddingResource(dg.ConfigurableResource):  # type: ignore[type-arg]
 
     def get_client(self) -> EmbeddingService:
         if self._service is None:
-            from context_service.embeddings import build_embedding_service
-
-            self._service = build_embedding_service(self.provider)
+            self._service = _build_embedding_service(self.provider)
         return self._service
 
     def teardown_after_execution(self, _context: dg.InitResourceContext) -> None:

@@ -36,6 +36,14 @@ CLUSTER_INDEX_QUERIES: tuple[str, ...] = (
 
 HEAT_CURSOR_INDEX_QUERIES: tuple[str, ...] = ("CREATE INDEX ON :HeatCursor(silo_id);",)
 
+# --- Weak links (speculative signal accumulation) ---
+
+WEAK_LINK_INDEX_QUERIES: tuple[str, ...] = (
+    "CREATE INDEX ON :WeakLink(id);",
+    "CREATE INDEX ON :WeakLink(silo_id);",
+    "CREATE INDEX ON :WeakLink(speculative);",
+)
+
 # --- Memory layer ---
 
 MEMORY_INDEX_QUERIES: tuple[str, ...] = (
@@ -143,6 +151,7 @@ META_MEMORY_INDEX_QUERIES: tuple[str, ...] = (
 ALL_INDEX_QUERIES: tuple[str, ...] = (
     *CLUSTER_INDEX_QUERIES,
     *HEAT_CURSOR_INDEX_QUERIES,
+    *WEAK_LINK_INDEX_QUERIES,
     *MEMORY_INDEX_QUERIES,
     *KNOWLEDGE_INDEX_QUERIES,
     *WISDOM_INDEX_QUERIES,

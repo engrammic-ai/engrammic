@@ -7,7 +7,7 @@ from unittest.mock import patch
 import dagster as dg
 
 from context_service.pipelines.assets.extraction import _stable_entity_id
-from context_service.pipelines.resources import LLMResource, MemgraphResource
+from context_service.pipelines.resources import LLMResource, MemgraphResource, RedisResource
 
 # ---------------------------------------------------------------------------
 # _stable_entity_id
@@ -53,14 +53,15 @@ def test_extraction_asset_output_has_required_metadata_keys() -> None:
 
     memgraph_res = MemgraphResource(uri="bolt://fake:7687")
     llm_res = LLMResource(provider="gemini", model="gemini-2.0-flash")
+    redis_res = RedisResource(url="redis://fake:6379")
 
     with patch(
         "context_service.pipelines.assets.extraction.asyncio.run",
-        return_value=(2, 3, 150, 0.0),
+        return_value=(2, 3, 150, 0.0, 1),
     ):
         result = dg.materialize_to_memory(
             [extraction],
-            resources={"memgraph": memgraph_res, "llm": llm_res},
+            resources={"memgraph": memgraph_res, "llm": llm_res, "redis": redis_res},
             partition_key=silo_id,
             instance=instance,
         )
@@ -82,14 +83,15 @@ def test_extraction_asset_returns_zero_counts_when_no_docs() -> None:
 
     memgraph_res = MemgraphResource(uri="bolt://fake:7687")
     llm_res = LLMResource(provider="gemini", model="gemini-2.0-flash")
+    redis_res = RedisResource(url="redis://fake:6379")
 
     with patch(
         "context_service.pipelines.assets.extraction.asyncio.run",
-        return_value=(0, 0, 0, 0.0),
+        return_value=(0, 0, 0, 0.0, 0),
     ):
         result = dg.materialize_to_memory(
             [extraction],
-            resources={"memgraph": memgraph_res, "llm": llm_res},
+            resources={"memgraph": memgraph_res, "llm": llm_res, "redis": redis_res},
             partition_key=silo_id,
             instance=instance,
         )

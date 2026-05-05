@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from context_service.engine.history import BeliefHistory
     from context_service.engine.protocols import HyperGraphStore
     from context_service.expansion.generator import ExpansionGenerator
+    from context_service.services.auto_tagging import AutoTaggingService
     from context_service.services.context_meta import (
         HistoryResult,
         ProvenanceResult,
@@ -92,6 +93,7 @@ class ContextService:
         cache: RedisClient | None = None,
         splade: SpladeEncoder | None = None,
         expansion_generator: ExpansionGenerator | None = None,
+        auto_tagging: AutoTaggingService | None = None,
     ) -> None:
         self._memgraph = memgraph
         self._qdrant = qdrant
@@ -99,6 +101,7 @@ class ContextService:
         self._cache = cache
         self._splade = splade
         self._expansion_generator = expansion_generator
+        self._auto_tagging = auto_tagging
 
     @property
     def graph_store(self) -> HyperGraphStore:
@@ -205,7 +208,11 @@ class ContextService:
                 silo_id: $silo_id,
                 source_uri: $source_uri,
                 content_hash: $content_hash,
-                created_at: timestamp()
+                created_at: timestamp(),
+                valid_from: $valid_from,
+                heat_score: 0.0,
+                tier: 'COLD',
+                tags: []
             }})
             {"SET n += $extra_props" if extra_props else ""}
             RETURN n
@@ -217,6 +224,7 @@ class ContextService:
             "silo_id": str(silo_id),
             "source_uri": source_uri or "",
             "content_hash": node.content_hash,
+            "valid_from": datetime.now(UTC).isoformat(),
         }
         if extra_props:
             params["extra_props"] = extra_props
@@ -225,6 +233,39 @@ class ContextService:
 
         if content and len(content) >= MIN_CONTENT_FOR_EMBEDDING and self._embedding:
             vector = await self._embedding.embed_single(content)
+
+            if self._auto_tagging is not None:
+                try:
+                    auto_tags = await self._auto_tagging.suggest_tags(
+                        content_vector=vector,
+                        silo_id=str(silo_id),
+                    )
+                except Exception as exc:
+                    logger.warning(
+                        "auto_tagging_failed_in_store",
+                        node_id=str(node.id),
+                        error=str(exc),
+                    )
+                    auto_tags = []
+
+                if auto_tags:
+                    user_tags: list[str] = list((properties or {}).get("tags") or [])
+                    merged_tags = list(dict.fromkeys(user_tags + auto_tags))
+                    tag_update_params: dict[str, Any] = {
+                        "id": str(node.id),
+                        "silo_id": str(silo_id),
+                        "tags": merged_tags,
+                        "auto_tags": auto_tags,
+                    }
+                    await self._memgraph.execute_write(
+                        """
+                        MATCH (n:Node {id: $id, silo_id: $silo_id})
+                        SET n.tags = $tags, n.auto_tags = $auto_tags
+                        """,
+                        tag_update_params,
+                    )
+                    node.properties["tags"] = merged_tags
+                    node.properties["auto_tags"] = auto_tags
 
             # Generate expansion for SPLADE if not already provided and generation is enabled.
             settings = get_settings()
@@ -374,6 +415,10 @@ class ContextService:
                 if raw is not None:
                     try:
                         data = loads(raw)
+                        created_at_str = data.get("created_at")
+                        created_at_val = None
+                        if created_at_str:
+                            created_at_val = datetime.fromisoformat(created_at_str)
                         result[nid] = Node(
                             id=uuid.UUID(data["id"]),
                             type=data["type"],
@@ -382,6 +427,7 @@ class ContextService:
                             silo_id=uuid.UUID(data["silo_id"]) if data.get("silo_id") else None,
                             source_uri=data.get("source_uri"),
                             content_hash=data.get("content_hash"),
+                            created_at=created_at_val,
                         )
                     except (KeyError, ValueError):
                         miss_ids.append(nid)
@@ -397,11 +443,24 @@ class ContextService:
                 MATCH (n:Node {id: id, silo_id: $silo_id})
                 RETURN n.id AS id, n.type AS type, n.content AS content,
                        n.silo_id AS silo_id, n.source_uri AS source_uri,
-                       n.content_hash AS content_hash
+                       n.content_hash AS content_hash, n.created_at AS created_at,
+                       n.tags AS tags, n.layer AS layer, n.confidence AS confidence,
+                       n.summary AS summary, n.heat_score AS heat_score, n.tier AS tier
                 """,
                 {"ids": miss_ids, "silo_id": str(silo_id)},
             )
             for row in db_rows:
+                created_at_val = row.get("created_at")
+                if created_at_val is not None and isinstance(created_at_val, int):
+                    created_at_val = datetime.fromtimestamp(created_at_val / 1_000_000, tz=UTC)
+                props = {
+                    "layer": row.get("layer", "memory"),
+                    "tags": row.get("tags") or [],
+                    "confidence": row.get("confidence", 1.0),
+                    "summary": row.get("summary"),
+                    "heat_score": row.get("heat_score"),
+                    "tier": row.get("tier"),
+                }
                 node = Node(
                     id=uuid.UUID(row["id"]),
                     type=row["type"],
@@ -409,6 +468,8 @@ class ContextService:
                     silo_id=uuid.UUID(row["silo_id"]) if row.get("silo_id") else None,
                     source_uri=row.get("source_uri"),
                     content_hash=row.get("content_hash"),
+                    created_at=created_at_val,
+                    properties=props,
                 )
                 result[row["id"]] = node
                 if self._cache:
@@ -420,6 +481,8 @@ class ContextService:
                         "silo_id": str(node.silo_id) if node.silo_id else None,
                         "source_uri": node.source_uri,
                         "content_hash": node.content_hash,
+                        "created_at": created_at_val.isoformat() if created_at_val else None,
+                        "properties": props,
                     }
                     await self._cache.set(cache_key, dumps(cache_data).encode())
 

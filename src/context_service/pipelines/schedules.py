@@ -97,10 +97,10 @@ def custodian_visit_schedule(
 
 
 @dg.schedule(
-    cron_schedule="0 * * * *",
+    cron_schedule="0 2 * * *",
     name="heat_schedule",
     target=dg.AssetSelection.assets("heat"),
-    description="Hourly heat scoring per active silo.",
+    description="Daily heat scoring (02:00 UTC) per active silo.",
     execution_timezone="UTC",
 )
 def heat_schedule(
@@ -201,6 +201,64 @@ def llm_pattern_detection_schedule(
         )
 
 
+@dg.schedule(
+    cron_schedule="*/30 * * * *",
+    name="auto_tagging_schedule",
+    target=dg.AssetSelection.assets("auto_tagging"),
+    description="Tag refinement every 30 minutes per active silo.",
+    execution_timezone="UTC",
+)
+def auto_tagging_schedule(
+    context: ScheduleEvaluationContext,
+    memgraph: MemgraphResource,
+) -> Iterator[dg.RunRequest]:
+    """Yield one auto_tagging RunRequest per active silo."""
+    silo_ids = _fetch_silo_ids(memgraph)
+    for silo_id in silo_ids:
+        yield dg.RunRequest(
+            run_key=f"auto_tagging:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            partition_key=silo_id,
+            tags={"dagster/concurrency_key": silo_id},
+        )
+
+
+@dg.schedule(
+    cron_schedule="0 3 * * *",
+    name="tag_maintenance_schedule",
+    target=dg.AssetSelection.assets("tag_maintenance"),
+    description="Daily tag vocabulary pruning (03:00 UTC) per active silo.",
+    execution_timezone="UTC",
+)
+def tag_maintenance_schedule(
+    context: ScheduleEvaluationContext,
+    memgraph: MemgraphResource,
+) -> Iterator[dg.RunRequest]:
+    """Yield one tag_maintenance RunRequest per active silo."""
+    silo_ids = _fetch_silo_ids(memgraph)
+    for silo_id in silo_ids:
+        yield dg.RunRequest(
+            run_key=f"tag_maintenance:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            partition_key=silo_id,
+            tags={"dagster/concurrency_key": silo_id},
+        )
+
+
+@dg.schedule(
+    cron_schedule="*/15 * * * *",
+    name="reconciliation_gc_schedule",
+    target=dg.AssetSelection.assets("reconciliation_gc"),
+    description="Every 15 minutes: re-reconcile orphaned chains and clean dangling Postgres rows.",
+    execution_timezone="UTC",
+)
+def reconciliation_gc_schedule(
+    context: ScheduleEvaluationContext,
+) -> dg.RunRequest:
+    """Emit a single RunRequest for the global reconciliation GC sweep."""
+    return dg.RunRequest(
+        run_key=f"reconciliation_gc:{context.scheduled_execution_time.isoformat()}",
+    )
+
+
 all_schedules: list[Any] = [
     clustering_schedule,
     fact_promotion_schedule,
@@ -210,16 +268,22 @@ all_schedules: list[Any] = [
     retention_schedule,
     pattern_detection_schedule,
     llm_pattern_detection_schedule,
+    auto_tagging_schedule,
+    tag_maintenance_schedule,
+    reconciliation_gc_schedule,
 ]
 
 __all__ = [
     "all_schedules",
+    "auto_tagging_schedule",
     "clustering_schedule",
-    "fact_promotion_schedule",
     "custodian_visit_schedule",
+    "fact_promotion_schedule",
     "heat_schedule",
-    "reasoning_compaction_schedule",
-    "retention_schedule",
-    "pattern_detection_schedule",
     "llm_pattern_detection_schedule",
+    "pattern_detection_schedule",
+    "reasoning_compaction_schedule",
+    "reconciliation_gc_schedule",
+    "retention_schedule",
+    "tag_maintenance_schedule",
 ]

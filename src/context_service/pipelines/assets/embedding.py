@@ -3,17 +3,50 @@
 import asyncio
 import concurrent.futures
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import dagster as dg
 from dagster import AssetExecutionContext
 
+from context_service.config.settings import get_settings
+from context_service.pipelines.assets.weak_link_creation import create_weak_links_for_node
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import (
     EmbeddingResource,
     MemgraphResource,
     QdrantResource,
 )
+
+if TYPE_CHECKING:
+    from context_service.engine.qdrant_store import EngineQdrantStore
+    from context_service.stores import MemgraphClient
+
+
+async def _post_embed_hook(
+    memgraph: "MemgraphClient",
+    qdrant: "EngineQdrantStore",
+    node_id: str,
+    embedding: list[float],
+    silo_id: str,
+) -> None:
+    """Post-embedding hook: create weak links if enabled."""
+    settings = get_settings()
+    if not settings.weak_links.enabled:
+        return
+
+    wl = settings.weak_links
+    await create_weak_links_for_node(
+        memgraph=memgraph,
+        qdrant=qdrant,
+        node_id=node_id,
+        embedding=embedding,
+        silo_id=silo_id,
+        max_links_per_node=wl.max_links_per_node,
+        similarity_threshold=wl.similarity_threshold,
+        top_k_candidates=wl.top_k_candidates,
+        initial_weight_multiplier=wl.initial_weight_multiplier,
+        embedding_model=wl.embedding_model_version,
+    )
 
 
 def _run_async(coro: Any) -> Any:
@@ -147,6 +180,19 @@ def embedding_asset(
                         context.log.warning(f"mark_embedded write failed: {exc}")
 
                     nodes_processed += len(batch)
+
+                    # Post-embed hook: create weak links for each node
+                    for r, v in zip(batch, vectors, strict=True):
+                        try:
+                            await _post_embed_hook(
+                                memgraph=mg_client,
+                                qdrant=engine_qdrant,
+                                node_id=str(r["id"]),
+                                embedding=v,
+                                silo_id=silo_id,
+                            )
+                        except Exception as exc:
+                            context.log.warning(f"post_embed_hook failed for node={r['id']}: {exc}")
 
                 if len(rows) < _BATCH_SIZE:
                     # Fetched fewer than a full page — queue is drained.

@@ -33,6 +33,8 @@ COPY --from=builder /primitives /primitives
 COPY context-service/pyproject.toml ./
 COPY context-service/config/ /app/config/
 COPY context-service/src/ /app/src/
+COPY context-service/alembic.ini /app/alembic.ini
+COPY context-service/alembic/ /app/alembic/
 COPY context-service/docker/app-entrypoint.sh /app/entrypoint.sh
 
 # Make entrypoint executable

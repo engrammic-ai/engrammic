@@ -273,6 +273,17 @@ class FakeGraphStore:
     async def delete_silo(self, scope: ScopeContext) -> bool:
         raise NotImplementedError("FakeGraphStore.delete_silo not implemented")
 
+    async def upsert_agent(
+        self,
+        agent_id: str,
+        silo_id: str,
+        *,
+        role: str = "agent",
+        parent_agent_id: str | None = None,
+        lineage_root_id: str | None = None,
+    ) -> str:
+        raise NotImplementedError("FakeGraphStore.upsert_agent not implemented")
+
     async def batch_upsert_nodes(self, nodes: list[Node]) -> None:
         raise NotImplementedError("FakeGraphStore.batch_upsert_nodes not implemented")
 
@@ -284,3 +295,21 @@ class FakeGraphStore:
 
     async def health_check(self) -> bool:
         raise NotImplementedError("FakeGraphStore.health_check not implemented")
+
+    async def upsert_reasoning_chain(
+        self,
+        chain_id: str,
+        silo_id: str,
+        step_count: int,
+        first_step: str | None,
+        final_step: str | None,
+        outcome: str | None,
+        all_premise_refs: list[str],
+        produced_by_model: str,
+        produced_by_agent_id: str,
+        query_context_hash: str | None = None,
+        status: str = "draft",
+        source: str = "agent_explicit",
+        conclusion: str | None = None,
+    ) -> None:
+        raise NotImplementedError("FakeGraphStore.upsert_reasoning_chain not implemented")

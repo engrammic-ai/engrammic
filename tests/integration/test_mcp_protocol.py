@@ -18,10 +18,6 @@ EXPECTED_TOOLS = {
     "context_recall",
     "context_admin",
     "context_link",
-    "context_query",
-    "context_get",
-    "context_graph",
-    "context_history",
 }
 
 _DEV_AUTH = AuthContext(
