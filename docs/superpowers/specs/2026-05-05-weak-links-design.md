@@ -50,10 +50,13 @@ Create speculative RELATED_TO edges during ingest based on embedding similarity.
     "speculative": True,
     "created_at": "<timestamp>",
     "source": "embedding_similarity",
+    "embedding_model": "<model_version>",  # e.g., "jina-v3"
     "edge_heat": 0.0,
     "heat_updated_at": None
 }
 ```
+
+**Note:** `embedding_model` tracks which model produced the similarity score. On model upgrade, edges from old models should be purged or re-evaluated.
 
 ### Constraints
 
@@ -68,18 +71,77 @@ Create speculative RELATED_TO edges during ingest based on embedding similarity.
 Extend embedding asset or create new `weak_link_creation` asset that runs after embedding:
 
 ```python
-# Pseudocode
+# Pseudocode - FIXED for race conditions and cap enforcement
 for node in newly_embedded_nodes:
+    # 1. Query existing weak link degree
+    existing_degree = count_weak_links(node.id, silo_id)
+    budget = max(0, config.max_links_per_node - existing_degree)
+    
+    if budget == 0:
+        continue
+    
+    # 2. Search for similar nodes
     similar = qdrant.search(
         vector=node.embedding,
         limit=config.top_k_candidates,
         filter={"silo_id": silo_id}
     )
     
-    for candidate in similar[:config.max_links_per_node]:
-        if candidate.score >= config.similarity_threshold:
-            if not edge_exists(node.id, candidate.id):
-                create_weak_edge(node.id, candidate.id, candidate.score)
+    # 3. Filter by threshold FIRST, then cap
+    candidates = [c for c in similar if c.score >= config.similarity_threshold]
+    candidates = candidates[:budget]
+    
+    # 4. Create edges using MERGE (idempotent, handles concurrent ingest)
+    for candidate in candidates:
+        # Always create edge in sorted order (a < b lexicographically)
+        # This ensures symmetric edge_id regardless of which node is ingested first
+        a, b = sorted([node.id, candidate.id])
+        eid = edge_id(a, b, "RELATED_TO")
+        
+        merge_weak_edge(
+            from_node=a,
+            to_node=b,
+            edge_id=eid,
+            weight=candidate.score * config.initial_weight_multiplier,
+            embedding_model=config.embedding_model_version
+        )
+```
+
+### WeakLink Creation Cypher
+
+Use MERGE on the WeakLink node for idempotency:
+```cypher
+MATCH (a {id: $from_id, silo_id: $silo_id})
+MATCH (b {id: $to_id, silo_id: $silo_id})
+MERGE (w:WeakLink {id: $link_id, silo_id: $silo_id})
+ON CREATE SET
+    w.weight = $weight,
+    w.speculative = true,
+    w.created_at = datetime(),
+    w.source = 'embedding_similarity',
+    w.embedding_model = $embedding_model,
+    w.edge_heat = 0.0,
+    w.from_node = $from_id,
+    w.to_node = $to_id
+MERGE (a)-[:SOURCE_OF]->(w)
+MERGE (w)-[:TARGETS]->(b)
+RETURN w.id AS created
+```
+
+### Required Index
+
+```cypher
+CREATE INDEX ON :WeakLink(id);
+CREATE INDEX ON :WeakLink(silo_id);
+CREATE INDEX ON :WeakLink(speculative);
+```
+
+### Degree Check Query
+
+```cypher
+MATCH (n {id: $node_id, silo_id: $silo_id})-[r:RELATED_TO]-()
+WHERE r.speculative = true
+RETURN count(r) AS degree
 ```
 
 ## Section 2: Configuration
@@ -129,6 +191,13 @@ Settings loaded via pydantic-settings, same pattern as existing config.
 ### New Function
 
 ```python
+# Counter for observability
+EDGE_ACCESS_EVENTS_DROPPED = Counter(
+    "edge_access_events_dropped_total",
+    "Edge access events dropped due to Redis errors",
+    ["silo_id"]
+)
+
 async def emit_edge_access_event(
     redis: RedisClient,
     silo_id: str,
@@ -137,18 +206,38 @@ async def emit_edge_access_event(
     edge_type: str,
     traversal_context: str = "recall"  # recall|provenance|graph
 ) -> None:
-    """Append edge access event to silo stream. Best-effort."""
-    stream_key = f"silo:{silo_id}:edge_access_events"
-    await redis.xadd(
-        stream_key,
-        {
-            "from_node": from_node,
-            "to_node": to_node,
-            "edge_type": edge_type,
-            "context": traversal_context,
-        },
-        maxlen=ACCESS_STREAM_MAXLEN,
-    )
+    """Append edge access event to silo stream. Best-effort, never raises.
+    
+    Failures are logged at WARN and counted via EDGE_ACCESS_EVENTS_DROPPED.
+    Callers should NOT wrap this in try/except - it handles errors internally.
+    
+    Note: Heat computed from these events is a LOWER BOUND, not exact count.
+    Dropped events mean some traversals are not reflected in edge_heat.
+    """
+    try:
+        stream_key = f"silo:{silo_id}:edge_access_events"
+        await asyncio.wait_for(
+            redis.xadd(
+                stream_key,
+                {
+                    "from_node": from_node,
+                    "to_node": to_node,
+                    "edge_type": edge_type,
+                    "context": traversal_context,
+                },
+                maxlen=ACCESS_STREAM_MAXLEN,
+            ),
+            timeout=1.0  # 1s timeout - don't block reads
+        )
+    except Exception as e:
+        EDGE_ACCESS_EVENTS_DROPPED.labels(silo_id=silo_id).inc()
+        logger.warning(
+            "edge_access_event_dropped",
+            silo_id=silo_id,
+            from_node=from_node,
+            to_node=to_node,
+            error=str(e)
+        )
 ```
 
 ### Call Sites
@@ -166,11 +255,36 @@ def edge_id(from_node: str, to_node: str, edge_type: str) -> str:
     return str(uuid5(NAMESPACE, f"{pair[0]}:{pair[1]}:{edge_type}"))
 ```
 
+**Directionality invariant:** Edges are ALWAYS created in sorted order (lexicographically smaller node ID first). This means:
+- `edge_id("node-A", "node-B", "RELATED_TO") == edge_id("node-B", "node-A", "RELATED_TO")`
+- The edge `A->B` is created, never `B->A`
+- For traversal purposes, RELATED_TO is treated as **undirected** (query both directions)
+
 This ensures idempotent edge creation and enables efficient updates by ID.
 
 ## Section 4: Edge Heat Computation
 
 **New Dagster asset:** `edge_heat`
+
+### Schema Decision: Reified WeakLink Nodes
+
+**Problem:** Memgraph edge property indexes don't work with named parameters. `MATCH ()-[r {id: $edge_id}]->()` is always a full scan.
+
+**Solution:** Reify weak links as intermediate nodes:
+
+```
+(A)-[:SOURCE_OF]->(WeakLink {id, weight, speculative, ...})-[:TARGETS]->(B)
+```
+
+This enables:
+- Standard node index: `CREATE INDEX ON :WeakLink(id)`
+- Parameterized queries work: `MATCH (w:WeakLink {id: $id})`
+- All existing node heat patterns apply directly
+
+**Docker-compose update required:**
+```yaml
+command: ["--log-level=WARNING", "--storage-properties-on-edges=true"]
+```
 
 ### Pattern (mirrors existing heat asset)
 
@@ -178,8 +292,8 @@ This ensures idempotent edge creation and enables efficient updates by ID.
 |---------------------|-----------------|
 | `silo:{id}:access_events` | `silo:{id}:edge_access_events` |
 | `:HeatCursor` singleton | `:EdgeHeatCursor` singleton |
-| `MATCH (n {id: ...})` | `MATCH ()-[r {id: ...}]->()` |
-| `n.heat_score, n.tier` | `r.edge_heat` |
+| `MATCH (n {id: ...})` | `MATCH (w:WeakLink {id: ...})` |
+| `n.heat_score, n.tier` | `w.edge_heat` |
 
 ### Asset Definition
 
@@ -190,7 +304,7 @@ This ensures idempotent edge creation and enables efficient updates by ID.
     deps=["heat"],  # run after node heat
     description="Compute edge heat from traversal events",
     retry_policy=dg.RetryPolicy(max_retries=3, delay=10.0, backoff=dg.Backoff.EXPONENTIAL),
-    tags={"dagster/concurrency_key": "edge_heat"},
+    # No global concurrency key - allow parallel execution across silos
 )
 def edge_heat_asset(
     context: AssetExecutionContext,
@@ -200,14 +314,18 @@ def edge_heat_asset(
     ...
 ```
 
+**Note:** No `dagster/concurrency_key` - silos run in parallel. If resource contention becomes an issue, add per-silo key: `f"edge_heat:{context.partition_key}"`
+
 ### Update Cypher
 
 ```cypher
 UNWIND $updates AS u
-MATCH ()-[r {id: u.edge_id}]->()
-SET r.edge_heat = u.heat_score,
-    r.heat_updated_at = $now
+MATCH (w:WeakLink {id: u.link_id, silo_id: $silo_id})
+SET w.edge_heat = u.heat_score,
+    w.heat_updated_at = $now
 ```
+
+Uses the `:WeakLink(id)` index - no full scan.
 
 ### Constants
 
@@ -227,13 +345,16 @@ Runs after heat assets complete. Separate from cluster-focused custodian visits.
     name="weak_link_review",
     partitions_def=silo_partitions,
     deps=["heat", "edge_heat"],
-    description="Promote high-signal weak links, prune unused ones",
-    tags={"dagster/concurrency_key": "weak_link_review"},
+    description="Promote high-signal weak links, prune unused ones, demote stale promoted links",
+    # No global concurrency key - silos run in parallel
 )
 def weak_link_review_asset(
     context: AssetExecutionContext,
     memgraph: MemgraphResource,
 ) -> dg.Output[dict[str, Any]]:
+    # 1. Promote eligible speculative edges
+    # 2. Prune old unused speculative edges
+    # 3. Demote promoted edges whose endpoints were superseded
     ...
 ```
 
@@ -251,16 +372,16 @@ AND (not config.promotion.require_fact_endpoints
 ### Promotion Query
 
 ```cypher
-MATCH (a)-[r:RELATED_TO]->(b)
-WHERE r.speculative = true
-  AND r.silo_id = $silo_id
-  AND r.weight >= $min_weight
-  AND r.edge_heat >= $min_edge_heat
+MATCH (a)-[:SOURCE_OF]->(w:WeakLink)-[:TARGETS]->(b)
+WHERE w.speculative = true
+  AND w.silo_id = $silo_id
+  AND w.weight >= $min_weight
+  AND w.edge_heat >= $min_edge_heat
   AND ($require_facts = false OR (a:Fact AND b:Fact))
-SET r.speculative = false,
-    r.promoted_at = datetime(),
-    r.promoted_by = 'custodian'
-RETURN count(r) AS promoted
+SET w.speculative = false,
+    w.promoted_at = datetime(),
+    w.promoted_by = 'custodian'
+RETURN count(w) AS promoted
 ```
 
 ### Pruning Criteria
@@ -274,13 +395,47 @@ AND edge.edge_heat < config.pruning.min_edge_heat       # 0.1
 ### Pruning Query
 
 ```cypher
-MATCH (a)-[r:RELATED_TO]->(b)
-WHERE r.speculative = true
-  AND r.silo_id = $silo_id
-  AND r.created_at < datetime() - duration({days: $max_age_days})
-  AND r.edge_heat < $min_edge_heat
-DELETE r
-RETURN count(r) AS pruned
+MATCH (a)-[s:SOURCE_OF]->(w:WeakLink)-[t:TARGETS]->(b)
+WHERE w.speculative = true
+  AND w.silo_id = $silo_id
+  AND w.created_at < datetime() - duration({days: $max_age_days})
+  AND w.edge_heat < $min_edge_heat
+DELETE s, t, w
+RETURN count(w) AS pruned
+```
+
+**Note on pruning timing:** With `EDGE_HEAT_HALF_LIFE_DAYS = 7` and `max_age_days = 30`, heat decays to ~5% of peak after 30 days. The `min_edge_heat: 0.1` threshold means edges with any early activity will be pruned by heat decay before the age limit kicks in. The age limit is a backstop for edges with zero activity, not a grace period.
+
+### Demotion (Rollback for False Promotions)
+
+Promoted edges (`speculative = false`) can become invalid when:
+- An endpoint node is superseded
+- An endpoint Fact is retracted
+- Embedding model is upgraded
+
+**Demotion Query:**
+```cypher
+// Demote weak links where an endpoint was superseded
+MATCH (a)-[:SOURCE_OF]->(w:WeakLink)-[:TARGETS]->(b)
+WHERE w.speculative = false
+  AND w.silo_id = $silo_id
+  AND (a.superseded = true OR b.superseded = true)
+SET w.speculative = true,
+    w.demoted_at = datetime(),
+    w.demoted_reason = 'endpoint_superseded'
+RETURN count(w) AS demoted
+```
+
+**Embedding model migration:**
+```cypher
+// Mark weak links from old embedding model for re-evaluation
+MATCH (w:WeakLink)
+WHERE w.silo_id = $silo_id
+  AND w.embedding_model <> $current_model
+SET w.speculative = true,
+    w.demoted_at = datetime(),
+    w.demoted_reason = 'model_upgrade'
+RETURN count(w) AS demoted
 ```
 
 ## Section 6: Future Scope (Post-100 Users)
@@ -336,7 +491,23 @@ Config placeholders exist but are disabled.
 
 | Risk | Mitigation |
 |------|------------|
-| Fan-out explosion | Cap at max_links_per_node (5) |
+| Fan-out explosion | Cap at max_links_per_node (5), check existing degree |
 | Noise from low-quality links | Pruning removes unused edges |
 | Heat asset overhead | Batch processing, same pattern as node heat |
-| False promotions | require_fact_endpoints flag, tunable thresholds |
+| False promotions | require_fact_endpoints flag, tunable thresholds, demotion path |
+| Edge property index perf | Reified WeakLink nodes with standard index |
+| Race conditions on create | MERGE with deterministic ID |
+| Embedding model drift | embedding_model property + migration queries |
+| Redis failures | Best-effort emit with metrics, heat is lower bound |
+
+## Schema Changes Required
+
+1. **New node label:** `:WeakLink`
+2. **New edge types:** `:SOURCE_OF`, `:TARGETS`
+3. **Indexes:**
+   ```cypher
+   CREATE INDEX ON :WeakLink(id);
+   CREATE INDEX ON :WeakLink(silo_id);
+   CREATE INDEX ON :WeakLink(speculative);
+   ```
+4. **Docker-compose:** Add `--storage-properties-on-edges=true`
