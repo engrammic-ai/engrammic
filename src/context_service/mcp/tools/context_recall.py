@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 from context_service.mcp.tools.context_get import _context_get
 from context_service.mcp.tools.context_graph import _context_graph
@@ -11,6 +12,25 @@ from context_service.services.models import derive_silo_id
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
+
+
+async def _fetch_chain_steps(
+    chain_ids: list[str],
+) -> dict[str, list[dict[str, Any]]]:
+    """Fetch reasoning chain steps from Postgres for the given chain IDs.
+
+    Returns a mapping of chain_id -> steps list. Chain IDs with no stored
+    steps are omitted from the result.
+    """
+    from context_service.engine.postgres_store import PostgresStore
+
+    store = PostgresStore()
+    result: dict[str, list[dict[str, Any]]] = {}
+    for chain_id in chain_ids:
+        steps = await store.get_chain_steps(UUID(chain_id))
+        if steps is not None:
+            result[chain_id] = steps
+    return result
 
 
 async def _context_recall(
@@ -23,19 +43,35 @@ async def _context_recall(
     as_of: str | None = None,
     include_reflections: bool = False,
     reflections_agent_id: str | None = None,
+    include_steps: bool = False,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     if not query and not node_ids:
         return {"error": "missing_input", "message": "Provide query or node_ids"}
 
     if node_ids and depth == 0:
-        return await _context_get(
+        response = await _context_get(
             node_ids=node_ids,
             silo_id=silo_id,
             as_of=as_of,
             include_reflections=include_reflections,
             reflections_agent_id=reflections_agent_id,
         )
+
+        if include_steps and isinstance(response.get("nodes"), list):
+            intelligence_ids = [
+                n["node_id"]
+                for n in response["nodes"]
+                if n.get("layer") == "intelligence" and "node_id" in n
+            ]
+            if intelligence_ids:
+                steps_by_id = await _fetch_chain_steps(intelligence_ids)
+                for node in response["nodes"]:
+                    nid = node.get("node_id")
+                    if nid in steps_by_id:
+                        node["steps"] = steps_by_id[nid]
+
+        return response
 
     if node_ids and depth > 0:
         return await _context_graph(
@@ -85,6 +121,7 @@ def register(mcp: FastMCP) -> None:
         silo_id: str | None = None,
         include_reflections: bool = False,
         reflections_agent_id: str | None = None,
+        include_steps: bool = False,
     ) -> dict[str, Any]:
         """Unified read across Memory, Knowledge, Wisdom, and Intelligence layers.
 
@@ -103,6 +140,10 @@ def register(mcp: FastMCP) -> None:
             reflections_agent_id: Optional agent ID to filter reflections. When
                 provided with include_reflections=True, only observations created
                 by that agent are returned. Omit to return all agents' observations.
+            include_steps: When True and fetching intelligence-layer nodes by
+                node_ids at depth=0, attach reasoning chain steps stored in
+                Postgres to each matching node. Silently ignored in search and
+                traversal modes.
 
         Returns:
             Depends on mode:
@@ -125,4 +166,5 @@ def register(mcp: FastMCP) -> None:
             as_of=as_of,
             include_reflections=include_reflections,
             reflections_agent_id=reflections_agent_id,
+            include_steps=include_steps,
         )
