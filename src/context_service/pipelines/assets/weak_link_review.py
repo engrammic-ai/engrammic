@@ -6,7 +6,6 @@ unused ones, demotes promoted edges whose endpoints were superseded.
 
 import asyncio
 import concurrent.futures
-from datetime import UTC, datetime
 from typing import Any
 
 import dagster as dg
@@ -82,7 +81,7 @@ def weak_link_review_asset(
         driver = await memgraph.driver()
         mg = MemgraphClient(driver)
 
-        promote_result = await mg.execute(
+        promote_result = await mg.execute_write(
             PROMOTE_CYPHER,
             {
                 "silo_id": silo_id,
@@ -93,7 +92,7 @@ def weak_link_review_asset(
         )
         promoted = promote_result[0]["promoted"] if promote_result else 0
 
-        prune_result = await mg.execute(
+        prune_result = await mg.execute_write(
             PRUNE_CYPHER,
             {
                 "silo_id": silo_id,
@@ -103,7 +102,7 @@ def weak_link_review_asset(
         )
         pruned = prune_result[0]["pruned"] if prune_result else 0
 
-        demote_result = await mg.execute(DEMOTE_SUPERSEDED_CYPHER, {"silo_id": silo_id})
+        demote_result = await mg.execute_write(DEMOTE_SUPERSEDED_CYPHER, {"silo_id": silo_id})
         demoted = demote_result[0]["demoted"] if demote_result else 0
 
         return {

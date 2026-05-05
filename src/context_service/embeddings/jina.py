@@ -32,7 +32,7 @@ class JinaEmbeddingService:
         self,
         api_key: str,
         model: str = "jina-embeddings-v4",
-        dimensions: int = 1024,
+        dimensions: int = 768,
         api_url: str = "https://api.jina.ai/v1/embeddings",
         _embedding_cache: EmbeddingCache | None = None,
     ) -> None:
@@ -80,7 +80,7 @@ class JinaEmbeddingService:
         return cls(
             api_key=settings.jina_api_key.get_secret_value(),
             model=settings.jina_model or "jina-embeddings-v4",
-            dimensions=settings.jina_dimensions or 1024,
+            dimensions=settings.jina_dimensions or 768,
             api_url=settings.jina_api_url or "https://api.jina.ai/v1/embeddings",
             _embedding_cache=_embedding_cache,
         )

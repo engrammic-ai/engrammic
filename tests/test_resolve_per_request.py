@@ -33,12 +33,15 @@ async def test_header_reaches_verify_session(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(
         server, "get_http_headers", lambda **_kw: {"authorization": "Bearer sealed-abc"}
     )
-    expected = AuthContext(org_id="org-1", user_id="user-1", email="x@y.com", is_dev=False)
-    verify = AsyncMock(return_value=expected)
+    base = AuthContext(org_id="org-1", user_id="user-1", email="x@y.com", is_dev=False)
+    verify = AsyncMock(return_value=base)
     with patch("context_service.auth.workos_client.verify_session", new=verify):
         ctx = await server.get_mcp_auth_context()
 
-    assert ctx is expected
+    assert ctx.org_id == base.org_id
+    assert ctx.user_id == base.user_id
+    assert ctx.email == base.email
+    assert ctx.is_dev == base.is_dev
     verify.assert_awaited_once_with("sealed-abc")
 
 
@@ -56,8 +59,10 @@ async def test_missing_header_raises_when_auth_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(server, "get_http_headers", lambda **_kw: {})
-    monkeypatch.setattr("context_service.config.settings.get_settings", lambda: _AUTH_ON)
-    with pytest.raises(MCPAuthError, match="Missing Authorization header"):
+    with (
+        patch("context_service.config.settings.get_settings", return_value=_AUTH_ON),
+        pytest.raises(MCPAuthError, match="Missing Authorization header"),
+    ):
         await server.get_mcp_auth_context()
 
 
@@ -66,8 +71,8 @@ async def test_missing_header_returns_dev_when_auth_disabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(server, "get_http_headers", lambda **_kw: {})
-    monkeypatch.setattr("context_service.config.settings.get_settings", lambda: _AUTH_OFF)
-    ctx = await server.get_mcp_auth_context()
+    with patch("context_service.config.settings.get_settings", return_value=_AUTH_OFF):
+        ctx = await server.get_mcp_auth_context()
 
     assert ctx.is_dev is True
     assert ctx.org_id == _AUTH_OFF.dev_org_id

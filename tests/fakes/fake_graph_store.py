@@ -273,6 +273,17 @@ class FakeGraphStore:
     async def delete_silo(self, scope: ScopeContext) -> bool:
         raise NotImplementedError("FakeGraphStore.delete_silo not implemented")
 
+    async def upsert_agent(
+        self,
+        agent_id: str,
+        silo_id: str,
+        *,
+        role: str = "agent",
+        parent_agent_id: str | None = None,
+        lineage_root_id: str | None = None,
+    ) -> str:
+        raise NotImplementedError("FakeGraphStore.upsert_agent not implemented")
+
     async def batch_upsert_nodes(self, nodes: list[Node]) -> None:
         raise NotImplementedError("FakeGraphStore.batch_upsert_nodes not implemented")
 

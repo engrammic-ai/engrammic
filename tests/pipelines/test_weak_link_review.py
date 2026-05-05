@@ -1,8 +1,8 @@
 # tests/pipelines/test_weak_link_review.py
 from context_service.pipelines.assets.weak_link_review import (
+    DEMOTE_SUPERSEDED_CYPHER,
     PROMOTE_CYPHER,
     PRUNE_CYPHER,
-    DEMOTE_SUPERSEDED_CYPHER,
 )
 
 

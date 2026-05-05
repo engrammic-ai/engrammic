@@ -14,17 +14,17 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from context_service.config.settings import get_settings
+from context_service.config import settings as _settings_mod
 from context_service.services.context import ContextService
 from context_service.services.models import Node, ScopeContext
 
 
 @pytest.fixture(autouse=True)
 def _clear_settings_cache() -> Generator[None, None, None]:
-    """Clear lru_cache on get_settings before and after each test."""
-    get_settings.cache_clear()
+    """Reset the settings singleton cache before and after each test."""
+    _settings_mod._settings_cache = None
     yield
-    get_settings.cache_clear()
+    _settings_mod._settings_cache = None
 
 
 NOW = datetime(2026, 5, 1, tzinfo=UTC)

@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-import context_service.custodian.sensors.consensus as _consensus_mod
 from context_service.custodian.sensors.consensus import find_consensus_candidates
 
 
@@ -29,14 +28,13 @@ async def test_candidates_ranked_by_priority(monkeypatch: pytest.MonkeyPatch) ->
             "avg_chain_confidence": 0.10,
         },
     ]
+    # Second call returns heat batch: constant 0.5 for each node.
+    heat_rows = [
+        {"node_id": "cm-high", "heat": 0.5},
+        {"node_id": "cm-low", "heat": 0.5},
+    ]
     memgraph = AsyncMock()
-    memgraph.execute_query = AsyncMock(return_value=cypher_rows)
-
-    # Stub heat to a constant so ordering depends solely on confidence + agents.
-    async def fake_heat(_mg, _node_id, _silo):
-        return 0.5
-
-    monkeypatch.setattr(_consensus_mod, "get_heat", fake_heat)
+    memgraph.execute_query = AsyncMock(side_effect=[cypher_rows, heat_rows])
 
     rows = await find_consensus_candidates(
         memgraph=memgraph,
@@ -62,13 +60,9 @@ async def test_limit_applied_after_priority_sort(monkeypatch: pytest.MonkeyPatch
         }
         for i, c in enumerate([0.9, 0.1, 0.5, 0.2])
     ]
+    heat_rows = [{"node_id": f"cm-{i}", "heat": 0.5} for i in range(4)]
     memgraph = AsyncMock()
-    memgraph.execute_query = AsyncMock(return_value=cypher_rows)
-
-    async def fake_heat(_mg, _node_id, _silo):
-        return 0.5
-
-    monkeypatch.setattr(_consensus_mod, "get_heat", fake_heat)
+    memgraph.execute_query = AsyncMock(side_effect=[cypher_rows, heat_rows])
 
     rows = await find_consensus_candidates(
         memgraph=memgraph,

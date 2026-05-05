@@ -1,10 +1,12 @@
 """Tests for weak link creation asset."""
-import pytest
+
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
+
 from context_service.pipelines.assets.weak_link_creation import (
-    create_weak_links_for_node,
     MERGE_WEAK_LINK_CYPHER,
+    create_weak_links_for_node,
 )
 
 

@@ -158,8 +158,8 @@ class TestWeakLinksCycleMocked:
     ) -> None:
         """emit_edge_access_event should xadd to the silo stream key."""
         from context_service.signals.edge_access_events import (
-            emit_edge_access_event,
             edge_access_stream_key,
+            emit_edge_access_event,
         )
 
         node_a, node_b = node_ids
@@ -248,11 +248,13 @@ class TestWeakLinksCycleMocked:
         from context_service.pipelines.assets.weak_link_creation import (
             create_weak_links_for_node,
         )
+        from context_service.pipelines.assets.weak_link_review import PROMOTE_CYPHER
         from context_service.signals.edge_access_events import (
-            emit_edge_access_event,
             edge_id as compute_edge_id,
         )
-        from context_service.pipelines.assets.weak_link_review import PROMOTE_CYPHER
+        from context_service.signals.edge_access_events import (
+            emit_edge_access_event,
+        )
 
         node_a, node_b = node_ids
         embedding = _fake_vector(42)
@@ -375,14 +377,12 @@ class TestWeakLinksCycleLive:
     ) -> None:
         """End-to-end: embed nodes -> create weak links -> traverse ->
         update edge heat -> verify promotion query selects the link."""
+        from context_service.pipelines.assets.edge_heat import APPLY_EDGE_HEAT_CYPHER
         from context_service.pipelines.assets.weak_link_creation import (
-            create_weak_links_for_node,
             MERGE_WEAK_LINK_CYPHER,
         )
-        from context_service.pipelines.assets.edge_heat import APPLY_EDGE_HEAT_CYPHER
         from context_service.pipelines.assets.weak_link_review import PROMOTE_CYPHER
         from context_service.signals.edge_access_events import (
-            emit_edge_access_event,
             edge_id as compute_edge_id,
         )
 

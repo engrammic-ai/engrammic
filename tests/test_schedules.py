@@ -46,7 +46,7 @@ def test_custodian_visit_schedule_cron() -> None:
 
 
 def test_all_schedules_has_four_entries() -> None:
-    assert len(all_schedules) == 4
+    assert len(all_schedules) == 8
 
 
 def test_schedule_names_in_all_schedules() -> None:

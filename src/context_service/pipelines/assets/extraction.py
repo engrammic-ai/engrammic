@@ -150,11 +150,7 @@ def extraction(
                                 if source_alias
                                 else _stable_entity_id(silo_id, rel.source)
                             ),
-                            name=(
-                                source_alias["canonical_name"]
-                                if source_alias
-                                else rel.source
-                            ),
+                            name=(source_alias["canonical_name"] if source_alias else rel.source),
                             entity_type=entity_type_by_name.get(rel.source, "unknown"),
                         ),
                         EntityMention(
@@ -163,11 +159,7 @@ def extraction(
                                 if target_alias
                                 else _stable_entity_id(silo_id, rel.target)
                             ),
-                            name=(
-                                target_alias["canonical_name"]
-                                if target_alias
-                                else rel.target
-                            ),
+                            name=(target_alias["canonical_name"] if target_alias else rel.target),
                             entity_type=entity_type_by_name.get(rel.target, "unknown"),
                         ),
                     ]

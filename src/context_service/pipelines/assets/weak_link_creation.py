@@ -13,7 +13,8 @@ import structlog
 from context_service.signals.edge_access_events import edge_id
 
 if TYPE_CHECKING:
-    from context_service.engine.protocols import HyperGraphStore, VectorStore
+    from context_service.engine.qdrant_store import EngineQdrantStore
+    from context_service.stores import MemgraphClient
 
 logger = structlog.get_logger(__name__)
 
@@ -42,8 +43,8 @@ RETURN w.id AS created
 
 
 async def create_weak_links_for_node(
-    memgraph: HyperGraphStore,
-    qdrant: VectorStore,
+    memgraph: MemgraphClient,
+    qdrant: EngineQdrantStore,
     node_id: str,
     embedding: list[float],
     silo_id: str,
@@ -55,7 +56,7 @@ async def create_weak_links_for_node(
 ) -> int:
     """Create weak links for a newly embedded node. Returns count created."""
     # Check existing degree
-    result = await memgraph.execute(
+    result = await memgraph.execute_query(
         DEGREE_CHECK_CYPHER,
         {"node_id": node_id, "silo_id": silo_id},
     )
@@ -65,24 +66,26 @@ async def create_weak_links_for_node(
     if budget == 0:
         return 0
 
-    # Search for similar nodes
-    similar = await qdrant.search(
+    # Search for similar nodes (dense-only mode for weak link discovery)
+    similar = await qdrant.query(
         vector=embedding,
+        silo_id=silo_id,
         limit=top_k_candidates,
-        filter_conditions={"silo_id": silo_id},
+        search_mode="dense",
+        score_threshold=similarity_threshold,
     )
 
-    # Filter by threshold and cap to budget
-    candidates = [c for c in similar if c.score >= similarity_threshold and c.id != node_id]
+    # Filter self and cap to budget (threshold already applied by query)
+    candidates = [c for c in similar if c.node_id != node_id]
     candidates = candidates[:budget]
 
     created = 0
     for candidate in candidates:
         # Sort IDs for deterministic edge direction
-        a, b = sorted([node_id, candidate.id])
+        a, b = sorted([node_id, candidate.node_id])
         link_id = edge_id(a, b, "RELATED_TO")
 
-        await memgraph.execute(
+        await memgraph.execute_write(
             MERGE_WEAK_LINK_CYPHER,
             {
                 "from_id": a,

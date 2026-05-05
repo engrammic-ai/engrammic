@@ -64,12 +64,15 @@ def mock_history():
 
 @pytest.fixture
 def mock_graph_provenance():
+    from context_service.services.context_meta import ProvenanceResult
+
+    mock_svc = AsyncMock()
+    mock_svc.provenance.return_value = ProvenanceResult(chain=[], root_sources=[])
     with patch(
-        "context_service.mcp.tools.context_admin._context_graph",
-        new_callable=AsyncMock,
-        return_value=_PROVENANCE_RESULT,
-    ) as m:
-        yield m
+        "context_service.mcp.tools.context_admin.get_context_service",
+        return_value=mock_svc,
+    ):
+        yield mock_svc
 
 
 @pytest.fixture
@@ -117,11 +120,8 @@ async def test_admin_provenance(mock_graph_provenance):
 
     result = await _context_admin(action="provenance", silo_id=_SILO_ID, ref=_NODE_ID)
 
-    assert "node_id" in result
-    mock_graph_provenance.assert_called_once()
-    call_kwargs = mock_graph_provenance.call_args.kwargs
-    assert call_kwargs.get("mode") == "provenance"
-    assert call_kwargs.get("seed_nodes") == [_NODE_ID]
+    assert "chain" in result
+    mock_graph_provenance.provenance.assert_called_once_with(_SILO_ID, _NODE_ID)
 
 
 @pytest.mark.asyncio

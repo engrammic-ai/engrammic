@@ -97,7 +97,7 @@ def edge_heat_asset(
         redis_conn = await redis.client()
 
         # Fetch cursor
-        cursor_result = await mg_client.execute_read(
+        cursor_result = await mg_client.execute_query(
             _GET_EDGE_HEAT_CURSOR_CYPHER, {"silo_id": silo_id}
         )
         last_id = "0-0"
@@ -124,9 +124,7 @@ def edge_heat_asset(
                 if raw_eid is not None:
                     eid = raw_eid.decode() if isinstance(raw_eid, bytes) else raw_eid
                     heat_acc[eid] += 1.0
-                new_last_id = (
-                    entry_id_b.decode() if isinstance(entry_id_b, bytes) else entry_id_b
-                )
+                new_last_id = entry_id_b.decode() if isinstance(entry_id_b, bytes) else entry_id_b
 
         if not heat_acc:
             if new_last_id != last_id:

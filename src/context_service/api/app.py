@@ -45,6 +45,9 @@ class _MCPDispatcher:
         self.mcp_app = mcp_app
         self.prefix = prefix
 
+    def __getattr__(self, name: str) -> object:
+        return getattr(self.fastapi_app, name)
+
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] == "lifespan":
             await self.fastapi_app(scope, receive, send)

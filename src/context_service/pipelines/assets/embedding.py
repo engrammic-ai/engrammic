@@ -18,12 +18,13 @@ from context_service.pipelines.resources import (
 )
 
 if TYPE_CHECKING:
-    from context_service.engine.protocols import HyperGraphStore, VectorStore
+    from context_service.engine.qdrant_store import EngineQdrantStore
+    from context_service.stores import MemgraphClient
 
 
 async def _post_embed_hook(
-    memgraph: "HyperGraphStore",
-    qdrant: "VectorStore",
+    memgraph: "MemgraphClient",
+    qdrant: "EngineQdrantStore",
     node_id: str,
     embedding: list[float],
     silo_id: str,

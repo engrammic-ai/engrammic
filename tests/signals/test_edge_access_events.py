@@ -1,10 +1,11 @@
-import pytest
 from unittest.mock import AsyncMock
 
+import pytest
+
 from context_service.signals.edge_access_events import (
-    emit_edge_access_event,
     edge_access_stream_key,
     edge_id,
+    emit_edge_access_event,
 )
 
 
