@@ -97,10 +97,10 @@ def custodian_visit_schedule(
 
 
 @dg.schedule(
-    cron_schedule="0 * * * *",
+    cron_schedule="0 2 * * *",
     name="heat_schedule",
     target=dg.AssetSelection.assets("heat"),
-    description="Hourly heat scoring per active silo.",
+    description="Daily heat scoring (02:00 UTC) per active silo.",
     execution_timezone="UTC",
 )
 def heat_schedule(
