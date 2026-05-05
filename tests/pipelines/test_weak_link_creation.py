@@ -25,7 +25,7 @@ async def test_create_weak_links_skips_when_at_cap():
     qdrant = AsyncMock()
 
     # Already at cap
-    memgraph.execute.return_value = [{"degree": 5}]
+    memgraph.execute_query.return_value = [{"degree": 5}]
 
     result = await create_weak_links_for_node(
         memgraph=memgraph,
@@ -41,7 +41,7 @@ async def test_create_weak_links_skips_when_at_cap():
     )
 
     assert result == 0
-    qdrant.search.assert_not_called()
+    qdrant.query.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -49,10 +49,10 @@ async def test_create_weak_links_filters_by_threshold():
     memgraph = AsyncMock()
     qdrant = AsyncMock()
 
-    memgraph.execute.return_value = [{"degree": 0}]
-    qdrant.search.return_value = [
-        MagicMock(id="node-a", score=0.9),
-        MagicMock(id="node-b", score=0.6),  # Below threshold
+    memgraph.execute_query.return_value = [{"degree": 0}]
+    # query() already applies score_threshold, so only node-a is returned
+    qdrant.query.return_value = [
+        MagicMock(node_id="node-a", score=0.9),
     ]
 
     result = await create_weak_links_for_node(
@@ -68,4 +68,4 @@ async def test_create_weak_links_filters_by_threshold():
         embedding_model="jina-v3",
     )
 
-    assert result == 1  # Only node-a passes threshold
+    assert result == 1
