@@ -390,6 +390,13 @@ class ContextService:
         if not node_type and labels:
             non_node_labels = [lbl for lbl in labels if lbl != "Node"]
             node_type = non_node_labels[0] if non_node_labels else None
+        raw_created_at = row.get("created_at")
+        if isinstance(raw_created_at, str):
+            from datetime import datetime
+
+            created_at = datetime.fromisoformat(raw_created_at.replace("Z", "+00:00"))
+        else:
+            created_at = raw_created_at
         node = Node(
             id=uuid.UUID(row["id"]),
             type=node_type,
@@ -399,9 +406,9 @@ class ContextService:
             content_hash=row.get("content_hash"),
             properties={
                 "confidence": row.get("confidence"),
-                "created_at": row.get("created_at"),
+                "created_at": raw_created_at,
             },
-            created_at=row.get("created_at"),
+            created_at=created_at,
         )
 
         if self._cache:
