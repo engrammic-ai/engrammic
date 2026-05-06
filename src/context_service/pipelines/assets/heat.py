@@ -139,9 +139,7 @@ def heat_asset(
         silo_uuid = UUID(silo_id)
         async with get_session() as session:
             result = await session.execute(
-                select(PGSiloConfig.feature_flags).where(
-                    PGSiloConfig.silo_id == silo_uuid
-                )
+                select(PGSiloConfig.feature_flags).where(PGSiloConfig.silo_id == silo_uuid)
             )
             row = result.scalar_one_or_none()
             feature_flags: dict[str, Any] = row if row is not None else {}

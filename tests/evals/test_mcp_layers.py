@@ -192,8 +192,16 @@ class TestIntelligenceLayer:
             "Propose quarterly payment structure",
             steps=[
                 {"step": 1, "reasoning": "Acme has budget constraints in Q3", "confidence": 0.85},
-                {"step": 2, "reasoning": "Flexible payment terms reduce friction", "confidence": 0.8},
-                {"step": 3, "reasoning": "Quarterly payments align with their budget cycles", "confidence": 0.75},
+                {
+                    "step": 2,
+                    "reasoning": "Flexible payment terms reduce friction",
+                    "confidence": 0.8,
+                },
+                {
+                    "step": 3,
+                    "reasoning": "Quarterly payments align with their budget cycles",
+                    "confidence": 0.75,
+                },
             ],
         )
         assert result.get("layer") == "intelligence"
@@ -205,9 +213,21 @@ class TestIntelligenceLayer:
             "intelligence",
             "Migrate to microservices architecture",
             steps=[
-                {"step": 1, "reasoning": "System needs to handle 10k concurrent users", "confidence": 0.9},
-                {"step": 2, "reasoning": "Current monolith won't scale past 2k", "confidence": 0.85},
-                {"step": 3, "reasoning": "Microservices enable horizontal scaling", "confidence": 0.8},
+                {
+                    "step": 1,
+                    "reasoning": "System needs to handle 10k concurrent users",
+                    "confidence": 0.9,
+                },
+                {
+                    "step": 2,
+                    "reasoning": "Current monolith won't scale past 2k",
+                    "confidence": 0.85,
+                },
+                {
+                    "step": 3,
+                    "reasoning": "Microservices enable horizontal scaling",
+                    "confidence": 0.8,
+                },
             ],
         )
         assert result.get("layer") == "intelligence"

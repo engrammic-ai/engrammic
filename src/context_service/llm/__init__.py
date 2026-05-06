@@ -1,40 +1,36 @@
-"""LLM provider services.
+"""LLM provider services - unified via LiteLLM."""
 
-Ported from prototype/app/llm/.
-"""
-
-from context_service.llm.anthropic import AnthropicError, AnthropicProvider
 from context_service.llm.base import LLMProvider, Usage, robust_json_loads
-from context_service.llm.gemini import GeminiError, GeminiProvider
-from context_service.llm.openai import OpenAIError, OpenAIProvider
-from context_service.llm.vertex_gemini import VertexGeminiError, VertexGeminiProvider
+from context_service.llm.litellm_provider import (
+    LiteLLMError,
+    LiteLLMProvider,
+    build_litellm_provider,
+)
+
+# Backward-compat aliases for error types
+AnthropicError = LiteLLMError
+GeminiError = LiteLLMError
+OpenAIError = LiteLLMError
+VertexGeminiError = LiteLLMError
+
+# Backward-compat aliases for provider classes (all map to LiteLLMProvider)
+AnthropicProvider = LiteLLMProvider
+GeminiProvider = LiteLLMProvider
+OpenAIProvider = LiteLLMProvider
+VertexGeminiProvider = LiteLLMProvider
 
 
 def build_llm_provider(provider: str, model: str | None = None) -> LLMProvider:
     """Factory for LLM providers by name.
 
     Args:
-        provider: One of "anthropic", "openai", "vertex_gemini", "gemini".
+        provider: One of "anthropic", "openai", "vertex_gemini", "gemini", "ollama".
         model: Optional model override.
 
     Returns:
         Configured LLMProvider instance.
     """
-    if provider == "anthropic":
-        return AnthropicProvider.from_settings(model)
-    if provider == "openai":
-        return OpenAIProvider.from_settings(model)
-    if provider == "vertex_gemini":
-        return VertexGeminiProvider.from_settings(model)
-    # default: gemini
-    from context_service.config.settings import get_settings
-
-    settings = get_settings()
-    api_key = settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else ""
-    return GeminiProvider(
-        api_key=api_key,
-        model=model or settings.default_llm_model,
-    )
+    return build_litellm_provider(provider, model)
 
 
 __all__ = [
@@ -42,12 +38,16 @@ __all__ = [
     "Usage",
     "robust_json_loads",
     "build_llm_provider",
-    "VertexGeminiProvider",
-    "VertexGeminiError",
-    "GeminiProvider",
-    "GeminiError",
+    "build_litellm_provider",
+    "LiteLLMProvider",
+    "LiteLLMError",
+    # Backward-compat
     "AnthropicProvider",
     "AnthropicError",
+    "GeminiProvider",
+    "GeminiError",
     "OpenAIProvider",
     "OpenAIError",
+    "VertexGeminiProvider",
+    "VertexGeminiError",
 ]

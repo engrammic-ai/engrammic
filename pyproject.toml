@@ -44,6 +44,8 @@ dependencies = [
     "orjson>=3.9",
     # Numeric
     "numpy>=1.26",
+    # LLM providers (unified)
+    "litellm>=1.40",
 ]
 
 [dependency-groups]

@@ -450,43 +450,62 @@ class ContextService:
 
             # Not yet valid: valid_from > as_of
             if valid_from is not None:
-                vf = valid_from if isinstance(valid_from, datetime) else datetime.fromisoformat(str(valid_from).replace("Z", "+00:00"))
+                vf = (
+                    valid_from
+                    if isinstance(valid_from, datetime)
+                    else datetime.fromisoformat(str(valid_from).replace("Z", "+00:00"))
+                )
                 if vf > as_of:
-                    results.append({
-                        "error": "not_yet_valid",
-                        "node_id": requested_id,
-                        "valid_from": vf.isoformat(),
-                    })
+                    results.append(
+                        {
+                            "error": "not_yet_valid",
+                            "node_id": requested_id,
+                            "valid_from": vf.isoformat(),
+                        }
+                    )
                     continue
 
             # Expired: valid_to <= as_of
             if valid_to is not None:
-                vt = valid_to if isinstance(valid_to, datetime) else datetime.fromisoformat(str(valid_to).replace("Z", "+00:00"))
+                vt = (
+                    valid_to
+                    if isinstance(valid_to, datetime)
+                    else datetime.fromisoformat(str(valid_to).replace("Z", "+00:00"))
+                )
                 if vt <= as_of:
-                    results.append({
-                        "error": "node_expired",
-                        "node_id": requested_id,
-                        "valid_to": vt.isoformat(),
-                        "superseded_by": row.get("superseded_by"),
-                    })
+                    results.append(
+                        {
+                            "error": "node_expired",
+                            "node_id": requested_id,
+                            "valid_to": vt.isoformat(),
+                            "superseded_by": row.get("superseded_by"),
+                        }
+                    )
                     continue
 
             # Valid node
-            results.append({
-                "node_id": node_id,
-                "content": row.get("content"),
-                "type": row.get("labels", ["Document"])[0] if row.get("labels") else "Document",
-                "layer": row.get("layer"),
-                "summary": row.get("summary"),
-                "confidence": row.get("confidence"),
-                "tags": row.get("tags"),
-                "source_uri": row.get("source_uri"),
-                "content_hash": row.get("content_hash"),
-                "valid_from": valid_from.isoformat() if isinstance(valid_from, datetime) else valid_from,
-                "valid_to": valid_to.isoformat() if isinstance(valid_to, datetime) else valid_to,
-                "created_at": (ca := row.get("created_at")) and (ca.isoformat() if isinstance(ca, datetime) else ca),
-                "silo_id": str(silo_id),
-            })
+            results.append(
+                {
+                    "node_id": node_id,
+                    "content": row.get("content"),
+                    "type": row.get("labels", ["Document"])[0] if row.get("labels") else "Document",
+                    "layer": row.get("layer"),
+                    "summary": row.get("summary"),
+                    "confidence": row.get("confidence"),
+                    "tags": row.get("tags"),
+                    "source_uri": row.get("source_uri"),
+                    "content_hash": row.get("content_hash"),
+                    "valid_from": valid_from.isoformat()
+                    if isinstance(valid_from, datetime)
+                    else valid_from,
+                    "valid_to": valid_to.isoformat()
+                    if isinstance(valid_to, datetime)
+                    else valid_to,
+                    "created_at": (ca := row.get("created_at"))
+                    and (ca.isoformat() if isinstance(ca, datetime) else ca),
+                    "silo_id": str(silo_id),
+                }
+            )
 
         return results
 
@@ -1282,11 +1301,19 @@ class ContextService:
                 valid_from = props.get("valid_from")
                 valid_to = props.get("valid_to")
                 if valid_from is not None:
-                    vf = valid_from if isinstance(valid_from, datetime) else datetime.fromisoformat(str(valid_from))
+                    vf = (
+                        valid_from
+                        if isinstance(valid_from, datetime)
+                        else datetime.fromisoformat(str(valid_from))
+                    )
                     if vf > as_of:
                         continue
                 if valid_to is not None:
-                    vt = valid_to if isinstance(valid_to, datetime) else datetime.fromisoformat(str(valid_to))
+                    vt = (
+                        valid_to
+                        if isinstance(valid_to, datetime)
+                        else datetime.fromisoformat(str(valid_to))
+                    )
                     if vt <= as_of:
                         continue
 

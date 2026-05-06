@@ -667,6 +667,9 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = Field(default=None)
     gemini_api_key: SecretStr | None = Field(default=None)
 
+    # Self-hosted LLM (Ollama, vLLM)
+    ollama_base_url: str = Field(default="http://localhost:11434")
+
     # =========================================================================
     # WorkOS Auth Settings
     # =========================================================================

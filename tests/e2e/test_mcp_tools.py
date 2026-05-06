@@ -617,7 +617,9 @@ class TestMultiAgentVisibility:
 
 
 class TestSiloIsolation:
-    @pytest.mark.skip(reason="mcp_client_alt uses in-process fakes; not compatible with real server")
+    @pytest.mark.skip(
+        reason="mcp_client_alt uses in-process fakes; not compatible with real server"
+    )
     async def test_different_orgs_use_different_silos(
         self, mcp_client: Any, mcp_client_alt: Any
     ) -> None:
@@ -640,14 +642,18 @@ class TestSiloIsolation:
         assert isinstance(silos, list)
         assert len(silos) >= 1
 
-    @pytest.mark.skip(reason="mcp_client_alt uses in-process fakes; not compatible with real server")
+    @pytest.mark.skip(
+        reason="mcp_client_alt uses in-process fakes; not compatible with real server"
+    )
     async def test_silo_list_alt_org(self, mcp_client_alt: Any) -> None:
         result = await admin(mcp_client_alt, "silo_list")
         assert "error" not in result
         silos = result.get("silos", [])
         assert isinstance(silos, list)
 
-    @pytest.mark.skip(reason="mcp_client_alt uses in-process fakes; not compatible with real server")
+    @pytest.mark.skip(
+        reason="mcp_client_alt uses in-process fakes; not compatible with real server"
+    )
     async def test_alt_org_silo_id_differs_from_primary(
         self, mcp_client: Any, mcp_client_alt: Any
     ) -> None:

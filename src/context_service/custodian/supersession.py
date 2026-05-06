@@ -250,7 +250,9 @@ async def run_supersession_pass(
         ]
         prompt = build_supersession_prompt(prompt_input)
         try:
-            raw, _usage = await llm.complete(prompt, temperature=_SUPERSESSION_TEMPERATURE, max_tokens=2048)
+            raw, _usage = await llm.complete(
+                prompt, temperature=_SUPERSESSION_TEMPERATURE, max_tokens=2048
+            )
             llm_pairs = parse_supersession_response(raw)
         except Exception as exc:
             logger.warning(

@@ -374,7 +374,9 @@ class ClusteringService:
                     ]
 
                     raw, _usage = await with_llm_limit(
-                        self._llm.extract_structured(messages, CLUSTER_SUMMARY_SCHEMA, max_tokens=4096)
+                        self._llm.extract_structured(
+                            messages, CLUSTER_SUMMARY_SCHEMA, max_tokens=4096
+                        )
                     )
                     cluster.summary = raw.get("summary", "")
                     cluster.key_topics = raw.get("key_topics", [])
