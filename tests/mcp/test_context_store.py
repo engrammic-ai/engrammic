@@ -264,3 +264,85 @@ async def test_store_invalid_layer():
     result = await _context_store(silo_id=_SILO_ID, content="Something", layer="invalid")
 
     assert result["error"] == "invalid_layer"
+
+
+@pytest.mark.asyncio
+async def test_store_memory_routes_to_remember(mock_remember):
+    from context_service.mcp.tools.context_store import _context_store
+
+    await _context_store(silo_id=_SILO_ID, content="test memory", layer="memory")
+
+    mock_remember.assert_called_once()
+    call_kwargs = mock_remember.call_args.kwargs
+    assert call_kwargs["content"] == "test memory"
+    assert call_kwargs["silo_id"] == _SILO_ID
+
+
+@pytest.mark.asyncio
+async def test_store_knowledge_routes_to_assert(mock_assert):
+    from context_service.mcp.tools.context_store import _context_store
+
+    await _context_store(
+        silo_id=_SILO_ID,
+        content="test knowledge",
+        layer="knowledge",
+        evidence=["node:abc-123"],
+        source_type="document",
+    )
+
+    mock_assert.assert_called_once()
+    call_kwargs = mock_assert.call_args.kwargs
+    assert call_kwargs["claim"] == "test knowledge"
+    assert call_kwargs["silo_id"] == _SILO_ID
+
+
+@pytest.mark.asyncio
+async def test_store_wisdom_routes_to_commit(mock_commit):
+    from context_service.mcp.tools.context_store import _context_store
+
+    await _context_store(
+        silo_id=_SILO_ID,
+        content="test wisdom",
+        layer="wisdom",
+        about=["node-1"],
+    )
+
+    mock_commit.assert_called_once()
+    call_kwargs = mock_commit.call_args.kwargs
+    assert call_kwargs["belief"] == "test wisdom"
+    assert call_kwargs["silo_id"] == _SILO_ID
+
+
+@pytest.mark.asyncio
+async def test_store_intelligence_routes_to_reason(mock_reason):
+    from context_service.mcp.tools.context_store import _context_store
+
+    await _context_store(
+        silo_id=_SILO_ID,
+        content="test reasoning",
+        layer="intelligence",
+        steps=[{"step": "Observe A", "reasoning": "A implies B"}],
+    )
+
+    mock_reason.assert_called_once()
+    call_kwargs = mock_reason.call_args.kwargs
+    assert call_kwargs["conclusion"] == "test reasoning"
+    assert call_kwargs["silo_id"] == _SILO_ID
+
+
+@pytest.mark.asyncio
+async def test_store_meta_routes_to_reflect(mock_reflect):
+    from context_service.mcp.tools.context_store import _context_store
+
+    await _context_store(
+        silo_id=_SILO_ID,
+        content="test reflection",
+        layer="meta",
+        observation_type="insight",
+        about=["node-1"],
+    )
+
+    mock_reflect.assert_called_once()
+    call_kwargs = mock_reflect.call_args.kwargs
+    assert call_kwargs["observation"] == "test reflection"
+    assert call_kwargs["silo_id"] == _SILO_ID
