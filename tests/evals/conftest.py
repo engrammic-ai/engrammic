@@ -110,11 +110,22 @@ def scope_context(
 async def context_service(
     memgraph_client: MemgraphClient,  # noqa: F811
 ) -> ContextService:
-    """Wired ContextService with embedding for eval tests."""
-    from context_service.embeddings.jina import JinaEmbeddingService
+    """Wired ContextService with embedding + cache for eval tests.
+
+    Uses EMBEDDING_PROVIDER env var to select provider (jina or vertex).
+    """
+    from context_service.cache.embedding_cache import EmbeddingCache
+    from context_service.embeddings import build_embedding_service
+    from context_service.stores.redis import RedisClient, create_redis_pool
 
     settings = get_settings()
     qdrant = QdrantClient.from_settings(settings)
     await qdrant.ensure_collection()
-    embedding = JinaEmbeddingService.from_settings(settings)
+
+    # Wire embedding cache via Redis for faster repeated calls
+    redis_pool = await create_redis_pool(settings)
+    redis = RedisClient(redis_pool)
+    embedding_cache = EmbeddingCache(redis)
+    embedding = build_embedding_service(settings.embedding_provider, settings, embedding_cache)
+
     return ContextService(memgraph=memgraph_client, qdrant=qdrant, embedding=embedding)
