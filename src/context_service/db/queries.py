@@ -1255,7 +1255,7 @@ LIMIT 10
 # SUPERSEDES them. Their valid_to is set to $valid_from on supersession.
 CRYSTALLIZE_TO_COMMITMENT = """
 MATCH (wb:WorkingBelief {id: $belief_id, silo_id: $silo_id})
-CREATE (cm:Commitment {
+CREATE (cm:Node:Commitment {
     id: $commitment_id,
     silo_id: $silo_id,
     content: wb.content,
