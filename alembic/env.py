@@ -47,7 +47,7 @@ def _get_dsn() -> str:
         # Fall back to settings (loads .env / YAML if present).
         from context_service.config.settings import get_settings
 
-        dsn = get_settings().infra.postgres.dsn.get_secret_value()
+        dsn = get_settings().infra.postgres.dsn
 
     # Ensure asyncpg driver.
     if dsn.startswith("postgresql://"):
