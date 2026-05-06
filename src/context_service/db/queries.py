@@ -677,6 +677,33 @@ TEMPORAL_QUERY_FILTERED = (
     "LIMIT $limit"
 )
 
+# --- Temporal fetch by explicit node IDs ---
+# Returns all requested nodes with temporal metadata for classification.
+# Classification (valid/not_yet_valid/expired/not_found) done in Python.
+
+GET_NODES_BY_IDS_TEMPORAL = """
+UNWIND $node_ids AS nid
+OPTIONAL MATCH (n {id: nid, silo_id: $silo_id})
+WHERE n.tombstoned_at IS NULL
+OPTIONAL MATCH (n)-[:SUPERSEDES]->(successor)
+RETURN
+    nid AS requested_id,
+    n.id AS node_id,
+    n.content AS content,
+    labels(n) AS labels,
+    n.confidence AS confidence,
+    n.valid_from AS valid_from,
+    n.valid_to AS valid_to,
+    n.created_at AS created_at,
+    n.committed AS committed,
+    n.layer AS layer,
+    n.summary AS summary,
+    n.tags AS tags,
+    n.source_uri AS source_uri,
+    n.content_hash AS content_hash,
+    successor.id AS superseded_by
+"""
+
 # --- Supersession chain traversal (belief history) ---
 
 # ---------------------------------------------------------------------------
