@@ -484,7 +484,7 @@ class ContextService:
                 "content_hash": row.get("content_hash"),
                 "valid_from": valid_from.isoformat() if isinstance(valid_from, datetime) else valid_from,
                 "valid_to": valid_to.isoformat() if isinstance(valid_to, datetime) else valid_to,
-                "created_at": row.get("created_at").isoformat() if isinstance(row.get("created_at"), datetime) else row.get("created_at"),
+                "created_at": (ca := row.get("created_at")) and (ca.isoformat() if isinstance(ca, datetime) else ca),
                 "silo_id": str(silo_id),
             })
 

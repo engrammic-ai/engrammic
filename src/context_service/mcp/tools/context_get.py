@@ -84,10 +84,9 @@ async def _context_get(
             return {"nodes": invalid_ids}
 
         temporal_results = await ctx_svc.get_temporal(node_uuids, resolved_silo_id, as_of_dt)
-        nodes_out = invalid_ids + temporal_results
 
         CONTEXT_GET_LATENCY.observe(time.perf_counter() - _start)
-        return {"nodes": nodes_out}
+        return {"nodes": invalid_ids + temporal_results}
 
     _start = time.perf_counter()
     auth = await get_mcp_auth_context()
