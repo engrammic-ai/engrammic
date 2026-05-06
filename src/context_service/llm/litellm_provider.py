@@ -111,8 +111,14 @@ class LiteLLMProvider(LLMProvider):
         """Generate structured JSON output via LiteLLM."""
         kwargs = self._build_kwargs(timeout=timeout)
 
-        # Use JSON mode - litellm handles provider-specific format
-        kwargs["response_format"] = {"type": "json_object"}
+        # Use json_schema for providers that support it, fall back to json_object
+        if schema and self._model.startswith(("openai/", "anthropic/")):
+            kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": "extraction_result", "schema": schema, "strict": True},
+            }
+        else:
+            kwargs["response_format"] = {"type": "json_object"}
 
         try:
             response = await litellm.acompletion(

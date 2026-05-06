@@ -105,7 +105,7 @@ def llm_pattern_detection(
         from context_service.db.queries import GET_FACTS_IN_CLUSTER, LIST_CLUSTERS
         from context_service.engine.llm_patterns import process_llm_candidates
         from context_service.extraction.filter.circuit_breaker import get_or_create
-        from context_service.llm.anthropic import AnthropicProvider
+        from context_service.llm import build_llm_provider
         from context_service.stores import MemgraphClient
 
         driver = await memgraph.driver()
@@ -203,7 +203,7 @@ def llm_pattern_detection(
         # --- LLM provider (Haiku) ---
         from context_service.engine.llm_patterns import HAIKU_MODEL
 
-        llm = AnthropicProvider.from_settings(model=HAIKU_MODEL)
+        llm = build_llm_provider("anthropic", model=HAIKU_MODEL)
         try:
             process_result = await process_llm_candidates(
                 store,
