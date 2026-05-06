@@ -611,6 +611,13 @@ class Settings(BaseSettings):
     jina_api_url: str = Field(default="")
 
     # =========================================================================
+    # LiteLLM Embedding Settings
+    # =========================================================================
+
+    litellm_embedding_model: str = Field(default="openai/text-embedding-3-small")
+    embedding_dimensions: int = Field(default=768)
+
+    # =========================================================================
     # Embedding Provider
     # =========================================================================
 

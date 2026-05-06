@@ -13,6 +13,10 @@ from context_service.embeddings.vertex import (
     VertexAIEmbeddingError,
     VertexAIEmbeddingService,
 )
+from context_service.embeddings.litellm_embeddings import (
+    LiteLLMEmbeddingError,
+    LiteLLMEmbeddingService,
+)
 
 
 def build_embedding_service(
@@ -36,6 +40,8 @@ def build_embedding_service(
         settings = get_settings()
     if provider == "vertex":
         return VertexAIEmbeddingService.from_settings(settings, _embedding_cache=embedding_cache)
+    if provider == "litellm":
+        return LiteLLMEmbeddingService.from_settings(settings, _embedding_cache=embedding_cache)
     return JinaEmbeddingService.from_settings(settings, _embedding_cache=embedding_cache)
 
 
@@ -44,6 +50,8 @@ __all__ = [
     "build_embedding_service",
     "JinaEmbeddingError",
     "JinaEmbeddingService",
+    "LiteLLMEmbeddingError",
+    "LiteLLMEmbeddingService",
     "SpladeEncoder",
     "SpladeEncoderError",
     "VertexAIEmbeddingError",
