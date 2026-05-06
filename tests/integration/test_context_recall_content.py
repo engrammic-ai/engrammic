@@ -54,9 +54,7 @@ async def test_include_content_false_projects_node_in_flat_get() -> None:
     with patch("context_service.mcp.tools.context_recall._context_get") as mock_get:
         mock_get.return_value = {"nodes": [full]}
 
-        result = await _context_recall(
-            silo_id=silo_id, node_ids=[nid], include_content=False
-        )
+        result = await _context_recall(silo_id=silo_id, node_ids=[nid], include_content=False)
 
         node = result["nodes"][0]
         assert set(node.keys()) == {"node_id", "layer", "summary", "created_at", "confidence"}
@@ -83,9 +81,7 @@ async def test_include_content_false_preserves_existing_summary() -> None:
     with patch("context_service.mcp.tools.context_recall._context_get") as mock_get:
         mock_get.return_value = {"nodes": [full]}
 
-        result = await _context_recall(
-            silo_id=silo_id, node_ids=[nid], include_content=False
-        )
+        result = await _context_recall(silo_id=silo_id, node_ids=[nid], include_content=False)
 
         assert result["nodes"][0]["summary"] == "pre-computed summary"
 
@@ -129,9 +125,7 @@ async def test_node_ids_always_returned_regardless_of_flag() -> None:
     with patch("context_service.mcp.tools.context_recall._context_get") as mock_get:
         mock_get.return_value = {"nodes": [full]}
 
-        with_content = await _context_recall(
-            silo_id=silo_id, node_ids=[nid], include_content=True
-        )
+        with_content = await _context_recall(silo_id=silo_id, node_ids=[nid], include_content=True)
         mock_get.return_value = {"nodes": [_full_node(nid)]}
         without_content = await _context_recall(
             silo_id=silo_id, node_ids=[nid], include_content=False
@@ -166,9 +160,7 @@ async def test_include_content_false_in_query_mode() -> None:
             "search_time_ms": 12,
         }
 
-        result = await _context_recall(
-            silo_id=silo_id, query="anything", include_content=False
-        )
+        result = await _context_recall(silo_id=silo_id, query="anything", include_content=False)
 
         out = result["results"][0]
         assert set(out.keys()) == {"node_id", "layer", "summary", "created_at", "confidence"}

@@ -34,7 +34,7 @@ from context_service.config.settings import get_settings
 from context_service.embeddings.splade import SpladeEncoder, SpladeEncoderError
 from context_service.expansion.generator import ExpansionGenerator
 from context_service.stores.memgraph import MemgraphClient, create_memgraph_driver
-from context_service.stores.qdrant import COLLECTION_NAME, DENSE_VECTOR_NAME, QdrantClient
+from context_service.stores.qdrant import DENSE_VECTOR_NAME, QdrantClient, get_collection_name
 
 _DEFAULT_BATCH_SIZE = 100
 _LOG_EVERY = 100
@@ -111,8 +111,8 @@ async def _backfill_silo(
     # Check collection exists.
     collections = await client.get_collections()
     existing = {c.name for c in collections.collections}
-    if COLLECTION_NAME not in existing:
-        log.warning("backfill_collection_missing", collection=COLLECTION_NAME, silo_id=silo_id)
+    if get_collection_name(silo_id) not in existing:
+        log.warning("backfill_collection_missing", collection=get_collection_name(silo_id), silo_id=silo_id)
         return 0
 
     from qdrant_client.models import FieldCondition, Filter, MatchValue
@@ -132,7 +132,7 @@ async def _backfill_silo(
 
     while True:
         scroll_result = await client.scroll(
-            collection_name=COLLECTION_NAME,
+            collection_name=get_collection_name(silo_id),
             scroll_filter=query_filter,
             limit=batch_size,
             offset=offset,
@@ -225,7 +225,7 @@ async def _backfill_silo(
 
             if updated_points:
                 await client.upsert(
-                    collection_name=COLLECTION_NAME, points=updated_points
+                    collection_name=get_collection_name(silo_id), points=updated_points
                 )
                 log.info(
                     "backfill_batch_upserted",

@@ -55,7 +55,7 @@ test:
 
 # Run integration tests (requires live docker stack)
 test-integration:
-    uv run pytest -m integration -v
+    env $(cat .env.test | grep -v '^#' | xargs) uv run pytest -m integration -v
 
 # Run tests with coverage report
 coverage:

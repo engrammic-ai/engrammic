@@ -242,7 +242,9 @@ class EngineQdrantStore:
         try:
             await client.upsert(collection_name=collection, points=points)
         except Exception as e:
-            logger.error("Qdrant batch_upsert failed", silo_id=silo_id, count=len(points), error=str(e))
+            logger.error(
+                "Qdrant batch_upsert failed", silo_id=silo_id, count=len(points), error=str(e)
+            )
             raise QdrantOperationError(f"Failed to batch upsert vectors: {e}") from e
 
     async def query(
@@ -309,7 +311,9 @@ class EngineQdrantStore:
                 )
             elif effective_mode == "sparse":
                 if not has_sparse:
-                    raise ValueError("sparse_indices and sparse_values are required for sparse mode")
+                    raise ValueError(
+                        "sparse_indices and sparse_values are required for sparse mode"
+                    )
                 response = await client.query_points(
                     collection_name=collection,
                     query=SparseVector(
@@ -373,7 +377,9 @@ class EngineQdrantStore:
                 points_selector=PointIdsList(points=[str(node_id)]),
             )
         except Exception as e:
-            logger.error("Qdrant delete failed", node_id=str(node_id), silo_id=silo_id, error=str(e))
+            logger.error(
+                "Qdrant delete failed", node_id=str(node_id), silo_id=silo_id, error=str(e)
+            )
             raise QdrantOperationError(f"Failed to delete vector {node_id}: {e}") from e
 
     async def delete_collection(self, silo_id: str) -> None:
@@ -437,8 +443,15 @@ class EngineQdrantStore:
         try:
             await client.upsert(collection_name=collection, points=[point])
         except Exception as e:
-            logger.error("Qdrant upsert_cluster_embedding failed", cluster_id=cluster_id, silo_id=silo_id, error=str(e))
-            raise QdrantOperationError(f"Failed to upsert cluster embedding {cluster_id}: {e}") from e
+            logger.error(
+                "Qdrant upsert_cluster_embedding failed",
+                cluster_id=cluster_id,
+                silo_id=silo_id,
+                error=str(e),
+            )
+            raise QdrantOperationError(
+                f"Failed to upsert cluster embedding {cluster_id}: {e}"
+            ) from e
 
     async def batch_upsert_cluster_embeddings(
         self,
@@ -469,7 +482,12 @@ class EngineQdrantStore:
         try:
             await client.upsert(collection_name=collection, points=points)
         except Exception as e:
-            logger.error("Qdrant batch_upsert_cluster_embeddings failed", silo_id=silo_id, count=len(points), error=str(e))
+            logger.error(
+                "Qdrant batch_upsert_cluster_embeddings failed",
+                silo_id=silo_id,
+                count=len(points),
+                error=str(e),
+            )
             raise QdrantOperationError(f"Failed to batch upsert cluster embeddings: {e}") from e
         return len(points)
 

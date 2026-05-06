@@ -26,7 +26,6 @@ Next candidates:
 |------|--------|-------------|
 | [clustering-algo-eval.md](./clustering-algo-eval.md) | Spike | Evaluate LPA/HDBSCAN as Leiden replacements |
 | [dagger-test-pipeline.md](./dagger-test-pipeline.md) | Draft | Dagger-based test pipeline |
-| [e2e-test-scenarios.md](./e2e-test-scenarios.md) | Draft | E2E test scenario definitions |
 
 ## OSS track
 
@@ -46,6 +45,7 @@ Next candidates:
 ## Archive
 
 Completed plans in `archive/`:
+- E2E test scenarios (2026-05-06)
 - as_of time-travel for node_ids (2026-05-06)
 - v1.7 Auto-Tagging
 - v1.6 Hybrid Storage

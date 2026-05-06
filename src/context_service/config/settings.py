@@ -583,6 +583,7 @@ class Settings(BaseSettings):
     memgraph_password: SecretStr = Field(default=SecretStr(""))
     memgraph_pool_size: int = Field(default=50)
     memgraph_pool_timeout: float = Field(default=30.0)
+
     @property
     def memgraph_uri(self) -> str:
         return f"bolt://{self.memgraph_host}:{self.memgraph_port}"

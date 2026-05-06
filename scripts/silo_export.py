@@ -24,7 +24,7 @@ from typing import Any
 from context_service.config.logging import configure_logging, get_logger
 from context_service.config.settings import get_settings
 from context_service.stores.memgraph import MemgraphClient, create_memgraph_driver
-from context_service.stores.qdrant import COLLECTION_NAME, QdrantClient
+from context_service.stores.qdrant import QdrantClient, get_collection_name
 
 _SCHEMA_VERSION = 1
 _DEFAULT_PAGE_SIZE = 500
@@ -167,7 +167,7 @@ async def export_vectors(
 
     while True:
         result, next_offset = await client.scroll(
-            collection_name=COLLECTION_NAME,
+            collection_name=get_collection_name(silo_id),
             scroll_filter=qmodels.Filter(
                 must=[
                     qmodels.FieldCondition(

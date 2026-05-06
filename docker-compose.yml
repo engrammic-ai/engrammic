@@ -63,6 +63,18 @@ services:
       retries: 5
     restart: unless-stopped
 
+  memgraph-test:
+    image: memgraph/memgraph-mage:latest
+    container_name: context-service-memgraph-test
+    ports:
+      - "17687:7687"
+    volumes:
+      - memgraph-test-data:/var/lib/memgraph
+    command: ["--log-level=WARNING", "--storage-properties-on-edges=true"]
+    profiles:
+      - test
+    restart: unless-stopped
+
   qdrant:
     image: qdrant/qdrant:latest
     container_name: context-service-qdrant
@@ -128,6 +140,7 @@ services:
 volumes:
   memgraph-data:
   memgraph-log:
+  memgraph-test-data:
   qdrant-data:
   redis-data:
   postgres-data:

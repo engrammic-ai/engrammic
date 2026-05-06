@@ -353,6 +353,12 @@ class ContextService:
             cached = await self._cache.get(cache_key)
             if cached:
                 data = loads(cached)
+                created_at_str = data.get("created_at")
+                created_at = None
+                if created_at_str:
+                    from datetime import datetime
+
+                    created_at = datetime.fromisoformat(created_at_str)
                 return Node(
                     id=uuid.UUID(data["id"]),
                     type=data["type"],
@@ -361,6 +367,7 @@ class ContextService:
                     silo_id=uuid.UUID(data["silo_id"]) if data.get("silo_id") else None,
                     source_uri=data.get("source_uri"),
                     content_hash=data.get("content_hash"),
+                    created_at=created_at,
                 )
 
         results = await self._memgraph.execute_query(
@@ -368,7 +375,8 @@ class ContextService:
             MATCH (n:Node {id: $id, silo_id: $silo_id})
             RETURN n.id AS id, n.type AS type, n.content AS content,
                    n.silo_id AS silo_id, n.source_uri AS source_uri,
-                   n.content_hash AS content_hash
+                   n.content_hash AS content_hash, n.confidence AS confidence,
+                   n.created_at AS created_at, labels(n) AS labels
             """,
             {"id": str(node_id), "silo_id": str(silo_id)},
         )
@@ -377,13 +385,23 @@ class ContextService:
             return None
 
         row = results[0]
+        labels = row.get("labels") or []
+        node_type = row["type"]
+        if not node_type and labels:
+            non_node_labels = [lbl for lbl in labels if lbl != "Node"]
+            node_type = non_node_labels[0] if non_node_labels else None
         node = Node(
             id=uuid.UUID(row["id"]),
-            type=row["type"],
+            type=node_type,
             content=row["content"],
             silo_id=uuid.UUID(row["silo_id"]) if row.get("silo_id") else None,
             source_uri=row.get("source_uri"),
             content_hash=row.get("content_hash"),
+            properties={
+                "confidence": row.get("confidence"),
+                "created_at": row.get("created_at"),
+            },
+            created_at=row.get("created_at"),
         )
 
         if self._cache:
@@ -395,6 +413,8 @@ class ContextService:
                 "silo_id": str(node.silo_id) if node.silo_id else None,
                 "source_uri": node.source_uri,
                 "content_hash": node.content_hash,
+                "properties": node.properties,
+                "created_at": node.created_at.isoformat() if node.created_at else None,
             }
             await self._cache.set(cache_key, dumps(cache_data).encode())
 

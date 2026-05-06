@@ -27,7 +27,7 @@ from context_service.config.logging import configure_logging, get_logger
 from context_service.config.settings import get_settings
 from context_service.embeddings.splade import SpladeEncoder, SpladeEncoderError
 from context_service.stores.memgraph import MemgraphClient, create_memgraph_driver
-from context_service.stores.qdrant import COLLECTION_NAME, DENSE_VECTOR_NAME, QdrantClient
+from context_service.stores.qdrant import DENSE_VECTOR_NAME, QdrantClient, get_collection_name
 
 _BATCH_SIZE = 100
 
@@ -59,7 +59,7 @@ async def _backfill_silo(
     """
     log = get_logger(__name__)
     client = await qdrant_client._get_client()
-    collection = COLLECTION_NAME
+    collection = get_collection_name(silo_id)
 
     # Check collection exists.
     collections = await client.get_collections()

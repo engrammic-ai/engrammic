@@ -48,8 +48,7 @@ async def _context_belief_state(
     )
 
     contradictions = [
-        {"belief_a": row["belief_a"], "belief_b": row["belief_b"]}
-        for row in contradiction_rows
+        {"belief_a": row["belief_a"], "belief_b": row["belief_b"]} for row in contradiction_rows
     ]
 
     return {

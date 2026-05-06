@@ -122,10 +122,9 @@ async def context_service(
     qdrant = QdrantClient.from_settings(settings)
     await qdrant.ensure_collection()
 
-    # Wire embedding cache via Redis for faster repeated calls
     redis_pool = await create_redis_pool(settings)
     redis = RedisClient(redis_pool)
     embedding_cache = EmbeddingCache(redis)
-    embedding = build_embedding_service(settings.embedding_provider, settings, embedding_cache)
+    embedding = build_embedding_service(embedding_cache)
 
     return ContextService(memgraph=memgraph_client, qdrant=qdrant, embedding=embedding)

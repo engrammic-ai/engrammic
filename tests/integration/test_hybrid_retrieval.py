@@ -87,7 +87,10 @@ class TestHybridRetrieval:
 
     @pytest.fixture
     async def qdrant_client(self) -> QdrantClient:
-        client = QdrantClient(url="http://localhost:6333", vector_size=128)
+        from context_service.config.config_loader import load_config
+
+        dims = load_config("embeddings")["dimensions"]
+        client = QdrantClient(url="http://localhost:6333", vector_size=dims)
         return client
 
     @pytest.fixture

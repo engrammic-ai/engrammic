@@ -56,10 +56,7 @@ async def _context_crystallize(
     effective_reason = reason or "crystallized"
 
     results = await asyncio.gather(
-        *[
-            _crystallize_one(store, bid, silo_id, effective_reason, now)
-            for bid in belief_ids
-        ]
+        *[_crystallize_one(store, bid, silo_id, effective_reason, now) for bid in belief_ids]
     )
 
     commitment_ids = [r for r in results if r is not None]

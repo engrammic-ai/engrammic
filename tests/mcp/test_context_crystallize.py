@@ -36,9 +36,7 @@ class TestContextCrystallizeSuccess:
     async def test_single_belief_produces_commitment(self, fake_store):
         fake_store.seed_write_result([{"commitment_id": "ignored-by-impl"}])
 
-        result = await _context_crystallize(
-            belief_ids=[_BELIEF_A], silo_id=_SILO_ID
-        )
+        result = await _context_crystallize(belief_ids=[_BELIEF_A], silo_id=_SILO_ID)
 
         assert len(result["commitment_ids"]) == 1
         assert result["superseded"] == [_BELIEF_A]
@@ -56,9 +54,7 @@ class TestContextCrystallizeSuccess:
         fake_store.seed_write_result([{"commitment_id": "x"}])
         fake_store.seed_write_result([{"commitment_id": "y"}])
 
-        result = await _context_crystallize(
-            belief_ids=[_BELIEF_A, _BELIEF_B], silo_id=_SILO_ID
-        )
+        result = await _context_crystallize(belief_ids=[_BELIEF_A, _BELIEF_B], silo_id=_SILO_ID)
 
         assert len(result["commitment_ids"]) == 2
         assert set(result["superseded"]) == {_BELIEF_A, _BELIEF_B}
@@ -101,9 +97,7 @@ class TestContextCrystallizePartialFailure:
         fake_store.seed_write_result([{"commitment_id": "x"}])
         fake_store.seed_write_result([])  # _BELIEF_B not found
 
-        result = await _context_crystallize(
-            belief_ids=[_BELIEF_A, _BELIEF_B], silo_id=_SILO_ID
-        )
+        result = await _context_crystallize(belief_ids=[_BELIEF_A, _BELIEF_B], silo_id=_SILO_ID)
 
         assert _BELIEF_A in result["superseded"]
         assert _BELIEF_B in result["not_found"]
@@ -113,9 +107,7 @@ class TestContextCrystallizePartialFailure:
         fake_store.seed_write_result([])
         fake_store.seed_write_result([])
 
-        result = await _context_crystallize(
-            belief_ids=[_BELIEF_A, _BELIEF_B], silo_id=_SILO_ID
-        )
+        result = await _context_crystallize(belief_ids=[_BELIEF_A, _BELIEF_B], silo_id=_SILO_ID)
 
         assert result["commitment_ids"] == []
         assert result["superseded"] == []

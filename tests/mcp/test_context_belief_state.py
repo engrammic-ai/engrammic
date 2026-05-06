@@ -55,9 +55,7 @@ class TestContextBeliefStateReturnsBeliefs:
         fake_store.seed_query_result([_make_belief_row(_BELIEF_A), _make_belief_row(_BELIEF_B)])
         fake_store.seed_query_result([])  # no contradictions
 
-        result = await _context_belief_state(
-            session_id=_SESSION_ID, silo_id=_SILO_ID
-        )
+        result = await _context_belief_state(session_id=_SESSION_ID, silo_id=_SILO_ID)
 
         assert len(result["working_beliefs"]) == 2
         assert result["session_id"] == _SESSION_ID
@@ -68,9 +66,7 @@ class TestContextBeliefStateReturnsBeliefs:
         fake_store.seed_query_result([])
         fake_store.seed_query_result([])
 
-        result = await _context_belief_state(
-            session_id=_SESSION_ID, silo_id=_SILO_ID
-        )
+        result = await _context_belief_state(session_id=_SESSION_ID, silo_id=_SILO_ID)
 
         assert result["working_beliefs"] == []
         assert result["reflection_suggested"] is False
@@ -91,10 +87,12 @@ class TestContextBeliefStateReturnsBeliefs:
 class TestContextBeliefStateAboutFilter:
     async def test_filters_to_matching_about_ids(self, fake_store):
         other_node = str(uuid.uuid4())
-        fake_store.seed_query_result([
-            _make_belief_row(_BELIEF_A, about_ids=[_NODE_ID]),
-            _make_belief_row(_BELIEF_B, about_ids=[other_node]),
-        ])
+        fake_store.seed_query_result(
+            [
+                _make_belief_row(_BELIEF_A, about_ids=[_NODE_ID]),
+                _make_belief_row(_BELIEF_B, about_ids=[other_node]),
+            ]
+        )
         fake_store.seed_query_result([])
 
         result = await _context_belief_state(
@@ -115,15 +113,15 @@ class TestContextBeliefStateAboutFilter:
         assert result["working_beliefs"] == []
 
     async def test_about_none_returns_all(self, fake_store):
-        fake_store.seed_query_result([
-            _make_belief_row(_BELIEF_A, about_ids=[_NODE_ID]),
-            _make_belief_row(_BELIEF_B, about_ids=[]),
-        ])
+        fake_store.seed_query_result(
+            [
+                _make_belief_row(_BELIEF_A, about_ids=[_NODE_ID]),
+                _make_belief_row(_BELIEF_B, about_ids=[]),
+            ]
+        )
         fake_store.seed_query_result([])
 
-        result = await _context_belief_state(
-            session_id=_SESSION_ID, silo_id=_SILO_ID, about=None
-        )
+        result = await _context_belief_state(session_id=_SESSION_ID, silo_id=_SILO_ID, about=None)
 
         assert len(result["working_beliefs"]) == 2
 
@@ -143,15 +141,19 @@ class TestContextBeliefStateContradictions:
 
     async def test_multiple_contradictions(self, fake_store):
         c_id = str(uuid.uuid4())
-        fake_store.seed_query_result([
-            _make_belief_row(_BELIEF_A),
-            _make_belief_row(_BELIEF_B),
-            _make_belief_row(c_id),
-        ])
-        fake_store.seed_query_result([
-            {"belief_a": _BELIEF_A, "belief_b": _BELIEF_B},
-            {"belief_a": _BELIEF_A, "belief_b": c_id},
-        ])
+        fake_store.seed_query_result(
+            [
+                _make_belief_row(_BELIEF_A),
+                _make_belief_row(_BELIEF_B),
+                _make_belief_row(c_id),
+            ]
+        )
+        fake_store.seed_query_result(
+            [
+                {"belief_a": _BELIEF_A, "belief_b": _BELIEF_B},
+                {"belief_a": _BELIEF_A, "belief_b": c_id},
+            ]
+        )
 
         result = await _context_belief_state(session_id=_SESSION_ID, silo_id=_SILO_ID)
 

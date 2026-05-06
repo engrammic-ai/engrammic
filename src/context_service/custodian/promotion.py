@@ -272,9 +272,7 @@ async def execute_promotion(
             result.findings_promoted = len(promoted_ids)
             for fid in finding_ids:
                 if fid not in promoted_ids:
-                    result.errors.append(
-                        f"finding {fid} not found or already published"
-                    )
+                    result.errors.append(f"finding {fid} not found or already published")
 
         # Promote proposed edges via 9-way type dispatch, one UNWIND per type.
         # Group edges by relationship type first so valid and invalid types are

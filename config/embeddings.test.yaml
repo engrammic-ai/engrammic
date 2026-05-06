@@ -1,0 +1,8 @@
+# Test embedding configuration - isolated from production
+provider: litellm
+model: jina_ai/jina-embeddings-v3
+dimensions: 1024
+model_version: jina-v3
+
+# Separate collection for tests
+qdrant_collection: context_vectors_test

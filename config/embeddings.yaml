@@ -1,0 +1,8 @@
+# Embedding service configuration
+provider: litellm
+model: jina_ai/jina-embeddings-v3
+dimensions: 1024
+model_version: jina-v3
+
+# Qdrant collection name (tests use context_vectors_test)
+qdrant_collection: context_vectors

@@ -52,7 +52,17 @@ requires_full_stack = pytest.mark.skipif(
 # Helpers
 # ---------------------------------------------------------------------------
 
-_VECTOR_DIM = 128
+
+def _get_vector_dim() -> int:
+    from context_service.config.config_loader import load_config
+
+    try:
+        return load_config("embeddings")["dimensions"]
+    except (FileNotFoundError, KeyError):
+        return 1024
+
+
+_VECTOR_DIM = _get_vector_dim()
 
 
 def _fake_vector(seed: int, dim: int = _VECTOR_DIM) -> list[float]:
