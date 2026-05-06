@@ -41,6 +41,7 @@ _LAYER_TO_LABEL: dict[str, str] = {
     "wisdom": "Commitment",
     "intelligence": "ReasoningChain",
     "meta": "MetaObservation",
+    "belief": "WorkingBelief",
 }
 
 
@@ -541,6 +542,55 @@ async def _context_reason(
     return response
 
 
+async def _context_store_belief(
+    silo_id: str,
+    content: str,
+    session_id: str,
+    about: list[str],
+    confidence: float = 0.8,
+) -> dict[str, Any]:
+    """Create a WorkingBelief node and run sync conflict detection."""
+    from context_service.db import queries as q
+    from context_service.engine.sessions import create_or_join_session
+
+    ctx_svc = get_context_service()
+    store = ctx_svc.graph_store
+
+    await create_or_join_session(store, session_id, silo_id)
+
+    belief_id = str(uuid.uuid4())
+    now = datetime.now(UTC).isoformat()
+
+    await store.execute_write(
+        q.CREATE_WORKING_BELIEF,
+        {
+            "id": belief_id,
+            "silo_id": silo_id,
+            "session_id": session_id,
+            "content": content,
+            "confidence": confidence,
+            "created_at": now,
+            "about_ids": about,
+        },
+    )
+
+    conflict_rows = await store.execute_query(
+        q.DETECT_CONFLICTING_WORKING_BELIEFS,
+        {"new_belief_id": belief_id, "silo_id": silo_id},
+    )
+    conflict_ids = [row["conflict_id"] for row in conflict_rows]
+
+    result: dict[str, Any] = {
+        "belief_id": belief_id,
+        "layer": "belief",
+        "session_id": session_id,
+        "created_at": now,
+    }
+    if conflict_ids:
+        result["potential_conflicts"] = conflict_ids
+    return result
+
+
 async def _context_store(
     silo_id: str | None,
     content: str,
@@ -556,8 +606,30 @@ async def _context_store(
     tags: list[str] | None = None,
     decay_class: str = "standard",
     parent_chain_id: str | None = None,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
+    if layer == "belief":
+        if not about:
+            return {
+                "error": "missing_about",
+                "message": "about required for belief layer",
+            }
+        if not session_id:
+            return {
+                "error": "missing_session_id",
+                "message": "session_id required for belief layer",
+            }
+        auth = await get_mcp_auth_context()
+        resolved_silo = silo_id or str(derive_silo_id(auth.org_id))
+        return await _context_store_belief(
+            silo_id=resolved_silo,
+            content=content,
+            session_id=session_id,
+            about=about,
+            confidence=confidence,
+        )
+
     if layer == "memory":
         result = await _context_remember(
             silo_id=silo_id,
@@ -653,7 +725,7 @@ async def _context_store(
 
     return {
         "error": "invalid_layer",
-        "valid": ["memory", "knowledge", "wisdom", "intelligence", "meta"],
+        "valid": ["memory", "knowledge", "wisdom", "intelligence", "meta", "belief"],
     }
 
 
@@ -664,16 +736,17 @@ def register(mcp: FastMCP) -> None:
         name="context_store",
         description=(
             "Unified write tool for all EAG layers. "
-            "Routes to memory, knowledge, wisdom, intelligence, or meta based on layer. "
+            "Routes to memory, knowledge, wisdom, intelligence, meta, or belief based on layer. "
             "knowledge requires evidence + source_type. "
             "wisdom requires about. "
             "intelligence requires steps. "
-            "meta requires observation_type + about."
+            "meta requires observation_type + about. "
+            "belief requires about + session_id."
         ),
     )
     async def context_store(
         content: str,
-        layer: Literal["memory", "knowledge", "wisdom", "intelligence", "meta"],
+        layer: Literal["memory", "knowledge", "wisdom", "intelligence", "meta", "belief"],
         evidence: list[str] | None = None,
         source_type: str | None = None,
         confidence: float = 0.8,
@@ -686,16 +759,17 @@ def register(mcp: FastMCP) -> None:
         decay_class: str = "standard",
         silo_id: str | None = None,
         parent_chain_id: str | None = None,
+        session_id: str | None = None,
     ) -> dict[str, Any]:
         """Store to any EAG layer.
 
         Args:
             content: The content to store. For intelligence layer, this is the conclusion.
-            layer: Target layer: memory|knowledge|wisdom|intelligence|meta.
+            layer: Target layer: memory|knowledge|wisdom|intelligence|meta|belief.
             evidence: Evidence refs (node:<uuid> or URI). Required for knowledge layer.
             source_type: Source type for knowledge layer: document|user|external|agent.
             confidence: 0.0-1.0, agent's confidence (default 0.8).
-            about: Node IDs this content concerns. Required for wisdom and meta layers.
+            about: Node IDs this content concerns. Required for wisdom, meta, and belief layers.
             reasoning: Reasoning behind a wisdom-layer belief.
             steps: Reasoning steps for intelligence layer. List of {step, reasoning, confidence?}.
             observation_type: Meta-observation type. Required for meta layer.
@@ -707,10 +781,14 @@ def register(mcp: FastMCP) -> None:
             parent_chain_id: Intelligence layer only. UUID of an existing ReasoningChain
                 in the same silo that this chain continues. Creates a CONTINUES edge
                 (child_chain -> parent_chain). One chain can continue only one parent.
+            session_id: Belief layer only. ID of the ReasoningSession the WorkingBelief
+                belongs to. Required for belief layer; ignored for all other layers.
 
         Returns:
             Layer-specific response dict with at minimum {node_id, layer, created_at}.
             Intelligence layer includes continues_chain_id when parent_chain_id is set.
+            Belief layer returns {belief_id, layer, session_id, created_at} and includes
+            potential_conflicts when other beliefs in the session target the same nodes.
         """
         auth = await get_mcp_auth_context()
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
@@ -730,12 +808,13 @@ def register(mcp: FastMCP) -> None:
             tags=tags,
             decay_class=decay_class,
             parent_chain_id=parent_chain_id,
+            session_id=session_id,
         )
 
         if "error" not in result and get_settings().write_events_enabled:
             redis = get_redis()
             if redis is not None:
-                node_id = result.get("node_id") or result.get("chain_id")
+                node_id = result.get("node_id") or result.get("chain_id") or result.get("belief_id")
                 if node_id:
                     node_label = _layer_to_label(layer)
                     await emit_access_event(

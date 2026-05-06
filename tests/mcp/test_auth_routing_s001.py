@@ -42,14 +42,9 @@ async def test_get_mcp_auth_context_returns_dev_fallback_when_no_header(
     from context_service.config import settings as settings_module
     from context_service.mcp import server
 
-    real_get_settings = settings_module.get_settings
-    real_settings = real_get_settings()
-    monkeypatch.setattr(
-        real_settings,
-        "auth_enabled",
-        False,
-        raising=False,
-    )
+    real_settings = settings_module.get_settings()
+    patched_settings = real_settings.model_copy(update={"auth_enabled": False})
+    monkeypatch.setattr(settings_module, "get_settings", lambda: patched_settings)
 
     # Simulate stdio / no-HTTP-request: get_http_headers returns {}.
     monkeypatch.setattr(server, "get_http_headers", lambda **_kw: {})

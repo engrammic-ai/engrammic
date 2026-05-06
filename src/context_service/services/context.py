@@ -1323,7 +1323,8 @@ class ContextService:
                 relevance = relevance * ((1.0 - freshness_weight) + freshness_weight * fresh)
 
             if settings.heat_ranking_enabled and settings.heat_weight > 0:
-                heat = float(props.get("heat_score") or 0.5)
+                raw_heat = props.get("heat_score")
+                heat = float(raw_heat) if raw_heat is not None else 0.5
                 relevance = relevance * ((1.0 - settings.heat_weight) + settings.heat_weight * heat)
 
             results.append(

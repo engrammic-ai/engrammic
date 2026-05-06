@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+from context_service.mcp.server import get_mcp_auth_context
 from context_service.mcp.tools.context_get import _context_get
 from context_service.mcp.tools.context_graph import _context_graph
 from context_service.mcp.tools.context_query import _context_query
@@ -37,6 +38,42 @@ async def _fetch_chain_steps(
     return result
 
 
+_SUMMARY_MAX_CHARS = 200
+
+
+def _project_node_without_content(node: dict[str, Any]) -> dict[str, Any]:
+    """Project a node dict to {node_id, layer, summary, created_at, confidence}.
+
+    `summary` falls back to the first 200 chars of `content` when no
+    pre-computed summary is present. Error/sentinel entries are passed
+    through unchanged so callers still see them.
+    """
+    if "node_id" not in node or "error" in node:
+        return node
+
+    summary = node.get("summary")
+    if not summary:
+        content = node.get("content") or ""
+        summary = content[:_SUMMARY_MAX_CHARS] if content else None
+
+    return {
+        "node_id": node["node_id"],
+        "layer": node.get("layer"),
+        "summary": summary,
+        "created_at": node.get("created_at"),
+        "confidence": node.get("confidence"),
+    }
+
+
+def _strip_content(response: dict[str, Any]) -> dict[str, Any]:
+    """Remove content from any node/result lists in a recall response."""
+    if isinstance(response.get("nodes"), list):
+        response["nodes"] = [_project_node_without_content(n) for n in response["nodes"]]
+    if isinstance(response.get("results"), list):
+        response["results"] = [_project_node_without_content(r) for r in response["results"]]
+    return response
+
+
 async def _context_recall(
     silo_id: str,
     query: str | None = None,
@@ -48,6 +85,7 @@ async def _context_recall(
     include_reflections: bool = False,
     reflections_agent_id: str | None = None,
     include_steps: bool = False,
+    include_content: bool = True,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     if not query and not node_ids:
@@ -75,32 +113,43 @@ async def _context_recall(
                     if nid in steps_by_id:
                         node["steps"] = steps_by_id[nid]
 
+        if not include_content:
+            response = _strip_content(response)
         return response
 
     if node_ids and depth > 0:
-        return await _context_graph(
+        response = await _context_graph(
             silo_id=silo_id,
             seed_nodes=node_ids,
             max_depth=depth,
             layers=layers,
         )
+        if not include_content:
+            response = _strip_content(response)
+        return response
 
     if query and depth == 0:
-        return await _context_query(
+        response = await _context_query(
             silo_id=silo_id,
             query=query,
             layers=layers,
             top_k=top_k,
             as_of=as_of,
         )
+        if not include_content:
+            response = _strip_content(response)
+        return response
 
-    return await _context_graph(
+    response = await _context_graph(
         silo_id=silo_id,
         query=query,
         max_depth=depth,
         max_nodes=top_k,
         layers=layers,
     )
+    if not include_content:
+        response = _strip_content(response)
+    return response
 
 
 def register(mcp: FastMCP) -> None:
@@ -126,6 +175,7 @@ def register(mcp: FastMCP) -> None:
         include_reflections: bool = False,
         reflections_agent_id: str | None = None,
         include_steps: bool = False,
+        include_content: bool = True,
     ) -> dict[str, Any]:
         """Unified read across Memory, Knowledge, Wisdom, and Intelligence layers.
 
@@ -148,6 +198,12 @@ def register(mcp: FastMCP) -> None:
                 node_ids at depth=0, attach reasoning chain steps stored in
                 Postgres to each matching node. Silently ignored in search and
                 traversal modes.
+            include_content: When True (default), each node carries its full
+                content and properties. When False, nodes are projected to
+                {node_id, layer, summary, created_at, confidence}, where summary
+                falls back to the first 200 characters of content if no
+                pre-computed summary exists. Useful for cheap browsing or
+                pagination before a follow-up fetch by node_id.
 
         Returns:
             Depends on mode:
@@ -156,8 +212,6 @@ def register(mcp: FastMCP) -> None:
             - query + depth=0: {results, total_candidates, search_time_ms}
             - query + depth>0: {nodes, edges, traversal_stats, metadata}
         """
-        from context_service.mcp.server import get_mcp_auth_context
-
         auth = await get_mcp_auth_context()
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         return await _context_recall(
@@ -171,4 +225,5 @@ def register(mcp: FastMCP) -> None:
             include_reflections=include_reflections,
             reflections_agent_id=reflections_agent_id,
             include_steps=include_steps,
+            include_content=include_content,
         )

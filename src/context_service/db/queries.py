@@ -1162,3 +1162,118 @@ UNWIND $target_ids AS target_id
 MATCH (src {id: $src_id, silo_id: $silo_id}), (target {id: target_id, silo_id: $silo_id})
 MERGE (src)-[:ABOUT]->(target)
 """
+
+
+# ---------------------------------------------------------------------------
+# Working belief queries (Intelligence layer, session-scoped)
+#
+# WorkingBelief nodes are mutable, ephemeral, attached to a ReasoningSession.
+# They represent what an agent currently thinks during a session and can be
+# crystallized into durable Commitments at session end (or earlier).
+# ---------------------------------------------------------------------------
+
+# Create a :WorkingBelief node, attach it to its :ReasoningSession via
+# PART_OF_SESSION, and create :ABOUT edges to each node id in $about_ids.
+# Caller must ensure the :ReasoningSession exists in the same silo.
+CREATE_WORKING_BELIEF = """
+CREATE (wb:WorkingBelief {
+    id: $id,
+    silo_id: $silo_id,
+    session_id: $session_id,
+    content: $content,
+    confidence: $confidence,
+    created_at: $created_at,
+    updated_at: $created_at
+})
+WITH wb
+MATCH (s:ReasoningSession {id: $session_id, silo_id: $silo_id})
+CREATE (wb)-[:PART_OF_SESSION]->(s)
+WITH wb
+UNWIND $about_ids AS about_id
+MATCH (n {id: about_id, silo_id: $silo_id})
+CREATE (wb)-[:ABOUT]->(n)
+RETURN wb.id AS belief_id
+"""
+
+# Return all :WorkingBelief nodes attached to a session, with the ids of
+# the nodes they reference via :ABOUT collected per belief.
+GET_WORKING_BELIEFS_FOR_SESSION = """
+MATCH (wb:WorkingBelief {session_id: $session_id, silo_id: $silo_id})
+OPTIONAL MATCH (wb)-[:ABOUT]->(n)
+WITH wb, collect(n.id) AS about_ids
+RETURN wb.id AS belief_id,
+       wb.content AS content,
+       wb.confidence AS confidence,
+       wb.created_at AS created_at,
+       wb.updated_at AS updated_at,
+       about_ids
+ORDER BY wb.created_at DESC
+"""
+
+# In-place update of a :WorkingBelief. $content may be null to leave content
+# unchanged; confidence and updated_at are always set.
+UPDATE_WORKING_BELIEF = """
+MATCH (wb:WorkingBelief {id: $belief_id, silo_id: $silo_id})
+SET wb.confidence = $confidence,
+    wb.updated_at = $updated_at
+SET wb.content = CASE WHEN $content IS NOT NULL THEN $content ELSE wb.content END
+RETURN wb.id AS belief_id, wb.confidence AS confidence
+"""
+
+DELETE_WORKING_BELIEF = """
+MATCH (wb:WorkingBelief {id: $belief_id, silo_id: $silo_id})
+DETACH DELETE wb
+"""
+
+# Sync conflict detection: given a freshly-written :WorkingBelief, return the
+# ids of any other :WorkingBelief in the same session that ABOUT the same
+# node(s). Bounded by LIMIT 10 to keep p99 under ~30ms.
+DETECT_CONFLICTING_WORKING_BELIEFS = """
+MATCH (new:WorkingBelief {id: $new_belief_id, silo_id: $silo_id})
+MATCH (new)-[:ABOUT]->(n)
+MATCH (other:WorkingBelief)-[:ABOUT]->(n)
+WHERE other.id <> $new_belief_id
+  AND other.session_id = new.session_id
+RETURN DISTINCT other.id AS conflict_id
+LIMIT 10
+"""
+
+# Pairwise contradiction detection across a whole session. Returns up to 10
+# unordered pairs of WorkingBeliefs that share at least one ABOUT target.
+DETECT_CONTRADICTIONS_IN_SESSION = """
+MATCH (wb1:WorkingBelief {session_id: $session_id, silo_id: $silo_id})
+MATCH (wb2:WorkingBelief {session_id: $session_id, silo_id: $silo_id})
+WHERE wb1.id < wb2.id
+MATCH (wb1)-[:ABOUT]->(n)<-[:ABOUT]-(wb2)
+RETURN DISTINCT wb1.id AS belief_a, wb2.id AS belief_b
+LIMIT 10
+"""
+
+# Promote a :WorkingBelief to a durable :Commitment, copy its ABOUT edges,
+# and SUPERSEDE any existing active Commitments that ABOUT the same node(s).
+# Existing commitments are considered active when no other Commitment
+# SUPERSEDES them. Their valid_to is set to $valid_from on supersession.
+CRYSTALLIZE_TO_COMMITMENT = """
+MATCH (wb:WorkingBelief {id: $belief_id, silo_id: $silo_id})
+CREATE (cm:Commitment {
+    id: $commitment_id,
+    silo_id: $silo_id,
+    content: wb.content,
+    confidence: wb.confidence,
+    created_at: $created_at,
+    valid_from: $valid_from,
+    crystallized_from: wb.id
+})
+WITH wb, cm
+OPTIONAL MATCH (wb)-[:ABOUT]->(n)<-[:ABOUT]-(existing:Commitment)
+WHERE NOT EXISTS { (existing)<-[:SUPERSEDES]-(:Commitment) }
+  AND existing.silo_id = $silo_id
+WITH wb, cm, collect(DISTINCT existing) AS to_supersede
+MATCH (wb)-[:ABOUT]->(n)
+CREATE (cm)-[:ABOUT]->(n)
+WITH cm, to_supersede
+UNWIND to_supersede AS old
+CREATE (cm)-[:SUPERSEDES {reason: $reason, created_at: $created_at}]->(old)
+SET old.valid_to = $valid_from
+RETURN cm.id AS commitment_id
+"""

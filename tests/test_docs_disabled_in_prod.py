@@ -8,12 +8,15 @@ import pytest
 
 
 def _build_app_with_env(monkeypatch: pytest.MonkeyPatch, env: str) -> object:
-    from context_service.api.app import create_app
+    import context_service.api.app as app_module
+    from context_service.config import settings as settings_module
     from context_service.config.settings import get_settings
 
     real = get_settings()
-    monkeypatch.setattr(real, "environment", env, raising=False)
-    return create_app()
+    patched = real.model_copy(update={"environment": env})
+    monkeypatch.setattr(settings_module, "get_settings", lambda: patched)
+    monkeypatch.setattr(app_module, "get_settings", lambda: patched)
+    return app_module.create_app()
 
 
 def test_docs_disabled_in_production(monkeypatch: pytest.MonkeyPatch) -> None:

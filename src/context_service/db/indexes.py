@@ -112,6 +112,15 @@ INTELLIGENCE_INDEX_QUERIES: tuple[str, ...] = (
 )
 
 
+# --- Working belief (intelligence layer, session-scoped) ---
+
+WORKING_BELIEF_INDEX_QUERIES: tuple[str, ...] = (
+    f"CREATE INDEX ON :{IntelligenceLabel.WORKING_BELIEF}(id);",
+    f"CREATE INDEX ON :{IntelligenceLabel.WORKING_BELIEF}(silo_id);",
+    f"CREATE INDEX ON :{IntelligenceLabel.WORKING_BELIEF}(session_id);",
+)
+
+
 # --- Registry layer ---
 
 REGISTRY_INDEX_QUERIES: tuple[str, ...] = (
@@ -156,6 +165,7 @@ ALL_INDEX_QUERIES: tuple[str, ...] = (
     *KNOWLEDGE_INDEX_QUERIES,
     *WISDOM_INDEX_QUERIES,
     *INTELLIGENCE_INDEX_QUERIES,
+    *WORKING_BELIEF_INDEX_QUERIES,
     *REGISTRY_INDEX_QUERIES,
     *AUDIT_INDEX_QUERIES,
     *META_MEMORY_INDEX_QUERIES,
