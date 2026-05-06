@@ -13,7 +13,9 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 ## Active plans
 
-None currently active.
+| Plan | Status | Description |
+|------|--------|-------------|
+| [2026-05-06-as-of-node-ids.md](./2026-05-06-as-of-node-ids.md) | Ready | as_of time-travel for node_ids retrieval |
 
 Next candidates:
 - OSS launch prep (primitives + engine open-source)
