@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -119,108 +118,6 @@ async def test_create_auto_reflection_unique_ids() -> None:
     id_b, _ = await create_auto_reflection(store2, "belief_change", "c", [], "s1")
 
     assert id_a != id_b
-
-
-# ---------------------------------------------------------------------------
-# Supersession hook integration
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_supersession_pass_calls_auto_reflection_when_enabled() -> None:
-    """When auto_reflect.enabled=True and on_supersession=True, auto-reflections
-    are created for detected supersession pairs."""
-    from context_service.custodian.supersession import run_supersession_pass
-
-    # Use SPO-structured nodes so the deterministic structured path fires
-    # without needing an LLM call.
-    class _SPONode:
-        def __init__(
-            self,
-            nid: str,
-            content: str,
-            ts: datetime,
-            confidence: float,
-        ) -> None:
-            self.id = nid
-            self.content = content
-            self.created_at = ts
-            self.confidence = confidence
-            # SPO fields required by _has_spo_structure
-            self.subject = "entity-x"
-            self.predicate = "has_property"
-            self.object = "value"
-
-    older = _SPONode("aaa", "old content", datetime(2026, 1, 1, tzinfo=UTC), confidence=0.6)
-    newer = _SPONode("bbb", "new content", datetime(2026, 6, 1, tzinfo=UTC), confidence=0.95)
-
-    store = MagicMock()
-    store.create_supersedes_edge = AsyncMock(return_value=True)
-    store.execute_write = AsyncMock(return_value=[])
-
-    settings_mock = MagicMock()
-    settings_mock.auto_reflect.enabled = True
-    settings_mock.auto_reflect.on_supersession = True
-
-    with patch(
-        "context_service.custodian.supersession.get_settings",
-        return_value=settings_mock,
-    ):
-        result = await run_supersession_pass(
-            cluster_id="c-1",
-            cluster_nodes=[older, newer],
-            silo_id="silo-1",
-            llm=None,
-            store=store,
-            confidence_threshold=0.8,
-            dominance_threshold=1.2,
-        )
-
-    # If a supersession edge was written, execute_write should be called
-    # for the auto-reflection node.
-    if result.edges_written > 0:
-        assert store.execute_write.called
-
-
-@pytest.mark.asyncio
-async def test_supersession_pass_skips_auto_reflection_when_disabled() -> None:
-    from context_service.custodian.supersession import run_supersession_pass
-
-    class _SPONode:
-        def __init__(self, nid: str, content: str, ts: datetime, confidence: float) -> None:
-            self.id = nid
-            self.content = content
-            self.created_at = ts
-            self.confidence = confidence
-            self.subject = "entity-x"
-            self.predicate = "has_property"
-            self.object = "value"
-
-    older = _SPONode("aaa", "old content", datetime(2026, 1, 1, tzinfo=UTC), confidence=0.6)
-    newer = _SPONode("bbb", "new content", datetime(2026, 6, 1, tzinfo=UTC), confidence=0.95)
-
-    store = MagicMock()
-    store.create_supersedes_edge = AsyncMock(return_value=True)
-    store.execute_write = AsyncMock(return_value=[])
-
-    settings_mock = MagicMock()
-    settings_mock.auto_reflect.enabled = False
-
-    with patch(
-        "context_service.custodian.supersession.get_settings",
-        return_value=settings_mock,
-    ):
-        await run_supersession_pass(
-            cluster_id="c-1",
-            cluster_nodes=[older, newer],
-            silo_id="silo-1",
-            llm=None,
-            store=store,
-            dominance_threshold=1.2,
-        )
-
-    # execute_write must NOT have been called (flag is off, no LLM pairs)
-    store.execute_write.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

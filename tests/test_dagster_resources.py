@@ -123,7 +123,7 @@ class _FakeEmbeddingService:
 
 
 def test_embedding_resource_get_client_lazy() -> None:
-    resource = EmbeddingResource(provider="jina")
+    resource = EmbeddingResource()
     assert resource._service is None
 
     with patch(
@@ -131,12 +131,12 @@ def test_embedding_resource_get_client_lazy() -> None:
         return_value=_FakeEmbeddingService(),
     ) as mock_build:
         client = resource.get_client()
-        mock_build.assert_called_once_with("jina")
+        mock_build.assert_called_once_with()
         assert client is resource._service
 
 
 def test_embedding_resource_get_client_cached() -> None:
-    resource = EmbeddingResource(provider="jina")
+    resource = EmbeddingResource()
     fake = _FakeEmbeddingService()
 
     with patch(
@@ -150,7 +150,7 @@ def test_embedding_resource_get_client_cached() -> None:
 
 
 def test_embedding_resource_teardown_closes_service() -> None:
-    resource = EmbeddingResource(provider="jina")
+    resource = EmbeddingResource()
     resource._service = _FakeEmbeddingService()  # type: ignore[assignment]
 
     with patch("context_service.pipelines.resources._close_async") as mock_close:
@@ -160,7 +160,7 @@ def test_embedding_resource_teardown_closes_service() -> None:
 
 
 def test_embedding_resource_teardown_noop_when_no_service() -> None:
-    resource = EmbeddingResource(provider="jina")
+    resource = EmbeddingResource()
     with patch("context_service.pipelines.resources._close_async") as mock_close:
         resource.teardown_after_execution(MagicMock())
         mock_close.assert_not_called()
@@ -226,23 +226,3 @@ def test_build_default_resources_keys() -> None:
     assert isinstance(resources["llm"], LLMResource)
     assert isinstance(resources["embedding"], EmbeddingResource)
     assert resources["llm"].provider == "gemini"
-    assert resources["embedding"].provider == "jina"
-
-
-def test_build_default_resources_picks_vertex_embedding_when_no_jina() -> None:
-    with patch("context_service.pipelines.resources.get_settings") as mock_settings:
-        s = MagicMock()
-        s.memgraph_uri = "bolt://localhost:7687"
-        s.memgraph_user = ""
-        s.memgraph_password = ""
-        s.redis_url = "redis://localhost:6379"
-        s.qdrant_url = "http://localhost:6333"
-        s.qdrant_api_key = ""
-        s.default_llm_model = "claude-3-haiku"
-        s.jina_api_key = ""  # empty -> falls back to vertex
-        mock_settings.return_value = s
-
-        resources = build_default_resources()
-
-    assert resources["llm"].provider == "anthropic"
-    assert resources["embedding"].provider == "vertex"

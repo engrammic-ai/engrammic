@@ -48,9 +48,9 @@ RETURN pe.id AS edge_id,
        pe.target_node_id AS target_node_id
 """
 
-_FETCH_PROPOSED_EDGES_BY_FINDING = """
+_FETCH_PROPOSED_EDGES_BY_FINDING_IDS = """
 MATCH (pe:ProposedEdge {status: 'draft'})
-WHERE pe.finding_id = $finding_id
+WHERE pe.finding_id IN $finding_ids
 RETURN pe.id AS edge_id,
        pe.type AS type,
        pe.source_node_id AS source_node_id,
@@ -58,11 +58,12 @@ RETURN pe.id AS edge_id,
 """
 
 # ---------------------------------------------------------------------------
-# Cypher: promote a :Finding
+# Cypher: promote :Finding nodes (batch UNWIND)
 # ---------------------------------------------------------------------------
 
-_PROMOTE_FINDING = """
-MATCH (f:Finding {id: $id, status: 'draft'})
+_PROMOTE_FINDINGS_BATCH = """
+UNWIND $ids AS finding_id
+MATCH (f:Finding {id: finding_id, status: 'draft'})
 SET f.status = 'published', f.published_at = datetime()
 RETURN f.id AS id
 """
@@ -79,9 +80,16 @@ RETURN f.id AS id
 #   5. RETURNs the created relationship's start node id for confirmation.
 
 
-def _promote_edge_cypher(rel_type: str) -> str:
+def _promote_edge_batch_cypher(rel_type: str) -> str:
+    """Return a batch UNWIND query that promotes all edges of one relationship type.
+
+    Memgraph does not support parameterized relationship types in CREATE, so we
+    still need one query per RelationshipType -- but a single UNWIND replaces
+    N individual round-trips for edges that share the same type.
+    """
     return f"""
-MATCH (pe:ProposedEdge {{id: $id}})
+UNWIND $ids AS edge_id
+MATCH (pe:ProposedEdge {{id: edge_id}})
 MATCH (src) WHERE {content_union_predicate("src")} AND src.id = pe.source_node_id
 MATCH (tgt) WHERE {content_union_predicate("tgt")} AND tgt.id = pe.target_node_id
 CREATE (src)-[r:{rel_type} {{
@@ -94,8 +102,8 @@ RETURN id(r) AS rel_id
 """
 
 
-PROMOTE_CYPHER_BY_TYPE: dict[RelationshipType, str] = {
-    rt: _promote_edge_cypher(rt.value) for rt in RelationshipType
+PROMOTE_EDGE_BATCH_CYPHER_BY_TYPE: dict[RelationshipType, str] = {
+    rt: _promote_edge_batch_cypher(rt.value) for rt in RelationshipType
 }
 
 
@@ -173,12 +181,13 @@ async def plan_promotion(
             }
             for r in rows
         ]
-        # Fetch proposed edges associated with this finding
-        for f in findings:
+        # Fetch proposed edges for all planned findings in one batch query.
+        if findings:
+            finding_ids = [f["finding_id"] for f in findings]
             edge_rows = await memgraph_client.execute_query(
-                _FETCH_PROPOSED_EDGES_BY_FINDING, {"finding_id": f["finding_id"]}
+                _FETCH_PROPOSED_EDGES_BY_FINDING_IDS, {"finding_ids": finding_ids}
             )
-            proposed_edges.extend(
+            proposed_edges = [
                 {
                     "edge_id": r["edge_id"],
                     "type": r["type"],
@@ -186,7 +195,7 @@ async def plan_promotion(
                     "target_node_id": r["target_node_id"],
                 }
                 for r in edge_rows
-            )
+            ]
     else:
         # pass_id branch
         rows = await memgraph_client.execute_query(
@@ -204,40 +213,31 @@ async def plan_promotion(
                 }
             )
 
-        edge_rows = await memgraph_client.execute_query(
-            _FETCH_PROPOSED_EDGES_BY_PASS, {"pass_id": pass_id}
-        )
-        # Filter proposed edges to only those whose finding is in the plan
-        finding_ids = {f["finding_id"] for f in findings}
-        for r in edge_rows:
-            proposed_edges.append(
+        finding_ids = [f["finding_id"] for f in findings]
+        if finding_ids:
+            if min_quality is not None:
+                # Some findings were filtered out: fetch edges only for the
+                # planned subset in one batch query instead of N per-finding
+                # round-trips.
+                edge_rows = await memgraph_client.execute_query(
+                    _FETCH_PROPOSED_EDGES_BY_FINDING_IDS,
+                    {"finding_ids": finding_ids},
+                )
+            else:
+                # No quality filter: all pass findings are planned, use the
+                # pass-scoped query which is already indexed on pass_id.
+                edge_rows = await memgraph_client.execute_query(
+                    _FETCH_PROPOSED_EDGES_BY_PASS, {"pass_id": pass_id}
+                )
+            proposed_edges = [
                 {
                     "edge_id": r["edge_id"],
                     "type": r["type"],
                     "source_node_id": r["source_node_id"],
                     "target_node_id": r["target_node_id"],
                 }
-            )
-        # Note: if pass_id + min_quality filtered out some findings, we still
-        # promote their proposed edges since edges are pass-scoped, not
-        # finding-scoped in the query above. Re-filter to only planned findings.
-        if min_quality is not None:
-            # Re-fetch edges only for planned findings
-            proposed_edges = []
-            for f in findings:
-                fe_rows = await memgraph_client.execute_query(
-                    _FETCH_PROPOSED_EDGES_BY_FINDING, {"finding_id": f["finding_id"]}
-                )
-                proposed_edges.extend(
-                    {
-                        "edge_id": r["edge_id"],
-                        "type": r["type"],
-                        "source_node_id": r["source_node_id"],
-                        "target_node_id": r["target_node_id"],
-                    }
-                    for r in fe_rows
-                )
-            _ = finding_ids  # suppress unused-variable warning
+                for r in edge_rows
+            ]
 
     return PromotionPlan(findings=findings, proposed_edges=proposed_edges)
 
@@ -262,16 +262,24 @@ async def execute_promotion(
     result = PromotionResult()
 
     async with memgraph_client.transaction() as tx:
-        # Promote findings
-        for f in plan.findings:
-            row = await tx.run(_PROMOTE_FINDING, id=f["finding_id"])
-            record = await row.single()
-            if record is not None:
-                result.findings_promoted += 1
-            else:
-                result.errors.append(f"finding {f['finding_id']} not found or already published")
+        # Promote findings: single UNWIND replaces N per-finding round-trips.
+        if plan.findings:
+            finding_ids = [f["finding_id"] for f in plan.findings]
+            rows = await tx.run(_PROMOTE_FINDINGS_BATCH, ids=finding_ids)
+            promoted_ids: set[str] = set()
+            async for record in rows:
+                promoted_ids.add(record["id"])
+            result.findings_promoted = len(promoted_ids)
+            for fid in finding_ids:
+                if fid not in promoted_ids:
+                    result.errors.append(
+                        f"finding {fid} not found or already published"
+                    )
 
-        # Promote proposed edges via 9-way dispatch
+        # Promote proposed edges via 9-way type dispatch, one UNWIND per type.
+        # Group edges by relationship type first so valid and invalid types are
+        # separated before touching the graph.
+        edges_by_type: dict[RelationshipType, list[str]] = {}
         for edge in plan.proposed_edges:
             edge_type_str = edge["type"]
             try:
@@ -281,15 +289,20 @@ async def execute_promotion(
                     f"edge {edge['edge_id']}: unknown relationship type {edge_type_str!r}"
                 )
                 continue
+            edges_by_type.setdefault(rel_type, []).append(edge["edge_id"])
 
-            cypher = PROMOTE_CYPHER_BY_TYPE[rel_type]
-            row = await tx.run(cypher, id=edge["edge_id"])
-            record = await row.single()
-            if record is not None:
-                result.edges_promoted += 1
-            else:
+        for rel_type, edge_ids in edges_by_type.items():
+            cypher = PROMOTE_EDGE_BATCH_CYPHER_BY_TYPE[rel_type]
+            rows = await tx.run(cypher, ids=edge_ids)
+            promoted_count = 0
+            async for _ in rows:
+                promoted_count += 1
+            result.edges_promoted += promoted_count
+            if promoted_count < len(edge_ids):
+                missing = len(edge_ids) - promoted_count
                 result.errors.append(
-                    f"edge {edge['edge_id']} ({edge_type_str}): source/target nodes not found"
+                    f"{missing} edge(s) of type {rel_type.value!r}: "
+                    "source/target nodes not found or edge already promoted"
                 )
 
     return result

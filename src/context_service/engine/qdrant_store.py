@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
@@ -23,6 +24,7 @@ from qdrant_client.models import (
 from qdrant_client.models import Filter as QdrantFilter
 
 from context_service.config.logging import get_logger
+from context_service.stores.qdrant import QdrantOperationError
 
 if TYPE_CHECKING:
     import uuid
@@ -66,6 +68,7 @@ class EngineQdrantStore:
         self._qdrant = qdrant_client
         self._ensured_collections: set[str] = set()
         self._hybrid = hybrid
+        self._ensure_lock: asyncio.Lock = asyncio.Lock()
 
     async def close(self) -> None:
         """Release the underlying Qdrant client connection."""
@@ -76,54 +79,67 @@ class EngineQdrantStore:
 
     async def _ensure_collection(self, silo_id: str) -> str:
         name = self._collection_name(silo_id)
-        if name not in self._ensured_collections:
-            client = await self._qdrant._get_client()
-            collections = await client.get_collections()
-            existing = {c.name for c in collections.collections}
-            if name in existing and self._hybrid:
-                logger.warning(
-                    f"Collection {name} exists; if created without hybrid mode, "
-                    f"named-vector upserts will fail. Recreate to enable hybrid."
-                )
-            if name not in existing:
-                if self._hybrid:
-                    await client.create_collection(
-                        collection_name=name,
-                        vectors_config={
-                            self.DENSE_VECTOR_NAME: VectorParams(
+        if name in self._ensured_collections:
+            return name
+        async with self._ensure_lock:
+            # Double-checked locking: another coroutine may have created it while we waited.
+            if name in self._ensured_collections:
+                return name
+            try:
+                client = await self._qdrant._get_client()
+                collections = await client.get_collections()
+                existing = {c.name for c in collections.collections}
+                if name in existing and self._hybrid:
+                    logger.warning(
+                        f"Collection {name} exists; if created without hybrid mode, "
+                        f"named-vector upserts will fail. Recreate to enable hybrid."
+                    )
+                if name not in existing:
+                    if self._hybrid:
+                        await client.create_collection(
+                            collection_name=name,
+                            vectors_config={
+                                self.DENSE_VECTOR_NAME: VectorParams(
+                                    size=self._qdrant._vector_size,
+                                    distance=Distance.COSINE,
+                                ),
+                            },
+                            sparse_vectors_config={
+                                self.SPARSE_VECTOR_NAME: SparseVectorParams(),
+                            },
+                        )
+                    else:
+                        await client.create_collection(
+                            collection_name=name,
+                            vectors_config=VectorParams(
                                 size=self._qdrant._vector_size,
                                 distance=Distance.COSINE,
                             ),
-                        },
-                        sparse_vectors_config={
-                            self.SPARSE_VECTOR_NAME: SparseVectorParams(),
-                        },
-                    )
-                else:
-                    await client.create_collection(
-                        collection_name=name,
-                        vectors_config=VectorParams(
-                            size=self._qdrant._vector_size,
-                            distance=Distance.COSINE,
-                        ),
-                    )
-                try:
-                    await client.create_payload_index(
-                        collection_name=name,
-                        field_name="expansion",
-                        field_schema=PayloadSchemaType.TEXT,
-                    )
-                except (UnexpectedResponse, ConnectionError) as e:
-                    logger.error(
-                        "Failed to create payload index; deleting collection to avoid partial state",
-                        collection=name,
-                        error=str(e),
-                    )
-                    with contextlib.suppress(Exception):
-                        await client.delete_collection(name)
-                    raise
-                logger.info(f"Created Qdrant collection: {name} (hybrid={self._hybrid})")
-            self._ensured_collections.add(name)
+                        )
+                    try:
+                        await client.create_payload_index(
+                            collection_name=name,
+                            field_name="expansion",
+                            field_schema=PayloadSchemaType.TEXT,
+                        )
+                    except (UnexpectedResponse, ConnectionError) as e:
+                        logger.error(
+                            "Failed to create payload index; deleting collection to avoid partial state",
+                            collection=name,
+                            error=str(e),
+                        )
+                        with contextlib.suppress(Exception):
+                            await client.delete_collection(name)
+                        raise QdrantOperationError(
+                            f"Failed to create payload index for collection {name}: {e}"
+                        ) from e
+                    logger.info(f"Created Qdrant collection: {name} (hybrid={self._hybrid})")
+                self._ensured_collections.add(name)
+            except QdrantOperationError:
+                raise
+            except Exception as e:
+                logger.error("Failed to ensure Qdrant collection", collection=name, error=str(e))
+                raise QdrantOperationError(f"Failed to ensure collection {name}: {e}") from e
         return name
 
     async def upsert(
@@ -223,7 +239,11 @@ class EngineQdrantStore:
             else:
                 points.append(PointStruct(id=str(node_id), vector=vector, payload=payload))
 
-        await client.upsert(collection_name=collection, points=points)
+        try:
+            await client.upsert(collection_name=collection, points=points)
+        except Exception as e:
+            logger.error("Qdrant batch_upsert failed", silo_id=silo_id, count=len(points), error=str(e))
+            raise QdrantOperationError(f"Failed to batch upsert vectors: {e}") from e
 
     async def query(
         self,
@@ -277,54 +297,60 @@ class EngineQdrantStore:
             )
             effective_mode = "dense"
 
-        if effective_mode == "dense":
-            response = await client.query_points(
-                collection_name=collection,
-                query=vector,
-                using=self.DENSE_VECTOR_NAME if self._hybrid else None,
-                query_filter=query_filter,
-                limit=limit,
-                score_threshold=score_threshold,
-            )
-        elif effective_mode == "sparse":
-            if not has_sparse:
-                raise ValueError("sparse_indices and sparse_values are required for sparse mode")
-            response = await client.query_points(
-                collection_name=collection,
-                query=SparseVector(
-                    indices=sparse_indices,  # type: ignore[arg-type]
-                    values=sparse_values,  # type: ignore[arg-type]
-                ),
-                using=self.SPARSE_VECTOR_NAME,
-                query_filter=query_filter,
-                limit=limit,
-                score_threshold=score_threshold,
-            )
-        else:
-            # Hybrid: RRF fusion over dense + sparse prefetch legs.
-            response = await client.query_points(
-                collection_name=collection,
-                prefetch=[
-                    Prefetch(
-                        query=vector,
-                        using=self.DENSE_VECTOR_NAME,
-                        filter=query_filter,
-                        limit=limit * 2,
+        try:
+            if effective_mode == "dense":
+                response = await client.query_points(
+                    collection_name=collection,
+                    query=vector,
+                    using=self.DENSE_VECTOR_NAME if self._hybrid else None,
+                    query_filter=query_filter,
+                    limit=limit,
+                    score_threshold=score_threshold,
+                )
+            elif effective_mode == "sparse":
+                if not has_sparse:
+                    raise ValueError("sparse_indices and sparse_values are required for sparse mode")
+                response = await client.query_points(
+                    collection_name=collection,
+                    query=SparseVector(
+                        indices=sparse_indices,  # type: ignore[arg-type]
+                        values=sparse_values,  # type: ignore[arg-type]
                     ),
-                    Prefetch(
-                        query=SparseVector(
-                            indices=sparse_indices,  # type: ignore[arg-type]
-                            values=sparse_values,  # type: ignore[arg-type]
+                    using=self.SPARSE_VECTOR_NAME,
+                    query_filter=query_filter,
+                    limit=limit,
+                    score_threshold=score_threshold,
+                )
+            else:
+                # Hybrid: RRF fusion over dense + sparse prefetch legs.
+                response = await client.query_points(
+                    collection_name=collection,
+                    prefetch=[
+                        Prefetch(
+                            query=vector,
+                            using=self.DENSE_VECTOR_NAME,
+                            filter=query_filter,
+                            limit=limit * 2,
                         ),
-                        using=self.SPARSE_VECTOR_NAME,
-                        filter=query_filter,
-                        limit=limit * 2,
-                    ),
-                ],
-                query=FusionQuery(fusion=Fusion.RRF),
-                limit=limit,
-                score_threshold=score_threshold,
-            )
+                        Prefetch(
+                            query=SparseVector(
+                                indices=sparse_indices,  # type: ignore[arg-type]
+                                values=sparse_values,  # type: ignore[arg-type]
+                            ),
+                            using=self.SPARSE_VECTOR_NAME,
+                            filter=query_filter,
+                            limit=limit * 2,
+                        ),
+                    ],
+                    query=FusionQuery(fusion=Fusion.RRF),
+                    limit=limit,
+                    score_threshold=score_threshold,
+                )
+        except QdrantOperationError:
+            raise
+        except Exception as e:
+            logger.error("Qdrant query failed", silo_id=silo_id, mode=effective_mode, error=str(e))
+            raise QdrantOperationError(f"Failed to query vectors: {e}") from e
 
         return [
             VectorSearchResult(
@@ -341,16 +367,24 @@ class EngineQdrantStore:
         client = await self._qdrant._get_client()
         from qdrant_client.models import PointIdsList
 
-        await client.delete(
-            collection_name=collection,
-            points_selector=PointIdsList(points=[str(node_id)]),
-        )
+        try:
+            await client.delete(
+                collection_name=collection,
+                points_selector=PointIdsList(points=[str(node_id)]),
+            )
+        except Exception as e:
+            logger.error("Qdrant delete failed", node_id=str(node_id), silo_id=silo_id, error=str(e))
+            raise QdrantOperationError(f"Failed to delete vector {node_id}: {e}") from e
 
     async def delete_collection(self, silo_id: str) -> None:
         """Delete entire tenant collection (for GDPR erasure)."""
         name = self._collection_name(silo_id)
         client = await self._qdrant._get_client()
-        await client.delete_collection(name)
+        try:
+            await client.delete_collection(name)
+        except Exception as e:
+            logger.error("Qdrant delete_collection failed", collection=name, error=str(e))
+            raise QdrantOperationError(f"Failed to delete collection {name}: {e}") from e
         self._ensured_collections.discard(name)
         logger.info(f"Deleted Qdrant collection: {name}")
 
@@ -400,7 +434,11 @@ class EngineQdrantStore:
                 "silo_id": silo_id,
             },
         )
-        await client.upsert(collection_name=collection, points=[point])
+        try:
+            await client.upsert(collection_name=collection, points=[point])
+        except Exception as e:
+            logger.error("Qdrant upsert_cluster_embedding failed", cluster_id=cluster_id, silo_id=silo_id, error=str(e))
+            raise QdrantOperationError(f"Failed to upsert cluster embedding {cluster_id}: {e}") from e
 
     async def batch_upsert_cluster_embeddings(
         self,
@@ -428,7 +466,11 @@ class EngineQdrantStore:
             )
             for item in items
         ]
-        await client.upsert(collection_name=collection, points=points)
+        try:
+            await client.upsert(collection_name=collection, points=points)
+        except Exception as e:
+            logger.error("Qdrant batch_upsert_cluster_embeddings failed", silo_id=silo_id, count=len(points), error=str(e))
+            raise QdrantOperationError(f"Failed to batch upsert cluster embeddings: {e}") from e
         return len(points)
 
     async def search_clusters(

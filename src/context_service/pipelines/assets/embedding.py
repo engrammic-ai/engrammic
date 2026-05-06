@@ -115,7 +115,7 @@ def embedding_asset(
 
         # qdrant_store() creates a dedicated StoreQdrantClient/EngineQdrantStore
         # pair for this asset run. Close it in `finally` to avoid handle leaks.
-        engine_qdrant = qdrant.qdrant_store(vector_size=embed_svc.dimensions)
+        engine_qdrant = qdrant.qdrant_store()
 
         try:
             nodes_processed = 0

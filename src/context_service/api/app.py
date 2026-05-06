@@ -127,21 +127,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         embedding_cache = EmbeddingCache(redis_client)
         embedding_service: EmbeddingService | None = None
-        if settings.litellm_embedding_model:
+        try:
+            from context_service.config.config_loader import load_config
             from context_service.embeddings import build_embedding_service
 
-            embedding_service = build_embedding_service(
-                "litellm", settings, embedding_cache
-            )
+            embed_config = load_config("embeddings")
+            embedding_service = build_embedding_service(embedding_cache)
             logger.info(
                 "embedding_service_configured",
                 provider="LiteLLMEmbeddingService",
-                model=settings.litellm_embedding_model,
+                model=embed_config["model"],
             )
-        else:
+        except FileNotFoundError:
             logger.warning(
                 "embedding_service_unconfigured",
-                hint="set litellm_embedding_model to enable semantic search",
+                hint="create config/embeddings.yaml to enable semantic search",
             )
 
         splade_encoder = None

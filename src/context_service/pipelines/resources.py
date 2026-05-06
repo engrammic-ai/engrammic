@@ -46,10 +46,10 @@ def _build_llm_provider(provider: str, model: str | None) -> LLMProvider:
     return build_llm_provider(provider, model)
 
 
-def _build_embedding_service(provider: str) -> EmbeddingService:
+def _build_embedding_service() -> EmbeddingService:
     from context_service.embeddings import build_embedding_service
 
-    return build_embedding_service(provider)
+    return build_embedding_service()
 
 
 class MemgraphResource(dg.ConfigurableResource):  # type: ignore[type-arg]
@@ -142,20 +142,22 @@ class QdrantResource(dg.ConfigurableResource):  # type: ignore[type-arg]
             )
         return self._client
 
-    def qdrant_store(self, vector_size: int = 768) -> EngineQdrantStore:
+    def qdrant_store(self) -> EngineQdrantStore:
         """Return an EngineQdrantStore backed by the resource's Qdrant config.
 
         Asset bodies should call this rather than importing EngineQdrantStore
         directly, keeping concrete store construction out of pipeline assets.
         The caller is responsible for closing the underlying client when done.
         """
+        from context_service.config.config_loader import load_config
         from context_service.engine.qdrant_store import EngineQdrantStore
         from context_service.stores.qdrant import QdrantClient as StoreQdrantClient
 
+        dimensions = load_config("embeddings")["dimensions"]
         store_client = StoreQdrantClient(
             url=self.url,
             api_key=self.api_key if self.api_key else None,
-            vector_size=vector_size,
+            vector_size=dimensions,
         )
         return EngineQdrantStore(store_client)
 
@@ -192,18 +194,13 @@ class LLMResource(dg.ConfigurableResource):  # type: ignore[type-arg]
 
 
 class EmbeddingResource(dg.ConfigurableResource):  # type: ignore[type-arg]
-    """Dispatches to an EmbeddingService implementation based on `provider`.
-
-    Supported values: "jina", "vertex".
-    """
-
-    provider: str = "jina"
+    """Loads EmbeddingService from config/embeddings.yaml."""
 
     _service: EmbeddingService | None = PrivateAttr(default=None)
 
     def get_client(self) -> EmbeddingService:
         if self._service is None:
-            self._service = _build_embedding_service(self.provider)
+            self._service = _build_embedding_service()
         return self._service
 
     def teardown_after_execution(self, _context: dg.InitResourceContext) -> None:
@@ -237,7 +234,7 @@ def build_default_resources() -> dict[str, dg.ConfigurableResource]:  # type: ig
             api_key=qdrant_api_key,
         ),
         "llm": LLMResource(provider=_infer_llm_provider(settings.default_llm_model)),
-        "embedding": EmbeddingResource(provider="jina" if settings.jina_api_key else "vertex"),
+        "embedding": EmbeddingResource(),
     }
 
 

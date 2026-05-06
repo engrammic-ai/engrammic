@@ -35,7 +35,7 @@ def _resources() -> dict[str, dg.ConfigurableResource]:  # type: ignore[type-arg
     return {
         "memgraph": MemgraphResource(uri="bolt://fake:7687"),
         "qdrant": QdrantResource(url="http://fake:6333"),
-        "embedding": EmbeddingResource(provider="jina"),
+        "embedding": EmbeddingResource(),
     }
 
 

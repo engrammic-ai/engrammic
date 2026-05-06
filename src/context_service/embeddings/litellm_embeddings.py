@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING
 
 import litellm
 
+from context_service.config.config_loader import load_config
 from context_service.config.logging import get_logger
 
 if TYPE_CHECKING:
     from context_service.cache.embedding_cache import EmbeddingCache
-    from context_service.config.settings import Settings
 
 logger = get_logger(__name__)
 
@@ -34,7 +34,7 @@ class LiteLLMEmbeddingService:
         self,
         model: str,
         dimensions: int = 768,
-        _embedding_cache: "EmbeddingCache | None" = None,
+        _embedding_cache: EmbeddingCache | None = None,
     ) -> None:
         """Initialize the LiteLLM embedding service.
 
@@ -52,23 +52,22 @@ class LiteLLMEmbeddingService:
         return self._dimensions
 
     @classmethod
-    def from_settings(
+    def from_config(
         cls,
-        settings: "Settings",
-        _embedding_cache: "EmbeddingCache | None" = None,
-    ) -> "LiteLLMEmbeddingService":
-        """Create a LiteLLMEmbeddingService from application settings.
+        _embedding_cache: EmbeddingCache | None = None,
+    ) -> LiteLLMEmbeddingService:
+        """Create a LiteLLMEmbeddingService from config/embeddings.yaml.
 
         Args:
-            settings: Application settings instance.
             _embedding_cache: Optional Redis-backed embedding cache.
 
         Returns:
             Configured LiteLLMEmbeddingService.
         """
+        config = load_config("embeddings")
         return cls(
-            model=settings.litellm_embedding_model,
-            dimensions=settings.embedding_dimensions,
+            model=config["model"],
+            dimensions=config["dimensions"],
             _embedding_cache=_embedding_cache,
         )
 
@@ -112,7 +111,7 @@ class LiteLLMEmbeddingService:
             embeddings = await self._embed_batch(uncached_texts)
 
             # Store in cache and merge results
-            for idx, (text, embedding) in enumerate(zip(uncached_texts, embeddings)):
+            for idx, (text, embedding) in enumerate(zip(uncached_texts, embeddings, strict=True)):
                 await self._embedding_cache.set(text, task, embedding)
                 cached_results[uncached_indices[idx]] = embedding
 
@@ -133,7 +132,9 @@ class LiteLLMEmbeddingService:
             LiteLLMEmbeddingError: If embedding generation fails.
         """
         try:
-            response = await litellm.aembedding(model=self._model, input=texts)
+            response = await litellm.aembedding(
+                model=self._model, input=texts, dimensions=self._dimensions
+            )
             return [item["embedding"] for item in response.data]
         except Exception as e:
             logger.error("LiteLLM embedding failed", error=str(e), model=self._model)

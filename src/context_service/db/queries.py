@@ -224,23 +224,6 @@ RETURN count(n) as updated
 # legacy query wrote a spec-illegal edge shape. The Claim-mediated path lives
 # in ATTACH_CLAIM_TO_PASSAGE + UPSERT_ENTITY_MENTION below.
 
-UPSERT_CLAIM = """
-MERGE (c:Claim {id: $claim_id, silo_id: $silo_id})
-ON CREATE SET
-    c.fingerprint = $fingerprint,
-    c.subject = $subject,
-    c.predicate = $predicate,
-    c.object = $object,
-    c.valid_from = $valid_from,
-    c.valid_to = $valid_to,
-    c.source_doc_id = $source_doc_id,
-    c.source_passage_id = $source_passage_id,
-    c.confidence = $confidence,
-    c.created_at = $created_at,
-    c.committed = true
-RETURN c.id AS id
-"""
-
 ATTACH_CLAIM_TO_PASSAGE = """
 MATCH (ps:Passage {id: $passage_id, silo_id: $silo_id})
 MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
@@ -317,35 +300,6 @@ RETURN count(*) as created
 """
 
 
-# Cluster retrieval channel queries
-
-GET_CLUSTER_MEMBER_IDS = f"""
-MATCH (n)-[r:MEMBER_OF]->(c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
-WHERE {content_union_predicate("n")} AND coalesce(n.stale, false) = false AND n.committed = true
-RETURN n.id AS node_id, n.silo_id AS silo_id, toLower(head(labels(n))) AS node_type, r.weight AS weight
-ORDER BY r.weight DESC
-LIMIT $limit
-"""
-
-SEARCH_CLUSTERS_BY_KEYWORDS = """
-MATCH (c:Cluster {silo_id: $silo_id})
-WHERE c.summary IS NOT NULL
-  AND ($level IS NULL OR c.level = $level)
-  AND ANY(token IN $tokens WHERE toLower(c.summary) CONTAINS token)
-RETURN c.id AS id, c.level AS level, c.summary AS summary, c.node_count AS node_count
-ORDER BY c.node_count DESC
-LIMIT $limit
-"""
-
-# Entity queries with qualified_name support
-FIND_ENTITY_BY_QUALIFIED_NAME = """
-MATCH (e:Entity {silo_id: $silo_id})
-WHERE (toLower(e.name) = toLower($name)
-   OR ($qualified_name IS NOT NULL AND toLower(e.qualified_name) = toLower($qualified_name)))
-  AND e.tombstoned_at IS NULL
-RETURN e
-"""
-
 # Batch find-or-create entities in a single round trip.
 #
 # Each row in $entities carries: name, name_lower, qualified_name,
@@ -400,15 +354,9 @@ RETURN n.id AS node_id,
 # Agent node queries (v1.5 phase 5a)
 # ---------------------------------------------------------------------------
 
-# Edge type constant for agent lineage.
-EDGE_SPAWNED_BY = "SPAWNED_BY"
-
 # ---------------------------------------------------------------------------
 # Chain handoff queries (v1.5 phase 5c)
 # ---------------------------------------------------------------------------
-
-# Edge type constant for reasoning chain continuation.
-EDGE_CONTINUES = "CONTINUES"
 
 # Validate that a :ReasoningChain exists in the same silo before writing a
 # CONTINUES edge.  Returns the chain id if found.
@@ -456,16 +404,6 @@ MATCH (child:Agent {agent_id: $child_agent_id, silo_id: $silo_id})
 MATCH (parent:Agent {agent_id: $parent_agent_id, silo_id: $silo_id})
 MERGE (child)-[r:SPAWNED_BY {created_at: $created_at}]->(parent)
 RETURN child.agent_id AS child_id, parent.agent_id AS parent_id
-"""
-
-# Walk SPAWNED_BY lineage up to 3 hops (max lineage depth constraint).
-GET_AGENT_LINEAGE = """
-MATCH path = (a:Agent {agent_id: $agent_id, silo_id: $silo_id})-[:SPAWNED_BY*0..3]->(ancestor:Agent)
-WHERE ancestor.silo_id = $silo_id
-RETURN ancestor.agent_id AS agent_id, ancestor.role AS role,
-       ancestor.lineage_root_id AS lineage_root_id,
-       length(path) AS depth
-ORDER BY depth ASC
 """
 
 # Health check query
@@ -536,22 +474,6 @@ GET_META_OBSERVATION_DEPTHS = """
 MATCH (obs:MetaObservation {silo_id: $silo_id})
 WHERE obs.id IN $target_ids AND obs.tombstoned_at IS NULL
 RETURN obs.id AS id, coalesce(obs.reflection_depth, 1) AS reflection_depth
-"""
-
-# Get reflections at a specific depth
-GET_REFLECTIONS_AT_DEPTH = """
-MATCH (obs:MetaObservation {silo_id: $silo_id})
-WHERE coalesce(obs.reflection_depth, 1) = $depth AND obs.tombstoned_at IS NULL
-RETURN
-    obs.id AS node_id,
-    obs.content AS content,
-    obs.observation_type AS observation_type,
-    obs.confidence AS confidence,
-    obs.agent_id AS agent_id,
-    obs.reflection_depth AS reflection_depth,
-    obs.created_at AS created_at
-ORDER BY obs.created_at DESC
-LIMIT $limit
 """
 
 BELIEF_HISTORY_CURRENT = """
