@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 from context_service.api.metrics import CONTEXT_GET_LATENCY
@@ -41,10 +42,52 @@ async def _context_get(
         Dictionary with 'nodes' list containing node data.
     """
     if as_of is not None:
-        return {
-            "error": "as_of_not_supported",
-            "message": "Point-in-time retrieval is not yet implemented",
-        }
+        # Parse and normalize to UTC
+        try:
+            parsed = datetime.fromisoformat(as_of.replace("Z", "+00:00"))
+            as_of_dt = parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=UTC)
+        except ValueError:
+            return {
+                "error": "invalid_as_of_format",
+                "message": "as_of must be an ISO 8601 datetime string (e.g. 2026-04-01T00:00:00Z)",
+            }
+
+        _start = time.perf_counter()
+        auth = await get_mcp_auth_context()
+        ctx_svc = get_context_service()
+
+        if isinstance(node_ids, str):
+            node_ids = [node_ids]
+
+        if silo_id is not None:
+            err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+            if err is not None:
+                return err
+            try:
+                resolved_silo_id = uuid.UUID(silo_id)
+            except ValueError:
+                return {"error": "invalid_silo_id", "silo_id": silo_id}
+        else:
+            resolved_silo_id = derive_silo_id(auth.org_id)
+
+        # Parse node IDs
+        node_uuids: list[uuid.UUID] = []
+        invalid_ids: list[dict[str, Any]] = []
+        for nid in node_ids:
+            try:
+                node_uuids.append(uuid.UUID(nid))
+            except ValueError:
+                invalid_ids.append({"error": "invalid_node_id", "node_id": nid})
+
+        if not node_uuids:
+            CONTEXT_GET_LATENCY.observe(time.perf_counter() - _start)
+            return {"nodes": invalid_ids}
+
+        temporal_results = await ctx_svc.get_temporal(node_uuids, resolved_silo_id, as_of_dt)
+        nodes_out = invalid_ids + temporal_results
+
+        CONTEXT_GET_LATENCY.observe(time.perf_counter() - _start)
+        return {"nodes": nodes_out}
 
     _start = time.perf_counter()
     auth = await get_mcp_auth_context()
