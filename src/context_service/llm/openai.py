@@ -125,12 +125,13 @@ class OpenAIProvider(LLMProvider):
         *,
         temperature: float | None = None,
         timeout: float | None = None,
-        max_tokens: int = 4096,  # noqa: ARG002
+        max_tokens: int = 4096,
     ) -> tuple[str, Usage]:
         client = await self._get_client()
         payload: dict[str, Any] = {
             "model": self._model,
             "messages": messages,
+            "max_tokens": max_tokens,
         }
         if temperature is not None:
             payload["temperature"] = temperature
@@ -159,6 +160,9 @@ class OpenAIProvider(LLMProvider):
         content = message.get("content")
         if content is None:
             raise OpenAIError("No content in response message")
+        finish_reason = choices[0].get("finish_reason")
+        if finish_reason == "length":
+            logger.warning("openai_output_truncated", model=self._model, max_tokens=max_tokens)
         usage = self._extract_usage(data)
         logger.debug("OpenAI completion", model=self._model, wall_ms=wall_ms)
         return str(content), usage
@@ -169,12 +173,13 @@ class OpenAIProvider(LLMProvider):
         schema: dict[str, Any],
         *,
         timeout: float | None = None,
-        max_tokens: int = 4096,  # noqa: ARG002
+        max_tokens: int = 4096,
     ) -> tuple[dict[str, Any], Usage]:
         client = await self._get_client()
         payload = {
             "model": self._model,
             "messages": messages,
+            "max_tokens": max_tokens,
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {

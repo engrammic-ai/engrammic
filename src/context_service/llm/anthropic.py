@@ -180,6 +180,9 @@ class AnthropicProvider(LLMProvider):
             )
         text_parts = [block["text"] for block in content_blocks if block.get("type") == "text"]
         usage = self._extract_usage(data)
+        stop_reason = data.get("stop_reason")
+        if stop_reason == "max_tokens":
+            logger.warning("anthropic_output_truncated", model=self._model, max_tokens=max_tokens)
         logger.debug("Anthropic completion", model=self._model, wall_ms=wall_ms)
         return "".join(text_parts), usage
 

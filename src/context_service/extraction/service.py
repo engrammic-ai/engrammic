@@ -112,7 +112,7 @@ class ExtractionService:
 
         try:
             raw, usage = await with_llm_limit(
-                self._llm.extract_structured(messages, EXTRACTION_SCHEMA, timeout=90.0)
+                self._llm.extract_structured(messages, EXTRACTION_SCHEMA, timeout=90.0, max_tokens=8192)
             )
         except Exception as e:
             logger.error(f"LLM extraction failed: {truncate(str(e))}", exc_info=True)

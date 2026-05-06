@@ -175,7 +175,13 @@ def detect_structured_supersession(
 
 
 class _LLMClient(Protocol):
-    async def complete(self, prompt: str, *, temperature: float | None = None) -> str: ...
+    async def complete(
+        self,
+        prompt: str,
+        *,
+        temperature: float | None = None,
+        max_tokens: int = 4096,
+    ) -> tuple[str, Any]: ...
 
 
 # Supersession runs with temperature=0 so the same cluster+prompt produces the
@@ -244,7 +250,7 @@ async def run_supersession_pass(
         ]
         prompt = build_supersession_prompt(prompt_input)
         try:
-            raw = await llm.complete(prompt, temperature=_SUPERSESSION_TEMPERATURE)
+            raw, _usage = await llm.complete(prompt, temperature=_SUPERSESSION_TEMPERATURE, max_tokens=2048)
             llm_pairs = parse_supersession_response(raw)
         except Exception as exc:
             logger.warning(

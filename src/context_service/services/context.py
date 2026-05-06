@@ -1180,7 +1180,7 @@ class ContextService:
         filters: Any | None = None,
         top_k: int = 10,
         include_superseded: bool = False,
-        as_of: datetime | None = None,  # noqa: ARG002
+        as_of: datetime | None = None,
         search_mode: Literal["hybrid", "dense", "sparse"] = "hybrid",
     ) -> list[QueryResult]:
         """Semantic search with layer filtering.
@@ -1277,6 +1277,18 @@ class ContextService:
 
             if not include_superseded and props.get("superseded_by"):
                 continue
+
+            if as_of is not None:
+                valid_from = props.get("valid_from")
+                valid_to = props.get("valid_to")
+                if valid_from is not None:
+                    vf = valid_from if isinstance(valid_from, datetime) else datetime.fromisoformat(str(valid_from))
+                    if vf > as_of:
+                        continue
+                if valid_to is not None:
+                    vt = valid_to if isinstance(valid_to, datetime) else datetime.fromisoformat(str(valid_to))
+                    if vt <= as_of:
+                        continue
 
             relevance = score_map[node_id_str]
             if freshness_weight > 0 and node.created_at is not None:

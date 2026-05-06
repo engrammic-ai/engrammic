@@ -151,7 +151,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if settings.hybrid_search_enabled:
             from context_service.embeddings.splade import SpladeEncoder
 
-            splade_encoder = SpladeEncoder()
+            splade_encoder = SpladeEncoder(model_name=settings.embedding.splade.model)
             logger.info("splade_encoder_configured")
 
         from context_service.engine.memgraph_store import MemgraphStore

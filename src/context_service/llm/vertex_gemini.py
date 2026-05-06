@@ -192,6 +192,7 @@ class VertexGeminiProvider(LLMProvider):
         structured: bool,
         schema: dict[str, Any] | None = None,
         temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> dict[str, Any]:
         contents, system_instruction = self._convert_messages(messages)
         payload: dict[str, Any] = {"contents": contents}
@@ -204,6 +205,8 @@ class VertexGeminiProvider(LLMProvider):
                 gen_config["responseSchema"] = _to_gemini_schema(schema)
         if temperature is not None:
             gen_config["temperature"] = temperature
+        if max_tokens is not None:
+            gen_config["maxOutputTokens"] = max_tokens
         if gen_config:
             payload["generationConfig"] = gen_config
         return payload
@@ -301,14 +304,17 @@ class VertexGeminiProvider(LLMProvider):
         *,
         temperature: float | None = None,
         timeout: float | None = None,
-        max_tokens: int = 4096,  # noqa: ARG002
+        max_tokens: int = 4096,
     ) -> tuple[str, Usage]:
         client = await self._get_client()
-        payload = self._build_payload(messages, structured=False, temperature=temperature)
+        payload = self._build_payload(messages, structured=False, temperature=temperature, max_tokens=max_tokens)
         start = time.monotonic()
         response = await self._post_with_retry(client, payload, timeout=timeout)
         wall_ms = int((time.monotonic() - start) * 1000)
         data = response.json()
+        candidates = data.get("candidates", [])
+        if candidates and candidates[0].get("finishReason") == "MAX_TOKENS":
+            logger.warning("vertex_gemini_output_truncated", model=self._model, max_tokens=max_tokens)
         usage = self._extract_usage(data)
         logger.debug("VertexGemini completion", model=self._model, wall_ms=wall_ms)
         return self._extract_text(data), usage
@@ -319,14 +325,17 @@ class VertexGeminiProvider(LLMProvider):
         schema: dict[str, Any],
         *,
         timeout: float | None = None,
-        max_tokens: int = 4096,  # noqa: ARG002
+        max_tokens: int = 4096,
     ) -> tuple[dict[str, Any], Usage]:
         client = await self._get_client()
-        payload = self._build_payload(messages, structured=True, schema=schema)
+        payload = self._build_payload(messages, structured=True, schema=schema, max_tokens=max_tokens)
         start = time.monotonic()
         response = await self._post_with_retry(client, payload, timeout=timeout)
         wall_ms = int((time.monotonic() - start) * 1000)
         data = response.json()
+        candidates = data.get("candidates", [])
+        if candidates and candidates[0].get("finishReason") == "MAX_TOKENS":
+            logger.warning("vertex_gemini_output_truncated", model=self._model, max_tokens=max_tokens)
         text = self._extract_text(data)
         result: dict[str, Any] = robust_json_loads(text)
         usage = self._extract_usage(data)
