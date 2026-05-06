@@ -1272,8 +1272,9 @@ WITH wb, cm, collect(DISTINCT existing) AS to_supersede
 MATCH (wb)-[:ABOUT]->(n)
 CREATE (cm)-[:ABOUT]->(n)
 WITH cm, to_supersede
-UNWIND to_supersede AS old
-CREATE (cm)-[:SUPERSEDES {reason: $reason, created_at: $created_at}]->(old)
-SET old.valid_to = $valid_from
+FOREACH (old IN to_supersede |
+    CREATE (cm)-[:SUPERSEDES {reason: $reason, created_at: $created_at}]->(old)
+    SET old.valid_to = $valid_from
+)
 RETURN cm.id AS commitment_id
 """
