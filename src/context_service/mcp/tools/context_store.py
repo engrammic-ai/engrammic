@@ -768,7 +768,12 @@ def register(mcp: FastMCP) -> None:
             layer: Target layer: memory|knowledge|wisdom|intelligence|meta|belief.
             evidence: Evidence refs (node:<uuid> or URI). Required for knowledge layer.
             source_type: Source type for knowledge layer: document|user|external|agent.
-            confidence: 0.0-1.0, agent's confidence (default 0.8).
+            confidence: 0.0-1.0, agent's confidence (default 0.8). Guidelines:
+                0.95+ = near certain, verified from multiple sources
+                0.8-0.95 = confident, single reliable source or strong reasoning
+                0.6-0.8 = probable, reasonable inference with some uncertainty
+                0.4-0.6 = uncertain, plausible but unverified
+                <0.4 = speculative, weak evidence or tentative hypothesis
             about: Node IDs this content concerns. Required for wisdom, meta, and belief layers.
             reasoning: Reasoning behind a wisdom-layer belief.
             steps: Reasoning steps for intelligence layer. List of {step, reasoning, confidence?}.

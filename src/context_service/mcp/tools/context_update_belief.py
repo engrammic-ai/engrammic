@@ -75,7 +75,12 @@ def register(mcp: FastMCP) -> None:
 
         Args:
             belief_id: ID of the WorkingBelief to update.
-            confidence: New confidence score (0.0-1.0).
+            confidence: New confidence score (0.0-1.0). Guidelines:
+                0.95+ = near certain, verified from multiple sources
+                0.8-0.95 = confident, single reliable source or strong reasoning
+                0.6-0.8 = probable, reasonable inference with some uncertainty
+                0.4-0.6 = uncertain, plausible but unverified
+                <0.4 = speculative, weak evidence or tentative hypothesis
             reason: Human-readable reason for the update (audit trail only, not persisted).
             content: If provided, replaces the belief's content text.
             silo_id: UUID of the silo. Optional; defaults to the org's primary silo
