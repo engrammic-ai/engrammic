@@ -424,6 +424,32 @@ class TestTimeTravel:
         )
         assert "error" not in result
 
+    async def test_recall_as_of_before_node_created(self, mcp_client: Any) -> None:
+        """Query with as_of before node's valid_from returns not_yet_valid."""
+        # Store a node (will have valid_from = now)
+        store_result = await store(mcp_client, "memory", "future node content")
+        node_id = store_result["node_id"]
+
+        # Query with as_of in the past (before node existed)
+        past = "2020-01-01T00:00:00Z"
+        result = await recall(mcp_client, node_ids=[node_id], as_of=past)
+
+        assert "nodes" in result
+        assert len(result["nodes"]) == 1
+        node_result = result["nodes"][0]
+        assert node_result.get("error") == "not_yet_valid"
+        assert node_result.get("node_id") == node_id
+        assert "valid_from" in node_result
+
+    async def test_recall_as_of_invalid_format(self, mcp_client: Any) -> None:
+        """Invalid as_of format returns error."""
+        store_result = await store(mcp_client, "memory", "test content")
+        node_id = store_result["node_id"]
+
+        result = await recall(mcp_client, node_ids=[node_id], as_of="not-a-date")
+
+        assert result.get("error") == "invalid_as_of_format"
+
 
 # ---------------------------------------------------------------------------
 # 6. Error cases
