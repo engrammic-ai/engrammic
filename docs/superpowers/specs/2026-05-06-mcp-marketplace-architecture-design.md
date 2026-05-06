@@ -463,6 +463,8 @@ All isolation logic stays in context-service:
 - All queries scoped to silo_id
 - mcp-client never sees or interprets tenant data
 
+**Current policy: 1:1 org-to-silo.** Each organization gets exactly one silo. Multi-silo support is deferred.
+
 The silo_id derivation is a database lookup, not a deterministic transform:
 
 ```python
@@ -477,7 +479,7 @@ async def resolve_silo_id(org_id: str) -> str:
     return row["silo_id"]
 ```
 
-This prevents enumeration attacks since silo_id cannot be derived from org_id without database access.
+This prevents enumeration attacks since silo_id cannot be derived from org_id without database access. The DB lookup also allows future multi-silo support without API changes (mcp-client stays unchanged).
 
 ## OSS Engine (Deferred)
 

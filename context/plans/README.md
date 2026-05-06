@@ -13,10 +13,11 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 ## Active plans
 
-None currently active.
+| Plan | Status | Description |
+|------|--------|-------------|
+| [2026-05-06-mcp-client-scaffold.md](./2026-05-06-mcp-client-scaffold.md) | Active | MCP marketplace client repo scaffold |
 
 Next candidates:
-- OSS launch prep (primitives + engine open-source)
 - Clustering algorithm evaluation (spike)
 
 ## Spikes / drafts
