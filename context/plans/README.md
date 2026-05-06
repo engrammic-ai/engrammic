@@ -13,9 +13,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 ## Active plans
 
-| Plan | Status | Description |
-|------|--------|-------------|
-| [2026-05-06-as-of-node-ids.md](./2026-05-06-as-of-node-ids.md) | Ready | as_of time-travel for node_ids retrieval |
+None currently active.
 
 Next candidates:
 - OSS launch prep (primitives + engine open-source)
@@ -47,6 +45,7 @@ Next candidates:
 ## Archive
 
 Completed plans in `archive/`:
+- as_of time-travel for node_ids (2026-05-06)
 - v1.7 Auto-Tagging
 - v1.6 Hybrid Storage
 - v1.5 Agent Identity (5.0-5d)

@@ -10,6 +10,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import CursorResult
 
 from context_service.db.postgres import get_session
+from context_service.models.postgres.org import OrgPreferences, SiloConfig
 from context_service.models.postgres.reasoning import (
     OrphanedChains,
     ReasoningChainSteps,
@@ -19,10 +20,34 @@ from context_service.models.postgres.reasoning import (
 class PostgresStore:
     """Async repository for Postgres-backed hybrid storage."""
 
+    async def ensure_silo_config(self, silo_id: UUID, org_id: UUID, name: str = "default") -> None:
+        """Ensure OrgPreferences and SiloConfig exist for the given silo.
+
+        Uses INSERT ... ON CONFLICT DO NOTHING for idempotent creation.
+        """
+        async with get_session() as session:
+            org_stmt = insert(OrgPreferences).values(org_id=org_id)
+            org_stmt = org_stmt.on_conflict_do_nothing(index_elements=["org_id"])
+            await session.execute(org_stmt)
+
+            silo_stmt = insert(SiloConfig).values(
+                silo_id=silo_id,
+                org_id=org_id,
+                name=name,
+            )
+            silo_stmt = silo_stmt.on_conflict_do_nothing(index_elements=["silo_id"])
+            await session.execute(silo_stmt)
+
     async def upsert_chain_steps(
-        self, chain_id: UUID, silo_id: UUID, steps: list[dict[str, Any]]
+        self, chain_id: UUID, silo_id: UUID, steps: list[dict[str, Any]], org_id: UUID | None = None
     ) -> None:
-        """Upsert reasoning chain steps with ON CONFLICT UPDATE."""
+        """Upsert reasoning chain steps with ON CONFLICT UPDATE.
+
+        If org_id is provided, ensures the silo config exists first.
+        """
+        if org_id is not None:
+            await self.ensure_silo_config(silo_id, org_id)
+
         async with get_session() as session:
             stmt = insert(ReasoningChainSteps).values(
                 chain_id=chain_id,

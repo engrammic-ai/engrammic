@@ -294,7 +294,7 @@ async def mcp_client(e2e_org_id: str) -> AsyncGenerator[Any, None]:
     2. In-process FastMCPTransport with fake stores
     """
     from fastmcp import Client
-    from fastmcp.client.transports import FastMCPTransport
+    from fastmcp.client.transports import FastMCPTransport, SSETransport
 
     server_url = _get_server_url()
     use_real = await _probe_server(server_url)
@@ -302,13 +302,14 @@ async def mcp_client(e2e_org_id: str) -> AsyncGenerator[Any, None]:
     auth = _make_auth(e2e_org_id)
 
     if use_real:
-        async with Client(server_url) as client:
+        sse_transport = SSETransport(server_url.rstrip("/"))
+        async with Client(sse_transport) as client:
             yield client
         return
 
     # In-process path: build server with fake deps + patch auth
     mcp_server = _build_in_process_server(e2e_org_id)
-    transport = FastMCPTransport(mcp_server)
+    in_process_transport = FastMCPTransport(mcp_server)
 
     with (
         patch(
@@ -340,7 +341,7 @@ async def mcp_client(e2e_org_id: str) -> AsyncGenerator[Any, None]:
             new=AsyncMock(return_value=_make_fake_silo(e2e_org_id)),
         ),
     ):
-        async with Client(transport) as client:
+        async with Client(in_process_transport) as client:
             yield client
 
 

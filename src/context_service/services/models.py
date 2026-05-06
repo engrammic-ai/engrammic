@@ -94,3 +94,8 @@ class GraphResult:
 def derive_silo_id(org_id: str) -> uuid.UUID:
     """Derive deterministic silo ID from org ID (MVP 1:1 mapping)."""
     return uuid.uuid5(uuid.NAMESPACE_DNS, f"silo:{org_id}")
+
+
+def derive_org_uuid(org_id: str) -> uuid.UUID:
+    """Derive deterministic UUID from org ID string."""
+    return uuid.uuid5(uuid.NAMESPACE_DNS, f"org:{org_id}")

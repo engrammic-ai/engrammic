@@ -444,6 +444,8 @@ async def _context_reason(
     postgres_store = PostgresStore()
     saga = ChainSagaWriter(postgres_store, store)
 
+    from context_service.services.models import derive_org_uuid
+
     await saga.write_chain(
         chain_id=chain_id,
         silo_id=expected_silo_id,
@@ -454,6 +456,7 @@ async def _context_reason(
         source="agent_explicit",
         conclusion=conclusion,
         evidence_used=evidence_used,
+        org_id=derive_org_uuid(auth.org_id),
     )
 
     await attach_chain_to_session(store, str(chain_id), resolved_session_id, str(expected_silo_id))

@@ -44,6 +44,7 @@ class ChainSagaWriter:
         source: str = "agent_explicit",
         conclusion: str | None = None,
         evidence_used: list[str] | None = None,
+        org_id: UUID | None = None,
     ) -> None:
         """Write chain with saga pattern: Postgres first, then Memgraph.
 
@@ -65,7 +66,7 @@ class ChainSagaWriter:
             log.error("saga_serialization_failed", chain_id=str(chain_id), error=str(exc))
             raise
 
-        await self._pg.upsert_chain_steps(chain_id, silo_id, steps_data)
+        await self._pg.upsert_chain_steps(chain_id, silo_id, steps_data, org_id=org_id)
 
         try:
             await self._mg.upsert_reasoning_chain(
