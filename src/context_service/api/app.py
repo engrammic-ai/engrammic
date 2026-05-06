@@ -127,24 +127,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         embedding_cache = EmbeddingCache(redis_client)
         embedding_service: EmbeddingService | None = None
-        if settings.vertex_project_id:
-            from context_service.embeddings.vertex import VertexAIEmbeddingService
+        if settings.litellm_embedding_model:
+            from context_service.embeddings import build_embedding_service
 
-            embedding_service = VertexAIEmbeddingService.from_settings(settings, embedding_cache)
-        elif settings.jina_api_key:
-            from context_service.embeddings.jina import JinaEmbeddingService
-
-            embedding_service = JinaEmbeddingService.from_settings(settings, embedding_cache)
-
-        if embedding_service is None:
-            logger.warning(
-                "embedding_service_unconfigured",
-                hint="set jina_api_key or embedding_provider=vertex to enable semantic search",
+            embedding_service = build_embedding_service(
+                "litellm", settings, embedding_cache
             )
-        else:
             logger.info(
                 "embedding_service_configured",
-                provider=type(embedding_service).__name__,
+                provider="LiteLLMEmbeddingService",
+                model=settings.litellm_embedding_model,
+            )
+        else:
+            logger.warning(
+                "embedding_service_unconfigured",
+                hint="set litellm_embedding_model to enable semantic search",
             )
 
         splade_encoder = None

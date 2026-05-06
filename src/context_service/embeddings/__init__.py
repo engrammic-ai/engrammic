@@ -3,20 +3,21 @@
 from typing import TYPE_CHECKING
 
 from context_service.embeddings.base import EmbeddingService
-
-if TYPE_CHECKING:
-    from context_service.cache.embedding_cache import EmbeddingCache
-    from context_service.config.settings import Settings
-from context_service.embeddings.jina import JinaEmbeddingError, JinaEmbeddingService
-from context_service.embeddings.splade import SpladeEncoder, SpladeEncoderError
-from context_service.embeddings.vertex import (
-    VertexAIEmbeddingError,
-    VertexAIEmbeddingService,
-)
 from context_service.embeddings.litellm_embeddings import (
     LiteLLMEmbeddingError,
     LiteLLMEmbeddingService,
 )
+from context_service.embeddings.splade import SpladeEncoder, SpladeEncoderError
+
+if TYPE_CHECKING:
+    from context_service.cache.embedding_cache import EmbeddingCache
+    from context_service.config.settings import Settings
+
+# Backward-compat aliases
+JinaEmbeddingService = LiteLLMEmbeddingService
+JinaEmbeddingError = LiteLLMEmbeddingError
+VertexAIEmbeddingService = LiteLLMEmbeddingService
+VertexAIEmbeddingError = LiteLLMEmbeddingError
 
 
 def build_embedding_service(
@@ -27,7 +28,7 @@ def build_embedding_service(
     """Factory for embedding services by provider name.
 
     Args:
-        provider: One of "jina", "vertex".
+        provider: Provider name (all route to LiteLLM now).
         settings: Optional settings instance (uses get_settings() if None).
         embedding_cache: Optional Redis-backed embedding cache.
 
@@ -38,11 +39,7 @@ def build_embedding_service(
 
     if settings is None:
         settings = get_settings()
-    if provider == "vertex":
-        return VertexAIEmbeddingService.from_settings(settings, _embedding_cache=embedding_cache)
-    if provider == "litellm":
-        return LiteLLMEmbeddingService.from_settings(settings, _embedding_cache=embedding_cache)
-    return JinaEmbeddingService.from_settings(settings, _embedding_cache=embedding_cache)
+    return LiteLLMEmbeddingService.from_settings(settings, _embedding_cache=embedding_cache)
 
 
 __all__ = [
