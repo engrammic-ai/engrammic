@@ -107,7 +107,7 @@ services:
       - POSTGRES_PASSWORD=context
       - POSTGRES_DB=context_service
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U context"]
+      test: ["CMD-SHELL", "pg_isready -U context -d context_service"]
       interval: 10s
       timeout: 5s
       retries: 5
