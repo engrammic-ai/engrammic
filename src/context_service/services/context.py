@@ -400,6 +400,96 @@ class ContextService:
 
         return node
 
+    async def get_temporal(
+        self,
+        node_ids: list[uuid.UUID],
+        silo_id: uuid.UUID,
+        as_of: datetime,
+    ) -> list[dict[str, Any]]:
+        """Fetch nodes by ID with temporal validity filtering.
+
+        Args:
+            node_ids: List of node UUIDs to fetch.
+            silo_id: Silo to scope the lookup.
+            as_of: Point-in-time for validity check (must be UTC).
+
+        Returns:
+            List of dicts, each either a full node or an error entry:
+            - Valid node: {node_id, content, layer, ...}
+            - not_yet_valid: {error, node_id, valid_from}
+            - node_expired: {error, node_id, valid_to, superseded_by}
+            - node_not_found: {error, node_id}
+        """
+        from context_service.db.queries import GET_NODES_BY_IDS_TEMPORAL
+
+        rows = await self._memgraph.execute_query(
+            GET_NODES_BY_IDS_TEMPORAL,
+            {
+                "node_ids": [str(nid) for nid in node_ids],
+                "silo_id": str(silo_id),
+            },
+        )
+
+        results: list[dict[str, Any]] = []
+        for row in rows:
+            requested_id = row["requested_id"]
+            node_id = row.get("node_id")
+
+            # Node doesn't exist
+            if node_id is None:
+                results.append({"error": "node_not_found", "node_id": requested_id})
+                continue
+
+            # Uncommitted nodes treated as nonexistent
+            if row.get("committed") is False:
+                results.append({"error": "node_not_found", "node_id": requested_id})
+                continue
+
+            valid_from = row.get("valid_from")
+            valid_to = row.get("valid_to")
+
+            # Not yet valid: valid_from > as_of
+            if valid_from is not None:
+                vf = valid_from if isinstance(valid_from, datetime) else datetime.fromisoformat(str(valid_from).replace("Z", "+00:00"))
+                if vf > as_of:
+                    results.append({
+                        "error": "not_yet_valid",
+                        "node_id": requested_id,
+                        "valid_from": vf.isoformat(),
+                    })
+                    continue
+
+            # Expired: valid_to <= as_of
+            if valid_to is not None:
+                vt = valid_to if isinstance(valid_to, datetime) else datetime.fromisoformat(str(valid_to).replace("Z", "+00:00"))
+                if vt <= as_of:
+                    results.append({
+                        "error": "node_expired",
+                        "node_id": requested_id,
+                        "valid_to": vt.isoformat(),
+                        "superseded_by": row.get("superseded_by"),
+                    })
+                    continue
+
+            # Valid node
+            results.append({
+                "node_id": node_id,
+                "content": row.get("content"),
+                "type": row.get("labels", ["Document"])[0] if row.get("labels") else "Document",
+                "layer": row.get("layer"),
+                "summary": row.get("summary"),
+                "confidence": row.get("confidence"),
+                "tags": row.get("tags"),
+                "source_uri": row.get("source_uri"),
+                "content_hash": row.get("content_hash"),
+                "valid_from": valid_from.isoformat() if isinstance(valid_from, datetime) else valid_from,
+                "valid_to": valid_to.isoformat() if isinstance(valid_to, datetime) else valid_to,
+                "created_at": row.get("created_at").isoformat() if isinstance(row.get("created_at"), datetime) else row.get("created_at"),
+                "silo_id": str(silo_id),
+            })
+
+        return results
+
     async def _batch_fetch_nodes(self, node_ids: list[str], silo_id: uuid.UUID) -> dict[str, Node]:
         """Fetch multiple nodes from cache then Memgraph for misses.
 
@@ -1177,7 +1267,7 @@ class ContextService:
             if layer_values and node_layer not in layer_values:
                 continue
 
-            node_confidence = float(props.get("confidence", 1.0))
+            node_confidence = float(props.get("confidence") or 1.0)
             if min_confidence is not None and node_confidence < min_confidence:
                 continue
 
