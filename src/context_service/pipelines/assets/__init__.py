@@ -20,6 +20,8 @@ from context_service.pipelines.assets.fact_promotion import claim_to_fact_promot
 from context_service.pipelines.assets.heat import heat_asset
 from context_service.pipelines.assets.llm_pattern_detection import llm_pattern_detection
 from context_service.pipelines.assets.pattern_detection import pattern_detection
+from context_service.pipelines.assets.proposal_cleanup import proposal_cleanup
+from context_service.pipelines.assets.proposal_detection import proposal_detection
 from context_service.pipelines.assets.reconciliation_gc import reconciliation_gc
 from context_service.pipelines.assets.retention import retention_sweep
 from context_service.pipelines.assets.tag_maintenance import tag_maintenance
@@ -51,4 +53,6 @@ all_assets: list[Any] = [
     auto_tagging,
     tag_maintenance,
     reconciliation_gc,
+    proposal_detection,
+    proposal_cleanup,
 ]

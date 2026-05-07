@@ -114,6 +114,18 @@ class ValidatorOverrides(BaseModel):
         le=1.0,
         description="Cosine distance above which a belief centroid is considered stale.",
     )
+    auto_synthesis_threshold: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Confidence above which T3 auto-creates Belief from cluster.",
+    )
+    proposal_threshold: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Confidence above which (but below auto_synthesis) creates ProposedBelief.",
+    )
 
 
 class SiloConfig(BaseModel):
@@ -211,6 +223,16 @@ class SiloConfig(BaseModel):
                 if v.revision_cosine_threshold is not None
                 else settings.revision_cosine_threshold
             ),
+            auto_synthesis_threshold=(
+                v.auto_synthesis_threshold
+                if v.auto_synthesis_threshold is not None
+                else settings.validator_auto_synthesis_threshold
+            ),
+            proposal_threshold=(
+                v.proposal_threshold
+                if v.proposal_threshold is not None
+                else settings.validator_proposal_threshold
+            ),
         )
 
     def to_metadata_dict(self) -> dict[str, Any]:
@@ -252,3 +274,5 @@ class ResolvedSiloConfig(BaseModel):
     supersession_confidence_threshold: float
     belief_density_threshold: int
     revision_cosine_threshold: float
+    auto_synthesis_threshold: float
+    proposal_threshold: float

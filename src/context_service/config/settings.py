@@ -888,6 +888,23 @@ class Settings(BaseSettings):
     )
 
     # =========================================================================
+    # Proposal Worker Thresholds
+    # =========================================================================
+
+    validator_auto_synthesis_threshold: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Confidence above which T3 auto-creates Belief from cluster.",
+    )
+    validator_proposal_threshold: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Confidence above which (but below auto_synthesis) creates ProposedBelief.",
+    )
+
+    # =========================================================================
     # Signals — heat / freshness / priority
     # =========================================================================
 

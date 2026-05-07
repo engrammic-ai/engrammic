@@ -79,6 +79,31 @@ def _strip_content(response: dict[str, Any]) -> dict[str, Any]:
     return response
 
 
+async def _fetch_pending_proposals(silo_id: str, limit: int = 20) -> list[dict[str, Any]]:
+    """Fetch pending ProposedBelief nodes for a silo."""
+    from context_service.db.queries import GET_PROPOSED_BELIEFS_FOR_SILO
+    from context_service.mcp.server import get_context_service
+
+    svc = get_context_service()
+    rows = await svc.graph_store.execute_query(
+        GET_PROPOSED_BELIEFS_FOR_SILO,
+        {"silo_id": silo_id, "limit": limit},
+    )
+    return [
+        {
+            "node_id": r["proposed_belief_id"],
+            "layer": "wisdom",
+            "node_type": "ProposedBelief",
+            "content": r["content"],
+            "confidence": r["confidence"],
+            "created_at": r["created_at"],
+            "source_fact_ids": r["source_fact_ids"],
+            "status": "pending",
+        }
+        for r in rows
+    ]
+
+
 async def _context_recall(
     silo_id: str,
     query: str | None = None,
@@ -91,6 +116,7 @@ async def _context_recall(
     reflections_agent_id: str | None = None,
     include_steps: bool = False,
     include_content: bool = True,
+    include_proposals: bool = False,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     if not query and not node_ids:
@@ -120,6 +146,8 @@ async def _context_recall(
 
         if not include_content:
             response = _strip_content(response)
+        if include_proposals:
+            response["pending_proposals"] = await _fetch_pending_proposals(silo_id)
         return response
 
     if node_ids and depth > 0:
@@ -131,6 +159,8 @@ async def _context_recall(
         )
         if not include_content:
             response = _strip_content(response)
+        if include_proposals:
+            response["pending_proposals"] = await _fetch_pending_proposals(silo_id)
         return response
 
     if query and depth == 0:
@@ -143,6 +173,8 @@ async def _context_recall(
         )
         if not include_content:
             response = _strip_content(response)
+        if include_proposals:
+            response["pending_proposals"] = await _fetch_pending_proposals(silo_id)
         return response
 
     response = await _context_graph(
@@ -154,6 +186,11 @@ async def _context_recall(
     )
     if not include_content:
         response = _strip_content(response)
+
+    if include_proposals:
+        proposals = await _fetch_pending_proposals(silo_id)
+        response["pending_proposals"] = proposals
+
     return response
 
 
@@ -181,6 +218,7 @@ def register(mcp: FastMCP) -> None:
         reflections_agent_id: str | None = None,
         include_steps: bool = False,
         include_content: bool = True,
+        include_proposals: bool = False,
     ) -> dict[str, Any]:
         """Unified read across Memory, Knowledge, Wisdom, and Intelligence layers.
 
@@ -209,6 +247,8 @@ def register(mcp: FastMCP) -> None:
                 falls back to the first 200 characters of content if no
                 pre-computed summary exists. Useful for cheap browsing or
                 pagination before a follow-up fetch by node_id.
+            include_proposals: When True, append pending ProposedBelief nodes
+                to the response in a `pending_proposals` field.
 
         Returns:
             Depends on mode:
@@ -231,4 +271,5 @@ def register(mcp: FastMCP) -> None:
             reflections_agent_id=reflections_agent_id,
             include_steps=include_steps,
             include_content=include_content,
+            include_proposals=include_proposals,
         )

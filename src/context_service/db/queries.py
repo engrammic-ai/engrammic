@@ -1297,7 +1297,8 @@ CREATE (pb:ProposedBelief {
     confidence: $confidence,
     status: 'pending',
     created_at: $created_at,
-    updated_at: $created_at
+    updated_at: $created_at,
+    expires_at: $expires_at
 })
 WITH pb
 UNWIND $synthesized_from_ids AS fact_id
@@ -1350,4 +1351,26 @@ SET pb.status = 'rejected',
     pb.rejection_reason = $reason,
     pb.updated_at = $rejected_at
 RETURN pb.id AS proposed_belief_id, pb.status AS status
+"""
+
+GET_PENDING_PROPOSAL_COUNT_FOR_SILO = """
+MATCH (pb:ProposedBelief {silo_id: $silo_id, status: 'pending'})
+RETURN count(pb) AS pending_count
+"""
+
+DELETE_EXPIRED_PROPOSALS = """
+MATCH (pb:ProposedBelief {silo_id: $silo_id, status: 'pending'})
+WHERE pb.expires_at IS NOT NULL AND pb.expires_at < $now
+DETACH DELETE pb
+RETURN count(pb) AS deleted_count
+"""
+
+LIST_DENSE_CLUSTERS_WITHOUT_BELIEF_OR_PROPOSAL = """
+MATCH (f:Fact)-[:MEMBER_OF]->(c:Cluster {silo_id: $silo_id})
+WITH c, count(f) AS fact_count
+WHERE fact_count >= $min_facts
+  AND NOT EXISTS((c)<-[:SYNTHESIZED_FROM]-(:Belief {silo_id: $silo_id}))
+  AND NOT EXISTS((c)<-[:SYNTHESIZED_FROM]-(:ProposedBelief {silo_id: $silo_id, status: 'pending'}))
+RETURN c.id AS cluster_id, fact_count
+ORDER BY fact_count DESC
 """

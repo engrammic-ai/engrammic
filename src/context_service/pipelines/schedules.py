@@ -259,6 +259,48 @@ def reconciliation_gc_schedule(
     )
 
 
+@dg.schedule(
+    cron_schedule="*/10 * * * *",
+    name="proposal_detection_schedule",
+    target=dg.AssetSelection.assets("proposal_detection"),
+    description="Every 10 minutes: detect weak synthesis candidates and create ProposedBeliefs.",
+    execution_timezone="UTC",
+)
+def proposal_detection_schedule(
+    context: ScheduleEvaluationContext,
+    memgraph: MemgraphResource,
+) -> Iterator[dg.RunRequest]:
+    """Yield one proposal_detection RunRequest per active silo."""
+    silo_ids = _fetch_silo_ids(memgraph)
+    for silo_id in silo_ids:
+        yield dg.RunRequest(
+            run_key=f"proposal_detection:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            partition_key=silo_id,
+            tags={"dagster/concurrency_key": silo_id},
+        )
+
+
+@dg.schedule(
+    cron_schedule="0 6 * * *",
+    name="proposal_cleanup_schedule",
+    target=dg.AssetSelection.assets("proposal_cleanup"),
+    description="Daily proposal cleanup (06:00 UTC): delete expired ProposedBeliefs.",
+    execution_timezone="UTC",
+)
+def proposal_cleanup_schedule(
+    context: ScheduleEvaluationContext,
+    memgraph: MemgraphResource,
+) -> Iterator[dg.RunRequest]:
+    """Yield one proposal_cleanup RunRequest per active silo."""
+    silo_ids = _fetch_silo_ids(memgraph)
+    for silo_id in silo_ids:
+        yield dg.RunRequest(
+            run_key=f"proposal_cleanup:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            partition_key=silo_id,
+            tags={"dagster/concurrency_key": silo_id},
+        )
+
+
 all_schedules: list[Any] = [
     clustering_schedule,
     fact_promotion_schedule,
@@ -271,6 +313,8 @@ all_schedules: list[Any] = [
     auto_tagging_schedule,
     tag_maintenance_schedule,
     reconciliation_gc_schedule,
+    proposal_detection_schedule,
+    proposal_cleanup_schedule,
 ]
 
 __all__ = [
@@ -282,6 +326,8 @@ __all__ = [
     "heat_schedule",
     "llm_pattern_detection_schedule",
     "pattern_detection_schedule",
+    "proposal_cleanup_schedule",
+    "proposal_detection_schedule",
     "reasoning_compaction_schedule",
     "reconciliation_gc_schedule",
     "retention_schedule",

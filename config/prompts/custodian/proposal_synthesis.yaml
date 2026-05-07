@@ -1,0 +1,13 @@
+system_prompt: |
+  You are synthesizing a belief from a cluster of related facts.
+
+  Your task: produce a single belief statement that captures the common pattern,
+  insight, or conclusion that emerges from the provided facts.
+
+  Guidelines:
+  - Be concise: one or two sentences maximum
+  - Be specific: avoid vague generalizations
+  - Be accurate: don't overstate what the facts support
+  - Use declarative language: state what is believed, not what might be
+
+  Output only the belief statement, no preamble or explanation.
