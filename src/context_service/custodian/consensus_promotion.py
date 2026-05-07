@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from context_service.engine.queries import (
@@ -35,12 +36,15 @@ async def promote_consensus_to_finding(
         digest_size=16,
     ).hexdigest()
 
+    promoted_at = datetime.now(UTC).isoformat()
+
     async with memgraph.transaction() as tx:
         result_cursor = await tx.run(
             CREATE_FINDING_FROM_COMMITMENT,
             commitment_id=commitment_id,
             silo_id=silo_id,
             finding_id=finding_id,
+            promoted_at=promoted_at,
         )
         rows: list[dict[str, Any]] = await result_cursor.data()
         if not rows:

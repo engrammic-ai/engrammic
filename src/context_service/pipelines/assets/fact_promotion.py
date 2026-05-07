@@ -4,6 +4,7 @@ import asyncio
 import concurrent.futures
 import time
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 import dagster as dg
@@ -121,6 +122,8 @@ def claim_to_fact_promotion(
 
             rule_value: str = decision.rule.value if decision.rule is not None else ""
             fact_id = str(uuid.uuid4())
+            promoted_at = datetime.now(UTC).isoformat()
+            valid_from = claim_props.get("valid_from") or promoted_at
             await client.execute_write(
                 PROMOTE_CLAIM_TO_FACT,
                 {
@@ -128,6 +131,8 @@ def claim_to_fact_promotion(
                     "silo_id": silo_id,
                     "rule": rule_value,
                     "fact_id": fact_id,
+                    "promoted_at": promoted_at,
+                    "valid_from": valid_from,
                 },
             )
             claims_promoted += 1

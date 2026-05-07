@@ -251,10 +251,10 @@ CREATE (f:Fact {
     confidence: c.confidence,
     fingerprint: c.fingerprint,
     source_tier: c.source_tier,
-    promoted_at: datetime(),
+    promoted_at: $promoted_at,
     promotion_rule: $rule,
-    valid_from: datetime(),
-    created_at: datetime()
+    valid_from: $valid_from,
+    created_at: $promoted_at
 })
 CREATE (f)-[:PROMOTED_FROM]->(c)
 RETURN f.id AS fact_id, properties(f) AS props
@@ -1260,6 +1260,7 @@ CREATE (cm:Node:Commitment {
     silo_id: $silo_id,
     content: wb.content,
     confidence: wb.confidence,
+    kind: $kind,
     created_at: $created_at,
     valid_from: $valid_from,
     crystallized_from: wb.id

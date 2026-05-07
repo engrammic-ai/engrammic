@@ -50,9 +50,6 @@ def _layer_to_label(layer: str) -> str:
     return _LAYER_TO_LABEL.get(layer, "Document")
 
 
-# Minimum evidence count for R1 single-source promotion.
-_R1_THRESHOLD = 1
-
 _VALID_SOURCE_TIERS = ("authoritative", "validated", "community", "unknown")
 
 
@@ -185,30 +182,13 @@ async def _context_assert(
         source_tier=source_tier,
     )
 
-    promoted = False
-    if len(evidence_list) >= _R1_THRESHOLD:
-        try:
-            promotion_result = await ctx_svc.promote_claim_to_fact(
-                silo_id=str(expected_silo_id),
-                claim_id=str(node.id),
-                evidence_count=len(evidence_list),
-            )
-            if promotion_result is not None:
-                promoted = True
-        except Exception:
-            logger.warning(
-                "claim_assert_promotion_failed",
-                exc_info=True,
-                claim_id=str(node.id),
-            )
-
     return {
         "node_id": str(node.id),
         "layer": "knowledge",
         "claim_type": claim_type,
         "evidence_status": "verified" if evidence_mode == "sync" else "pending",
         "evidence_nodes": evidence_nodes,
-        "promoted_to_fact": promoted,
+        "status": "pending_promotion",
         "created_at": datetime.now(UTC).isoformat(),
     }
 
@@ -791,6 +771,8 @@ def register(mcp: FastMCP) -> None:
 
         Returns:
             Layer-specific response dict with at minimum {node_id, layer, created_at}.
+            Knowledge layer returns status="pending_promotion" — fact promotion is
+            handled asynchronously by the custodian, not inline.
             Intelligence layer includes continues_chain_id when parent_chain_id is set.
             Belief layer returns {belief_id, layer, session_id, created_at} and includes
             potential_conflicts when other beliefs in the session target the same nodes.

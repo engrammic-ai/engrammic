@@ -869,6 +869,7 @@ ON CREATE SET
     c.produced_by_agent_id = $produced_by_agent_id,
     c.status = $status,
     c.source = $source,
+    c.kind = $kind,
     c.confidence_tier = $confidence_tier,
     c.valid_from = $valid_from,
     c.valid_to = $valid_to,
@@ -1066,10 +1067,11 @@ ON CREATE SET
     f.object = c.object,
     f.source = 'custodian_consensus',
     f.status = 'published',
-    f.created_at = datetime(),
+    f.created_at = $promoted_at,
     f.confidence_tier = 'high',
     f.distinct_agent_count = c.distinct_agent_count
 MERGE (c)-[:PROMOTED_TO]->(f)
+SET c.valid_to = $promoted_at
 RETURN f.id AS id
 """
 

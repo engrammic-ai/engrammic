@@ -45,7 +45,7 @@ def mock_assert():
             "claim_type": "freeform",
             "evidence_status": "verified",
             "evidence_nodes": [],
-            "promoted_to_fact": False,
+            "status": "pending_promotion",
             "created_at": "2026-01-01T00:00:00+00:00",
         },
     ) as m:
@@ -346,3 +346,29 @@ async def test_store_meta_routes_to_reflect(mock_reflect):
     call_kwargs = mock_reflect.call_args.kwargs
     assert call_kwargs["observation"] == "test reflection"
     assert call_kwargs["silo_id"] == _SILO_ID
+
+
+@pytest.mark.asyncio
+async def test_knowledge_write_returns_pending_promotion(mock_assert):
+    """Knowledge layer writes must return status='pending_promotion'.
+
+    Fact promotion is async (custodian-driven); inline auto-promotion was
+    removed. Callers must not assume the claim is a fact immediately.
+    """
+    from context_service.mcp.tools.context_store import _context_store
+
+    result = await _context_store(
+        silo_id=_SILO_ID,
+        content="Tokens expire in 30 days",
+        layer="knowledge",
+        evidence=["node:abc-123"],
+        source_type="document",
+    )
+
+    assert result.get("status") == "pending_promotion", (
+        "knowledge writes must return status='pending_promotion' — "
+        "fact promotion is handled asynchronously by the custodian"
+    )
+    assert "promoted_to_fact" not in result, (
+        "promoted_to_fact must not appear in knowledge write responses"
+    )
