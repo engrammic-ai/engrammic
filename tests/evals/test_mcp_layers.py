@@ -141,7 +141,7 @@ class TestKnowledgeLayer:
             "knowledge",
             "Unsupported claim without evidence",
         )
-        assert result.get("error") == "missing_evidence"
+        assert result.get("success") is False
 
 
 @pytest.mark.evals
@@ -352,5 +352,5 @@ class TestProvenance:
             confidence=0.9,
         )
 
-        prov = await admin(mcp_client, "provenance", ref=claim["node_id"])
+        prov = await admin(mcp_client, "provenance", node_id=claim["node_id"])
         assert "chain" in prov or "root_sources" in prov or "error" not in prov

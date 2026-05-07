@@ -143,10 +143,10 @@ Requires Batch 2 stable.
 - [ ] Test: errors are consistent, ignored flags surfaced
 
 ### Task 3.9: Update Documentation
-- [ ] Update `CLAUDE.md` — new tool surface (12 tools)
-- [ ] Update `context/api-examples.md` — new tool examples
+- [x] Update `CLAUDE.md` — new tool surface (9 tools)
+- [x] Update `context/api-examples.md` — new tool examples, error envelope format
 - [ ] Update `../primitives/context/specs/` if epistemology changes landed
-- [ ] Update Notion wiki — tool reference, architecture diagrams
+- [ ] Update Notion wiki — see `context/plans/notion-docs-update.md`
 - [ ] Update `context/plans/README.md` — mark v2 shipped
 
 **Done when**: All new tools work, `context_store` deleted, docs updated.

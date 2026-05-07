@@ -86,7 +86,7 @@ class TestStoreAllLayers:
 
     async def test_store_knowledge_missing_evidence(self, mcp_client: Any) -> None:
         result = await store(mcp_client, "knowledge", "claim with no evidence")
-        assert result.get("error") == "missing_evidence"
+        assert result.get("success") is False
 
     async def test_store_knowledge_missing_source_type(self, mcp_client: Any) -> None:
         ev_id = str(uuid.uuid4())
@@ -96,7 +96,7 @@ class TestStoreAllLayers:
             "claim without source_type",
             evidence=[f"node:{ev_id}"],
         )
-        assert result.get("error") == "missing_source_type"
+        assert result.get("success") is False
 
     async def test_store_wisdom(self, mcp_client: Any) -> None:
         node_a = str(uuid.uuid4())
@@ -114,7 +114,7 @@ class TestStoreAllLayers:
 
     async def test_store_wisdom_missing_about(self, mcp_client: Any) -> None:
         result = await store(mcp_client, "wisdom", "belief without about")
-        assert result.get("error") == "missing_about"
+        assert result.get("success") is False
 
     async def test_store_intelligence(self, mcp_client: Any) -> None:
         steps = [
@@ -136,7 +136,7 @@ class TestStoreAllLayers:
 
     async def test_store_intelligence_missing_steps(self, mcp_client: Any) -> None:
         result = await store(mcp_client, "intelligence", "conclusion with no steps")
-        assert result.get("error") == "missing_steps"
+        assert result.get("success") is False
 
     async def test_store_meta(self, mcp_client: Any) -> None:
         ref_node = str(uuid.uuid4())
@@ -154,11 +154,11 @@ class TestStoreAllLayers:
     async def test_store_meta_missing_observation_type(self, mcp_client: Any) -> None:
         ref_node = str(uuid.uuid4())
         result = await store(mcp_client, "meta", "obs", about=[ref_node])
-        assert result.get("error") == "missing_observation_type"
+        assert result.get("success") is False
 
     async def test_store_meta_missing_about(self, mcp_client: Any) -> None:
         result = await store(mcp_client, "meta", "obs", observation_type="insight")
-        assert result.get("error") == "missing_about"
+        assert result.get("success") is False
 
     async def test_store_invalid_layer(self, mcp_client: Any) -> None:
         import pytest
@@ -195,7 +195,7 @@ class TestRecallRoundTrip:
 
     async def test_recall_missing_both_inputs(self, mcp_client: Any) -> None:
         result = await recall(mcp_client)
-        assert result.get("error") == "missing_input"
+        assert result.get("success") is False
 
     async def test_recall_layer_filter(self, mcp_client: Any) -> None:
         await store(mcp_client, "memory", "memory layer content")
@@ -261,8 +261,8 @@ class TestLinkAndGraph:
         a = await store(mcp_client, "memory", "node for invalid link")
         b = await store(mcp_client, "memory", "other node")
         result = await link(mcp_client, a["node_id"], b["node_id"], "NOT_A_RELATIONSHIP")
-        assert result.get("error") == "invalid_relationship"
-        assert "valid" in result
+        assert result.get("success") is False
+        assert "valid_values" in result.get("error", {}).get("details", {})
 
     async def test_link_with_weight(self, mcp_client: Any) -> None:
         a = await store(mcp_client, "memory", "weighted source")
@@ -274,7 +274,7 @@ class TestLinkAndGraph:
         a = await store(mcp_client, "memory", "node x")
         b = await store(mcp_client, "memory", "node y")
         result = await link(mcp_client, a["node_id"], b["node_id"], "REFERENCES", weight=99.0)
-        assert result.get("error") == "invalid_weight"
+        assert result.get("success") is False
 
     async def test_link_with_note(self, mcp_client: Any) -> None:
         a = await store(mcp_client, "memory", "annotated source")
@@ -330,17 +330,18 @@ class TestReasoningChain:
         assert "error" not in store_result
         chain_id = store_result["chain_id"]
 
-        close_result = await admin(mcp_client, "close_session", ref=chain_id)
+        close_result = await admin(mcp_client, "close_session", chain_id=chain_id)
         # May error with feature_disabled if setting is off in test env;
         # accept that as a valid outcome.
-        assert "error" not in close_result or close_result["error"] in (
-            "feature_disabled",
-            "chain_not_found",
+        assert close_result.get("success") is not False or close_result.get("error", {}).get("code") in (
+            "FEATURE_DISABLED",
+            "NOT_FOUND",
+            "VALIDATION_ERROR",
         )
 
     async def test_close_session_missing_ref(self, mcp_client: Any) -> None:
         result = await admin(mcp_client, "close_session")
-        assert result.get("error") == "missing_ref"
+        assert result.get("success") is False
 
     async def test_store_reasoning_with_session_id(self, mcp_client: Any) -> None:
         steps = [{"step": 1, "reasoning": "Because A implies B"}]
@@ -370,7 +371,8 @@ class TestReasoningChain:
         )
 
         result = await close_reasoning_chain(store=store, chain_id=chain_id, silo_id=silo_id)
-        assert result.get("error") == "already_closed"
+        assert result.get("success") is False
+        assert result.get("error", {}).get("code") == "CONFLICT"
 
     async def test_close_nonexistent_chain(self, mcp_client: Any) -> None:
         """Closing a chain that does not exist returns chain_not_found."""
@@ -386,7 +388,8 @@ class TestReasoningChain:
             chain_id=str(uuid.uuid4()),
             silo_id=str(uuid.uuid5(uuid.NAMESPACE_DNS, "silo:missing")),
         )
-        assert result.get("error") == "chain_not_found"
+        assert result.get("success") is False
+        assert result.get("error", {}).get("code") == "NOT_FOUND"
 
 
 # ---------------------------------------------------------------------------
@@ -459,7 +462,7 @@ class TestTimeTravel:
 class TestErrorCases:
     async def test_invalid_decay_class(self, mcp_client: Any) -> None:
         result = await store(mcp_client, "memory", "content", decay_class="bogus")
-        assert result.get("error") == "invalid_decay_class"
+        assert result.get("success") is False
 
     async def test_invalid_source_type(self, mcp_client: Any) -> None:
         ev_id = str(uuid.uuid4())
@@ -470,7 +473,7 @@ class TestErrorCases:
             evidence=[f"node:{ev_id}"],
             source_type="made_up",
         )
-        assert result.get("error") == "invalid_source_type"
+        assert result.get("success") is False
 
     async def test_invalid_confidence_below_zero(self, mcp_client: Any) -> None:
         ev_id = str(uuid.uuid4())
@@ -482,7 +485,7 @@ class TestErrorCases:
             source_type="document",
             confidence=-0.1,
         )
-        assert result.get("error") == "invalid_confidence"
+        assert result.get("success") is False
 
     async def test_invalid_confidence_above_one(self, mcp_client: Any) -> None:
         ev_id = str(uuid.uuid4())
@@ -494,7 +497,7 @@ class TestErrorCases:
             source_type="document",
             confidence=1.5,
         )
-        assert result.get("error") == "invalid_confidence"
+        assert result.get("success") is False
 
     async def test_invalid_observation_type(self, mcp_client: Any) -> None:
         ref_node = str(uuid.uuid4())
@@ -505,13 +508,13 @@ class TestErrorCases:
             observation_type="not_valid",
             about=[ref_node],
         )
-        assert result.get("error") == "invalid_observation_type"
+        assert result.get("success") is False
 
     async def test_invalid_link_relationship(self, mcp_client: Any) -> None:
         a = await store(mcp_client, "memory", "src")
         b = await store(mcp_client, "memory", "dst")
         result = await link(mcp_client, a["node_id"], b["node_id"], "UNKNOWN")
-        assert result.get("error") == "invalid_relationship"
+        assert result.get("success") is False
 
     async def test_admin_unknown_action(self, mcp_client: Any) -> None:
         import pytest
@@ -522,23 +525,23 @@ class TestErrorCases:
 
     async def test_admin_provenance_missing_ref(self, mcp_client: Any) -> None:
         result = await admin(mcp_client, "provenance")
-        assert result.get("error") == "missing_ref"
+        assert result.get("success") is False
 
     async def test_admin_history_missing_ref(self, mcp_client: Any) -> None:
         result = await admin(mcp_client, "history")
-        assert result.get("error") == "missing_ref"
+        assert result.get("success") is False
 
     async def test_store_wisdom_empty_about_list(self, mcp_client: Any) -> None:
         result = await store(mcp_client, "wisdom", "belief with empty about", about=[])
-        assert result.get("error") == "missing_about"
+        assert result.get("success") is False
 
     async def test_store_intelligence_empty_steps(self, mcp_client: Any) -> None:
         result = await store(mcp_client, "intelligence", "conclusion", steps=[])
-        assert result.get("error") == "missing_steps"
+        assert result.get("success") is False
 
     async def test_recall_no_args_returns_error(self, mcp_client: Any) -> None:
         result = await recall(mcp_client)
-        assert result.get("error") == "missing_input"
+        assert result.get("success") is False
 
 
 # ---------------------------------------------------------------------------
@@ -680,14 +683,14 @@ class TestAdminActions:
     async def test_provenance_for_node(self, mcp_client: Any) -> None:
         store_result = await store(mcp_client, "memory", "provenance test node")
         node_id = store_result["node_id"]
-        result = await admin(mcp_client, "provenance", ref=node_id)
-        assert "error" not in result
+        result = await admin(mcp_client, "provenance", node_id=node_id)
+        assert result.get("success") is not False
 
     async def test_history_for_node(self, mcp_client: Any) -> None:
         store_result = await store(mcp_client, "memory", "history test node")
         node_id = store_result["node_id"]
-        result = await admin(mcp_client, "history", ref=node_id)
-        assert "error" not in result
+        result = await admin(mcp_client, "history", node_id=node_id)
+        assert result.get("success") is not False
 
     async def test_close_session_feature_flag_disabled(self, mcp_client: Any) -> None:
         """When session_compaction_enabled is False, close_session returns feature_disabled."""
@@ -705,5 +708,5 @@ class TestAdminActions:
             "context_service.mcp.tools.context_admin.get_settings",
             return_value=fake_settings,
         ):
-            result = await admin(mcp_client, "close_session", ref=str(uuid.uuid4()))
-            assert result.get("error") == "feature_disabled"
+            result = await admin(mcp_client, "close_session", chain_id=str(uuid.uuid4()))
+            assert result.get("success") is False

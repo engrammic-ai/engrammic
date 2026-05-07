@@ -2,11 +2,17 @@
 
 MCP is the primary agent-facing interface. The REST API is used for admin, dashboard, and silo management. Examples below cover both surfaces.
 
-The 3 MCP tools are:
+The 9 MCP tools are:
 
-- `context_store` — write to any layer (memory, knowledge, wisdom, intelligence, meta)
-- `context_recall` — read, search, traverse, or trace context
+- `context_store` — write to any layer (memory, knowledge, wisdom, intelligence, meta, belief)
+- `context_recall` — read, search, traverse, or trace context; surfaces `proposed_beliefs`
 - `context_link` — create a typed relationship between two nodes
+- `context_admin` — silo management, provenance, history, session control
+- `context_belief_state` — query live session beliefs + contradiction detection
+- `context_update_belief` — mutate working belief in-place
+- `context_crystallize` — promote working beliefs to commitments
+- `context_accept_belief` — accept a ProposedBelief, convert to WorkingBelief
+- `context_reject_belief` — reject a ProposedBelief with optional reason
 
 `silo_id` is no longer passed by callers. It is derived from the authenticated session.
 
@@ -104,10 +110,12 @@ Response:
   "layer": "knowledge",
   "evidence_status": "verified",
   "evidence_nodes": ["node-abc-123"],
-  "promoted_to_fact": true,
+  "status": "pending_promotion",
   "created_at": "2026-04-28T09:01:00+00:00"
 }
 ```
+
+Note: `status: pending_promotion` indicates the claim is queued for async fact promotion by the custodian.
 
 ---
 
@@ -665,13 +673,32 @@ history = await mcp.call("context_recall", {
 
 ## Error Handling
 
+All MCP tools use a consistent error envelope:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human-readable description",
+    "details": {}
+  },
+  "ignored_flags": []
+}
+```
+
+Error codes: `VALIDATION_ERROR`, `NOT_FOUND`, `CONFLICT`, `INTERNAL_ERROR`, `FEATURE_DISABLED`
+
 ### Node not found
 
 ```json
 {
-  "error": "node_not_found",
-  "node_id": "node-missing-123",
-  "message": "Node may have been deleted or does not belong to the current silo."
+  "success": false,
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "Node may have been deleted or does not belong to the current silo.",
+    "details": {"node_id": "node-missing-123"}
+  }
 }
 ```
 
@@ -679,9 +706,12 @@ history = await mcp.call("context_recall", {
 
 ```json
 {
-  "error": "missing_required_param",
-  "param": "evidence",
-  "message": "evidence is required for the knowledge layer"
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "evidence is required for the knowledge layer",
+    "details": {"param": "evidence", "layer": "knowledge"}
+  }
 }
 ```
 
@@ -689,32 +719,24 @@ history = await mcp.call("context_recall", {
 
 ```json
 {
-  "error": "invalid_evidence",
-  "evidence": "node:node-missing-999",
-  "reason": "Node does not exist in the silo"
-}
-```
-
-### as_of not yet supported
-
-```json
-{
-  "error": "as_of_not_supported",
-  "message": "Point-in-time retrieval is not yet implemented"
-}
-```
-
-### Rate limiting
-
-```json
-{
-  "error": "rate_limit_exceeded",
-  "retry_after": 60,
-  "quota": {
-    "limit": 1000,
-    "remaining": 0,
-    "reset_at": "2026-04-26T11:00:00Z"
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Evidence node does not exist in the silo",
+    "details": {"evidence": "node:node-missing-999"}
   }
+}
+```
+
+### Ignored flags
+
+When callers pass flags that don't apply to the operation, they're reported:
+
+```json
+{
+  "success": true,
+  "nodes": [...],
+  "ignored_flags": ["include_steps", "include_reflections"]
 }
 ```
 
