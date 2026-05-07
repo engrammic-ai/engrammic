@@ -45,7 +45,7 @@ def _run_async(coro: Any) -> Any:
     ),
     required_resource_keys={"redis", "qdrant", "embedding"},
 )
-def outbox_embed_op(context: dg.OpExecutionContext) -> dict[str, int]:
+def outbox_embed_op(context) -> dict[str, int]:  # type: ignore[no-untyped-def]
     """Process pending outbox entries."""
     redis_res: RedisResource = context.resources.redis
     qdrant_res: QdrantResource = context.resources.qdrant

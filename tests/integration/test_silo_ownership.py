@@ -127,5 +127,5 @@ class TestCrossOrgSiloOwnership:
                 query="anything",
             )
 
-        assert result.get("error") == "silo_not_found"
+        assert result.get("error", {}).get("code") == "NOT_FOUND"
         mock_ctx_svc.query.assert_not_called()

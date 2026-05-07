@@ -4,9 +4,6 @@ from typing import Any
 
 from context_service.pipelines.sensors.belief_merge import belief_merge_sensor
 from context_service.pipelines.sensors.belief_synthesis import belief_synthesis_sensor
-from context_service.pipelines.sensors.belief_synthesis_sensor import (
-    memory_cluster_belief_sensor,
-)
 from context_service.pipelines.sensors.cascade_review import cascade_review_sensor
 from context_service.pipelines.sensors.causal_chain_sensor import (
     causal_transitivity_sensor,
@@ -14,6 +11,9 @@ from context_service.pipelines.sensors.causal_chain_sensor import (
 )
 from context_service.pipelines.sensors.confidence_drift import confidence_drift_sensor
 from context_service.pipelines.sensors.document_arrival import document_arrival_sensor
+from context_service.pipelines.sensors.memory_cluster_sensor import (
+    memory_cluster_belief_sensor,
+)
 from context_service.pipelines.sensors.outbox_embed_sensor import outbox_embed_sensor
 from context_service.pipelines.sensors.poison_queue_sensor import poison_queue_sensor
 from context_service.pipelines.sensors.session_autoclose import session_autoclose_sensor

@@ -59,8 +59,8 @@ class TestSiloValidation:
         )
 
         assert result is not None
-        assert result["error"] == "invalid_silo_id"
-        assert "UUID" in result["message"]
+        assert result["error"]["code"] == "VALIDATION_ERROR"
+        assert "UUID" in result["error"]["message"]
 
     async def test_valid_uuid_wrong_org_returns_error(
         self,
@@ -77,23 +77,22 @@ class TestSiloValidation:
         )
 
         assert result is not None
-        assert result["error"] == "silo_not_found"
+        assert result["error"]["code"] == "NOT_FOUND"
 
-    async def test_valid_uuid_correct_org_not_in_db_returns_error(
+    async def test_valid_uuid_correct_org_not_in_db_auto_creates(
         self,
         silo_service: SiloService,
         unique_org_id: str,
         unique_silo_id: uuid.UUID,
     ) -> None:
-        """Valid UUID, correct org, but silo not created in DB."""
+        """Valid UUID, correct org, silo not yet in DB: auto-created, returns None."""
         result = await validate_silo_ownership(
             silo_service,
             str(unique_silo_id),
             unique_org_id,
         )
 
-        assert result is not None
-        assert result["error"] == "silo_not_found"
+        assert result is None
 
 
 # ============================================================================
