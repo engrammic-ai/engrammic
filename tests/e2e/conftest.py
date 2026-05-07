@@ -61,12 +61,19 @@ async def _probe_memgraph() -> bool:
 # ---------------------------------------------------------------------------
 
 
-def _make_fake_node(content: str = "test content") -> MagicMock:
+def _make_fake_node(content: str = "test content", silo_id: uuid.UUID | None = None) -> MagicMock:
+    from datetime import UTC, datetime
+
     node = MagicMock(spec=Node)
     node.id = uuid.uuid4()
     node.content = content
     node.type = "Document"
     node.properties = {}
+    node.silo_id = silo_id
+    node.source_uri = None
+    node.content_hash = None
+    node.created_at = datetime.now(UTC)
+    node.updated_at = datetime.now(UTC)
     return node
 
 
@@ -133,23 +140,7 @@ def _make_fake_context_service(org_id: str) -> MagicMock:
         )
 
     async def _get(*args: Any, **kwargs: Any) -> MagicMock:
-        from context_service.services.models import LookupResult, ScoredNode
-
-        node_id = uuid.uuid4()
-        return LookupResult(
-            nodes=[
-                ScoredNode(
-                    node_id=node_id,
-                    content="fetched content",
-                    type="Document",
-                    silo_id=silo_id,
-                    score=1.0,
-                )
-            ],
-            silos_searched=[silo_id],
-            total_candidates=1,
-            query="",
-        )
+        return _make_fake_node("fetched content", silo_id=silo_id)
 
     async def _graph(*args: Any, **kwargs: Any) -> MagicMock:
         from context_service.services.models import GraphResult

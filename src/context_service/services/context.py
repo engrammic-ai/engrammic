@@ -12,6 +12,9 @@ import structlog
 from primitives.schema.labels import ALL_CITE_LABELS
 
 from context_service.config.settings import get_settings
+
+# Re-export from hydration for timestamp parsing
+from context_service.engine.hydration import _parse_dt
 from context_service.services.models import (
     GraphResult,
     LookupResult,
@@ -410,12 +413,7 @@ class ContextService:
             non_node_labels = [lbl for lbl in labels if lbl != "Node"]
             node_type = non_node_labels[0] if non_node_labels else None
         raw_created_at = row.get("created_at")
-        if isinstance(raw_created_at, str):
-            from datetime import datetime
-
-            created_at = datetime.fromisoformat(raw_created_at.replace("Z", "+00:00"))
-        else:
-            created_at = raw_created_at
+        created_at = _parse_dt(raw_created_at) if raw_created_at is not None else None
         node = Node(
             id=uuid.UUID(row["id"]),
             type=node_type,
@@ -606,8 +604,8 @@ class ContextService:
             )
             for row in db_rows:
                 created_at_val = row.get("created_at")
-                if created_at_val is not None and isinstance(created_at_val, int):
-                    created_at_val = datetime.fromtimestamp(created_at_val / 1_000_000, tz=UTC)
+                if created_at_val is not None:
+                    created_at_val = _parse_dt(created_at_val)
                 props = {
                     "layer": row.get("layer", "memory"),
                     "tags": row.get("tags") or [],
