@@ -2,7 +2,7 @@
 
 ## Goal
 
-Transform Delta Prime from an epistemically-aware document store into a cognitive runtime that manages live belief state during agent reasoning.
+Transform Engrammic from an epistemically-aware document store into a cognitive runtime that manages live belief state during agent reasoning.
 
 ## Key Conceptual Split
 

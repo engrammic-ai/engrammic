@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Scaffold the delta-prime/mcp-client repo as a thin MCP proxy to the Delta Prime cloud backend.
+**Goal:** Scaffold the delta-prime/mcp-client repo as a thin MCP proxy to the Engrammic cloud backend.
 
 **Architecture:** FastMCP server exposing 4 tools (store, recall, link, admin) that forward requests to the backend REST API. Singleton HTTP client with connection pooling, automatic token refresh on 401, and error sanitization. Secure credential storage with file permission checks.
 
@@ -122,11 +122,11 @@ credentials.json
 [project]
 name = "delta-prime-mcp"
 version = "0.1.0"
-description = "MCP server for Delta Prime context management"
+description = "MCP server for Engrammic context management"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.12"
-authors = [{ name = "Delta Prime", email = "hello@deltaprime.ai" }]
+authors = [{ name = "Engrammic", email = "hello@deltaprime.ai" }]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -176,9 +176,9 @@ strict = true
 - [ ] **Step 4: Create README.md**
 
 ```markdown
-# Delta Prime MCP Server
+# Engrammic MCP Server
 
-MCP server for [Delta Prime](https://deltaprime.ai) context management. Connects AI agents to your Delta Prime workspace.
+MCP server for [Engrammic](https://deltaprime.ai) context management. Connects AI agents to your Engrammic workspace.
 
 ## Installation
 
@@ -253,9 +253,9 @@ Apache 2.0
 - [ ] **Step 6: Create .env.example**
 
 ```
-# Delta Prime MCP Configuration
+# Engrammic MCP Configuration
 
-# Backend URL (default: Delta Prime Cloud)
+# Backend URL (default: Engrammic Cloud)
 DELTA_PRIME_BACKEND_URL=https://api.deltaprime.ai
 
 # API Key (alternative to OAuth)
@@ -292,7 +292,7 @@ mkdir -p /home/novusedge/Projects/delta-prime/mcp-client/tests
 - [ ] **Step 2: Create src/delta_prime_mcp/__init__.py**
 
 ```python
-"""Delta Prime MCP Server."""
+"""Engrammic MCP Server."""
 
 __version__ = "0.1.0"
 ```
@@ -308,7 +308,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Delta Prime MCP settings."""
+    """Engrammic MCP settings."""
 
     backend_url: str = "https://api.deltaprime.ai"
     api_key: str | None = None
@@ -462,13 +462,13 @@ Expected: FAIL with import errors
 
 ```python
 # src/delta_prime_mcp/errors.py
-"""Error handling and sanitization for Delta Prime MCP."""
+"""Error handling and sanitization for Engrammic MCP."""
 
 from typing import Any
 
 
 class DeltaPrimeError(Exception):
-    """Error from Delta Prime backend, sanitized for agent consumption."""
+    """Error from Engrammic backend, sanitized for agent consumption."""
 
     def __init__(self, code: str, message: str, request_id: str) -> None:
         self.code = code
@@ -726,7 +726,7 @@ git commit -m "feat: add secure credential storage with permission checks"
 
 ```python
 # tests/test_client.py
-"""Tests for Delta Prime HTTP client."""
+"""Tests for Engrammic HTTP client."""
 
 import pytest
 from pytest_httpx import HTTPXMock
@@ -847,7 +847,7 @@ Expected: FAIL with import errors
 
 ```python
 # src/delta_prime_mcp/client.py
-"""HTTP client for Delta Prime backend communication."""
+"""HTTP client for Engrammic backend communication."""
 
 from __future__ import annotations
 
@@ -888,7 +888,7 @@ def reset_http_client() -> None:
 
 
 class DeltaPrimeClient:
-    """Client for Delta Prime backend API."""
+    """Client for Engrammic backend API."""
 
     def __init__(self, settings: Settings) -> None:
         self.base_url = settings.backend_url.rstrip("/")
@@ -1141,7 +1141,7 @@ Expected: FAIL with import errors
 
 ```python
 # src/delta_prime_mcp/tools/__init__.py
-"""MCP tool implementations for Delta Prime."""
+"""MCP tool implementations for Engrammic."""
 
 from delta_prime_mcp.tools import (
     context_admin,
@@ -1162,7 +1162,7 @@ __all__ = [
 
 ```python
 # src/delta_prime_mcp/tools/context_store.py
-"""MCP tool: context_store - Write to Delta Prime context layers."""
+"""MCP tool: context_store - Write to Engrammic context layers."""
 
 from typing import Any, Literal
 
@@ -1189,7 +1189,7 @@ async def store(
     steps: list[dict[str, Any]] | None = None,
     observation_type: str | None = None,
 ) -> dict[str, Any]:
-    """Store context to Delta Prime.
+    """Store context to Engrammic.
 
     Args:
         intent: Type of storage operation
@@ -1231,7 +1231,7 @@ async def store(
 
 ```python
 # src/delta_prime_mcp/tools/context_recall.py
-"""MCP tool: context_recall - Read from Delta Prime context layers."""
+"""MCP tool: context_recall - Read from Engrammic context layers."""
 
 from typing import Any
 
@@ -1258,7 +1258,7 @@ async def recall(
     include_reflections: bool = False,
     include_steps: bool = False,
 ) -> dict[str, Any]:
-    """Recall context from Delta Prime.
+    """Recall context from Engrammic.
 
     Args:
         query: Semantic search query (required if node_ids not provided)
@@ -1371,7 +1371,7 @@ async def admin(
     node_id: str | None = None,
     since: str | None = None,
 ) -> dict[str, Any]:
-    """Administrative operations for Delta Prime.
+    """Administrative operations for Engrammic.
 
     Args:
         action: Operation to perform
@@ -1422,7 +1422,7 @@ git commit -m "feat: add MCP tool implementations (store, recall, link, admin)"
 
 ```python
 # src/delta_prime_mcp/server.py
-"""FastMCP server for Delta Prime."""
+"""FastMCP server for Engrammic."""
 
 from typing import Any, Literal
 
@@ -1432,11 +1432,11 @@ from delta_prime_mcp.tools import context_admin, context_link, context_recall, c
 
 
 def create_server() -> FastMCP:
-    """Create and configure the Delta Prime MCP server."""
+    """Create and configure the Engrammic MCP server."""
     mcp = FastMCP(
         name="delta-prime",
         instructions=(
-            "Delta Prime context management for AI agents. "
+            "Engrammic context management for AI agents. "
             "Use context_store to save memories, knowledge, decisions, and reasoning. "
             "Use context_recall to search and retrieve context. "
             "Use context_link to connect related concepts. "
@@ -1455,7 +1455,7 @@ def create_server() -> FastMCP:
         steps: list[dict[str, Any]] | None = None,
         observation_type: str | None = None,
     ) -> dict[str, Any]:
-        """Store context to Delta Prime.
+        """Store context to Engrammic.
 
         intent options:
         - remember: Store observations and documents (memory layer)
@@ -1485,7 +1485,7 @@ def create_server() -> FastMCP:
         include_reflections: bool = False,
         include_steps: bool = False,
     ) -> dict[str, Any]:
-        """Recall context from Delta Prime.
+        """Recall context from Engrammic.
 
         Provide either query (semantic search) or node_ids (direct fetch).
         Use depth > 0 to traverse graph relationships.
@@ -1549,7 +1549,7 @@ def create_server() -> FastMCP:
 
 ```python
 # src/delta_prime_mcp/__main__.py
-"""Entry point for Delta Prime MCP server."""
+"""Entry point for Engrammic MCP server."""
 
 import sys
 
@@ -1567,7 +1567,7 @@ structlog.configure(
 
 
 def main() -> None:
-    """Run the Delta Prime MCP server."""
+    """Run the Engrammic MCP server."""
     from delta_prime_mcp.server import create_server
 
     server = create_server()

@@ -14,13 +14,13 @@ Automatic memory consolidation for Managed Agents, modeled after REM sleep. Runs
 
 Research preview, Managed Agents only. Developers must request access.
 
-## Delta Prime positioning
+## Engrammic positioning
 
 **Overlap**: Both address "memory for agents" problem space. Validates the market.
 
 **Differentiation**:
 - Dreaming = post-hoc pattern extraction and consolidation
-- Delta Prime = live belief state management during reasoning (WorkingBelief, confidence, contradictions, supersession)
+- Engrammic = live belief state management during reasoning (WorkingBelief, confidence, contradictions, supersession)
 - We provide epistemic structure; they provide consolidation
 - Provenance and time-travel are unique to us
 

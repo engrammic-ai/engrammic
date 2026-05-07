@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from context_service.mcp.tools.errors import error_response, success_response
 from context_service.services.models import derive_silo_id
 
 if TYPE_CHECKING:
@@ -30,30 +31,27 @@ async def _context_reject_belief(
     )
 
     if not rows:
-        return {
-            "error": "not_found",
-            "message": f"ProposedBelief {proposal_id!r} not found in silo",
-        }
+        return error_response(
+            "NOT_FOUND",
+            f"ProposedBelief {proposal_id!r} not found in silo",
+            details={"proposal_id": proposal_id, "silo_id": silo_id},
+        )
 
-    # If a rejection reason was provided, store it in the node's metadata
+    # If a rejection reason was provided, store it on the node
     if reason:
         await store.execute_write(
-            """
-            MATCH (pb:ProposedBelief {id: $id, silo_id: $silo_id})
-            SET pb.rejection_reason = $reason, pb.rejected_at = $rejected_at
-            RETURN pb.id AS id
-            """,
+            q.UPDATE_PROPOSED_BELIEF_REJECTION,
             {"id": proposal_id, "silo_id": silo_id, "reason": reason, "rejected_at": now},
         )
 
-    response: dict[str, Any] = {
+    data: dict[str, Any] = {
         "proposal_id": proposal_id,
         "status": "rejected",
         "rejected_at": now,
     }
     if reason:
-        response["reason"] = reason
-    return response
+        data["reason"] = reason
+    return success_response(data)
 
 
 def register(mcp: FastMCP) -> None:

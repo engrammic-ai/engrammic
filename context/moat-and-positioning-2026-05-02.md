@@ -173,7 +173,7 @@ We are **pure infra**. Customer handles ingestion; we handle truth.
         |
 [Customer's ingestion] <- they own sync, rate limits, pain
         |
-   [Delta Prime] <- evidence-based memory infra
+   [Engrammic] <- evidence-based memory infra
         | (MCP / REST)
 [Customer's agent / UI]
 ```

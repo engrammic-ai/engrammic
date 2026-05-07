@@ -43,7 +43,7 @@ Location: primitives/docs/manifesto.md (MIT licensed, freely quotable)
 
 - [ ] Write opening paragraph with:
   - "The difference between a filing cabinet and an analyst."
-  - "Memory products store what agents saw. Delta Prime stores what agents figured out, and whether it held up."
+  - "Memory products store what agents saw. Engrammic stores what agents figured out, and whether it held up."
   - Define EAG in plain terms (not "Epistemic Augmented Generation" jargon)
 - [ ] Review for tone
 - [ ] Commit

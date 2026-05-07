@@ -6,6 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from context_service.mcp.tools.errors import error_response, success_response
 from context_service.services.models import derive_silo_id
 
 if TYPE_CHECKING:
@@ -30,28 +31,24 @@ async def _context_accept_belief(
         {"id": proposal_id, "silo_id": silo_id, "status": "accepted"},
     )
 
-    if not rows:
-        return {
-            "error": "not_found",
-            "message": f"ProposedBelief {proposal_id!r} not found in silo",
-        }
-
     proposal = rows[0].get("pb") if rows else None
     if proposal is None:
-        return {
-            "error": "not_found",
-            "message": f"ProposedBelief {proposal_id!r} not found in silo",
-        }
+        return error_response(
+            "NOT_FOUND",
+            f"ProposedBelief {proposal_id!r} not found in silo",
+            details={"proposal_id": proposal_id, "silo_id": silo_id},
+        )
 
     content = proposal.get("content", "")
     confidence = proposal.get("confidence", 0.5)
     pb_session_id = session_id or proposal.get("session_id")
 
     if not pb_session_id:
-        return {
-            "error": "missing_session_id",
-            "message": "session_id is required to create a WorkingBelief (provide it or ensure the ProposedBelief has one)",
-        }
+        return error_response(
+            "VALIDATION_ERROR",
+            "session_id is required to create a WorkingBelief (provide it or ensure the ProposedBelief has one)",
+            details={"proposal_id": proposal_id},
+        )
 
     # Create a WorkingBelief from the proposal content
     working_belief_id = str(uuid.uuid4())
@@ -69,19 +66,19 @@ async def _context_accept_belief(
     )
 
     if not wb_rows:
-        return {
-            "error": "working_belief_creation_failed",
-            "message": "ProposedBelief accepted but WorkingBelief creation failed (session may not exist)",
-            "proposal_id": proposal_id,
-        }
+        return error_response(
+            "INTERNAL_ERROR",
+            "ProposedBelief accepted but WorkingBelief creation failed (session may not exist)",
+            details={"proposal_id": proposal_id},
+        )
 
-    return {
+    return success_response({
         "proposal_id": proposal_id,
         "status": "accepted",
         "working_belief_id": working_belief_id,
         "session_id": pb_session_id,
         "accepted_at": now,
-    }
+    })
 
 
 def register(mcp: FastMCP) -> None:

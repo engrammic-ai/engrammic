@@ -1,4 +1,4 @@
-# Delta Prime memory layer overview
+# Engrammic memory layer overview
 
 ## What it is
 

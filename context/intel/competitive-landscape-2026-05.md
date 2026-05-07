@@ -5,7 +5,7 @@
 ### 1. Agent Frameworks (not memory-focused)
 Build agents, not memory.
 
-| Player | Focus | Memory Approach | Delta Prime Fit |
+| Player | Focus | Memory Approach | Engrammic Fit |
 |--------|-------|-----------------|-----------------|
 | [Factory.ai](https://factory.ai/) | Autonomous SWE (Droids) | Task-specific, not persistent | **Complementary** — Droids could use DP for cross-task learning |
 | CrewAI | Multi-agent orchestration | Built-in short/long-term | **Integration target** — MCP native |
@@ -15,7 +15,7 @@ Build agents, not memory.
 ### 2. Memory Frameworks (storage-focused)
 Store and retrieve, limited cognition.
 
-| Player | Approach | Strengths | Gaps (vs Delta Prime) |
+| Player | Approach | Strengths | Gaps (vs Engrammic) |
 |--------|----------|-----------|----------------------|
 | [Mem0](https://mem0.ai/) | 3-tier (user/session/agent) + hybrid store | Personalization, 21+ integrations | No belief formation, no confidence tracking |
 | [Zep](https://www.getzep.com/) | Temporal knowledge graph | Time-bounded facts, 63.8% LongMemEval | Storage-focused, no active synthesis |
@@ -25,7 +25,7 @@ Store and retrieve, limited cognition.
 ### 3. Cognitive Memory (direct competitors)
 Belief management, governance, epistemics.
 
-| Player | Approach | Overlap with Delta Prime |
+| Player | Approach | Overlap with Engrammic |
 |--------|----------|-------------------------|
 | [Pith](https://pith.run/) | Cognitive governance, contradiction detection, confidence scoring | **HIGH** — direct competitor |
 | [Cognee](https://cognee.ai/) | "Model your agent's world" — knowledge graphs | Medium — more modeling, less belief |
@@ -47,7 +47,7 @@ Belief management, governance, epistemics.
 
 **Threat level: LOW**
 
-| Aspect | Pith | Delta Prime |
+| Aspect | Pith | Engrammic |
 |--------|------|-------------|
 | Architecture | SQLite wrapper | Graph + Vector + Redis |
 | Epistemology | None (marketing term) | **Formal EAG paradigm, 4 layers** |
@@ -58,7 +58,7 @@ Belief management, governance, epistemics.
 
 **Conclusion:** Pith has the positioning angle but not the depth. Not a real competitor yet.
 
-## Market Gaps (Where Delta Prime Wins)
+## Market Gaps (Where Engrammic Wins)
 
 From [State of AI Agent Memory 2026](https://mem0.ai/blog/state-of-ai-agent-memory-2026):
 
@@ -68,13 +68,13 @@ From [State of AI Agent Memory 2026](https://mem0.ai/blog/state-of-ai-agent-memo
 
 | Gap | Who addresses it? |
 |-----|-------------------|
-| Confidence tracking | Pith (partial), **Delta Prime** (full) |
-| Contradiction detection | Zep (temporal), Pith, **Delta Prime** |
-| Belief synthesis | **Delta Prime only** |
-| System-initiated proposals | **Delta Prime only** |
-| Multi-agent shared beliefs | **Delta Prime** (silo partitioning) |
-| Time-travel queries | Zep (validity windows), **Delta Prime** (as_of) |
-| Enterprise multi-tenancy | **Delta Prime** |
+| Confidence tracking | Pith (partial), **Engrammic** (full) |
+| Contradiction detection | Zep (temporal), Pith, **Engrammic** |
+| Belief synthesis | **Engrammic only** |
+| System-initiated proposals | **Engrammic only** |
+| Multi-agent shared beliefs | **Engrammic** (silo partitioning) |
+| Time-travel queries | Zep (validity windows), **Engrammic** (as_of) |
+| Enterprise multi-tenancy | **Engrammic** |
 
 ## Strategic Implications
 
@@ -92,14 +92,14 @@ From [State of AI Agent Memory 2026](https://mem0.ai/blog/state-of-ai-agent-memo
 ### 2. Memory frameworks are partners, not competitors
 - Mem0, Zep, Letta solve storage
 - We solve cognition on top of storage
-- Potential: Delta Prime as a layer above these
+- Potential: Engrammic as a layer above these
 
 ### 3. Agent frameworks are distribution channels
 - Factory Droids, CrewAI, LangGraph don't have cognitive memory
 - MCP is the integration layer
 - Be the default memory MCP server for these frameworks
 
-## Is Delta Prime Useful?
+## Is Engrammic Useful?
 
 **Yes, but positioning matters.**
 

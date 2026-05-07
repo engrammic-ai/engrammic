@@ -23,7 +23,7 @@ Each implementation run starts without memory of the last. This is the explicit 
 
 ## Positioning implications
 
-**Complementary, not competitive.** Symphony is task orchestration (ticket to PR). Delta Prime is cognitive infrastructure (memory, knowledge, wisdom, intelligence layers).
+**Complementary, not competitive.** Symphony is task orchestration (ticket to PR). Engrammic is cognitive infrastructure (memory, knowledge, wisdom, intelligence layers).
 
 Their gap is our headline. Integration story: Symphony handles dispatch, context-service provides persistent cognition across runs.
 

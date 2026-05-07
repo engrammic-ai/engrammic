@@ -4,7 +4,7 @@ Discussion from 2026-05-07 architecture review session.
 
 ## The Core Question
 
-How should beliefs form in Delta Prime? Two models:
+How should beliefs form in Engrammic? Two models:
 
 1. **Agent-initiated**: Agent explicitly calls belief tools
 2. **System-initiated**: System proposes beliefs from memory patterns

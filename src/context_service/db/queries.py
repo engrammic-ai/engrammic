@@ -1293,6 +1293,13 @@ SET pb.status = $status, pb.updated_at = datetime()
 RETURN pb
 """
 
+# Store rejection reason and timestamp on a :ProposedBelief.
+UPDATE_PROPOSED_BELIEF_REJECTION = """
+MATCH (pb:ProposedBelief {id: $id, silo_id: $silo_id})
+SET pb.rejection_reason = $reason, pb.rejected_at = $rejected_at
+RETURN pb.id AS id
+"""
+
 CRYSTALLIZE_TO_COMMITMENT = """
 MATCH (wb:WorkingBelief {id: $belief_id, silo_id: $silo_id})
 CREATE (cm:Node:Commitment {

@@ -43,6 +43,9 @@ def configure_services(
     from context_service.services.evidence import EvidenceValidator
     from context_service.services.silo import SiloService
 
+    # NOTE: outbox= is intentionally omitted. The OutboxWriter infrastructure is
+    # shipped but disabled until we enable it in production config. When omitted,
+    # ContextService falls back to inline Qdrant writes.
     _services["context"] = ContextService(
         memgraph=memgraph,
         qdrant=qdrant,

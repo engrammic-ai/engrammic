@@ -166,7 +166,7 @@ Silo management:
 Org management (metadata layer over WorkOS):
 - `GET /v1/org` - current org details (synced from WorkOS + local settings)
 - `GET /v1/org/members` - list users in org (reads from WorkOS, enriches with local roles)
-- `PATCH /v1/org/members/{id}` - update Delta Prime role (admin/member/viewer, stored locally)
+- `PATCH /v1/org/members/{id}` - update Engrammic role (admin/member/viewer, stored locally)
 
 User lifecycle (invite/remove) handled via WorkOS dashboard or their API directly. We store only role assignments and preferences, not user records.
 

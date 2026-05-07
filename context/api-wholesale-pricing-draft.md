@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-02
 **Status:** Draft for partner conversations (Silt, etc.)
-**Purpose:** Usage-based pricing for B2B partners integrating Delta Prime as infrastructure
+**Purpose:** Usage-based pricing for B2B partners integrating Engrammic as infrastructure
 
 ## Why Wholesale Pricing
 
@@ -92,7 +92,7 @@ Trade-off: Low margin early = faster adoption. Acceptable because:
 
 **Silt's unit economics:**
 - If Silt charges $50/org/mo = $5,000 MRR
-- Delta Prime cost = $299 = 6% of revenue
+- Engrammic cost = $299 = 6% of revenue
 - **94% gross margin on memory infra**
 
 This is the number that closes deals.

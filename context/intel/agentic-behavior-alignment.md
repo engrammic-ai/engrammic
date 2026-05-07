@@ -32,7 +32,7 @@ Models have the cognitive machinery for belief management but don't naturally us
 | Contradiction detection | Partial | Only when prompted |
 | Belief revision | Partial | Inconsistent |
 
-## Implication for Delta Prime
+## Implication for Engrammic
 
 **We're eliciting latent capabilities, not fighting model behavior.**
 

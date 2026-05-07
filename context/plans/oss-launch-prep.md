@@ -93,7 +93,7 @@ Depends on: W1 (engine) and W2 (manifesto) mostly complete.
 
 - [ ] Write Show HN title (<80 chars)
   - Format: "Show HN: [Product] - [one-line hook]"
-  - Example: "Show HN: Delta Prime - Memory for AI agents that knows what held up"
+  - Example: "Show HN: Engrammic - Memory for AI agents that knows what held up"
 - [ ] Write submission text (2-3 sentences):
   - What it is
   - Why it's different

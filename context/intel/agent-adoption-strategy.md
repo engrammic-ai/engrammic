@@ -1,6 +1,6 @@
 # Agent Adoption Strategy
 
-Research from 2026-05-07. How likely are agents to adopt Delta Prime, and how do we position for it?
+Research from 2026-05-07. How likely are agents to adopt Engrammic, and how do we position for it?
 
 ## Market Context
 
@@ -23,11 +23,11 @@ Research from 2026-05-07. How likely are agents to adopt Delta Prime, and how do
 
 **Key insight**: Memory is treated as "connect a vector DB" — no framework has epistemic memory (confidence, beliefs, contradictions) built-in.
 
-## Delta Prime's Position
+## Engrammic's Position
 
 ### Differentiation
 
-| Capability | Vector DBs | Anthropic Dreaming | Delta Prime |
+| Capability | Vector DBs | Anthropic Dreaming | Engrammic |
 |------------|-----------|-------------------|-------------|
 | Store/retrieve | Yes | Yes | Yes |
 | Semantic search | Yes | Yes | Yes |

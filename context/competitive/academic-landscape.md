@@ -64,7 +64,7 @@ Last updated: 2026-05-05
 
 ## Comparison Matrix
 
-| Dimension | HippoRAG | AriGraph | Delta Prime (EAG) |
+| Dimension | HippoRAG | AriGraph | Engrammic (EAG) |
 |-----------|----------|----------|-------------------|
 | Core win | Fast multi-hop retrieval | Agent world-modeling | Knowledge validation + temporal |
 | Graph schema | Schemaless (OpenIE) | Triplet + episodic | Tiered layers + CITEEdgeType |

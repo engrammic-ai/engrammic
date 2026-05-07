@@ -1,6 +1,6 @@
 # MCP Marketplace Architecture
 
-Split architecture for Delta Prime MCP marketplace release: public thin client, private cloud backend, optional OSS self-host.
+Split architecture for Engrammic MCP marketplace release: public thin client, private cloud backend, optional OSS self-host.
 
 ## Overview
 
@@ -512,7 +512,7 @@ The OSS engine MUST implement these endpoints with compatible behavior:
 **Partial (graceful degradation):**
 - `POST /v1/context/recall` with `mode: "search"` returns:
   ```json
-  {"error": "not_supported", "message": "Semantic search requires Delta Prime Cloud"}
+  {"error": "not_supported", "message": "Semantic search requires Engrammic Cloud"}
   ```
 - `POST /v1/context/admin` silo operations return `not_supported`
 

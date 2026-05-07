@@ -80,7 +80,7 @@ Outline (~5-6 pages, 15 min read):
 
 1. **The Hook** (opening paragraph)
    - "The difference between a filing cabinet and an analyst."
-   - "Memory products store what agents saw. Delta Prime stores what agents figured out, and whether it held up."
+   - "Memory products store what agents saw. Engrammic stores what agents figured out, and whether it held up."
    - Define EAG: Epistemic Augmented Generation - a paradigm where agent knowledge is curated, not just stored.
 
 2. **The Problem** (1 page)

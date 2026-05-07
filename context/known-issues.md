@@ -6,7 +6,7 @@
 **Date:** 2026-05-06
 **Affects:** Any workflow spawning subagents that need context_recall/context_store
 
-Claude Code subagents do not inherit MCP server connections from the parent agent. This is a platform limitation, not a Delta Prime bug.
+Claude Code subagents do not inherit MCP server connections from the parent agent. This is a platform limitation, not a Engrammic bug.
 
 **GitHub Issues:**
 - [#5465](https://github.com/anthropics/claude-code/issues/5465) - Subagents fail to inherit permissions in MCP server mode
@@ -21,7 +21,7 @@ Claude Code subagents do not inherit MCP server connections from the parent agen
 
 **Mitigation added:** `UserPromptSubmit` hook in settings.json auto-recalls on every user message, ensuring context is in the main agent's window before dispatch.
 
-**Better solution:** Use Agent Teams (teammates) instead of subagents. Teammates inherit MCP server configuration from project settings, so Delta Prime tools are available to all team members. Requires `teammateMode: "auto"` in settings (already configured).
+**Better solution:** Use Agent Teams (teammates) instead of subagents. Teammates inherit MCP server configuration from project settings, so Engrammic tools are available to all team members. Requires `teammateMode: "auto"` in settings (already configured).
 
 ## HTTP Transport for MCP (Already Available)
 
