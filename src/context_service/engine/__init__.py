@@ -12,6 +12,7 @@ from context_service.engine.models import (
     SubGraph,
 )
 from context_service.engine.protocols import HyperGraphStore
+from context_service.engine.raw_cypher import RawCypherMixin
 
 __all__ = [
     "BinaryEdge",
@@ -20,6 +21,7 @@ __all__ = [
     "HyperGraphStore",
     "Node",
     "Participant",
+    "RawCypherMixin",
     "Silo",
     "StaleVersionError",
     "SubGraph",

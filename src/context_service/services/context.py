@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from context_service.embeddings import EmbeddingService
     from context_service.embeddings.splade import SpladeEncoder
     from context_service.engine.history import BeliefHistory
+    from context_service.engine.outbox import OutboxWriter
     from context_service.engine.protocols import HyperGraphStore
     from context_service.expansion.generator import ExpansionGenerator
     from context_service.services.auto_tagging import AutoTaggingService
@@ -94,6 +95,7 @@ class ContextService:
         splade: SpladeEncoder | None = None,
         expansion_generator: ExpansionGenerator | None = None,
         auto_tagging: AutoTaggingService | None = None,
+        outbox: OutboxWriter | None = None,
     ) -> None:
         self._memgraph = memgraph
         self._qdrant = qdrant
@@ -102,6 +104,7 @@ class ContextService:
         self._splade = splade
         self._expansion_generator = expansion_generator
         self._auto_tagging = auto_tagging
+        self._outbox = outbox
 
     @property
     def graph_store(self) -> HyperGraphStore:
@@ -302,7 +305,45 @@ class ContextService:
                         error=str(exc),
                     )
 
-            try:
+            outbox_metadata: dict[str, Any] = {
+                "silo_id": str(silo_id),
+                "node_type": node_type,
+            }
+            if sparse_indices is not None:
+                outbox_metadata["sparse_indices"] = sparse_indices
+            if sparse_values is not None:
+                outbox_metadata["sparse_values"] = sparse_values
+            if expansion is not None:
+                outbox_metadata["expansion"] = expansion
+
+            if self._outbox is not None:
+                try:
+                    await self._outbox.push(
+                        {
+                            "type": "embed",
+                            "node_id": str(node.id),
+                            "content": content,
+                            "metadata": outbox_metadata,
+                        }
+                    )
+                except Exception as exc:
+                    logger.error(
+                        "outbox_push_failed_falling_back_to_inline",
+                        node_id=str(node.id),
+                        silo_id=str(silo_id),
+                        error=str(exc),
+                    )
+                    # Fall back to inline upsert so the node is still searchable.
+                    await self._qdrant.upsert(
+                        node_id=str(node.id),
+                        vector=vector,
+                        payload={"type": node_type},
+                        silo_id=str(silo_id),
+                        sparse_indices=sparse_indices,
+                        sparse_values=sparse_values,
+                        expansion=expansion,
+                    )
+            else:
                 await self._qdrant.upsert(
                     node_id=str(node.id),
                     vector=vector,
@@ -312,28 +353,6 @@ class ContextService:
                     sparse_values=sparse_values,
                     expansion=expansion,
                 )
-            except Exception as exc:
-                logger.error(
-                    "qdrant_upsert_failed_rolling_back_memgraph",
-                    node_id=str(node.id),
-                    silo_id=str(silo_id),
-                    error=str(exc),
-                )
-                from context_service.engine.queries import DELETE_NODE
-
-                try:
-                    await self._memgraph.execute_write(
-                        DELETE_NODE,
-                        {"id": str(node.id), "silo_id": str(silo_id)},
-                    )
-                except Exception as rollback_exc:
-                    logger.error(
-                        "memgraph_rollback_failed",
-                        node_id=str(node.id),
-                        silo_id=str(silo_id),
-                        error=str(rollback_exc),
-                    )
-                raise
 
         logger.info("context_stored", node_id=str(node.id), type=node_type, silo_id=str(silo_id))
         return node

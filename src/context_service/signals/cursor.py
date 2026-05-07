@@ -17,7 +17,7 @@ import structlog
 if TYPE_CHECKING:
     from neo4j import AsyncTransaction
 
-    from context_service.engine.protocols import HyperGraphStore
+    from context_service.engine.raw_cypher import RawCypherMixin
 
 logger = structlog.get_logger(__name__)
 
@@ -36,7 +36,7 @@ SET c.last_id = $last_id, c.updated_at = $now
 
 
 async def fetch_or_init_heat_cursor(
-    memgraph: HyperGraphStore,
+    memgraph: RawCypherMixin,
     silo_id: str,
 ) -> str:
     """Return the cursor's last-consumed stream entry ID, creating it if absent.
@@ -62,7 +62,7 @@ async def fetch_or_init_heat_cursor(
 
 
 async def advance_heat_cursor(
-    memgraph: HyperGraphStore,
+    memgraph: RawCypherMixin,
     silo_id: str,
     new_cursor: str,
     *,

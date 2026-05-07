@@ -20,7 +20,7 @@ from context_service.retention.queries import (
 )
 
 if TYPE_CHECKING:
-    from context_service.engine.protocols import HyperGraphStore
+    from context_service.engine.raw_cypher import RawCypherMixin
 
 logger = structlog.get_logger(__name__)
 
@@ -30,7 +30,7 @@ class RetentionService:
 
     def __init__(
         self,
-        store: HyperGraphStore,
+        store: RawCypherMixin,
         policy: RetentionPolicy | None = None,
     ) -> None:
         self._store = store

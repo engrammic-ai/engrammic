@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Literal, Protocol, runtime_checkable
+
+from context_service.engine.raw_cypher import RawCypherMixin
 
 if TYPE_CHECKING:
     import uuid
-    from contextlib import AbstractAsyncContextManager
     from datetime import datetime
 
     from context_service.engine.models import BinaryEdge, HyperEdge, Node, Silo, SubGraph
@@ -26,7 +27,7 @@ class Closeable(Protocol):
 
 
 @runtime_checkable
-class HyperGraphStore(Protocol):
+class HyperGraphStore(RawCypherMixin, Protocol):
     """Domain-agnostic graph storage interface.
 
     All methods that return lists use cursor-based pagination.
@@ -244,35 +245,3 @@ class HyperGraphStore(Protocol):
 
     async def ensure_indexes(self) -> None: ...
 
-    # --- Raw Cypher escape hatches ---
-    # These methods exist to enable incremental migration of code that currently
-    # bypasses the protocol and calls MemgraphClient directly. New code should
-    # prefer the domain-level methods above wherever possible.
-
-    async def execute_query(
-        self,
-        cypher: str,
-        params: dict[str, Any] | None = None,
-    ) -> list[dict[str, Any]]:
-        """Run a read-only Cypher query and return results as a list of dicts."""
-        ...
-
-    async def execute_write(
-        self,
-        cypher: str,
-        params: dict[str, Any] | None = None,
-    ) -> list[dict[str, Any]]:
-        """Run a write Cypher query within a transaction and return results as a list of dicts."""
-        ...
-
-    def session(self) -> AbstractAsyncContextManager[Any]:
-        """Return an async context manager yielding a database session for transaction scope."""
-        ...
-
-    def transaction(self) -> AbstractAsyncContextManager[Any]:
-        """Return an async context manager yielding an explicit transaction.
-
-        The transaction is committed on clean exit and rolled back if the body raises.
-        Prefer this over session() + begin_transaction() for atomic writes.
-        """
-        ...

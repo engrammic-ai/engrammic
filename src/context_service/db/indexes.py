@@ -19,7 +19,7 @@ from primitives.schema import (  # noqa: E402
 )
 
 if TYPE_CHECKING:
-    from context_service.engine.protocols import HyperGraphStore
+    from context_service.engine.raw_cypher import RawCypherMixin
 
 logger = structlog.get_logger(__name__)
 
@@ -172,7 +172,7 @@ ALL_INDEX_QUERIES: tuple[str, ...] = (
 )
 
 
-async def apply_all_indexes(client: HyperGraphStore) -> None:
+async def apply_all_indexes(client: RawCypherMixin) -> None:
     """Apply every index in :data:`ALL_INDEX_QUERIES` to Memgraph.
 
     Each ``CREATE INDEX`` is idempotent — Memgraph silently skips indexes

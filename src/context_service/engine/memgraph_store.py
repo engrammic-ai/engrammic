@@ -22,7 +22,9 @@ from context_service.db.schema import (
 )
 from context_service.engine import queries
 from context_service.engine.exceptions import StaleVersionError
+from context_service.engine.hydration import _parse_dt, node_from_record
 from context_service.engine.models import BinaryEdge, HyperEdge, Node, Participant, Silo, SubGraph
+from context_service.engine.raw_cypher import RawCypherMixin
 from context_service.services.models import ScopeContext  # noqa: TC001
 from context_service.utils.json import dumps, loads
 
@@ -60,27 +62,7 @@ def _node_to_knowledge_node(node: Node) -> KnowledgeNode:
     )
 
 
-def _parse_dt(value: Any) -> datetime:
-    """Parse a datetime from Memgraph -- handles str, native datetime, neo4j DateTime, and epoch-ms int."""
-    if isinstance(value, datetime):
-        return value
-    if isinstance(value, (int, float)):
-        # Memgraph timestamp() returns epoch-microseconds (not ms)
-        return datetime.fromtimestamp(value / 1_000_000.0, tz=UTC)
-    if isinstance(value, str):
-        return datetime.fromisoformat(value)
-    # neo4j driver returns neo4j.time.DateTime -- convert via iso_format()
-    if hasattr(value, "iso_format"):
-        return datetime.fromisoformat(value.iso_format())
-    if hasattr(value, "to_native"):
-        native = value.to_native()
-        if not isinstance(native, datetime):
-            raise TypeError(f"to_native() returned {type(native).__name__!r}, expected datetime")
-        return native
-    return datetime.fromisoformat(str(value))
-
-
-class MemgraphStore(EAGKnowledgeStore):
+class MemgraphStore(EAGKnowledgeStore, RawCypherMixin):
     """HyperGraphStore implementation backed by Memgraph.
 
     Inherits EAGKnowledgeStore to satisfy the primitives protocol contract.
@@ -152,106 +134,6 @@ class MemgraphStore(EAGKnowledgeStore):
         return DeleteResult(deleted=deleted, node_id=node_id, cascade_count=0)
 
     # --- Helpers ---
-
-    @staticmethod
-    def _node_from_record(record: dict[str, Any]) -> Node:
-        n = record["n"]
-        props = n.get("properties", "{}")
-        if isinstance(props, str):
-            props = loads(props)
-        supersedes_raw = n.get("supersedes_id")
-        # Prefer record-level _labels (set by queries that do `labels(n) AS _labels`);
-        # neo4j's result.data() flattens Node values to property dicts, so labels
-        # are not available as a nested key on `n`. Fall back to nested keys for
-        # tests that fabricate the shape directly.
-        raw_labels: list[str] = (
-            record.get("_labels")
-            or record.get("labels")
-            or n.get("_labels")
-            or n.get("labels")
-            or []
-        )
-        label = next(
-            (lbl.lower() for lbl in raw_labels if lbl in _CONTENT_LABEL_SET),
-            None,
-        )
-
-        # Phase-4 Document/Passage nodes are written with a different row
-        # shape than the legacy flat Node schema: they lack `type`,
-        # `content`, `version`, `valid_from`. Coerce on the way out so
-        # downstream retrieval + graph walker + admin routes see a
-        # uniform Node model. See context/plans/fix-retrieval-hydration-debt.md.
-        if label == "document":
-            node_type = "document"
-            content = n.get("content") or n.get("raw_payload")
-            version = int(n.get("current_version") or n.get("version") or 1)
-            # Documents are written via UPSERT_DOCUMENT_AND_PASSAGES with
-            # `d += $doc_props`, i.e. flat top-level keys — NOT a JSON-
-            # encoded `properties` string like legacy :Node. Surface the
-            # non-system keys as a `properties` dict so callers (REST
-            # /context/{id}, bench corpus_doc_id round-trip) get them.
-            _system_doc_keys = {
-                "id",
-                "silo_id",
-                "committed",
-                "current_version",
-                "version",
-                "created_at",
-                "updated_at",
-                "valid_from",
-                "valid_to",
-                "supersedes_id",
-                "content",
-                "type",
-                "_labels",
-                "labels",
-                "uri",
-                "mime",
-                "source_type",
-                "content_hash",
-                "content_class",
-                "ingest_class",
-                "last_reset_at",
-                "raw_payload",
-                "raw_payload_truncated",
-                "properties",
-            }
-            props = {k: v for k, v in n.items() if k not in _system_doc_keys}
-        elif label == "passage":
-            node_type = "passage"
-            content = n.get("content") or n.get("text")
-            version = int(n.get("current_version") or n.get("version") or 1)
-        else:
-            # Legacy :Node rows (and tests that fabricate them) plus
-            # :Claim / :Entity which still use the flat shape.
-            node_type = n["type"]
-            content = n.get("content")
-            version = int(n.get("version", 1))
-
-        return Node(
-            id=uuid.UUID(n["id"]),
-            type=node_type,
-            content=content,
-            properties=props,
-            silo_id=uuid.UUID(n["silo_id"]),
-            source_uri=n.get("source_uri") or n.get("uri"),
-            content_hash=n.get("content_hash"),
-            stale=n.get("stale", False),
-            version=version,
-            created_at=_parse_dt(n["created_at"]),
-            updated_at=_parse_dt(n["updated_at"]),
-            last_accessed_at=_parse_dt(n["last_accessed_at"])
-            if n.get("last_accessed_at")
-            else None,
-            valid_from=_parse_dt(n["valid_from"]) if n.get("valid_from") else datetime.now(UTC),
-            valid_to=_parse_dt(n["valid_to"]) if n.get("valid_to") else None,
-            supersedes_id=uuid.UUID(supersedes_raw) if supersedes_raw else None,
-            label=label,
-            ingest_class=n.get("ingest_class") or "standard",
-            content_class=n.get("content_class") or "default",
-            last_reset_at=_parse_dt(n["last_reset_at"]) if n.get("last_reset_at") else None,
-            reclassified_at=_parse_dt(n["reclassified_at"]) if n.get("reclassified_at") else None,
-        )
 
     @staticmethod
     def _silo_from_record(record: dict[str, Any]) -> Silo:
@@ -362,7 +244,7 @@ class MemgraphStore(EAGKnowledgeStore):
         )
         if not result:
             return None
-        return self._node_from_record(result[0])
+        return node_from_record(result[0])
 
     async def get_node_as_of(
         self, node_id: uuid.UUID, silo_id: str, as_of: datetime
@@ -378,7 +260,7 @@ class MemgraphStore(EAGKnowledgeStore):
         )
         if not records:
             return None
-        return self._node_from_record(records[0])
+        return node_from_record(records[0])
 
     async def filter_superseded_at(
         self,
@@ -462,7 +344,7 @@ class MemgraphStore(EAGKnowledgeStore):
             queries.BATCH_GET_NODES,
             {"ids": [str(nid) for nid in node_ids], "silo_id": silo_id},
         )
-        return {uuid.UUID(r["n"]["id"]): self._node_from_record(r) for r in result}
+        return {uuid.UUID(r["n"]["id"]): node_from_record(r) for r in result}
 
     async def delete_node(self, node_id: uuid.UUID, silo_id: str) -> bool:
         result = await self._client.execute_write(
@@ -489,7 +371,7 @@ class MemgraphStore(EAGKnowledgeStore):
                 "limit": limit + 1,
             },
         )
-        nodes = [self._node_from_record(r) for r in result[:limit]]
+        nodes = [node_from_record(r) for r in result[:limit]]
         next_cursor = str(offset + limit) if len(result) > limit else None
         return nodes, next_cursor
 
@@ -526,7 +408,7 @@ class MemgraphStore(EAGKnowledgeStore):
         )
         if not result:
             return None
-        return self._node_from_record(result[0])
+        return node_from_record(result[0])
 
     async def list_nodes_with_uri(self, silo_id: uuid.UUID) -> list[dict[str, Any]]:
         return await self._client.execute_query(
@@ -614,7 +496,7 @@ class MemgraphStore(EAGKnowledgeStore):
             # The Cypher query returns rows with keys {b, shared_links,
             # bridge_entities}. The _node_from_record helper expects a
             # dict where the node is under key "n", so wrap accordingly.
-            node = self._node_from_record({"n": row["b"]})
+            node = node_from_record({"n": row["b"]})
             strength = int(row["shared_links"])
             neighbors.append((node, strength))
         return neighbors
@@ -774,7 +656,7 @@ class MemgraphStore(EAGKnowledgeStore):
         )
         nodes: dict[uuid.UUID, Node] = {}
         for r in result:
-            node = self._node_from_record({"n": r["other"]})
+            node = node_from_record({"n": r["other"]})
             if silo_scope is None or str(node.silo_id) in silo_scope:
                 nodes[node.id] = node
 
@@ -830,7 +712,7 @@ class MemgraphStore(EAGKnowledgeStore):
                 "limit": limit,
             },
         )
-        return [(self._node_from_record({"n": r["b"]}), r["shared_count"]) for r in result]
+        return [(node_from_record({"n": r["b"]}), r["shared_count"]) for r in result]
 
     async def shortest_path(
         self,
@@ -861,7 +743,7 @@ class MemgraphStore(EAGKnowledgeStore):
             labels = n.get("labels", n.get("_labels", []))
             if not content_labels.intersection(labels):
                 continue
-            out.append(self._node_from_record({"n": n, "_labels": labels}))
+            out.append(node_from_record({"n": n, "_labels": labels}))
         return out
 
     # --- Export (Visualization) ---
@@ -871,7 +753,7 @@ class MemgraphStore(EAGKnowledgeStore):
             queries.EXPORT_ALL_NODES,
             {"silo_id": silo_id, "offset": offset, "limit": limit},
         )
-        return [self._node_from_record(r) for r in result]
+        return [node_from_record(r) for r in result]
 
     async def export_binary_edges(
         self, silo_id: str, *, limit: int = 500, offset: int = 0

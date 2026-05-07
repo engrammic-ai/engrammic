@@ -81,8 +81,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from context_service.db.custodian_queries import bootstrap_custodian_schema
         from context_service.db.indexes import apply_all_indexes
 
-        await apply_all_indexes(memgraph_client)  # type: ignore[arg-type]  # composition root passes concrete client
-        await bootstrap_custodian_schema(memgraph_client)  # type: ignore[arg-type]  # composition root passes concrete client
+        await apply_all_indexes(memgraph_client)
+        await bootstrap_custodian_schema(memgraph_client)
         logger.info("memgraph_schema_applied")
 
         redis_pool = await create_redis_pool(settings)

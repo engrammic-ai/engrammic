@@ -11,11 +11,13 @@ from context_service.pipelines.sensors.causal_chain_sensor import (
 )
 from context_service.pipelines.sensors.confidence_drift import confidence_drift_sensor
 from context_service.pipelines.sensors.document_arrival import document_arrival_sensor
+from context_service.pipelines.sensors.outbox_embed_sensor import outbox_embed_sensor
 from context_service.pipelines.sensors.poison_queue_sensor import poison_queue_sensor
 from context_service.pipelines.sensors.session_autoclose import session_autoclose_sensor
 
 all_sensors: list[Any] = [
     document_arrival_sensor,
+    outbox_embed_sensor,
     poison_queue_sensor,
     belief_synthesis_sensor,
     confidence_drift_sensor,

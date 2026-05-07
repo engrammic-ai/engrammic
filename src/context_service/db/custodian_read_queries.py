@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 from context_service.db.schema import content_union_predicate
 
 if TYPE_CHECKING:
-    from context_service.engine.protocols import HyperGraphStore
+    from context_service.engine.raw_cypher import RawCypherMixin
 
 _cup = content_union_predicate
 
@@ -166,7 +166,7 @@ RETURN n.id AS node_id
 
 
 async def fetch_cluster_members(
-    client: HyperGraphStore,
+    client: RawCypherMixin,
     *,
     cluster_id: str,
     silo_id: str,
@@ -186,7 +186,7 @@ async def fetch_cluster_members(
 
 
 async def count_cluster_members(
-    client: HyperGraphStore,
+    client: RawCypherMixin,
     *,
     cluster_id: str,
     silo_id: str,
@@ -201,7 +201,7 @@ async def count_cluster_members(
 
 
 async def fetch_node_by_id(
-    client: HyperGraphStore,
+    client: RawCypherMixin,
     *,
     node_id: str,
     silo_id: str,
@@ -214,7 +214,7 @@ async def fetch_node_by_id(
 
 
 async def fetch_neighborhood(
-    client: HyperGraphStore,
+    client: RawCypherMixin,
     *,
     node_id: str,
     silo_id: str,
@@ -254,7 +254,7 @@ async def fetch_neighborhood(
 
 
 async def list_edges_of_type_in_cluster(
-    client: HyperGraphStore,
+    client: RawCypherMixin,
     *,
     cluster_id: str,
     edge_type: str,
@@ -271,7 +271,7 @@ async def list_edges_of_type_in_cluster(
 
 
 async def fetch_lower_findings(
-    client: HyperGraphStore,
+    client: RawCypherMixin,
     *,
     parent_cluster_id: str,
     silo_id: str,
@@ -286,7 +286,7 @@ async def fetch_lower_findings(
 
 
 async def fetch_cluster_member_ids(
-    client: HyperGraphStore,
+    client: RawCypherMixin,
     *,
     cluster_id: str,
     silo_id: str,
