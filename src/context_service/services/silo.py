@@ -203,18 +203,20 @@ async def validate_silo_ownership(
     The silo_id must be a valid UUID and match the org's deterministic silo.
     Auto-creates the silo if it doesn't exist (MVP 1:1 model).
     """
+    from context_service.mcp.tools.errors import error_response
+
     try:
         requested = uuid.UUID(silo_id)
     except ValueError:
-        return {"error": "invalid_silo_id", "message": "silo_id must be a valid UUID"}
+        return error_response("VALIDATION_ERROR", "silo_id must be a valid UUID")
 
     expected = derive_silo_id(org_id)
     if requested != expected:
-        return {
-            "error": "silo_not_found",
-            "silo_id": silo_id,
-            "message": "Silo does not exist or org_id mismatch.",
-        }
+        return error_response(
+            "NOT_FOUND",
+            "Silo does not exist or org_id mismatch.",
+            details={"silo_id": silo_id},
+        )
 
     cache = silo_service.ownership_cache
     if cache is not None:

@@ -9,6 +9,7 @@ from context_service.mcp.server import get_mcp_auth_context
 from context_service.mcp.tools.context_get import _context_get
 from context_service.mcp.tools.context_graph import _context_graph
 from context_service.mcp.tools.context_query import _context_query
+from context_service.mcp.tools.errors import error_response
 from context_service.services.models import derive_silo_id
 
 if TYPE_CHECKING:
@@ -74,6 +75,41 @@ def _strip_content(response: dict[str, Any]) -> dict[str, Any]:
     return response
 
 
+_PROPOSED_BELIEFS_LIMIT = 5
+
+
+async def _fetch_proposed_beliefs(silo_id: str) -> list[dict[str, Any]]:
+    """Fetch pending ProposedBeliefs for the given silo.
+
+    Returns a list of proposal dicts, or an empty list if none are found or
+    the query fails.
+    """
+    from context_service.db import queries as q
+    from context_service.mcp.server import get_context_service
+
+    store = get_context_service().graph_store
+    rows = await store.execute_query(
+        q.GET_PROPOSED_BELIEFS,
+        {"silo_id": silo_id, "status": "pending", "limit": _PROPOSED_BELIEFS_LIMIT},
+    )
+
+    proposals: list[dict[str, Any]] = []
+    for row in rows:
+        pb = row.get("pb")
+        if pb is None:
+            continue
+        proposals.append(
+            {
+                "id": pb.get("id"),
+                "content": pb.get("content"),
+                "confidence": pb.get("confidence"),
+                "evidence_ids": pb.get("evidence_ids") or [],
+                "created_at": pb.get("created_at"),
+            }
+        )
+    return proposals
+
+
 async def _context_recall(
     silo_id: str,
     query: str | None = None,
@@ -89,7 +125,13 @@ async def _context_recall(
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     if not query and not node_ids:
-        return {"error": "missing_input", "message": "Provide query or node_ids"}
+        return error_response(
+            "VALIDATION_ERROR",
+            "Provide query or node_ids",
+            details={"fields": ["query", "node_ids"]},
+        )
+
+    ignored: list[str] = []
 
     if node_ids and depth == 0:
         response = await _context_get(
@@ -115,9 +157,11 @@ async def _context_recall(
 
         if not include_content:
             response = _strip_content(response)
-        return response
-
-    if node_ids and depth > 0:
+    elif node_ids and depth > 0:
+        if include_steps:
+            ignored.append("include_steps")
+        if include_reflections:
+            ignored.append("include_reflections")
         response = await _context_graph(
             silo_id=silo_id,
             seed_nodes=node_ids,
@@ -126,9 +170,11 @@ async def _context_recall(
         )
         if not include_content:
             response = _strip_content(response)
-        return response
-
-    if query and depth == 0:
+    elif query and depth == 0:
+        if include_steps:
+            ignored.append("include_steps")
+        if include_reflections:
+            ignored.append("include_reflections")
         response = await _context_query(
             silo_id=silo_id,
             query=query,
@@ -138,17 +184,28 @@ async def _context_recall(
         )
         if not include_content:
             response = _strip_content(response)
-        return response
+    else:
+        if include_steps:
+            ignored.append("include_steps")
+        if include_reflections:
+            ignored.append("include_reflections")
+        response = await _context_graph(
+            silo_id=silo_id,
+            query=query,
+            max_depth=depth,
+            max_nodes=top_k,
+            layers=layers,
+        )
+        if not include_content:
+            response = _strip_content(response)
 
-    response = await _context_graph(
-        silo_id=silo_id,
-        query=query,
-        max_depth=depth,
-        max_nodes=top_k,
-        layers=layers,
-    )
-    if not include_content:
-        response = _strip_content(response)
+    proposed = await _fetch_proposed_beliefs(silo_id)
+    if proposed:
+        response["proposed_beliefs"] = proposed
+
+    if ignored:
+        response["ignored_flags"] = ignored
+
     return response
 
 
@@ -211,6 +268,10 @@ def register(mcp: FastMCP) -> None:
             - node_ids + depth>0: {nodes, edges, traversal_stats, metadata}
             - query + depth=0: {results, total_candidates, search_time_ms}
             - query + depth>0: {nodes, edges, traversal_stats, metadata}
+            All modes append {proposed_beliefs} when pending proposals exist for
+            the silo. Each entry has {id, content, confidence, evidence_ids,
+            created_at}. Use context_accept_belief or context_reject_belief to
+            act on proposals.
         """
         auth = await get_mcp_auth_context()
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))

@@ -84,8 +84,9 @@ async def test_link_invalid_relationship(mock_deps):
         relationship="INVALID_REL",
     )
 
-    assert result["error"] == "invalid_relationship"
-    assert "valid" in result
+    assert result["success"] is False
+    assert result["error"]["code"] == "VALIDATION_ERROR"
+    assert "valid_values" in result["error"]["details"]
 
 
 @pytest.mark.asyncio
@@ -95,7 +96,7 @@ async def test_link_invalid_silo_id(mock_deps):
     with patch(
         "context_service.mcp.tools.context_link.validate_silo_ownership",
         new_callable=AsyncMock,
-        return_value={"error": "invalid_silo_id", "message": "silo_id must be a valid UUID"},
+        return_value={"success": False, "error": {"code": "VALIDATION_ERROR", "message": "silo_id must be a valid UUID"}},
     ):
         result = await _context_link(
             silo_id="not-a-uuid",
@@ -104,7 +105,8 @@ async def test_link_invalid_silo_id(mock_deps):
             relationship="REFERENCES",
         )
 
-    assert result["error"] == "invalid_silo_id"
+    assert result["success"] is False
+    assert result["error"]["code"] == "VALIDATION_ERROR"
 
 
 @pytest.mark.asyncio
@@ -114,7 +116,7 @@ async def test_link_wrong_silo_id(mock_deps):
     with patch(
         "context_service.mcp.tools.context_link.validate_silo_ownership",
         new_callable=AsyncMock,
-        return_value={"error": "silo_not_found", "silo_id": str(uuid.uuid4())},
+        return_value={"success": False, "error": {"code": "NOT_FOUND", "message": "Silo does not exist or org_id mismatch."}},
     ):
         result = await _context_link(
             silo_id=str(uuid.uuid4()),
@@ -123,7 +125,8 @@ async def test_link_wrong_silo_id(mock_deps):
             relationship="REFERENCES",
         )
 
-    assert result["error"] == "silo_not_found"
+    assert result["success"] is False
+    assert result["error"]["code"] == "NOT_FOUND"
 
 
 @pytest.mark.asyncio
@@ -139,7 +142,7 @@ async def test_link_with_weight_and_note(mock_deps):
         note="Strong structural support",
     )
 
-    assert "error" not in result
+    assert result.get("success") is not False
     call_kwargs = mock_deps["svc"].link.call_args.kwargs
     assert call_kwargs["weight"] == 0.7
     assert call_kwargs["note"] == "Strong structural support"
@@ -157,7 +160,8 @@ async def test_link_invalid_weight(mock_deps):
         weight=99.9,
     )
 
-    assert result["error"] == "invalid_weight"
+    assert result["success"] is False
+    assert result["error"]["code"] == "VALIDATION_ERROR"
 
 
 @pytest.mark.asyncio
@@ -239,7 +243,7 @@ async def test_link_writes_edge_to_graph_store(fake_graph_store, mock_deps_real_
         relationship="REFERENCES",
     )
 
-    assert "error" not in result
+    assert result.get("success") is not False
     assert len(fake_graph_store.write_log) == 1
     cypher, params = fake_graph_store.write_log[0]
     assert "CREATE" in cypher
@@ -303,7 +307,8 @@ async def test_link_no_write_on_invalid_relationship(fake_graph_store, mock_deps
         relationship="NOT_A_REAL_REL",
     )
 
-    assert result["error"] == "invalid_relationship"
+    assert result["success"] is False
+    assert result["error"]["code"] == "VALIDATION_ERROR"
     assert fake_graph_store.write_log == []
 
 
@@ -322,7 +327,8 @@ async def test_link_no_write_on_invalid_weight(fake_graph_store, mock_deps_real_
         weight=99.9,
     )
 
-    assert result["error"] == "invalid_weight"
+    assert result["success"] is False
+    assert result["error"]["code"] == "VALIDATION_ERROR"
     assert fake_graph_store.write_log == []
 
 

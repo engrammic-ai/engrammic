@@ -8,13 +8,16 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
+from context_service.mcp.tools.context_accept_belief import register as register_accept_belief
 from context_service.mcp.tools.context_admin import register as register_admin
 from context_service.mcp.tools.context_belief_state import register as register_belief_state
 from context_service.mcp.tools.context_crystallize import register as register_crystallize
 from context_service.mcp.tools.context_link import register as register_link
 from context_service.mcp.tools.context_recall import register as register_recall
+from context_service.mcp.tools.context_reject_belief import register as register_reject_belief
 from context_service.mcp.tools.context_store import register as register_store
 from context_service.mcp.tools.context_update_belief import register as register_update_belief
+from context_service.mcp.tools.errors import error_response, success_response
 
 
 def register_all(mcp: FastMCP) -> None:
@@ -26,9 +29,13 @@ def register_all(mcp: FastMCP) -> None:
     register_belief_state(mcp)
     register_update_belief(mcp)
     register_crystallize(mcp)
+    register_accept_belief(mcp)
+    register_reject_belief(mcp)
 
 
 __all__ = [
+    "error_response",
+    "register_accept_belief",
     "register_all",
     "register_admin",
     "register_belief_state",
@@ -36,5 +43,7 @@ __all__ = [
     "register_link",
     "register_recall",
     "register_store",
+    "register_reject_belief",
     "register_update_belief",
+    "success_response",
 ]

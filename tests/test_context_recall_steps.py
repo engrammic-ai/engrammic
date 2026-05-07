@@ -2,10 +2,21 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def mock_proposed_beliefs():
+    """Suppress _fetch_proposed_beliefs in unit tests (requires live service)."""
+    with patch(
+        "context_service.mcp.tools.context_recall._fetch_proposed_beliefs",
+        new_callable=AsyncMock,
+        return_value=[],
+    ):
+        yield
 
 
 @pytest.mark.asyncio

@@ -4,6 +4,9 @@ from typing import Any
 
 from context_service.pipelines.sensors.belief_merge import belief_merge_sensor
 from context_service.pipelines.sensors.belief_synthesis import belief_synthesis_sensor
+from context_service.pipelines.sensors.belief_synthesis_sensor import (
+    memory_cluster_belief_sensor,
+)
 from context_service.pipelines.sensors.cascade_review import cascade_review_sensor
 from context_service.pipelines.sensors.causal_chain_sensor import (
     causal_transitivity_sensor,
@@ -26,4 +29,5 @@ all_sensors: list[Any] = [
     chain_stitch_sensor,
     belief_merge_sensor,
     cascade_review_sensor,
+    memory_cluster_belief_sensor,
 ]

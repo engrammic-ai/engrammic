@@ -244,4 +244,3 @@ class HyperGraphStore(RawCypherMixin, Protocol):
     # --- Schema ---
 
     async def ensure_indexes(self) -> None: ...
-

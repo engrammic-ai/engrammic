@@ -99,7 +99,7 @@ async def test_admin_silo_list(mock_silo_list):
 async def test_admin_history(mock_history):
     from context_service.mcp.tools.context_admin import _context_admin
 
-    result = await _context_admin(action="history", silo_id=_SILO_ID, ref=_NODE_ID)
+    result = await _context_admin(action="history", silo_id=_SILO_ID, node_id=_NODE_ID)
 
     assert "timeline" in result
     mock_history.assert_called_once()
@@ -111,14 +111,15 @@ async def test_admin_history_missing_ref():
 
     result = await _context_admin(action="history", silo_id=_SILO_ID)
 
-    assert result["error"] == "missing_ref"
+    assert result["success"] is False
+    assert result["error"]["code"] == "VALIDATION_ERROR"
 
 
 @pytest.mark.asyncio
 async def test_admin_provenance(mock_graph_provenance):
     from context_service.mcp.tools.context_admin import _context_admin
 
-    result = await _context_admin(action="provenance", silo_id=_SILO_ID, ref=_NODE_ID)
+    result = await _context_admin(action="provenance", silo_id=_SILO_ID, node_id=_NODE_ID)
 
     assert "chain" in result
     mock_graph_provenance.provenance.assert_called_once_with(_SILO_ID, _NODE_ID)
@@ -130,14 +131,15 @@ async def test_admin_provenance_missing_ref():
 
     result = await _context_admin(action="provenance", silo_id=_SILO_ID)
 
-    assert result["error"] == "missing_ref"
+    assert result["success"] is False
+    assert result["error"]["code"] == "VALIDATION_ERROR"
 
 
 @pytest.mark.asyncio
 async def test_admin_close_session(mock_close_reasoning):
     from context_service.mcp.tools.context_admin import _context_admin
 
-    result = await _context_admin(action="close_session", silo_id=_SILO_ID, ref=_CHAIN_ID)
+    result = await _context_admin(action="close_session", silo_id=_SILO_ID, chain_id=_CHAIN_ID)
 
     assert result["chain_id"] == _CHAIN_ID
     mock_close_reasoning.assert_called_once()
@@ -149,7 +151,8 @@ async def test_admin_close_session_missing_ref():
 
     result = await _context_admin(action="close_session", silo_id=_SILO_ID)
 
-    assert result["error"] == "missing_ref"
+    assert result["success"] is False
+    assert result["error"]["code"] == "VALIDATION_ERROR"
 
 
 @pytest.mark.asyncio
@@ -158,5 +161,6 @@ async def test_admin_unknown_action():
 
     result = await _context_admin(action="delete_everything", silo_id=_SILO_ID)
 
-    assert result["error"] == "unknown_action"
-    assert "valid" in result
+    assert result["success"] is False
+    assert result["error"]["code"] == "VALIDATION_ERROR"
+    assert "valid_values" in result["error"]["details"]

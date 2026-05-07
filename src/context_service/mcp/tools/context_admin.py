@@ -21,6 +21,7 @@ from context_service.mcp.server import (
     get_silo_service,
 )
 from context_service.mcp.tools.context_history import _context_history
+from context_service.mcp.tools.errors import error_response, success_response
 from context_service.services.models import derive_silo_id
 from context_service.services.silo import ensure_silo, validate_silo_ownership
 
@@ -96,18 +97,20 @@ async def close_reasoning_chain(
         {"chain_id": chain_id, "silo_id": silo_id},
     )
     if not rows:
-        return {
-            "error": "chain_not_found",
-            "message": f"ReasoningChain {chain_id!r} not found in silo {silo_id!r}",
-        }
+        return error_response(
+            "NOT_FOUND",
+            f"ReasoningChain {chain_id!r} not found in silo {silo_id!r}",
+            details={"chain_id": chain_id, "silo_id": silo_id},
+        )
 
     chain = rows[0]
 
     if chain.get("session_state") == "closed":
-        return {
-            "error": "already_closed",
-            "message": f"ReasoningChain {chain_id!r} is already closed",
-        }
+        return error_response(
+            "CONFLICT",
+            f"ReasoningChain {chain_id!r} is already closed",
+            details={"chain_id": chain_id},
+        )
 
     await store.execute_write(
         SET_CHAIN_SESSION_STATE,
@@ -176,16 +179,13 @@ async def close_reasoning_chain(
                 except Exception:
                     summary = inline_summary(steps_list)
         except ValueError as exc:
-            return {
-                "error": "compaction_failed",
-                "message": str(exc),
-            }
+            return error_response("INTERNAL_ERROR", str(exc), details={"stage": "compaction"})
     elif steps_list:
         summary = inline_summary(steps_list)
     elif chain.get("compact_summary"):
         summary = chain["compact_summary"]
 
-    result: dict[str, Any] = {
+    payload: dict[str, Any] = {
         "chain_id": chain_id,
         "session_state": "summarized" if summarization_triggered else "closed",
         "summarization_triggered": summarization_triggered,
@@ -193,13 +193,13 @@ async def close_reasoning_chain(
         "closed_at": now,
     }
     if summary is not None:
-        result["summary"] = summary
+        payload["summary"] = summary
     if event_id is not None:
-        result["event_id"] = event_id
+        payload["event_id"] = event_id
     if refs_created:
-        result["references_created"] = refs_created
+        payload["references_created"] = refs_created
 
-    return result
+    return success_response(payload)
 
 
 async def _context_close_reasoning(
@@ -210,10 +210,10 @@ async def _context_close_reasoning(
     """MCP-layer wrapper: auth check + feature gate, then delegates to core logic."""
     settings = get_settings()
     if not settings.session_compaction_enabled:
-        return {
-            "error": "feature_disabled",
-            "message": "session_compaction_enabled is false; enable it to use context_close_reasoning",
-        }
+        return error_response(
+            "FEATURE_DISABLED",
+            "session_compaction_enabled is false; enable it to use context_close_reasoning",
+        )
 
     auth = await get_mcp_auth_context()
 
@@ -230,7 +230,7 @@ async def _context_close_reasoning(
         silo_id=expected_silo_id,
         referenced_chain_ids=referenced_chain_ids,
     )
-    if "error" not in result:
+    if result.get("success") is not False:
         result["silo_id"] = expected_silo_id
     return result
 
@@ -238,24 +238,56 @@ async def _context_close_reasoning(
 async def _context_admin(
     action: str,
     silo_id: str,
-    ref: str | None = None,
-    name: str | None = None,  # noqa: ARG001
+    node_id: str | None = None,
+    chain_id: str | None = None,
+    session_id: str | None = None,  # noqa: ARG001
+    query: str | None = None,
+    as_of: str | None = None,
+    revision_note: str | None = None,
 ) -> dict[str, Any]:
-    """Internal implementation for testing."""
+    """Internal implementation for testing.
+
+    Parameters
+    ----------
+    action:
+        One of the valid admin actions.
+    silo_id:
+        Resolved silo UUID (already derived from auth when not provided by caller).
+    node_id:
+        Node UUID. Used by: provenance, history, belief_history, partial_revise.
+    chain_id:
+        ReasoningChain UUID. Used by: close_session.
+    session_id:
+        Session UUID. Reserved for future session-scoped operations.
+    query:
+        Free-text search string. Used by: temporal_query.
+    as_of:
+        ISO 8601 datetime string. Used by: temporal_query.
+    revision_note:
+        Human-readable note describing the revision. Used by: partial_revise.
+    """
     if action == "silo_list":
         return await _silo_list_impl()
 
     if action == "close_session":
-        if not ref:
-            return {"error": "missing_ref", "message": "ref (chain_id) required for close_session"}
-        return await _context_close_reasoning(silo_id=silo_id, chain_id=ref)
+        if not chain_id:
+            return error_response(
+                "VALIDATION_ERROR",
+                "chain_id required for close_session",
+                details={"field": "chain_id"},
+            )
+        return await _context_close_reasoning(silo_id=silo_id, chain_id=chain_id)
 
     if action == "provenance":
-        if not ref:
-            return {"error": "missing_ref", "message": "ref (node_id) required for provenance"}
+        if not node_id:
+            return error_response(
+                "VALIDATION_ERROR",
+                "node_id required for provenance",
+                details={"field": "node_id"},
+            )
         ctx_svc = get_context_service()
-        result = await ctx_svc.provenance(silo_id, ref)
-        return {
+        result = await ctx_svc.provenance(silo_id, node_id)
+        return success_response({
             "chain": [
                 {
                     "node_id": step.node_id,
@@ -266,39 +298,46 @@ async def _context_admin(
                 for step in result.chain
             ],
             "root_sources": result.root_sources,
-        }
+        })
 
     if action == "history":
-        if not ref:
-            return {
-                "error": "missing_ref",
-                "message": "ref (node_id or subject) required for history",
-            }
-        return await _context_history(silo_id=silo_id, node_id=ref)
+        if not node_id:
+            return error_response(
+                "VALIDATION_ERROR",
+                "node_id (or subject) required for history",
+                details={"field": "node_id"},
+            )
+        return await _context_history(silo_id=silo_id, node_id=node_id)
 
     if action == "temporal_query":
-        if not ref:
-            return {
-                "error": "missing_ref",
-                "message": "ref (ISO datetime) required for temporal_query",
-            }
+        if not as_of:
+            return error_response(
+                "VALIDATION_ERROR",
+                "as_of (ISO datetime) required for temporal_query",
+                details={"field": "as_of"},
+            )
         try:
-            as_of = datetime.fromisoformat(ref)
+            as_of_dt = datetime.fromisoformat(as_of)
         except ValueError:
-            return {
-                "error": "invalid_ref",
-                "message": f"ref must be a valid ISO 8601 datetime, got {ref[:50]!r}{'...' if len(ref) > 50 else ''}",
-            }
+            return error_response(
+                "VALIDATION_ERROR",
+                f"as_of must be a valid ISO 8601 datetime, got {as_of[:50]!r}{'...' if len(as_of) > 50 else ''}",
+                details={"field": "as_of"},
+            )
         ctx_svc = get_context_service()
-        rows = await ctx_svc.temporal_query(silo_id, as_of, query=name or "", top_k=20)
-        return {"results": rows, "as_of": ref, "query": name or ""}
+        rows = await ctx_svc.temporal_query(silo_id, as_of_dt, query=query or "", top_k=20)
+        return success_response({"results": rows, "as_of": as_of, "query": query or ""})
 
     if action == "belief_history":
-        if not ref:
-            return {"error": "missing_ref", "message": "ref (node_id) required for belief_history"}
+        if not node_id:
+            return error_response(
+                "VALIDATION_ERROR",
+                "node_id required for belief_history",
+                details={"field": "node_id"},
+            )
         ctx_svc = get_context_service()
-        bh = await ctx_svc.belief_history(silo_id, ref)
-        return {
+        bh = await ctx_svc.belief_history(silo_id, node_id)
+        return success_response({
             "subject": bh.subject,
             "total_versions": bh.total_versions,
             "confidence_trend": bh.confidence_trend,
@@ -314,19 +353,21 @@ async def _context_admin(
                 }
                 for state in bh.timeline
             ],
-        }
+        })
 
     if action == "partial_revise":
-        if not ref:
-            return {
-                "error": "missing_ref",
-                "message": "ref (belief_id) required for partial_revise",
-            }
-        if not name:
-            return {
-                "error": "missing_name",
-                "message": "name (revision_note) required for partial_revise",
-            }
+        if not node_id:
+            return error_response(
+                "VALIDATION_ERROR",
+                "node_id (belief_id) required for partial_revise",
+                details={"field": "node_id"},
+            )
+        if not revision_note:
+            return error_response(
+                "VALIDATION_ERROR",
+                "revision_note required for partial_revise",
+                details={"field": "revision_note"},
+            )
         settings = get_settings()
         ctx_svc = get_context_service()
         store = ctx_svc.graph_store
@@ -340,26 +381,34 @@ async def _context_admin(
                 settings.summarization_provider, settings.summarization_model
             )
         except Exception as exc:
-            return {"error": "llm_unavailable", "message": str(exc)}
+            return error_response("INTERNAL_ERROR", str(exc), details={"stage": "llm_init"})
         embedding_svc = ctx_svc.embedding_client
         if embedding_svc is None:
-            return {"error": "embedding_unavailable", "message": "no embedding service configured"}
+            return error_response(
+                "INTERNAL_ERROR",
+                "no embedding service configured",
+                details={"stage": "embedding_init"},
+            )
         pr = await partial_revise_belief(
             store=store,
-            belief_id=ref,
+            belief_id=node_id,
             silo_id=silo_id,
-            revision_note=name,
+            revision_note=revision_note,
             llm_client=llm_client,
             embedding_client=embedding_svc,
         )
-        return {
+        return success_response({
             "original_belief_id": pr.original_belief_id,
             "revised_id": pr.revised_id,
             "retained_id": pr.retained_id,
             "cascade_flagged_count": pr.cascade_flagged_count,
-        }
+        })
 
-    return {"error": "unknown_action", "valid": list(_VALID_ACTIONS)}
+    return error_response(
+        "VALIDATION_ERROR",
+        f"Unknown action {action!r}",
+        details={"field": "action", "valid_values": list(_VALID_ACTIONS)},
+    )
 
 
 def register(mcp: FastMCP) -> None:
@@ -370,13 +419,13 @@ def register(mcp: FastMCP) -> None:
         description=(
             "Admin and utility actions: silo_list, close_session, provenance, history, "
             "temporal_query, belief_history, partial_revise. "
-            "silo_list: list org silos. "
-            "close_session: close a reasoning chain (ref=chain_id). "
-            "provenance: trace citation chain for a node (ref=node_id). "
-            "history: show belief evolution for a node (ref=node_id or subject). "
-            "temporal_query: return nodes valid at a point in time (ref=ISO datetime, name=query). "
-            "belief_history: return supersession chain for a fact node (ref=node_id). "
-            "partial_revise: partially revise a belief (ref=belief_id, name=revision_note)."
+            "silo_list: list org silos (no extra params). "
+            "close_session: close a reasoning chain (chain_id required). "
+            "provenance: trace citation chain for a node (node_id required). "
+            "history: show belief evolution for a node (node_id required). "
+            "temporal_query: return nodes valid at a point in time (as_of=ISO datetime, query=text). "
+            "belief_history: return supersession chain for a fact node (node_id required). "
+            "partial_revise: partially revise a belief (node_id=belief_id, revision_note required)."
         ),
     )
     async def context_admin(
@@ -389,17 +438,26 @@ def register(mcp: FastMCP) -> None:
             "belief_history",
             "partial_revise",
         ],
-        ref: str | None = None,
-        name: str | None = None,
+        node_id: str | None = None,
+        chain_id: str | None = None,
+        session_id: str | None = None,
+        query: str | None = None,
+        as_of: str | None = None,
+        revision_note: str | None = None,
         silo_id: str | None = None,
     ) -> dict[str, Any]:
         """Admin and utility actions.
 
         Args:
-            action: silo_list|close_session|provenance|history|temporal_query|belief_history|partial_revise.
-            ref: Node ID for provenance/history/belief_history, chain_id for close_session,
-                ISO datetime for temporal_query, belief_id for partial_revise.
-            name: Query text for temporal_query, revision_note for partial_revise.
+            action: One of silo_list, close_session, provenance, history, temporal_query,
+                belief_history, partial_revise.
+            node_id: UUID of a specific node. Required for: provenance, history,
+                belief_history, partial_revise (where it identifies the belief).
+            chain_id: UUID of a ReasoningChain. Required for: close_session.
+            session_id: UUID of a session. Reserved for future session-scoped operations.
+            query: Free-text search string. Used by: temporal_query.
+            as_of: ISO 8601 datetime string. Required for: temporal_query.
+            revision_note: Human-readable note describing the revision. Required for: partial_revise.
             silo_id: UUID of the silo. Optional; defaults to the org's primary silo
                 derived from auth.
 
@@ -411,6 +469,10 @@ def register(mcp: FastMCP) -> None:
         return await _context_admin(
             action=action,
             silo_id=resolved_silo_id,
-            ref=ref,
-            name=name,
+            node_id=node_id,
+            chain_id=chain_id,
+            session_id=session_id,
+            query=query,
+            as_of=as_of,
+            revision_note=revision_note,
         )

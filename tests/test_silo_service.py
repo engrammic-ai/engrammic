@@ -144,7 +144,8 @@ class TestValidateSiloOwnership:
         result = await validate_silo_ownership(silo_service, "not-a-uuid", "org-1")
 
         assert result is not None
-        assert result["error"] == "invalid_silo_id"
+        assert result["success"] is False
+        assert result["error"]["code"] == "VALIDATION_ERROR"
 
     @pytest.mark.asyncio
     async def test_silo_id_mismatch(self, silo_service: SiloService) -> None:
@@ -152,7 +153,8 @@ class TestValidateSiloOwnership:
         result = await validate_silo_ownership(silo_service, wrong_id, "org-1")
 
         assert result is not None
-        assert result["error"] == "silo_not_found"
+        assert result["success"] is False
+        assert result["error"]["code"] == "NOT_FOUND"
 
     @pytest.mark.asyncio
     async def test_valid_ownership(self, silo_service: SiloService, mock_store: AsyncMock) -> None:

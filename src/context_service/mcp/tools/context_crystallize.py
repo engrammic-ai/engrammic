@@ -7,6 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from context_service.mcp.tools.errors import error_response, success_response
 from context_service.services.models import derive_silo_id
 
 if TYPE_CHECKING:
@@ -49,7 +50,11 @@ async def _context_crystallize(
     from context_service.mcp.server import get_context_service
 
     if not belief_ids:
-        return {"error": "missing_belief_ids", "message": "belief_ids must be non-empty"}
+        return error_response(
+            "VALIDATION_ERROR",
+            "belief_ids must be non-empty",
+            details={"field": "belief_ids"},
+        )
 
     store = get_context_service().graph_store
     now = datetime.now(UTC).isoformat()
@@ -63,13 +68,13 @@ async def _context_crystallize(
     superseded = [bid for bid, r in zip(belief_ids, results, strict=True) if r is not None]
     not_found = [bid for bid, r in zip(belief_ids, results, strict=True) if r is None]
 
-    response: dict[str, Any] = {
+    payload: dict[str, Any] = {
         "commitment_ids": commitment_ids,
         "superseded": superseded,
     }
     if not_found:
-        response["not_found"] = not_found
-    return response
+        payload["not_found"] = not_found
+    return success_response(payload)
 
 
 def register(mcp: FastMCP) -> None:

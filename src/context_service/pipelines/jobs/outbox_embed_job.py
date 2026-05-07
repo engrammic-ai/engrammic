@@ -112,8 +112,7 @@ def outbox_embed_op(context: dg.OpExecutionContext) -> dict[str, int]:
 
                 except Exception as exc:
                     context.log.warning(
-                        f"outbox embed/upsert failed for node={node_id} "
-                        f"retry={retry_count}: {exc}"
+                        f"outbox embed/upsert failed for node={node_id} retry={retry_count}: {exc}"
                     )
                     if retry_count >= MAX_RETRIES - 1:
                         # Move to DLQ
@@ -153,7 +152,11 @@ def outbox_embed_op(context: dg.OpExecutionContext) -> dict[str, int]:
 @dg.job(
     name="outbox_embed_job",
     description="Process pending Qdrant embed outbox entries from Redis.",
-    resource_defs={"redis": RedisResource, "qdrant": QdrantResource, "embedding": EmbeddingResource},
+    resource_defs={
+        "redis": RedisResource,
+        "qdrant": QdrantResource,
+        "embedding": EmbeddingResource,
+    },
 )
 def outbox_embed_job() -> None:
     outbox_embed_op()

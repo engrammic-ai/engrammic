@@ -118,5 +118,6 @@ class TestContextCrystallizeGuards:
     async def test_empty_belief_ids_returns_error(self, fake_store):
         result = await _context_crystallize(belief_ids=[], silo_id=_SILO_ID)
 
-        assert result["error"] == "missing_belief_ids"
+        assert result["success"] is False
+        assert result["error"]["code"] == "VALIDATION_ERROR"
         assert fake_store.write_log == []

@@ -18,6 +18,7 @@ from context_service.mcp.server import (
     get_redis,
     get_silo_service,
 )
+from context_service.mcp.tools.errors import error_response, success_response
 from context_service.models.mcp import (
     Crystallization,
     DecayClass,
@@ -75,10 +76,11 @@ async def _context_remember(
     try:
         decay = DecayClass(decay_class)
     except ValueError:
-        return {
-            "error": "invalid_decay_class",
-            "message": f"decay_class must be one of: {[e.value for e in DecayClass]}",
-        }
+        return error_response(
+            "VALIDATION_ERROR",
+            f"decay_class must be one of: {[e.value for e in DecayClass]}",
+            details={"field": "decay_class", "valid_values": [e.value for e in DecayClass]},
+        )
 
     ctx_svc = get_context_service()
     scope = ScopeContext(org_id=auth.org_id, silo_id=validated_silo_id)
@@ -95,12 +97,12 @@ async def _context_remember(
     )
     CONTEXT_STORE_LATENCY.labels(tool="context_remember").observe(time.perf_counter() - _start)
 
-    return {
+    return success_response({
         "node_id": str(node.id),
         "layer": "memory",
         "decay_class": decay_class,
         "created_at": datetime.now(UTC).isoformat(),
-    }
+    })
 
 
 async def _context_assert(
@@ -129,19 +131,25 @@ async def _context_assert(
     try:
         src_type = SourceType(source_type)
     except ValueError:
-        return {
-            "error": "invalid_source_type",
-            "message": f"Must be one of: {[e.value for e in SourceType]}",
-        }
+        return error_response(
+            "VALIDATION_ERROR",
+            f"source_type must be one of: {[e.value for e in SourceType]}",
+            details={"field": "source_type", "valid_values": [e.value for e in SourceType]},
+        )
 
     if source_tier is not None and source_tier not in _VALID_SOURCE_TIERS:
-        return {
-            "error": "invalid_source_tier",
-            "message": f"Must be one of: {list(_VALID_SOURCE_TIERS)}",
-        }
+        return error_response(
+            "VALIDATION_ERROR",
+            f"source_tier must be one of: {list(_VALID_SOURCE_TIERS)}",
+            details={"field": "source_tier", "valid_values": list(_VALID_SOURCE_TIERS)},
+        )
 
     if not 0.0 <= confidence <= 1.0:
-        return {"error": "invalid_confidence", "message": "confidence must be between 0.0 and 1.0"}
+        return error_response(
+            "VALIDATION_ERROR",
+            "confidence must be between 0.0 and 1.0",
+            details={"field": "confidence"},
+        )
 
     claim_type = "freeform"
     parsed_claim: str | SPOClaim
@@ -150,7 +158,7 @@ async def _context_assert(
             parsed_claim = SPOClaim(**claim)
             claim_type = "structured"
         except Exception as e:
-            return {"error": "invalid_claim", "message": str(e)}
+            return error_response("VALIDATION_ERROR", str(e), details={"field": "claim"})
     else:
         parsed_claim = claim
 
@@ -161,11 +169,11 @@ async def _context_assert(
         for ev_ref in evidence_list:
             result = await ev_validator.validate(ev_ref, str(expected_silo_id))
             if result.status != "valid":
-                return {
-                    "error": "invalid_evidence",
-                    "evidence": ev_ref,
-                    "reason": result.reason,
-                }
+                return error_response(
+                    "VALIDATION_ERROR",
+                    f"Evidence reference {ev_ref!r} is not valid: {result.reason}",
+                    details={"field": "evidence", "evidence_ref": ev_ref, "reason": result.reason},
+                )
             if result.node_id:
                 evidence_nodes.append(result.node_id)
 
@@ -182,7 +190,7 @@ async def _context_assert(
         source_tier=source_tier,
     )
 
-    return {
+    return success_response({
         "node_id": str(node.id),
         "layer": "knowledge",
         "claim_type": claim_type,
@@ -190,7 +198,7 @@ async def _context_assert(
         "evidence_nodes": evidence_nodes,
         "status": "pending_promotion",
         "created_at": datetime.now(UTC).isoformat(),
-    }
+    })
 
 
 async def _context_commit(
@@ -215,7 +223,11 @@ async def _context_commit(
     expected_silo_id = derive_silo_id(auth.org_id)
 
     if not about:
-        return {"error": "missing_about", "message": "about must reference at least one node"}
+        return error_response(
+            "VALIDATION_ERROR",
+            "about must reference at least one node",
+            details={"field": "about"},
+        )
 
     agent_id = auth.agent_id or auth.org_id
 
@@ -231,7 +243,7 @@ async def _context_commit(
         agent_id=agent_id,
     )
 
-    result: dict[str, Any] = {
+    payload: dict[str, Any] = {
         "node_id": str(node.id),
         "layer": "wisdom",
         "declared_by": agent_id,
@@ -249,8 +261,8 @@ async def _context_commit(
                 silo_id=str(expected_silo_id),
                 outcome="committed",
             )
-            result["compacted_chain_id"] = chain_id
-            result["compaction_event_id"] = event_id
+            payload["compacted_chain_id"] = chain_id
+            payload["compaction_event_id"] = event_id
         except ValueError as exc:
             logger.warning(
                 "context_commit_compaction_skip",
@@ -258,7 +270,7 @@ async def _context_commit(
                 reason=str(exc),
             )
 
-    return result
+    return success_response(payload)
 
 
 async def _context_reflect(
@@ -283,10 +295,11 @@ async def _context_reflect(
     try:
         obs_type = ObservationType(observation_type)
     except ValueError:
-        return {
-            "error": "invalid_observation_type",
-            "valid": [e.value for e in ObservationType],
-        }
+        return error_response(
+            "VALIDATION_ERROR",
+            f"observation_type must be one of: {[e.value for e in ObservationType]}",
+            details={"field": "observation_type", "valid_values": [e.value for e in ObservationType]},
+        )
 
     agent_id = auth.agent_id or auth.org_id
 
@@ -315,12 +328,13 @@ async def _context_reflect(
         agent_id=agent_id,
     )
 
-    return {
+    return success_response({
         "node_id": str(node.id),
+        "layer": "meta",
         "observation_type": observation_type,
         "about_nodes": about,
         "created_at": datetime.now(UTC).isoformat(),
-    }
+    })
 
 
 async def _context_reason(
@@ -349,17 +363,21 @@ async def _context_reason(
     expected_silo_id = derive_silo_id(auth.org_id)
 
     if not steps:
-        return {"error": "missing_steps", "message": "steps must be a non-empty list"}
+        return error_response(
+            "VALIDATION_ERROR",
+            "steps must be a non-empty list",
+            details={"field": "steps"},
+        )
 
     try:
         parsed_steps = [ReasoningStep(**s) for s in steps]
     except Exception as e:
-        return {"error": "invalid_steps", "message": str(e)}
+        return error_response("VALIDATION_ERROR", str(e), details={"field": "steps"})
 
     try:
         parsed_cryst = [Crystallization(**c) for c in (crystallizations or [])]
     except Exception as e:
-        return {"error": "invalid_crystallizations", "message": str(e)}
+        return error_response("VALIDATION_ERROR", str(e), details={"field": "crystallizations"})
 
     ctx_svc = get_context_service()
 
@@ -399,10 +417,11 @@ async def _context_reason(
             parent_rows = []
 
         if not parent_rows:
-            return {
-                "error": "invalid_parent_chain_id",
-                "message": f"parent_chain_id {parent_chain_id!r} not found in silo",
-            }
+            return error_response(
+                "NOT_FOUND",
+                f"parent_chain_id {parent_chain_id!r} not found in silo",
+                details={"field": "parent_chain_id", "parent_chain_id": parent_chain_id},
+            )
 
     # Generate chain_id here so it can be passed to both the saga and session
     # attachment. The saga writes Postgres first (full steps), then the Memgraph
@@ -509,7 +528,7 @@ async def _context_reason(
             ]
             await store.execute_write(q.BATCH_CREATE_CRYSTALLIZES_EDGES, {"edges": edges})
 
-    response: dict[str, Any] = {
+    payload: dict[str, Any] = {
         "chain_id": str(chain_id),
         "layer": "intelligence",
         "steps_count": len(steps),
@@ -518,8 +537,8 @@ async def _context_reason(
         "created_at": datetime.now(UTC).isoformat(),
     }
     if continues_parent is not None:
-        response["continues_chain_id"] = continues_parent
-    return response
+        payload["continues_chain_id"] = continues_parent
+    return success_response(payload)
 
 
 async def _context_store_belief(
@@ -560,15 +579,15 @@ async def _context_store_belief(
     )
     conflict_ids = [row["conflict_id"] for row in conflict_rows]
 
-    result: dict[str, Any] = {
+    payload: dict[str, Any] = {
         "belief_id": belief_id,
         "layer": "belief",
         "session_id": session_id,
         "created_at": now,
     }
     if conflict_ids:
-        result["potential_conflicts"] = conflict_ids
-    return result
+        payload["potential_conflicts"] = conflict_ids
+    return success_response(payload)
 
 
 async def _context_store(
@@ -589,17 +608,23 @@ async def _context_store(
     session_id: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
+    _VALID_LAYERS = ["memory", "knowledge", "wisdom", "intelligence", "meta", "belief"]
+
     if layer == "belief":
         if not about:
-            return {
-                "error": "missing_about",
-                "message": "about required for belief layer",
-            }
+            return error_response(
+                "VALIDATION_ERROR",
+                "Belief layer requires 'about' — a list of node IDs this working belief "
+                "targets. Used for conflict detection within the session.",
+                details={"field": "about"},
+            )
         if not session_id:
-            return {
-                "error": "missing_session_id",
-                "message": "session_id required for belief layer",
-            }
+            return error_response(
+                "VALIDATION_ERROR",
+                "Belief layer requires 'session_id' — the ID of the ReasoningSession "
+                "this belief belongs to. Obtain one from context_belief_state.",
+                details={"field": "session_id"},
+            )
         auth = await get_mcp_auth_context()
         resolved_silo = silo_id or str(derive_silo_id(auth.org_id))
         return await _context_store_belief(
@@ -611,27 +636,30 @@ async def _context_store(
         )
 
     if layer == "memory":
-        result = await _context_remember(
+        return await _context_remember(
             silo_id=silo_id,
             content=content,
             metadata=metadata,
             tags=tags,
             decay_class=decay_class,
         )
-        return result
 
     if layer == "knowledge":
         if not evidence:
-            return {
-                "error": "missing_evidence",
-                "message": "evidence required for knowledge layer",
-            }
+            return error_response(
+                "VALIDATION_ERROR",
+                "Knowledge layer requires 'evidence' — a list of node IDs or URIs "
+                "that support this claim. Use format ['node:<uuid>'] or ['https://...'].",
+                details={"field": "evidence"},
+            )
         if not source_type:
-            return {
-                "error": "missing_source_type",
-                "message": "source_type required for knowledge layer",
-            }
-        result = await _context_assert(
+            return error_response(
+                "VALIDATION_ERROR",
+                "Knowledge layer requires 'source_type' — origin of this claim. "
+                "Must be one of: document, user, external, agent.",
+                details={"field": "source_type"},
+            )
+        return await _context_assert(
             silo_id=silo_id,
             claim=content,
             evidence=evidence,
@@ -640,17 +668,16 @@ async def _context_store(
             metadata=metadata,
             tags=tags,
         )
-        if "layer" not in result:
-            result["layer"] = "knowledge"
-        return result
 
     if layer == "wisdom":
         if not about:
-            return {
-                "error": "missing_about",
-                "message": "about required for wisdom layer",
-            }
-        result = await _context_commit(
+            return error_response(
+                "VALIDATION_ERROR",
+                "Wisdom layer requires 'about' — a list of node IDs (Claims or Documents) "
+                "that this commitment synthesizes. Use node IDs from prior knowledge/memory stores.",
+                details={"field": "about"},
+            )
+        return await _context_commit(
             silo_id=silo_id,
             belief=content,
             about=about,
@@ -659,39 +686,40 @@ async def _context_store(
             metadata=metadata,
             tags=tags,
         )
-        if "layer" not in result:
-            result["layer"] = "wisdom"
-        return result
 
     if layer == "intelligence":
         if not steps:
-            return {
-                "error": "missing_steps",
-                "message": "steps required for intelligence layer",
-            }
-        result = await _context_reason(
+            return error_response(
+                "VALIDATION_ERROR",
+                "Intelligence layer requires 'steps' — a list of reasoning steps. "
+                "Each step must have {step: int, reasoning: str, confidence?: float}. "
+                "Set 'content' to the overall conclusion of the chain.",
+                details={"field": "steps"},
+            )
+        return await _context_reason(
             silo_id=silo_id,
             steps=steps,
             conclusion=content,
             evidence_used=evidence,
             parent_chain_id=parent_chain_id,
         )
-        if "layer" not in result:
-            result["layer"] = "intelligence"
-        return result
 
     if layer == "meta":
         if not observation_type:
-            return {
-                "error": "missing_observation_type",
-                "message": "observation_type required for meta layer",
-            }
+            return error_response(
+                "VALIDATION_ERROR",
+                "Meta layer requires 'observation_type' — the kind of meta-cognitive "
+                "observation being recorded (e.g. contradiction, correction, uncertainty, pattern).",
+                details={"field": "observation_type"},
+            )
         if not about:
-            return {
-                "error": "missing_about",
-                "message": "about required for meta layer",
-            }
-        result = await _context_reflect(
+            return error_response(
+                "VALIDATION_ERROR",
+                "Meta layer requires 'about' — a list of node IDs that this observation "
+                "targets. Must reference existing nodes in the silo.",
+                details={"field": "about"},
+            )
+        return await _context_reflect(
             silo_id=silo_id,
             observation=content,
             observation_type=observation_type,
@@ -699,14 +727,16 @@ async def _context_store(
             confidence=confidence,
             metadata=metadata,
         )
-        if "layer" not in result:
-            result["layer"] = "meta"
-        return result
 
-    return {
-        "error": "invalid_layer",
-        "valid": ["memory", "knowledge", "wisdom", "intelligence", "meta", "belief"],
-    }
+    return error_response(
+        "VALIDATION_ERROR",
+        f"Layer {layer!r} is not valid. "
+        "Choose one of: memory, knowledge, wisdom, intelligence, meta, belief. "
+        "memory = raw observations; knowledge = evidence-backed claims; "
+        "wisdom = synthesized commitments; intelligence = reasoning chains; "
+        "meta = meta-cognitive observations; belief = working session beliefs.",
+        details={"field": "layer", "valid_values": _VALID_LAYERS},
+    )
 
 
 def register(mcp: FastMCP) -> None:
@@ -716,12 +746,14 @@ def register(mcp: FastMCP) -> None:
         name="context_store",
         description=(
             "Unified write tool for all EAG layers. "
-            "Routes to memory, knowledge, wisdom, intelligence, meta, or belief based on layer. "
-            "knowledge requires evidence + source_type. "
-            "wisdom requires about. "
-            "intelligence requires steps. "
-            "meta requires observation_type + about. "
-            "belief requires about + session_id."
+            "Routes to memory, knowledge, wisdom, intelligence, meta, or belief based on 'layer'. "
+            "Required params per layer: "
+            "memory — content only; "
+            "knowledge — content (the claim text), evidence (list of node IDs/URIs), source_type (document|user|external|agent); "
+            "wisdom — content (the belief statement), about (node IDs this synthesizes); "
+            "intelligence — content (conclusion), steps (list of {step, reasoning, confidence?}); "
+            "meta — content (observation text), observation_type, about (target node IDs); "
+            "belief — content, about (target node IDs), session_id."
         ),
     )
     async def context_store(
@@ -742,6 +774,37 @@ def register(mcp: FastMCP) -> None:
         session_id: str | None = None,
     ) -> dict[str, Any]:
         """Store to any EAG layer.
+
+        Examples:
+            Memory (raw observation, no extra params required)::
+
+                layer="memory", content="User prefers dark mode in the IDE"
+
+            Knowledge (evidence-backed claim)::
+
+                layer="knowledge", content="Redis cache reduces p95 latency by 40%",
+                evidence=["node:abc123", "https://example.com/benchmark"],
+                source_type="document", confidence=0.9
+
+            Wisdom (synthesized commitment across claims)::
+
+                layer="wisdom", content="Caching is essential for production performance",
+                about=["node:abc123", "node:def456"], reasoning="Two independent studies confirm"
+
+            Intelligence (reasoning chain with explicit steps)::
+
+                layer="intelligence", content="The outage was caused by a missing index",
+                steps=[{"step": 1, "reasoning": "Latency spiked at 14:32 UTC", "confidence": 0.95}]
+
+            Meta (meta-cognitive observation about existing nodes)::
+
+                layer="meta", content="This claim contradicts the earlier measurement",
+                observation_type="contradiction", about=["node:abc123", "node:ghi789"]
+
+            Belief (working session belief, for in-flight reasoning)::
+
+                layer="belief", content="The bug is in the auth middleware",
+                about=["node:abc123"], session_id="sess:xyz"
 
         Args:
             content: The content to store. For intelligence layer, this is the conclusion.
@@ -780,6 +843,31 @@ def register(mcp: FastMCP) -> None:
         auth = await get_mcp_auth_context()
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
 
+        # Determine which passed params are not applicable for the chosen layer.
+        _LAYER_INAPPLICABLE: dict[str, set[str]] = {
+            "memory": {"evidence", "source_type", "about", "steps", "observation_type", "parent_chain_id", "session_id"},
+            "knowledge": {"about", "steps", "observation_type", "decay_class", "parent_chain_id", "session_id", "reasoning"},
+            "wisdom": {"evidence", "source_type", "steps", "observation_type", "decay_class", "parent_chain_id", "session_id"},
+            "intelligence": {"about", "source_type", "observation_type", "decay_class", "session_id"},
+            "meta": {"evidence", "source_type", "steps", "decay_class", "parent_chain_id", "session_id", "reasoning"},
+            "belief": {"evidence", "source_type", "steps", "observation_type", "decay_class", "parent_chain_id", "reasoning"},
+        }
+        _passed = {
+            "evidence": evidence,
+            "source_type": source_type,
+            "about": about,
+            "reasoning": reasoning,
+            "steps": steps,
+            "observation_type": observation_type,
+            "decay_class": decay_class if decay_class != "standard" else None,
+            "parent_chain_id": parent_chain_id,
+            "session_id": session_id,
+        }
+        ignored_flags = [
+            k for k, v in _passed.items()
+            if v is not None and k in _LAYER_INAPPLICABLE.get(layer, set())
+        ]
+
         result = await _context_store(
             silo_id=resolved_silo_id,
             content=content,
@@ -798,7 +886,10 @@ def register(mcp: FastMCP) -> None:
             session_id=session_id,
         )
 
-        if "error" not in result and get_settings().write_events_enabled:
+        if result.get("success") is not False and ignored_flags:
+            result["ignored_flags"] = ignored_flags
+
+        if result.get("success") is not False and get_settings().write_events_enabled:
             redis = get_redis()
             if redis is not None:
                 node_id = result.get("node_id") or result.get("chain_id") or result.get("belief_id")

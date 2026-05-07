@@ -32,6 +32,17 @@ _GRAPH_RESULT = {
 }
 
 
+@pytest.fixture(autouse=True)
+def mock_proposed_beliefs():
+    """Suppress _fetch_proposed_beliefs in unit tests (requires live service)."""
+    with patch(
+        "context_service.mcp.tools.context_recall._fetch_proposed_beliefs",
+        new_callable=AsyncMock,
+        return_value=[],
+    ):
+        yield
+
+
 @pytest.fixture
 def mock_query():
     with patch(
@@ -152,7 +163,8 @@ async def test_recall_missing_input():
 
     result = await _context_recall(silo_id=_SILO_ID)
 
-    assert result["error"] == "missing_input"
+    assert result["success"] is False
+    assert result["error"]["code"] == "VALIDATION_ERROR"
 
 
 @pytest.mark.asyncio

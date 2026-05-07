@@ -88,7 +88,7 @@ class TestContextUpdateBeliefSuccess:
         )
 
         assert result["confidence"] == 0.0
-        assert "error" not in result
+        assert result.get("success") is not False
 
     async def test_confidence_one_is_valid(self, fake_store):
         fake_store.seed_write_result([{"belief_id": _BELIEF_ID}])
@@ -101,7 +101,7 @@ class TestContextUpdateBeliefSuccess:
         )
 
         assert result["confidence"] == 1.0
-        assert "error" not in result
+        assert result.get("success") is not False
 
 
 class TestContextUpdateBeliefValidation:
@@ -113,7 +113,8 @@ class TestContextUpdateBeliefValidation:
             silo_id=_SILO_ID,
         )
 
-        assert result["error"] == "invalid_confidence"
+        assert result["success"] is False
+        assert result["error"]["code"] == "VALIDATION_ERROR"
         assert fake_store.write_log == []
 
     async def test_rejects_confidence_below_zero(self, fake_store):
@@ -124,7 +125,8 @@ class TestContextUpdateBeliefValidation:
             silo_id=_SILO_ID,
         )
 
-        assert result["error"] == "invalid_confidence"
+        assert result["success"] is False
+        assert result["error"]["code"] == "VALIDATION_ERROR"
         assert fake_store.write_log == []
 
 
@@ -140,5 +142,6 @@ class TestContextUpdateBeliefNotFound:
             silo_id=_SILO_ID,
         )
 
-        assert result["error"] == "not_found"
-        assert _BELIEF_ID in result["message"]
+        assert result["success"] is False
+        assert result["error"]["code"] == "NOT_FOUND"
+        assert _BELIEF_ID in result["error"]["message"]

@@ -135,11 +135,7 @@ def _node_hydrator(record: dict[str, Any]) -> Node:
         props = loads(props)
 
     raw_labels: list[str] = (
-        record.get("_labels")
-        or record.get("labels")
-        or n.get("_labels")
-        or n.get("labels")
-        or []
+        record.get("_labels") or record.get("labels") or n.get("_labels") or n.get("labels") or []
     )
     label = next(
         (lbl.lower() for lbl in raw_labels if lbl in _CONTENT_LABEL_SET),
@@ -158,11 +154,7 @@ def node_from_record(record: dict[str, Any]) -> Node:
     """
     n = record.get("n", {})
     raw_labels: list[str] = (
-        record.get("_labels")
-        or record.get("labels")
-        or n.get("_labels")
-        or n.get("labels")
-        or []
+        record.get("_labels") or record.get("labels") or n.get("_labels") or n.get("labels") or []
     )
     label = next(
         (lbl.lower() for lbl in raw_labels if lbl in _CONTENT_LABEL_SET),

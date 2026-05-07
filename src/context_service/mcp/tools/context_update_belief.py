@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from context_service.mcp.tools.errors import error_response, success_response
 from context_service.services.models import derive_silo_id
 
 if TYPE_CHECKING:
@@ -23,7 +24,11 @@ async def _context_update_belief(
     from context_service.mcp.server import get_context_service
 
     if not 0.0 <= confidence <= 1.0:
-        return {"error": "invalid_confidence", "message": "confidence must be between 0.0 and 1.0"}
+        return error_response(
+            "VALIDATION_ERROR",
+            "confidence must be between 0.0 and 1.0",
+            details={"field": "confidence"},
+        )
 
     store = get_context_service().graph_store
     updated_at = datetime.now(UTC).isoformat()
@@ -40,18 +45,19 @@ async def _context_update_belief(
     )
 
     if not rows:
-        return {
-            "error": "not_found",
-            "message": f"WorkingBelief {belief_id!r} not found in silo",
-        }
+        return error_response(
+            "NOT_FOUND",
+            f"WorkingBelief {belief_id!r} not found in silo",
+            details={"belief_id": belief_id},
+        )
 
-    return {
+    return success_response({
         "belief_id": belief_id,
         "confidence": confidence,
         "content": content,
         "updated_at": updated_at,
         "reason": reason,
-    }
+    })
 
 
 def register(mcp: FastMCP) -> None:

@@ -12,6 +12,7 @@ from context_service.mcp.server import (
     get_redis,
     get_silo_service,
 )
+from context_service.mcp.tools.errors import error_response, success_response
 from context_service.models.mcp import RelationshipType
 from context_service.services.models import derive_silo_id
 from context_service.services.silo import validate_silo_ownership
@@ -41,13 +42,18 @@ async def _context_link(
     try:
         rel_type = RelationshipType(relationship)
     except ValueError:
-        return {
-            "error": "invalid_relationship",
-            "valid": [e.value for e in RelationshipType],
-        }
+        return error_response(
+            "VALIDATION_ERROR",
+            f"relationship must be one of: {[e.value for e in RelationshipType]}",
+            details={"field": "relationship", "valid_values": [e.value for e in RelationshipType]},
+        )
 
     if not 0.0 <= weight <= 10.0:
-        return {"error": "invalid_weight", "message": "weight must be between 0.0 and 10.0"}
+        return error_response(
+            "VALIDATION_ERROR",
+            "weight must be between 0.0 and 10.0",
+            details={"field": "weight"},
+        )
 
     edge_id = await ctx_svc.link(
         silo_id=str(expected_silo_id),
@@ -58,13 +64,13 @@ async def _context_link(
         note=note,
     )
 
-    return {
+    return success_response({
         "edge_id": edge_id,
         "from_node": from_node,
         "to_node": to_node,
         "relationship": rel_type.value,
         "created_at": datetime.now(UTC).isoformat(),
-    }
+    })
 
 
 def register(mcp: FastMCP) -> None:
@@ -111,7 +117,7 @@ def register(mcp: FastMCP) -> None:
             note=note,
         )
 
-        if "error" not in result and get_settings().write_events_enabled:
+        if result.get("success") is not False and get_settings().write_events_enabled:
             redis = get_redis()
             if redis is not None:
                 await emit_access_event(redis, resolved_silo_id, to_node, event_type="write")

@@ -93,7 +93,9 @@ def mock_reflect():
         "context_service.mcp.tools.context_store._context_reflect",
         new_callable=AsyncMock,
         return_value={
+            "success": True,
             "node_id": str(node.id),
+            "layer": "meta",
             "observation_type": "insight",
             "about_nodes": ["node-1"],
             "created_at": "2026-01-01T00:00:00+00:00",
@@ -140,7 +142,8 @@ async def test_store_knowledge_missing_evidence():
         source_type="document",
     )
 
-    assert result["error"] == "missing_evidence"
+    assert result["success"] is False
+    assert result["error"]["code"] == "VALIDATION_ERROR"
 
 
 @pytest.mark.asyncio
@@ -154,7 +157,8 @@ async def test_store_knowledge_missing_source_type():
         evidence=["node:abc-123"],
     )
 
-    assert result["error"] == "missing_source_type"
+    assert result["success"] is False
+    assert result["error"]["code"] == "VALIDATION_ERROR"
 
 
 @pytest.mark.asyncio
@@ -182,7 +186,8 @@ async def test_store_wisdom_missing_about():
         layer="wisdom",
     )
 
-    assert result["error"] == "missing_about"
+    assert result["success"] is False
+    assert result["error"]["code"] == "VALIDATION_ERROR"
 
 
 @pytest.mark.asyncio
@@ -210,7 +215,8 @@ async def test_store_intelligence_missing_steps():
         layer="intelligence",
     )
 
-    assert result["error"] == "missing_steps"
+    assert result["success"] is False
+    assert result["error"]["code"] == "VALIDATION_ERROR"
 
 
 @pytest.mark.asyncio
@@ -240,7 +246,8 @@ async def test_store_meta_missing_observation_type():
         about=["node-1"],
     )
 
-    assert result["error"] == "missing_observation_type"
+    assert result["success"] is False
+    assert result["error"]["code"] == "VALIDATION_ERROR"
 
 
 @pytest.mark.asyncio
@@ -254,7 +261,8 @@ async def test_store_meta_missing_about():
         observation_type="insight",
     )
 
-    assert result["error"] == "missing_about"
+    assert result["success"] is False
+    assert result["error"]["code"] == "VALIDATION_ERROR"
 
 
 @pytest.mark.asyncio
@@ -263,7 +271,8 @@ async def test_store_invalid_layer():
 
     result = await _context_store(silo_id=_SILO_ID, content="Something", layer="invalid")
 
-    assert result["error"] == "invalid_layer"
+    assert result["success"] is False
+    assert result["error"]["code"] == "VALIDATION_ERROR"
 
 
 @pytest.mark.asyncio

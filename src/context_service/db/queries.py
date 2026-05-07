@@ -1253,6 +1253,46 @@ LIMIT 10
 # and SUPERSEDE any existing active Commitments that ABOUT the same node(s).
 # Existing commitments are considered active when no other Commitment
 # SUPERSEDES them. Their valid_to is set to $valid_from on supersession.
+# ---------------------------------------------------------------------------
+# ProposedBelief queries (Intelligence layer, system-initiated proposals)
+#
+# ProposedBelief nodes represent beliefs proposed by the system that agents
+# can accept or reject. Status values: "pending", "accepted", "rejected".
+# ---------------------------------------------------------------------------
+
+# Create a :ProposedBelief node attached to a session.
+# evidence_ids is a list of node id strings supporting the proposal.
+CREATE_PROPOSED_BELIEF = """
+CREATE (pb:ProposedBelief:Node {
+    id: $id,
+    silo_id: $silo_id,
+    content: $content,
+    confidence: $confidence,
+    status: $status,
+    evidence_ids: $evidence_ids,
+    created_at: datetime(),
+    session_id: $session_id
+})
+RETURN pb
+"""
+
+# Return :ProposedBelief nodes filtered by status, newest first.
+# $status must be one of "pending", "accepted", "rejected".
+GET_PROPOSED_BELIEFS = """
+MATCH (pb:ProposedBelief {silo_id: $silo_id})
+WHERE pb.status = $status
+RETURN pb
+ORDER BY pb.created_at DESC
+LIMIT $limit
+"""
+
+# Update the status of a :ProposedBelief and record when the change occurred.
+UPDATE_PROPOSED_BELIEF_STATUS = """
+MATCH (pb:ProposedBelief {id: $id, silo_id: $silo_id})
+SET pb.status = $status, pb.updated_at = datetime()
+RETURN pb
+"""
+
 CRYSTALLIZE_TO_COMMITMENT = """
 MATCH (wb:WorkingBelief {id: $belief_id, silo_id: $silo_id})
 CREATE (cm:Node:Commitment {

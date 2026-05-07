@@ -145,6 +145,16 @@ AUDIT_INDEX_QUERIES: tuple[str, ...] = (
 )
 
 
+# --- ProposedBelief (Intelligence layer, system-initiated proposals) ---
+
+PROPOSED_BELIEF_INDEX_QUERIES: tuple[str, ...] = (
+    "CREATE INDEX ON :ProposedBelief(id);",
+    "CREATE INDEX ON :ProposedBelief(silo_id);",
+    "CREATE INDEX ON :ProposedBelief(status);",
+    "CREATE INDEX ON :ProposedBelief(session_id);",
+)
+
+
 # --- Meta-memory layer ---
 
 META_MEMORY_INDEX_QUERIES: tuple[str, ...] = (
@@ -169,6 +179,7 @@ ALL_INDEX_QUERIES: tuple[str, ...] = (
     *REGISTRY_INDEX_QUERIES,
     *AUDIT_INDEX_QUERIES,
     *META_MEMORY_INDEX_QUERIES,
+    *PROPOSED_BELIEF_INDEX_QUERIES,
 )
 
 

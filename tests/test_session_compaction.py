@@ -58,7 +58,8 @@ async def test_feature_flag_off_returns_error() -> None:
     with patch(f"{_MOD}.get_settings", return_value=settings):
         result = await _context_close_reasoning(silo_id="silo-1", chain_id="chain-1")
 
-    assert result["error"] == "feature_disabled"
+    assert result["success"] is False
+    assert result["error"]["code"] == "FEATURE_DISABLED"
 
 
 # ---------------------------------------------------------------------------
@@ -158,7 +159,8 @@ async def test_close_chain_not_found() -> None:
             silo_id="silo-1",
         )
 
-    assert result["error"] == "chain_not_found"
+    assert result["success"] is False
+    assert result["error"]["code"] == "NOT_FOUND"
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +182,8 @@ async def test_close_already_closed_chain() -> None:
             silo_id="silo-1",
         )
 
-    assert result["error"] == "already_closed"
+    assert result["success"] is False
+    assert result["error"]["code"] == "CONFLICT"
 
 
 # ---------------------------------------------------------------------------
