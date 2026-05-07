@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "delta-prime": {
+    "engrammic": {
       "type": "sse",
       "url": "http://localhost:8000/mcp/"
     }

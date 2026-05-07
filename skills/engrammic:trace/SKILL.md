@@ -1,8 +1,8 @@
 ---
-name: delta-prime:trace
+name: engrammic:trace
 description: Trace provenance chain for a belief. Use for "why do I believe", "where did this come from".
 allowed-tools:
-  - mcp__delta-prime__context_admin
+  - mcp__engrammic__context_admin
 ---
 
 Trace the citation/evidence chain for a node to understand where a belief came from.

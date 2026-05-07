@@ -2,9 +2,10 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-05)
+## Current state (2026-05-07)
 
 **Shipped:**
+- v2 Architecture Fixes (error envelopes, outbox pattern, raw Cypher mixin, hydration registry, ProposedBelief flow)
 - v1.7 Auto-Tagging (tag config, cosine matching, Dagster pipelines)
 - v1.6 Hybrid Storage (Postgres+Memgraph saga, consolidation, crystallization, GC)
 - v1.5 Agent Identity (agent nodes, reflection filtering, chain continuity, per-silo config)
@@ -45,6 +46,7 @@ Next candidates:
 ## Archive
 
 Completed plans in `archive/`:
+- v2 Architecture Fixes (2026-05-07)
 - E2E test scenarios (2026-05-06)
 - as_of time-travel for node_ids (2026-05-06)
 - v1.7 Auto-Tagging

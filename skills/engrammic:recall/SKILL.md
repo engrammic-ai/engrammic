@@ -1,8 +1,8 @@
 ---
-name: delta-prime:recall
+name: engrammic:recall
 description: Search and retrieve context. Use for "what do I know about", "find", "search".
 allowed-tools:
-  - mcp__delta-prime__context_recall
+  - mcp__engrammic__context_recall
 ---
 
 Search or retrieve from epistemic memory.

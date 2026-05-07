@@ -1,9 +1,9 @@
 ---
-name: delta-prime:reason
+name: engrammic:reason
 description: Store reasoning chain with steps. Use for "figure out", "reason through", "derive".
 allowed-tools:
-  - mcp__delta-prime__context_recall
-  - mcp__delta-prime__context_store
+  - mcp__engrammic__context_recall
+  - mcp__engrammic__context_store
 ---
 
 Gather evidence, then store a multi-step reasoning chain at the intelligence layer.

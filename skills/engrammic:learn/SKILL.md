@@ -1,8 +1,8 @@
 ---
-name: delta-prime:learn
+name: engrammic:learn
 description: Store fact with evidence to knowledge layer. Use for "assert that", "we know that".
 allowed-tools:
-  - mcp__delta-prime__context_store
+  - mcp__engrammic__context_store
 ---
 
 Store a fact with evidence. Facts enter the knowledge layer and may be promoted by the custodian.

@@ -1,8 +1,8 @@
 ---
-name: delta-prime:reflect
+name: engrammic:reflect
 description: Store meta-cognitive observation. Use for "I was wrong", "update belief", "flag contradiction".
 allowed-tools:
-  - mcp__delta-prime__context_store
+  - mcp__engrammic__context_store
 ---
 
 Store a meta-cognitive observation about your own reasoning or beliefs.

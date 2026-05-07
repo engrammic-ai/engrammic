@@ -1,8 +1,8 @@
 ---
-name: delta-prime:connect
+name: engrammic:connect
 description: Link two concepts with a typed relationship. Use for "X relates to Y", "connect these".
 allowed-tools:
-  - mcp__delta-prime__context_link
+  - mcp__engrammic__context_link
 ---
 
 Create a typed relationship between two nodes.

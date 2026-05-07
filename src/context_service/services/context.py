@@ -939,13 +939,23 @@ class ContextService:
         ``source_tier`` (one of authoritative/validated/community/unknown) is
         persisted on the claim for downstream :Claim -> :Fact promotion via
         ``primitives.eag.epistemology``. Defaults to unknown if omitted.
+
+        The stored confidence is computed via ``partial_confidence`` which
+        applies a 0.7 epistemic discount for uncorroborated single-source
+        claims. Source tier maps to source_reliability weight.
         """
+        from primitives.eag.epistemology import SourceTier, partial_confidence
+
         from context_service.models.mcp import SPOClaim
+
+        tier = SourceTier(source_tier) if source_tier else SourceTier.UNKNOWN
+        discounted_confidence = partial_confidence(confidence, source_reliability=tier.weight)
 
         props = dict(metadata or {})
         props["layer"] = "knowledge"
         props["source_type"] = source_type.value if hasattr(source_type, "value") else source_type
-        props["confidence"] = confidence
+        props["confidence"] = discounted_confidence
+        props["raw_confidence"] = confidence
         props["evidence"] = evidence
         if source_tier is not None:
             props["source_tier"] = source_tier

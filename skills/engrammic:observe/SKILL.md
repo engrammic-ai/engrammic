@@ -1,8 +1,8 @@
 ---
-name: delta-prime:observe
+name: engrammic:observe
 description: Store observation to memory. Use for "remember this", "note that", ephemeral context.
 allowed-tools:
-  - mcp__delta-prime__context_store
+  - mcp__engrammic__context_store
 ---
 
 Store an observation to memory. Memories decay over time.

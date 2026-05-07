@@ -1,6 +1,6 @@
 # Context Skills
 
-Skills for working with delta-prime context-service MCP tools.
+Skills for working with engrammic context-service MCP tools.
 
 ## Installation
 
@@ -9,10 +9,10 @@ Skills for working with delta-prime context-service MCP tools.
 Copy skills to your Claude Code skills directory:
 
 ```bash
-cp -r skills/delta-prime:* ~/.claude/skills/
+cp -r skills/engrammic:* ~/.claude/skills/
 ```
 
-Skills appear in your session as `delta-prime:observe`, `delta-prime:learn`, etc. Invoke via `/delta-prime:observe` or the `Skill` tool.
+Skills appear in your session as `engrammic:observe`, `engrammic:learn`, etc. Invoke via `/engrammic:observe` or the `Skill` tool.
 
 ### Other Agents
 
