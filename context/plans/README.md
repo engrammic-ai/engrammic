@@ -2,9 +2,10 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-05)
+## Current state (2026-05-07)
 
 **Shipped:**
+- v2 Cognitive Runtime Pivot (WorkingBelief nodes, belief_state/update_belief/crystallize tools, include_content flag)
 - v1.7 Auto-Tagging (tag config, cosine matching, Dagster pipelines)
 - v1.6 Hybrid Storage (Postgres+Memgraph saga, consolidation, crystallization, GC)
 - v1.5 Agent Identity (agent nodes, reflection filtering, chain continuity, per-silo config)
@@ -15,7 +16,8 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Status | Description |
 |------|--------|-------------|
-| [2026-05-06-mcp-client-scaffold.md](./2026-05-06-mcp-client-scaffold.md) | Active | MCP marketplace client repo scaffold |
+| [v2-architecture-fixes.md](./v2-architecture-fixes.md) | **Active** | P0-P3 fixes + ProposedBelief flow (3 batches) |
+| [2026-05-06-mcp-client-scaffold.md](./2026-05-06-mcp-client-scaffold.md) | Paused | MCP marketplace client repo scaffold |
 
 Next candidates:
 - Clustering algorithm evaluation (spike)
