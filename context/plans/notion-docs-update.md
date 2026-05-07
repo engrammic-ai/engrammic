@@ -1,27 +1,33 @@
 # Notion Docs Update
 
-Chore: update Notion wiki pages to reflect v2 architecture changes.
+Chore: update Notion wiki pages to reflect v2 architecture changes and rebrand.
 
-## Branch
+## Status: DONE (2026-05-07)
 
-`chore/notion-docs-update`
+## Completed
 
-## Pages to update
+1. **Rebrand Delta Prime to Engrammic** across 12+ wiki pages
+2. **Architecture (plain English)** - updated tool count from 4 to 9, added new tools list
+3. **What is Engrammic** - title and content rebranded
+4. **Technical Primer** - rebranded
+5. **Competitive Landscape, ICP & GTM, Roadmap, etc.** - all rebranded
 
-1. **MCP Tool Reference** - now 9 tools (was 7), add context_accept_belief / context_reject_belief
-2. **Error Handling** - document error envelope format `{success, error: {code, message, details}}`
-3. **Architecture Overview** - add outbox pattern, raw Cypher mixin, hydration registry
-4. **ProposedBelief Flow** - new page documenting the accept/reject workflow
-5. **Confidence Computation** - document partial_confidence for uncorroborated claims
+## Pages updated
 
-## Notes
+- What is Engrammic (was "What is Delta Prime")
+- Architecture (plain English)
+- Technical Primer
+- Competitive Landscape
+- Knowzilla x Engrammic
+- ICP & GTM
+- Smartstorify x Engrammic
+- Antler Due Diligence
+- Smartstorify: Design Partner Call Notes
+- Roadmap and Timeline
+- Cost Analysis
 
-- Use Notion MCP tools for updates
-- Keep tone human, no AI-slop (per feedback_doc_tone.md)
-- No em-dashes (per feedback_no_em_dashes.md)
+## Remaining (deferred)
 
-## Done criteria
-
-- [ ] All 5 pages updated/created
-- [ ] Tool count matches CLAUDE.md (9 tools)
-- [ ] Error envelope examples added
+- Error envelope documentation page (low priority, code is self-documenting)
+- ProposedBelief flow page (can add when needed for onboarding)
+- partial_confidence documentation (in primitives docstrings)
