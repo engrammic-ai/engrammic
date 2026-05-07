@@ -550,6 +550,9 @@ async def _context_store_belief(
     confidence: float = 0.8,
 ) -> dict[str, Any]:
     """Create a WorkingBelief node and run sync conflict detection."""
+    if not 0.0 <= confidence <= 1.0:
+        return {"error": "invalid_confidence", "message": "confidence must be between 0.0 and 1.0"}
+
     from context_service.db import queries as q
     from context_service.engine.sessions import create_or_join_session
 
@@ -621,6 +624,10 @@ async def _context_store(
                 "message": "session_id required for belief layer",
             }
         auth = await get_mcp_auth_context()
+        if silo_id is not None:
+            err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+            if err is not None:
+                return err
         resolved_silo = silo_id or str(derive_silo_id(auth.org_id))
         return await _context_store_belief(
             silo_id=resolved_silo,

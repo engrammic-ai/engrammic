@@ -60,12 +60,14 @@ async def _context_crystallize(
     )
 
     commitment_ids = [r for r in results if r is not None]
-    superseded = [bid for bid, r in zip(belief_ids, results, strict=True) if r is not None]
+    crystallized_belief_ids = [
+        bid for bid, r in zip(belief_ids, results, strict=True) if r is not None
+    ]
     not_found = [bid for bid, r in zip(belief_ids, results, strict=True) if r is None]
 
     response: dict[str, Any] = {
         "commitment_ids": commitment_ids,
-        "superseded": superseded,
+        "crystallized_belief_ids": crystallized_belief_ids,
     }
     if not_found:
         response["not_found"] = not_found
@@ -97,13 +99,18 @@ def register(mcp: FastMCP) -> None:
                 derived from auth.
 
         Returns:
-            {commitment_ids: list[str], superseded: list[str], not_found?: list[str]}
-            where superseded lists the belief_ids that were successfully promoted
+            {commitment_ids: list[str], crystallized_belief_ids: list[str], not_found?: list[str]}
+            where crystallized_belief_ids lists the belief_ids that were successfully promoted
             and not_found lists any IDs that did not match a WorkingBelief in the silo.
         """
-        from context_service.mcp.server import get_mcp_auth_context
+        from context_service.mcp.server import get_mcp_auth_context, get_silo_service
+        from context_service.services.silo import validate_silo_ownership
 
         auth = await get_mcp_auth_context()
+        if silo_id is not None:
+            err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+            if err is not None:
+                return err
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         return await _context_crystallize(
             belief_ids=belief_ids,

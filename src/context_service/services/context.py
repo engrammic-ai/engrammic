@@ -395,6 +395,10 @@ class ContextService:
             from datetime import datetime
 
             created_at = datetime.fromisoformat(raw_created_at.replace("Z", "+00:00"))
+        elif isinstance(raw_created_at, int):
+            from datetime import UTC, datetime
+
+            created_at = datetime.fromtimestamp(raw_created_at / 1_000_000, tz=UTC)
         else:
             created_at = raw_created_at
         node = Node(

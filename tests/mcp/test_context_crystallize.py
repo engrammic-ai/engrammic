@@ -39,7 +39,7 @@ class TestContextCrystallizeSuccess:
         result = await _context_crystallize(belief_ids=[_BELIEF_A], silo_id=_SILO_ID)
 
         assert len(result["commitment_ids"]) == 1
-        assert result["superseded"] == [_BELIEF_A]
+        assert result["crystallized_belief_ids"] == [_BELIEF_A]
         assert "not_found" not in result
 
     async def test_commitment_id_is_uuid(self, fake_store):
@@ -57,7 +57,7 @@ class TestContextCrystallizeSuccess:
         result = await _context_crystallize(belief_ids=[_BELIEF_A, _BELIEF_B], silo_id=_SILO_ID)
 
         assert len(result["commitment_ids"]) == 2
-        assert set(result["superseded"]) == {_BELIEF_A, _BELIEF_B}
+        assert set(result["crystallized_belief_ids"]) == {_BELIEF_A, _BELIEF_B}
         assert "not_found" not in result
 
     async def test_reason_passed_to_write(self, fake_store):
@@ -99,7 +99,7 @@ class TestContextCrystallizePartialFailure:
 
         result = await _context_crystallize(belief_ids=[_BELIEF_A, _BELIEF_B], silo_id=_SILO_ID)
 
-        assert _BELIEF_A in result["superseded"]
+        assert _BELIEF_A in result["crystallized_belief_ids"]
         assert _BELIEF_B in result["not_found"]
         assert len(result["commitment_ids"]) == 1
 
@@ -110,7 +110,7 @@ class TestContextCrystallizePartialFailure:
         result = await _context_crystallize(belief_ids=[_BELIEF_A, _BELIEF_B], silo_id=_SILO_ID)
 
         assert result["commitment_ids"] == []
-        assert result["superseded"] == []
+        assert result["crystallized_belief_ids"] == []
         assert set(result["not_found"]) == {_BELIEF_A, _BELIEF_B}
 
 

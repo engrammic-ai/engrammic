@@ -51,6 +51,14 @@ async def _context_belief_state(
         {"belief_a": row["belief_a"], "belief_b": row["belief_b"]} for row in contradiction_rows
     ]
 
+    if about:
+        belief_ids_in_scope = {b["belief_id"] for b in beliefs}
+        contradictions = [
+            c
+            for c in contradictions
+            if c["belief_a"] in belief_ids_in_scope and c["belief_b"] in belief_ids_in_scope
+        ]
+
     return {
         "working_beliefs": beliefs,
         "potential_contradictions": contradictions,
@@ -89,9 +97,14 @@ def register(mcp: FastMCP) -> None:
             where each belief has {belief_id, content, confidence, created_at,
             updated_at, about_ids} and each contradiction is {belief_a, belief_b}.
         """
-        from context_service.mcp.server import get_mcp_auth_context
+        from context_service.mcp.server import get_mcp_auth_context, get_silo_service
+        from context_service.services.silo import validate_silo_ownership
 
         auth = await get_mcp_auth_context()
+        if silo_id is not None:
+            err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+            if err is not None:
+                return err
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         return await _context_belief_state(
             session_id=session_id,

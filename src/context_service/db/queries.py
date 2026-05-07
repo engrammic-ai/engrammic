@@ -1258,6 +1258,7 @@ MATCH (wb:WorkingBelief {id: $belief_id, silo_id: $silo_id})
 CREATE (cm:Node:Commitment {
     id: $commitment_id,
     silo_id: $silo_id,
+    layer: "wisdom",
     content: wb.content,
     confidence: wb.confidence,
     created_at: $created_at,
@@ -1271,7 +1272,7 @@ WHERE NOT EXISTS { (existing)<-[:SUPERSEDES]-(:Commitment) }
 WITH wb, cm, collect(DISTINCT existing) AS to_supersede
 MATCH (wb)-[:ABOUT]->(n)
 CREATE (cm)-[:ABOUT]->(n)
-WITH cm, to_supersede
+WITH DISTINCT cm, to_supersede
 FOREACH (old IN to_supersede |
     CREATE (cm)-[:SUPERSEDES {reason: $reason, created_at: $created_at}]->(old)
     SET old.valid_to = $valid_from

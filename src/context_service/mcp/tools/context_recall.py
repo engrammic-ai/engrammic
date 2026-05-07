@@ -56,13 +56,18 @@ def _project_node_without_content(node: dict[str, Any]) -> dict[str, Any]:
         content = node.get("content") or ""
         summary = content[:_SUMMARY_MAX_CHARS] if content else None
 
-    return {
+    projected = {
         "node_id": node["node_id"],
         "layer": node.get("layer"),
         "summary": summary,
         "created_at": node.get("created_at"),
         "confidence": node.get("confidence"),
     }
+    if "steps" in node:
+        projected["steps"] = node["steps"]
+    if "reflections" in node:
+        projected["reflections"] = node["reflections"]
+    return projected
 
 
 def _strip_content(response: dict[str, Any]) -> dict[str, Any]:

@@ -44,7 +44,9 @@ def evaluate_claim_for_fact(
             reason="No evidence attached to claim",
         )
 
-    raw_confidence: float = float(claim_props.get("confidence", 0.0))
+    raw_confidence: float = float(
+        claim_props.get("raw_confidence", claim_props.get("confidence", 0.0))
+    )
     source_tier_value: str = str(claim_props.get("source_tier", SourceTier.UNKNOWN))
     try:
         source_tier = SourceTier(source_tier_value)
