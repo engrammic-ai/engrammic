@@ -41,7 +41,7 @@ _LAYER_TO_LABEL: dict[str, str] = {
     "wisdom": "Commitment",
     "intelligence": "ReasoningChain",
     "meta": "MetaObservation",
-    "belief": "WorkingBelief",
+    "belief": "WorkingHypothesis",
 }
 
 
@@ -549,7 +549,7 @@ async def _context_store_belief(
     about: list[str],
     confidence: float = 0.8,
 ) -> dict[str, Any]:
-    """Create a WorkingBelief node and run sync conflict detection."""
+    """Create a WorkingHypothesis node and run sync conflict detection."""
     if not 0.0 <= confidence <= 1.0:
         return {"error": "invalid_confidence", "message": "confidence must be between 0.0 and 1.0"}
 
@@ -565,7 +565,7 @@ async def _context_store_belief(
     now = datetime.now(UTC).isoformat()
 
     await store.execute_write(
-        q.CREATE_WORKING_BELIEF,
+        q.CREATE_WORKING_HYPOTHESIS,
         {
             "id": belief_id,
             "silo_id": silo_id,
@@ -578,7 +578,7 @@ async def _context_store_belief(
     )
 
     conflict_rows = await store.execute_query(
-        q.DETECT_CONFLICTING_WORKING_BELIEFS,
+        q.DETECT_CONFLICTING_WORKING_HYPOTHESES,
         {"new_belief_id": belief_id, "silo_id": silo_id},
     )
     conflict_ids = [row["conflict_id"] for row in conflict_rows]

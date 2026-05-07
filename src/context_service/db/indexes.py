@@ -112,12 +112,21 @@ INTELLIGENCE_INDEX_QUERIES: tuple[str, ...] = (
 )
 
 
-# --- Working belief (intelligence layer, session-scoped) ---
+# --- Working hypothesis (intelligence layer, session-scoped) ---
 
-WORKING_BELIEF_INDEX_QUERIES: tuple[str, ...] = (
-    f"CREATE INDEX ON :{IntelligenceLabel.WORKING_BELIEF}(id);",
-    f"CREATE INDEX ON :{IntelligenceLabel.WORKING_BELIEF}(silo_id);",
-    f"CREATE INDEX ON :{IntelligenceLabel.WORKING_BELIEF}(session_id);",
+WORKING_HYPOTHESIS_INDEX_QUERIES: tuple[str, ...] = (
+    f"CREATE INDEX ON :{IntelligenceLabel.WORKING_HYPOTHESIS}(id);",
+    f"CREATE INDEX ON :{IntelligenceLabel.WORKING_HYPOTHESIS}(silo_id);",
+    f"CREATE INDEX ON :{IntelligenceLabel.WORKING_HYPOTHESIS}(session_id);",
+)
+
+
+# --- ProposedBelief (wisdom layer, awaiting validation) ---
+
+PROPOSED_BELIEF_INDEX_QUERIES: tuple[str, ...] = (
+    f"CREATE INDEX ON :{WisdomLabel.PROPOSED_BELIEF}(id);",
+    f"CREATE INDEX ON :{WisdomLabel.PROPOSED_BELIEF}(silo_id);",
+    f"CREATE INDEX ON :{WisdomLabel.PROPOSED_BELIEF}(status);",
 )
 
 
@@ -165,7 +174,8 @@ ALL_INDEX_QUERIES: tuple[str, ...] = (
     *KNOWLEDGE_INDEX_QUERIES,
     *WISDOM_INDEX_QUERIES,
     *INTELLIGENCE_INDEX_QUERIES,
-    *WORKING_BELIEF_INDEX_QUERIES,
+    *WORKING_HYPOTHESIS_INDEX_QUERIES,
+    *PROPOSED_BELIEF_INDEX_QUERIES,
     *REGISTRY_INDEX_QUERIES,
     *AUDIT_INDEX_QUERIES,
     *META_MEMORY_INDEX_QUERIES,

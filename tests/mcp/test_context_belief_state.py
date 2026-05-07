@@ -57,7 +57,7 @@ class TestContextBeliefStateReturnsBeliefs:
 
         result = await _context_belief_state(session_id=_SESSION_ID, silo_id=_SILO_ID)
 
-        assert len(result["working_beliefs"]) == 2
+        assert len(result["working_hypotheses"]) == 2
         assert result["session_id"] == _SESSION_ID
         assert result["reflection_suggested"] is False
         assert result["potential_contradictions"] == []
@@ -68,7 +68,7 @@ class TestContextBeliefStateReturnsBeliefs:
 
         result = await _context_belief_state(session_id=_SESSION_ID, silo_id=_SILO_ID)
 
-        assert result["working_beliefs"] == []
+        assert result["working_hypotheses"] == []
         assert result["reflection_suggested"] is False
 
     async def test_belief_fields_present(self, fake_store):
@@ -77,7 +77,7 @@ class TestContextBeliefStateReturnsBeliefs:
 
         result = await _context_belief_state(session_id=_SESSION_ID, silo_id=_SILO_ID)
 
-        belief = result["working_beliefs"][0]
+        belief = result["working_hypotheses"][0]
         assert belief["belief_id"] == _BELIEF_A
         assert belief["content"] == "the market is bullish"
         assert belief["confidence"] == 0.8
@@ -99,8 +99,8 @@ class TestContextBeliefStateAboutFilter:
             session_id=_SESSION_ID, silo_id=_SILO_ID, about=[_NODE_ID]
         )
 
-        assert len(result["working_beliefs"]) == 1
-        assert result["working_beliefs"][0]["belief_id"] == _BELIEF_A
+        assert len(result["working_hypotheses"]) == 1
+        assert result["working_hypotheses"][0]["belief_id"] == _BELIEF_A
 
     async def test_no_match_returns_empty_beliefs(self, fake_store):
         fake_store.seed_query_result([_make_belief_row(_BELIEF_A, about_ids=["unrelated"])])
@@ -110,7 +110,7 @@ class TestContextBeliefStateAboutFilter:
             session_id=_SESSION_ID, silo_id=_SILO_ID, about=[_NODE_ID]
         )
 
-        assert result["working_beliefs"] == []
+        assert result["working_hypotheses"] == []
 
     async def test_about_none_returns_all(self, fake_store):
         fake_store.seed_query_result(
@@ -123,7 +123,7 @@ class TestContextBeliefStateAboutFilter:
 
         result = await _context_belief_state(session_id=_SESSION_ID, silo_id=_SILO_ID, about=None)
 
-        assert len(result["working_beliefs"]) == 2
+        assert len(result["working_hypotheses"]) == 2
 
 
 class TestContextBeliefStateContradictions:

@@ -1,4 +1,4 @@
-"""MCP tool: context_crystallize - Promote WorkingBeliefs to durable Commitments."""
+"""MCP tool: context_crystallize - Promote WorkingHypothesiss to durable Commitments."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ async def _crystallize_one(
     reason: str,
     created_at: str,
 ) -> str | None:
-    """Crystallize a single WorkingBelief; returns commitment_id or None on miss."""
+    """Crystallize a single WorkingHypothesis; returns commitment_id or None on miss."""
     from context_service.db import queries as q
 
     commitment_id = str(uuid.uuid4())
@@ -80,7 +80,7 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(
         name="context_crystallize",
         description=(
-            "Promote one or more WorkingBeliefs to durable Commitments. "
+            "Promote one or more WorkingHypothesiss to durable Commitments. "
             "Each crystallized belief creates a Commitment node with SUPERSEDES edges "
             "to any prior active Commitments about the same nodes."
         ),
@@ -90,10 +90,10 @@ def register(mcp: FastMCP) -> None:
         reason: str | None = None,
         silo_id: str | None = None,
     ) -> dict[str, Any]:
-        """Crystallize WorkingBeliefs into Commitments.
+        """Crystallize WorkingHypothesiss into Commitments.
 
         Args:
-            belief_ids: List of WorkingBelief IDs to promote.
+            belief_ids: List of WorkingHypothesis IDs to promote.
             reason: Optional reason stored on SUPERSEDES edges.
             silo_id: UUID of the silo. Optional; defaults to the org's primary silo
                 derived from auth.
@@ -101,7 +101,7 @@ def register(mcp: FastMCP) -> None:
         Returns:
             {commitment_ids: list[str], crystallized_belief_ids: list[str], not_found?: list[str]}
             where crystallized_belief_ids lists the belief_ids that were successfully promoted
-            and not_found lists any IDs that did not match a WorkingBelief in the silo.
+            and not_found lists any IDs that did not match a WorkingHypothesis in the silo.
         """
         from context_service.mcp.server import get_mcp_auth_context, get_silo_service
         from context_service.services.silo import validate_silo_ownership

@@ -1165,18 +1165,18 @@ MERGE (src)-[:ABOUT]->(target)
 
 
 # ---------------------------------------------------------------------------
-# Working belief queries (Intelligence layer, session-scoped)
+# Working hypothesis queries (Intelligence layer, session-scoped)
 #
-# WorkingBelief nodes are mutable, ephemeral, attached to a ReasoningSession.
+# WorkingHypothesis nodes are mutable, ephemeral, attached to a ReasoningSession.
 # They represent what an agent currently thinks during a session and can be
 # crystallized into durable Commitments at session end (or earlier).
 # ---------------------------------------------------------------------------
 
-# Create a :WorkingBelief node, attach it to its :ReasoningSession via
+# Create a :WorkingHypothesis node, attach it to its :ReasoningSession via
 # PART_OF_SESSION, and create :ABOUT edges to each node id in $about_ids.
 # Caller must ensure the :ReasoningSession exists in the same silo.
-CREATE_WORKING_BELIEF = """
-CREATE (wb:WorkingBelief {
+CREATE_WORKING_HYPOTHESIS = """
+CREATE (wb:WorkingHypothesis {
     id: $id,
     silo_id: $silo_id,
     session_id: $session_id,
@@ -1195,10 +1195,10 @@ CREATE (wb)-[:ABOUT]->(n)
 RETURN wb.id AS belief_id
 """
 
-# Return all :WorkingBelief nodes attached to a session, with the ids of
+# Return all :WorkingHypothesis nodes attached to a session, with the ids of
 # the nodes they reference via :ABOUT collected per belief.
-GET_WORKING_BELIEFS_FOR_SESSION = """
-MATCH (wb:WorkingBelief {session_id: $session_id, silo_id: $silo_id})
+GET_WORKING_HYPOTHESES_FOR_SESSION = """
+MATCH (wb:WorkingHypothesis {session_id: $session_id, silo_id: $silo_id})
 OPTIONAL MATCH (wb)-[:ABOUT]->(n)
 WITH wb, collect(n.id) AS about_ids
 RETURN wb.id AS belief_id,
@@ -1210,28 +1210,28 @@ RETURN wb.id AS belief_id,
 ORDER BY wb.created_at DESC
 """
 
-# In-place update of a :WorkingBelief. $content may be null to leave content
+# In-place update of a :WorkingHypothesis. $content may be null to leave content
 # unchanged; confidence and updated_at are always set.
-UPDATE_WORKING_BELIEF = """
-MATCH (wb:WorkingBelief {id: $belief_id, silo_id: $silo_id})
+UPDATE_WORKING_HYPOTHESIS = """
+MATCH (wb:WorkingHypothesis {id: $belief_id, silo_id: $silo_id})
 SET wb.confidence = $confidence,
     wb.updated_at = $updated_at
 SET wb.content = CASE WHEN $content IS NOT NULL THEN $content ELSE wb.content END
 RETURN wb.id AS belief_id, wb.confidence AS confidence
 """
 
-DELETE_WORKING_BELIEF = """
-MATCH (wb:WorkingBelief {id: $belief_id, silo_id: $silo_id})
+DELETE_WORKING_HYPOTHESIS = """
+MATCH (wb:WorkingHypothesis {id: $belief_id, silo_id: $silo_id})
 DETACH DELETE wb
 """
 
-# Sync conflict detection: given a freshly-written :WorkingBelief, return the
-# ids of any other :WorkingBelief in the same session that ABOUT the same
+# Sync conflict detection: given a freshly-written :WorkingHypothesis, return the
+# ids of any other :WorkingHypothesis in the same session that ABOUT the same
 # node(s). Bounded by LIMIT 10 to keep p99 under ~30ms.
-DETECT_CONFLICTING_WORKING_BELIEFS = """
-MATCH (new:WorkingBelief {id: $new_belief_id, silo_id: $silo_id})
+DETECT_CONFLICTING_WORKING_HYPOTHESES = """
+MATCH (new:WorkingHypothesis {id: $new_belief_id, silo_id: $silo_id})
 MATCH (new)-[:ABOUT]->(n)
-MATCH (other:WorkingBelief)-[:ABOUT]->(n)
+MATCH (other:WorkingHypothesis)-[:ABOUT]->(n)
 WHERE other.id <> $new_belief_id
   AND other.session_id = new.session_id
 RETURN DISTINCT other.id AS conflict_id
@@ -1239,22 +1239,22 @@ LIMIT 10
 """
 
 # Pairwise contradiction detection across a whole session. Returns up to 10
-# unordered pairs of WorkingBeliefs that share at least one ABOUT target.
+# unordered pairs of WorkingHypotheses that share at least one ABOUT target.
 DETECT_CONTRADICTIONS_IN_SESSION = """
-MATCH (wb1:WorkingBelief {session_id: $session_id, silo_id: $silo_id})
-MATCH (wb2:WorkingBelief {session_id: $session_id, silo_id: $silo_id})
+MATCH (wb1:WorkingHypothesis {session_id: $session_id, silo_id: $silo_id})
+MATCH (wb2:WorkingHypothesis {session_id: $session_id, silo_id: $silo_id})
 WHERE wb1.id < wb2.id
 MATCH (wb1)-[:ABOUT]->(n)<-[:ABOUT]-(wb2)
 RETURN DISTINCT wb1.id AS belief_a, wb2.id AS belief_b
 LIMIT 10
 """
 
-# Promote a :WorkingBelief to a durable :Commitment, copy its ABOUT edges,
+# Promote a :WorkingHypothesis to a durable :Commitment, copy its ABOUT edges,
 # and SUPERSEDE any existing active Commitments that ABOUT the same node(s).
 # Existing commitments are considered active when no other Commitment
 # SUPERSEDES them. Their valid_to is set to $valid_from on supersession.
 CRYSTALLIZE_TO_COMMITMENT = """
-MATCH (wb:WorkingBelief {id: $belief_id, silo_id: $silo_id})
+MATCH (wb:WorkingHypothesis {id: $belief_id, silo_id: $silo_id})
 CREATE (cm:Node:Commitment {
     id: $commitment_id,
     silo_id: $silo_id,
@@ -1278,4 +1278,76 @@ FOREACH (old IN to_supersede |
     SET old.valid_to = $valid_from
 )
 RETURN cm.id AS commitment_id
+"""
+
+
+# ---------------------------------------------------------------------------
+# ProposedBelief queries (Wisdom layer, awaiting validation)
+#
+# ProposedBelief nodes represent weak synthesis from the Custodian that
+# require validation before becoming active Beliefs. Status transitions:
+# pending -> accepted (creates Belief) or rejected (tombstoned).
+# ---------------------------------------------------------------------------
+
+CREATE_PROPOSED_BELIEF = """
+CREATE (pb:ProposedBelief {
+    id: $id,
+    silo_id: $silo_id,
+    content: $content,
+    confidence: $confidence,
+    status: 'pending',
+    created_at: $created_at,
+    updated_at: $created_at
+})
+WITH pb
+UNWIND $synthesized_from_ids AS fact_id
+MATCH (f:Fact {id: fact_id, silo_id: $silo_id})
+CREATE (pb)-[:SYNTHESIZED_FROM]->(f)
+RETURN pb.id AS proposed_belief_id
+"""
+
+GET_PROPOSED_BELIEFS_FOR_SILO = """
+MATCH (pb:ProposedBelief {silo_id: $silo_id, status: 'pending'})
+OPTIONAL MATCH (pb)-[:SYNTHESIZED_FROM]->(f:Fact)
+WITH pb, collect(f.id) AS source_fact_ids
+RETURN pb.id AS proposed_belief_id,
+       pb.content AS content,
+       pb.confidence AS confidence,
+       pb.created_at AS created_at,
+       source_fact_ids
+ORDER BY pb.created_at DESC
+LIMIT $limit
+"""
+
+ACCEPT_PROPOSED_BELIEF = """
+MATCH (pb:ProposedBelief {id: $proposed_belief_id, silo_id: $silo_id})
+WHERE pb.status = 'pending'
+SET pb.status = 'accepted',
+    pb.accepted_at = $accepted_at,
+    pb.updated_at = $accepted_at
+WITH pb
+CREATE (b:Belief {
+    id: $belief_id,
+    silo_id: $silo_id,
+    layer: 'wisdom',
+    content: pb.content,
+    confidence: CASE WHEN $override_confidence IS NOT NULL THEN $override_confidence ELSE pb.confidence END,
+    created_at: $accepted_at,
+    valid_from: $accepted_at
+})
+CREATE (b)-[:PROMOTED_FROM]->(pb)
+WITH pb, b
+MATCH (pb)-[:SYNTHESIZED_FROM]->(f)
+CREATE (b)-[:SYNTHESIZED_FROM]->(f)
+RETURN b.id AS belief_id
+"""
+
+REJECT_PROPOSED_BELIEF = """
+MATCH (pb:ProposedBelief {id: $proposed_belief_id, silo_id: $silo_id})
+WHERE pb.status = 'pending'
+SET pb.status = 'rejected',
+    pb.rejected_at = $rejected_at,
+    pb.rejection_reason = $reason,
+    pb.updated_at = $rejected_at
+RETURN pb.id AS proposed_belief_id, pb.status AS status
 """

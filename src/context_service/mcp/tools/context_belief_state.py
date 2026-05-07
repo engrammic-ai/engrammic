@@ -1,4 +1,4 @@
-"""MCP tool: context_belief_state - Query session WorkingBeliefs with contradiction detection."""
+"""MCP tool: context_belief_state - Query session WorkingHypotheses with contradiction detection."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ async def _context_belief_state(
     store = get_context_service().graph_store
 
     rows = await store.execute_query(
-        q.GET_WORKING_BELIEFS_FOR_SESSION,
+        q.GET_WORKING_HYPOTHESES_FOR_SESSION,
         {"session_id": session_id, "silo_id": silo_id},
     )
 
@@ -60,7 +60,7 @@ async def _context_belief_state(
         ]
 
     return {
-        "working_beliefs": beliefs,
+        "working_hypotheses": beliefs,
         "potential_contradictions": contradictions,
         "reflection_suggested": len(contradictions) > 0,
         "session_id": session_id,
@@ -73,9 +73,9 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(
         name="context_belief_state",
         description=(
-            "Query the session's active WorkingBeliefs with pairwise contradiction detection. "
-            "Returns beliefs, potential contradictions, and a reflection_suggested flag. "
-            "Filter by about to restrict to beliefs concerning specific nodes."
+            "Query the session's active WorkingHypotheses with pairwise contradiction detection. "
+            "Returns hypotheses, potential contradictions, and a reflection_suggested flag. "
+            "Filter by about to restrict to hypotheses concerning specific nodes."
         ),
     )
     async def context_belief_state(
@@ -83,18 +83,18 @@ def register(mcp: FastMCP) -> None:
         about: list[str] | None = None,
         silo_id: str | None = None,
     ) -> dict[str, Any]:
-        """Return working beliefs for a reasoning session.
+        """Return working hypotheses for a reasoning session.
 
         Args:
             session_id: ID of the ReasoningSession to query.
-            about: Optional list of node IDs. When provided, only beliefs that
+            about: Optional list of node IDs. When provided, only hypotheses that
                 reference at least one of these nodes are returned.
             silo_id: UUID of the silo. Optional; defaults to the org's primary silo
                 derived from auth.
 
         Returns:
-            {working_beliefs, potential_contradictions, reflection_suggested, session_id}
-            where each belief has {belief_id, content, confidence, created_at,
+            {working_hypotheses, potential_contradictions, reflection_suggested, session_id}
+            where each hypothesis has {belief_id, content, confidence, created_at,
             updated_at, about_ids} and each contradiction is {belief_a, belief_b}.
         """
         from context_service.mcp.server import get_mcp_auth_context, get_silo_service

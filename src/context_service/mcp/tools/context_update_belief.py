@@ -1,4 +1,4 @@
-"""MCP tool: context_update_belief - In-place mutation of a WorkingBelief."""
+"""MCP tool: context_update_belief - In-place mutation of a WorkingHypothesis."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ async def _context_update_belief(
     updated_at = datetime.now(UTC).isoformat()
 
     rows = await store.execute_write(
-        q.UPDATE_WORKING_BELIEF,
+        q.UPDATE_WORKING_HYPOTHESIS,
         {
             "belief_id": belief_id,
             "silo_id": silo_id,
@@ -42,7 +42,7 @@ async def _context_update_belief(
     if not rows:
         return {
             "error": "not_found",
-            "message": f"WorkingBelief {belief_id!r} not found in silo",
+            "message": f"WorkingHypothesis {belief_id!r} not found in silo",
         }
 
     return {
@@ -60,7 +60,7 @@ def register(mcp: FastMCP) -> None:
     @mcp.tool(
         name="context_update_belief",
         description=(
-            "Mutate a WorkingBelief in-place: update confidence and optionally revise content. "
+            "Mutate a WorkingHypothesis in-place: update confidence and optionally revise content. "
             "Use this to reflect changed certainty mid-session without superseding a Commitment."
         ),
     )
@@ -71,10 +71,10 @@ def register(mcp: FastMCP) -> None:
         content: str | None = None,
         silo_id: str | None = None,
     ) -> dict[str, Any]:
-        """Update a WorkingBelief's confidence and optionally its content.
+        """Update a WorkingHypothesis's confidence and optionally its content.
 
         Args:
-            belief_id: ID of the WorkingBelief to update.
+            belief_id: ID of the WorkingHypothesis to update.
             confidence: New confidence score (0.0-1.0). Guidelines:
                 0.95+ = near certain, verified from multiple sources
                 0.8-0.95 = confident, single reliable source or strong reasoning
