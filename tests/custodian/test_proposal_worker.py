@@ -31,9 +31,7 @@ def _make_resolved_config(
     return config
 
 
-def _make_cluster_rows(
-    cluster_ids: list[str], fact_counts: list[int]
-) -> list[dict[str, Any]]:
+def _make_cluster_rows(cluster_ids: list[str], fact_counts: list[int]) -> list[dict[str, Any]]:
     return [
         {"cluster_id": cid, "fact_count": fc}
         for cid, fc in zip(cluster_ids, fact_counts, strict=True)
@@ -79,7 +77,9 @@ def test_escape_for_prompt_escapes_braces() -> None:
     result = escape_for_prompt("{inject} and }}")
     assert "{{inject}}" in result or "{inject}" not in result.replace("{{", "").replace("}}", "")
     # Verify raw braces are escaped
-    assert "{inject}" not in result.split("<data>")[1].split("</data>")[0].replace("{{", "X").replace("}}", "X")
+    assert "{inject}" not in result.split("<data>")[1].split("</data>")[0].replace(
+        "{{", "X"
+    ).replace("}}", "X")
 
 
 def test_escape_for_prompt_handles_empty_string() -> None:
@@ -346,7 +346,10 @@ async def test_create_proposal_returns_id_on_success() -> None:
     # CREATE_PROPOSED_BELIEF
     store.seed_query_result([])
 
-    with patch("context_service.custodian.proposal_worker.synthesize_proposal_content", new=AsyncMock(return_value="Synthesized belief.")):
+    with patch(
+        "context_service.custodian.proposal_worker.synthesize_proposal_content",
+        new=AsyncMock(return_value="Synthesized belief."),
+    ):
         proposal_id = await create_proposal(store, "c-1", "silo-1", confidence=0.55)
 
     assert proposal_id is not None
@@ -387,7 +390,10 @@ async def test_create_proposal_node_params_are_correct() -> None:
     store.seed_query_result(_make_fact_rows("c-1", 2))
     store.seed_query_result([])
 
-    with patch("context_service.custodian.proposal_worker.synthesize_proposal_content", new=AsyncMock(return_value="Belief content.")):
+    with patch(
+        "context_service.custodian.proposal_worker.synthesize_proposal_content",
+        new=AsyncMock(return_value="Belief content."),
+    ):
         proposal_id = await create_proposal(store, "c-1", "silo-1", confidence=0.6)
 
     # Last query in log should be CREATE_PROPOSED_BELIEF
@@ -400,6 +406,7 @@ async def test_create_proposal_node_params_are_correct() -> None:
     assert "created_at" in params
     # TTL: expires_at > created_at by PROPOSAL_TTL_DAYS
     from datetime import datetime
+
     created = datetime.fromisoformat(params["created_at"])
     expires = datetime.fromisoformat(params["expires_at"])
     delta_days = (expires - created).days
@@ -416,7 +423,10 @@ async def test_create_proposal_passes_fact_ids_to_node() -> None:
     store.seed_query_result(facts)
     store.seed_query_result([])
 
-    with patch("context_service.custodian.proposal_worker.synthesize_proposal_content", new=AsyncMock(return_value="Belief.")):
+    with patch(
+        "context_service.custodian.proposal_worker.synthesize_proposal_content",
+        new=AsyncMock(return_value="Belief."),
+    ):
         await create_proposal(store, "c-1", "silo-1", confidence=0.5)
 
     _, params = store.query_log[-1]
@@ -444,7 +454,10 @@ async def test_create_proposal_skips_facts_without_content() -> None:
         captured_contents.append(fact_contents)
         return "Result."
 
-    with patch("context_service.custodian.proposal_worker.synthesize_proposal_content", new=capture_synthesize):
+    with patch(
+        "context_service.custodian.proposal_worker.synthesize_proposal_content",
+        new=capture_synthesize,
+    ):
         await create_proposal(store, "c-1", "silo-1", confidence=0.5)
 
     assert captured_contents[0] == ["Valid content"]
@@ -478,7 +491,10 @@ async def test_run_proposal_detection_creates_ids_for_candidates() -> None:
     store.seed_query_result(_make_fact_rows("c-2", 3))
     store.seed_query_result([])
 
-    with patch("context_service.custodian.proposal_worker.synthesize_proposal_content", new=AsyncMock(return_value="A belief.")):
+    with patch(
+        "context_service.custodian.proposal_worker.synthesize_proposal_content",
+        new=AsyncMock(return_value="A belief."),
+    ):
         ids = await run_proposal_detection(store, "silo-1", config)
 
     assert len(ids) == 2

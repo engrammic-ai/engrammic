@@ -589,8 +589,13 @@ class ContextService:
             )
             for row in db_rows:
                 created_at_val = row.get("created_at")
-                if created_at_val is not None and isinstance(created_at_val, int):
-                    created_at_val = datetime.fromtimestamp(created_at_val / 1_000_000, tz=UTC)
+                if created_at_val is not None:
+                    if isinstance(created_at_val, int):
+                        created_at_val = datetime.fromtimestamp(created_at_val / 1_000_000, tz=UTC)
+                    elif isinstance(created_at_val, str):
+                        created_at_val = datetime.fromisoformat(
+                            created_at_val.replace("Z", "+00:00")
+                        )
                 props = {
                     "layer": row.get("layer", "memory"),
                     "tags": row.get("tags") or [],

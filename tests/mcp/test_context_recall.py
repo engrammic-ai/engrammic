@@ -98,7 +98,13 @@ def _make_fake_ctx_service(
     async def _get(node_id: object, silo_id: object) -> object:
         return node
 
+    async def _batch_fetch_nodes(node_ids: list[str], silo_id: object) -> dict[str, object]:
+        if node is None:
+            return {}
+        return {str(node.id): node}
+
     svc.get = _get
+    svc._batch_fetch_nodes = _batch_fetch_nodes
     return svc
 
 

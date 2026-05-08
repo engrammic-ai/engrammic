@@ -177,8 +177,7 @@ def test_hyper_graph_store_declares_method(method_name: str, min_args: int) -> N
     positional = [
         p
         for p in sig.parameters.values()
-        if p.kind
-        in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
         # exclude 'self'
         and p.name != "self"
     ]
@@ -202,8 +201,7 @@ def test_fake_graph_store_method_satisfies_protocol(method_name: str, min_args: 
     positional = [
         p
         for p in sig.parameters.values()
-        if p.kind
-        in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
+        if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD)
     ]
     assert len(positional) >= min_args, (
         f"FakeGraphStore.{method_name} has {len(positional)} positional param(s), "

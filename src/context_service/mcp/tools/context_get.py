@@ -80,12 +80,16 @@ async def _context_get(
                 invalid_ids.append({"error": "invalid_node_id", "node_id": nid})
 
         if not node_uuids:
-            CONTEXT_GET_LATENCY.labels(silo_id=str(resolved_silo_id)).observe(time.perf_counter() - _start)
+            CONTEXT_GET_LATENCY.labels(silo_id=str(resolved_silo_id)).observe(
+                time.perf_counter() - _start
+            )
             return {"nodes": invalid_ids}
 
         temporal_results = await ctx_svc.get_temporal(node_uuids, resolved_silo_id, as_of_dt)
 
-        CONTEXT_GET_LATENCY.labels(silo_id=str(resolved_silo_id)).observe(time.perf_counter() - _start)
+        CONTEXT_GET_LATENCY.labels(silo_id=str(resolved_silo_id)).observe(
+            time.perf_counter() - _start
+        )
         return {"nodes": invalid_ids + temporal_results}
 
     _start = time.perf_counter()

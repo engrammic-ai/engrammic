@@ -258,4 +258,5 @@ class TestMalformedInput:
     def test_json_decode_error_is_importable(self) -> None:
         # Ensure re-export works so callers don't need stdlib json
         from context_service.utils.json import JSONDecodeError as JDE
+
         assert JDE is JSONDecodeError
