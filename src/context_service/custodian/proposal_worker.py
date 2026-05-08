@@ -14,12 +14,14 @@ from primitives.eag import noisy_or_aggregate
 from pydantic_ai import Agent
 
 from context_service.config.settings import get_settings
+from context_service.custodian.agents import proposal_synthesis_limits
 from context_service.custodian.prompt_loader import load_prompt
 from context_service.db.queries import (
     CREATE_PROPOSED_BELIEF,
     GET_PENDING_PROPOSAL_COUNT_FOR_SILO,
     LIST_DENSE_CLUSTERS_WITHOUT_BELIEF_OR_PROPOSAL,
 )
+from context_service.llm.sanitize import escape_for_prompt
 
 if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
@@ -110,7 +112,9 @@ async def synthesize_proposal_content(fact_contents: list[str]) -> str:
         system_prompt=PROPOSAL_SYNTHESIS_SYSTEM_PROMPT,
     )
 
-    user_prompt = "Given these facts:\n" + "\n".join(f"- {c}" for c in fact_contents)
+    user_prompt = "Given these facts:\n" + "\n".join(
+        f"- {escape_for_prompt(c)}" for c in fact_contents
+    )
     user_prompt += "\n\nSynthesize a belief statement that captures the pattern."
 
     result = await agent.run(user_prompt)
