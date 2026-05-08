@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
+from context_service.mcp.tools import context_skills
 from context_service.mcp.tools.context_accept_belief import register as register_accept_belief
 from context_service.mcp.tools.context_admin import register as register_admin
 from context_service.mcp.tools.context_belief_state import register as register_belief_state
@@ -34,6 +35,7 @@ def register_all(mcp: FastMCP) -> None:
 
 __all__ = [
     "register_all",
+    "context_skills",
     "register_accept_belief",
     "register_admin",
     "register_belief_state",
