@@ -42,7 +42,8 @@ def setup_metrics(service_name: str = "context-service") -> None:
         }
     )
 
-    exporter = OTLPMetricExporter(endpoint=endpoint, insecure=True)
+    insecure = os.getenv("OTEL_EXPORTER_OTLP_INSECURE", "true").lower() == "true"
+    exporter = OTLPMetricExporter(endpoint=endpoint, insecure=insecure)
     reader = PeriodicExportingMetricReader(exporter, export_interval_millis=10000)
     provider = MeterProvider(resource=resource, metric_readers=[reader])
     metrics.set_meter_provider(provider)
