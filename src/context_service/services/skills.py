@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import ipaddress
 import re
+import socket
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
+
+import httpx
 
 import structlog
 import yaml
@@ -18,6 +23,7 @@ if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = structlog.get_logger(__name__)
+
 
 def _builtin_id(name: str) -> uuid.UUID:
     """Generate a stable deterministic UUID for a builtin skill."""
@@ -122,9 +128,7 @@ class SkillService:
         """Search skills by name/description substring match."""
         all_skills = await self.list(silo_id, namespace=namespace, limit=10_000, offset=0)
         q = query.lower()
-        return [
-            s for s in all_skills if q in s.name.lower() or q in s.description.lower()
-        ][:limit]
+        return [s for s in all_skills if q in s.name.lower() or q in s.description.lower()][:limit]
 
     async def get(self, silo_id: str, name: str) -> SkillResponse | None:
         """Get skill by name. Check builtins first, then DB."""
@@ -188,6 +192,91 @@ class SkillService:
         result = await self._db.execute(stmt)
         if result.rowcount == 0:
             raise KeyError(f"Skill '{name}' not found")
+
+    async def import_from(
+        self,
+        silo_id: str,
+        source_url: str,
+        name: str,
+        token: str | None = None,
+    ) -> SkillResponse:
+        """Import a skill from a remote Engrammic instance.
+
+        1. Validate source_url (SSRF protection)
+        2. Reject if name starts with "engrammic:"
+        3. Check for existing skill (builtin or user)
+        4. Fetch from remote: GET {source_url}/api/skills/{name}
+        5. Sanitize fetched body
+        6. Save locally with source="user", version="1.0.0"
+        """
+        _validate_import_url(source_url)
+
+        if name.startswith("engrammic:"):
+            raise ValueError(f"Skill name '{name}' uses reserved namespace 'engrammic'")
+
+        existing = await self.get(silo_id, name)
+        if existing is not None:
+            raise ValueError(f"Skill '{name}' already exists")
+
+        headers: dict[str, str] = {}
+        if token is not None:
+            headers["Authorization"] = f"Bearer {token}"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"{source_url.rstrip('/')}/api/skills/{name}",
+                headers=headers,
+                follow_redirects=False,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+        body = _sanitize_skill_body(data.get("body", ""))
+        description = str(data.get("description", ""))
+        allowed_tools = data.get("allowed_tools")
+
+        db_skill = Skill(
+            name=name,
+            description=description,
+            body=body,
+            allowed_tools=allowed_tools,
+            source="user",
+            version="1.0.0",
+            silo_id=silo_id,
+        )
+        self._db.add(db_skill)
+        await self._db.flush()
+        await self._db.refresh(db_skill)
+        return SkillResponse.model_validate(db_skill)
+
+
+def _validate_import_url(url: str, allow_http: bool = False) -> None:
+    """Validate URL is safe for federation fetch. Raises ValueError if not."""
+    parsed = urlparse(url)
+
+    allowed_schemes = ("https",) if not allow_http else ("https", "http")
+    if parsed.scheme not in allowed_schemes:
+        raise ValueError(f"Only {', '.join(allowed_schemes)} URLs allowed")
+
+    if not parsed.hostname:
+        raise ValueError("URL must have a hostname")
+
+    try:
+        ip = socket.gethostbyname(parsed.hostname)
+    except socket.gaierror as e:
+        raise ValueError(f"Cannot resolve hostname: {e}") from e
+
+    blocked = [
+        ipaddress.ip_network("127.0.0.0/8"),
+        ipaddress.ip_network("10.0.0.0/8"),
+        ipaddress.ip_network("172.16.0.0/12"),
+        ipaddress.ip_network("192.168.0.0/16"),
+        ipaddress.ip_network("169.254.0.0/16"),
+    ]
+    ip_addr = ipaddress.ip_address(ip)
+    for net in blocked:
+        if ip_addr in net:
+            raise ValueError("Internal network addresses not allowed")
 
 
 def _sanitize_skill_body(body: str) -> str:

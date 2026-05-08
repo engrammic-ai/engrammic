@@ -1,13 +1,12 @@
 """Tests for SkillService core methods."""
 
+import uuid
 from datetime import UTC
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-
-import uuid
 
 from context_service.schemas.skill import SkillCreate, SkillUpdate
 from context_service.services.skills import (
@@ -298,3 +297,19 @@ async def test_create_skill(skills_dir: Path):
     assert created_skill.body == "bodycontent"  # sanitized
     assert created_skill.source == "user"
     assert created_skill.version == "1.0.0"
+
+
+@pytest.mark.asyncio
+async def test_import_validates_url(mock_db, skills_dir: Path):
+    """Import should reject internal network URLs."""
+    service = SkillService(mock_db, skills_dir)
+    with pytest.raises(ValueError, match="Internal network"):
+        await service.import_from("silo-123", "https://192.168.1.1/api/skills/org:tool", "org:tool")
+
+
+@pytest.mark.asyncio
+async def test_import_rejects_engrammic_namespace(mock_db, skills_dir: Path):
+    """Import should reject engrammic: names."""
+    service = SkillService(mock_db, skills_dir)
+    with pytest.raises(ValueError, match="reserved"):
+        await service.import_from("silo-123", "https://example.com", "engrammic:foo")
