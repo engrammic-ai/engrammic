@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic_ai import Agent
 
 from context_service.config.settings import get_settings
+from context_service.custodian.agents import silo_synthesis_limits
 from context_service.custodian.models import FindingOutput, StitchedSummary
 from context_service.custodian.prompt_loader import load_prompt
 from context_service.custodian.validators import CitationValidator
@@ -129,7 +130,7 @@ async def run_silo_synthesis(
         system_prompt=SILO_SYNTHESIS_SYSTEM_PROMPT,
     )
 
-    result = await agent.run(user_prompt)
+    result = await agent.run(user_prompt, usage_limits=silo_synthesis_limits())
 
     # 5. Build FindingOutput (no claims, no edges -- pure summary).
     finding = FindingOutput(

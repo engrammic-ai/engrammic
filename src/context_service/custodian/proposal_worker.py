@@ -117,7 +117,7 @@ async def synthesize_proposal_content(fact_contents: list[str]) -> str:
     )
     user_prompt += "\n\nSynthesize a belief statement that captures the pattern."
 
-    result = await agent.run(user_prompt)
+    result = await agent.run(user_prompt, usage_limits=proposal_synthesis_limits())
     return str(result.output).strip()
 
 

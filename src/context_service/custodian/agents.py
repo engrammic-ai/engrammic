@@ -196,6 +196,16 @@ def stitch_limits() -> UsageLimits:
     )
 
 
+def proposal_synthesis_limits() -> UsageLimits:
+    """UsageLimits for proposal synthesis. Single call, no tools."""
+    return UsageLimits(output_tokens_limit=512, request_limit=1, tool_calls_limit=0)
+
+
+def silo_synthesis_limits() -> UsageLimits:
+    """UsageLimits for silo-level synthesis. Single call, no tools."""
+    return UsageLimits(output_tokens_limit=1024, request_limit=1, tool_calls_limit=0)
+
+
 # --- Module-level singletons for tool registration ---
 # These are instantiated once at import time. The build_* factories are
 # retained for testability -- tests can still construct isolated agents.
@@ -220,4 +230,6 @@ __all__ = [
     "plan_limits",
     "stitch_agent",
     "stitch_limits",
+    "proposal_synthesis_limits",
+    "silo_synthesis_limits",
 ]
