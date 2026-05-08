@@ -1,7 +1,5 @@
 """Dagster asset: proposal_detection — create ProposedBelief for weak synthesis candidates."""
 
-from __future__ import annotations
-
 import asyncio
 import concurrent.futures
 from typing import Any

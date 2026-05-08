@@ -1,7 +1,7 @@
 # context-service - Development Commands
 
 # Variables
-dc := "docker compose"
+dc := "docker compose -f docker-compose.dev.yml"
 
 # List available recipes
 default:
