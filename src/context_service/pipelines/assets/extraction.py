@@ -28,7 +28,7 @@ _BATCH_SIZE = 50
 
 _PENDING_DOCUMENTS = """
 MATCH (d:Document {silo_id: $silo_id})
-WHERE NOT EXISTS((d)<-[:EXTRACTED_FROM]-(:Claim))
+WHERE size([(d)<-[:EXTRACTED_FROM]-(c:Claim) | c]) = 0
 RETURN d.id AS id, d.content AS content
 LIMIT $batch
 """

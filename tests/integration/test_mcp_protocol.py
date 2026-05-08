@@ -18,6 +18,11 @@ EXPECTED_TOOLS = {
     "context_recall",
     "context_admin",
     "context_link",
+    "context_belief_state",
+    "context_update_belief",
+    "context_crystallize",
+    "context_accept_belief",
+    "context_reject_belief",
 }
 
 _DEV_AUTH = AuthContext(

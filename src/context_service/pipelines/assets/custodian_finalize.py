@@ -26,7 +26,7 @@ _BATCH_SIZE = 100
 
 _SCAN_PROMOTABLE_COMMITMENTS = """
 MATCH (c:Claim:Commitment {silo_id: $silo_id})
-WHERE NOT EXISTS((c)-[:PROMOTED_TO]->(:Finding))
+WHERE size([(c)-[:PROMOTED_TO]->(f:Finding) | f]) = 0
 RETURN c.id AS commitment_id
 LIMIT $batch_size
 """

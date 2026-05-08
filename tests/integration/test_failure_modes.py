@@ -78,7 +78,7 @@ class TestMemgraphTransientRetry:
     """MemgraphClient retry policy recovers from a single transient failure."""
 
     async def test_read_retries_on_service_unavailable(self) -> None:
-        """execute_read retries and succeeds after one ServiceUnavailable."""
+        """execute_query retries and succeeds after one ServiceUnavailable."""
         call_count = 0
 
         async def _flaky_run(query: str, params: dict) -> object:  # type: ignore[type-arg]
@@ -104,7 +104,7 @@ class TestMemgraphTransientRetry:
             mock_session_ctx.return_value.__aenter__ = AsyncMock(return_value=mock_session)
             mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
 
-            result = await client.execute_read("MATCH (n) RETURN n LIMIT 1")
+            result = await client.execute_query("MATCH (n) RETURN n LIMIT 1")
 
         assert result == [{"n": 1}]
         assert call_count == 2
@@ -155,4 +155,4 @@ class TestMemgraphTransientRetry:
             mock_session_ctx.return_value.__aexit__ = AsyncMock(return_value=False)
 
             with pytest.raises(MemgraphOperationError, match="Database unavailable"):
-                await client.execute_read("MATCH (n) RETURN n")
+                await client.execute_query("MATCH (n) RETURN n")

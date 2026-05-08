@@ -98,7 +98,7 @@ class TestWeakLinksCycleMocked:
         silo_id: str,
         node_ids: tuple[str, str],
     ) -> None:
-        """create_weak_links_for_node should call memgraph.execute with MERGE_WEAK_LINK_CYPHER
+        """create_weak_links_for_node should call memgraph.execute_query with MERGE_WEAK_LINK_CYPHER
         when a similar candidate exists above threshold."""
         from context_service.pipelines.assets.weak_link_creation import (
             create_weak_links_for_node,
@@ -111,13 +111,13 @@ class TestWeakLinksCycleMocked:
         qdrant = AsyncMock()
 
         # Not at capacity
-        memgraph.execute.return_value = [{"degree": 0}]
+        memgraph.execute_query.return_value = [{"degree": 0}]
 
         # One candidate above threshold
         candidate = MagicMock()
-        candidate.id = node_b
+        candidate.node_id = node_b
         candidate.score = 0.90
-        qdrant.search.return_value = [candidate]
+        qdrant.query.return_value = [candidate]
 
         created = await create_weak_links_for_node(
             memgraph=memgraph,
@@ -133,8 +133,8 @@ class TestWeakLinksCycleMocked:
         )
 
         assert created == 1
-        # Second execute call is the MERGE
-        merge_calls = [c for c in memgraph.execute.call_args_list if "MERGE" in str(c)]
+        # MERGE is via execute_write
+        merge_calls = [c for c in memgraph.execute_write.call_args_list if "MERGE" in str(c)]
         assert len(merge_calls) == 1
         kwargs = merge_calls[0][0][1]
         assert kwargs["silo_id"] == silo_id
@@ -208,7 +208,7 @@ class TestWeakLinksCycleMocked:
         node_ids: tuple[str, str],
     ) -> None:
         """Simulate edge_heat event processing: multiple events for same edge
-        should accumulate and result in a memgraph.execute call with heat > 0."""
+        should accumulate and result in a memgraph.execute_query call with heat > 0."""
         from context_service.signals.edge_access_events import edge_id
 
         node_a, node_b = node_ids
@@ -270,11 +270,11 @@ class TestWeakLinksCycleMocked:
         # --- 1. create weak link ---
         memgraph = AsyncMock()
         qdrant = AsyncMock()
-        memgraph.execute.return_value = [{"degree": 0}]
+        memgraph.execute_query.return_value = [{"degree": 0}]
         candidate = MagicMock()
-        candidate.id = node_b
+        candidate.node_id = node_b
         candidate.score = 0.88
-        qdrant.search.return_value = [candidate]
+        qdrant.query.return_value = [candidate]
 
         created = await create_weak_links_for_node(
             memgraph=memgraph,
@@ -290,8 +290,8 @@ class TestWeakLinksCycleMocked:
         )
         assert created == 1
 
-        # Capture the link_id from the MERGE call
-        merge_call = [c for c in memgraph.execute.call_args_list if "MERGE" in str(c)][0]
+        # Capture the link_id from the MERGE call (via execute_write)
+        merge_call = [c for c in memgraph.execute_write.call_args_list if "MERGE" in str(c)][0]
         link_id = merge_call[0][1]["link_id"]
 
         # --- 2. emit edge access events ---
@@ -419,7 +419,7 @@ class TestWeakLinksCycleLive:
         )
 
         # --- 3. verify WeakLink exists with speculative=true ---
-        rows = await memgraph.execute(
+        rows = await memgraph.execute_query(
             "MATCH (w:WeakLink {id: $id, silo_id: $silo_id}) RETURN w.speculative AS spec",
             {"id": link_id, "silo_id": silo_id},
         )
@@ -441,7 +441,7 @@ class TestWeakLinksCycleLive:
         )
 
         # --- 5. verify edge_heat > 0 ---
-        heat_rows = await memgraph.execute(
+        heat_rows = await memgraph.execute_query(
             "MATCH (w:WeakLink {id: $id, silo_id: $silo_id}) RETURN w.edge_heat AS heat",
             {"id": link_id, "silo_id": silo_id},
         )
@@ -460,7 +460,7 @@ class TestWeakLinksCycleLive:
         )
 
         # --- 7. verify speculative=false after promotion ---
-        promo_rows = await memgraph.execute(
+        promo_rows = await memgraph.execute_query(
             "MATCH (w:WeakLink {id: $id, silo_id: $silo_id}) RETURN w.speculative AS spec",
             {"id": link_id, "silo_id": silo_id},
         )

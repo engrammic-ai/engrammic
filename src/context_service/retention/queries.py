@@ -3,7 +3,7 @@
 FIND_TOMBSTONE_CANDIDATES = """
 MATCH (n {silo_id: $silo_id})
 WHERE n.decay_class IS NOT NULL
-  AND NOT exists(n.tombstoned_at)
+  AND n.tombstoned_at IS NULL
   AND n.decay_class <> 'permanent'
 RETURN n.id AS id,
        n.decay_class AS decay_class,
@@ -13,7 +13,7 @@ RETURN n.id AS id,
 
 TOMBSTONE_NODE = """
 MATCH (n {id: $id, silo_id: $silo_id})
-WHERE NOT exists(n.tombstoned_at)
+WHERE n.tombstoned_at IS NULL
 SET n.tombstoned_at = $tombstoned_at,
     n.retention_run_id = $run_id
 RETURN n.id AS id
@@ -33,7 +33,7 @@ DETACH DELETE n
 
 FIND_EXCESS_META_OBSERVATIONS = """
 MATCH (n:MetaObservation {silo_id: $silo_id})
-WHERE NOT exists(n.tombstoned_at)
+WHERE n.tombstoned_at IS NULL
 WITH n ORDER BY n.created_at DESC
 SKIP $keep_count
 RETURN n.id AS id
@@ -49,7 +49,7 @@ FIND_ORPHANED_SUMMARIES = """
 MATCH (e:Event {silo_id: $silo_id})
 WHERE e.event_type = 'reasoning_trace'
   AND e.source_chain_id IS NOT NULL
-  AND NOT exists(e.tombstoned_at)
+  AND e.tombstoned_at IS NULL
 WITH e
 OPTIONAL MATCH (c:ReasoningChain {id: e.source_chain_id, silo_id: $silo_id})
 WHERE c IS NULL
