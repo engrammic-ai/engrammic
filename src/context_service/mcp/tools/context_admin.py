@@ -298,6 +298,15 @@ async def _context_admin(
             return {"error": "missing_ref", "message": "ref (node_id) required for belief_history"}
         ctx_svc = get_context_service()
         bh = await ctx_svc.belief_history(silo_id, ref)
+        def _format_ts(val: Any) -> str | None:
+            if val is None:
+                return None
+            if isinstance(val, str):
+                return val
+            if hasattr(val, "isoformat"):
+                return val.isoformat()
+            return str(val)
+
         return {
             "subject": bh.subject,
             "total_versions": bh.total_versions,
@@ -309,8 +318,8 @@ async def _context_admin(
                     "confidence": state.confidence,
                     "status": state.status,
                     "superseded_by": state.superseded_by,
-                    "valid_from": state.valid_from.isoformat() if state.valid_from else None,
-                    "valid_to": state.valid_to.isoformat() if state.valid_to else None,
+                    "valid_from": _format_ts(state.valid_from),
+                    "valid_to": _format_ts(state.valid_to),
                 }
                 for state in bh.timeline
             ],
