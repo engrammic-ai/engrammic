@@ -835,6 +835,7 @@ def register(mcp: FastMCP) -> None:
             Belief layer returns {belief_id, layer, session_id, created_at} and includes
             potential_conflicts when other beliefs in the session target the same nodes.
         """
+        start = time.perf_counter()
         auth = await get_mcp_auth_context()
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
 
@@ -866,5 +867,5 @@ def register(mcp: FastMCP) -> None:
                         redis, resolved_silo_id, str(node_id), event_type="write", layer=node_label
                     )
 
-        record_mcp_tool("context_store", 0)  # latency tracked per-layer via Prometheus
+        record_mcp_tool("context_store", (time.perf_counter() - start) * 1000)
         return result
