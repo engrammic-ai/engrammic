@@ -185,7 +185,9 @@ class SkillService:
             raise PermissionError(f"Cannot delete builtin skill '{name}'")
 
         stmt = delete(Skill).where(Skill.silo_id == silo_id, Skill.name == name)
-        await self._db.execute(stmt)
+        result = await self._db.execute(stmt)
+        if result.rowcount == 0:
+            raise KeyError(f"Skill '{name}' not found")
 
 
 def _sanitize_skill_body(body: str) -> str:

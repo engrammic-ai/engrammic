@@ -7,7 +7,9 @@ from uuid import uuid4
 
 import pytest
 
-from context_service.schemas.skill import SkillUpdate
+import uuid
+
+from context_service.schemas.skill import SkillCreate, SkillUpdate
 from context_service.services.skills import (
     SkillService,
     _increment_patch_version,
@@ -251,3 +253,48 @@ async def test_update_raises_key_error_for_missing(skills_dir: Path):
     service = SkillService(db, skills_dir)
     with pytest.raises(KeyError):
         await service.update("silo-123", "no:such", SkillUpdate(description="x"))
+
+
+@pytest.mark.asyncio
+async def test_delete_raises_key_error_for_missing(skills_dir: Path):
+    """Delete should raise KeyError if skill not found."""
+    db = _mock_db_returning([])
+    # Mock rowcount = 0
+    db.execute.return_value.rowcount = 0
+    service = SkillService(db, skills_dir)
+    with pytest.raises(KeyError):
+        await service.delete("silo-123", "no:such")
+
+
+@pytest.mark.asyncio
+async def test_create_skill(skills_dir: Path):
+    """Create should insert skill with sanitized body."""
+    db = _mock_db_returning([])
+    created_skill = None
+
+    def capture_add(obj: object) -> None:
+        nonlocal created_skill
+        created_skill = obj
+
+    db.add = capture_add
+
+    async def fake_flush() -> None:
+        pass
+
+    async def fake_refresh(obj: object) -> None:
+        obj.id = uuid.uuid4()
+
+    db.flush = fake_flush
+    db.refresh = fake_refresh
+
+    service = SkillService(db, skills_dir)
+    result = await service.create(
+        "silo-123",
+        SkillCreate(name="org:newtool", description="New tool", body="  body\x00content  "),
+    )
+
+    assert created_skill is not None
+    assert created_skill.name == "org:newtool"
+    assert created_skill.body == "bodycontent"  # sanitized
+    assert created_skill.source == "user"
+    assert created_skill.version == "1.0.0"
