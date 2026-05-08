@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 from pydantic_ai import Agent
 
 from context_service.config.settings import get_settings
+from context_service.custodian.agents import silo_synthesis_limits
 from context_service.custodian.models import FindingOutput, StitchedSummary
 from context_service.custodian.prompt_loader import load_prompt
 from context_service.custodian.validators import CitationValidator
@@ -21,6 +22,7 @@ from context_service.db.custodian_queries import (
     fetch_coarse_findings_for_silo,
     fetch_top_entities_by_citation,
 )
+from context_service.llm.sanitize import escape_for_prompt
 from context_service.utils.json import JSONDecodeError, loads
 
 if TYPE_CHECKING:
@@ -41,7 +43,7 @@ def _build_user_prompt(
     """Build the user prompt from the silo prior and coarse findings."""
     parts: list[str] = []
     parts.append("## Silo description\n")
-    parts.append(top_down_prior)
+    parts.append(escape_for_prompt(top_down_prior))
     parts.append("\n\n## Coarse-level findings\n")
 
     for f in findings:
@@ -60,7 +62,7 @@ def _build_user_prompt(
             parts.append("Claims:\n")
             for i, claim in enumerate(claims):
                 text = claim.get("text", "") if isinstance(claim, dict) else str(claim)
-                parts.append(f"  [{i}] {text}\n")
+                parts.append(f"  [{i}] {escape_for_prompt(text)}\n")
 
     return "".join(parts)
 
@@ -128,7 +130,7 @@ async def run_silo_synthesis(
         system_prompt=SILO_SYNTHESIS_SYSTEM_PROMPT,
     )
 
-    result = await agent.run(user_prompt)
+    result = await agent.run(user_prompt, usage_limits=silo_synthesis_limits())
 
     # 5. Build FindingOutput (no claims, no edges -- pure summary).
     finding = FindingOutput(

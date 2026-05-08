@@ -404,20 +404,32 @@ class EngineQdrantStore:
     async def ensure_cluster_collection(self, silo_id: str) -> str:
         """Create cluster summary collection if it does not exist."""
         name = self._cluster_collection_name(silo_id)
-        if name not in self._ensured_collections:
-            client = await self._qdrant._get_client()
-            collections = await client.get_collections()
-            existing = {c.name for c in collections.collections}
-            if name not in existing:
-                await client.create_collection(
-                    collection_name=name,
-                    vectors_config=VectorParams(
-                        size=self._qdrant._vector_size,
-                        distance=Distance.COSINE,
-                    ),
+        if name in self._ensured_collections:
+            return name
+        async with self._ensure_lock:
+            if name in self._ensured_collections:
+                return name
+            try:
+                client = await self._qdrant._get_client()
+                collections = await client.get_collections()
+                existing = {c.name for c in collections.collections}
+                if name not in existing:
+                    await client.create_collection(
+                        collection_name=name,
+                        vectors_config=VectorParams(
+                            size=self._qdrant._vector_size,
+                            distance=Distance.COSINE,
+                        ),
+                    )
+                    logger.info(f"Created cluster Qdrant collection: {name}")
+                self._ensured_collections.add(name)
+            except QdrantOperationError:
+                raise
+            except Exception as e:
+                logger.error(
+                    "Failed to ensure cluster Qdrant collection", collection=name, error=str(e)
                 )
-                logger.info(f"Created cluster Qdrant collection: {name}")
-            self._ensured_collections.add(name)
+                raise QdrantOperationError(f"Failed to ensure cluster collection: {e}") from e
         return name
 
     async def upsert_cluster_embedding(
@@ -508,12 +520,16 @@ class EngineQdrantStore:
             must.append(FieldCondition(key="level", match=MatchValue(value=level)))
         query_filter = QdrantFilter(must=must) if must else None
 
-        response = await client.query_points(
-            collection_name=collection,
-            query=vector,
-            query_filter=query_filter,
-            limit=limit,
-        )
+        try:
+            response = await client.query_points(
+                collection_name=collection,
+                query=vector,
+                query_filter=query_filter,
+                limit=limit,
+            )
+        except Exception as e:
+            logger.error("Qdrant search_clusters failed", silo_id=silo_id, error=str(e))
+            raise QdrantOperationError(f"Failed to search clusters: {e}") from e
         return [
             ClusterSearchResult(
                 cluster_id=str(r.id),

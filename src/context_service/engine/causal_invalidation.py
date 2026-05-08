@@ -15,15 +15,17 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-_FIND_DERIVED_EDGES = """
+_FIND_DERIVED_EDGES_BATCH = """
+UNWIND $edge_ids AS eid
 MATCH ()-[r:CAUSES {silo_id: $silo_id}]->()
-WHERE $superseded_edge_id IN r.inferred_from_edge_ids
+WHERE eid IN r.inferred_from_edge_ids
   AND r.inferred = true
 RETURN r.id AS derived_edge_id
 """
 
-_TOMBSTONE_DERIVED_EDGE = """
-MATCH ()-[r:CAUSES {id: $edge_id, silo_id: $silo_id}]->()
+_TOMBSTONE_DERIVED_EDGES_BATCH = """
+UNWIND $edge_ids AS eid
+MATCH ()-[r:CAUSES {id: eid, silo_id: $silo_id}]->()
 SET r.invalidated = true,
     r.invalidated_at = $invalidated_at,
     r.invalidation_reason = $reason
@@ -69,34 +71,35 @@ async def invalidate_derived_edges(
     tombstoned = 0
 
     for _ in range(max_depth):
-        if not frontier:
+        batch = [eid for eid in frontier if eid not in visited]
+        if not batch:
             break
+        visited.update(batch)
 
+        rows = await client.execute_query(
+            _FIND_DERIVED_EDGES_BATCH,
+            {"edge_ids": batch, "silo_id": silo_id},
+        )
         next_frontier: set[str] = set()
-        for edge_id in frontier:
-            if edge_id in visited:
+        to_tombstone: list[str] = []
+        for row in rows:
+            derived_id: str = str(row["derived_edge_id"])
+            if derived_id in visited:
                 continue
-            visited.add(edge_id)
+            to_tombstone.append(derived_id)
+            next_frontier.add(derived_id)
 
-            rows = await client.execute_query(
-                _FIND_DERIVED_EDGES,
-                {"superseded_edge_id": edge_id, "silo_id": silo_id},
+        if to_tombstone:
+            await client.execute_write(
+                _TOMBSTONE_DERIVED_EDGES_BATCH,
+                {
+                    "edge_ids": to_tombstone,
+                    "silo_id": silo_id,
+                    "invalidated_at": now,
+                    "reason": reason,
+                },
             )
-            for row in rows:
-                derived_id: str = str(row["derived_edge_id"])
-                if derived_id in visited:
-                    continue
-                await client.execute_write(
-                    _TOMBSTONE_DERIVED_EDGE,
-                    {
-                        "edge_id": derived_id,
-                        "silo_id": silo_id,
-                        "invalidated_at": now,
-                        "reason": reason,
-                    },
-                )
-                tombstoned += 1
-                next_frontier.add(derived_id)
+            tombstoned += len(to_tombstone)
 
         frontier = next_frontier
 

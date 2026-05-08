@@ -1,4 +1,4 @@
-# Delta Prime
+# Engrammic
 
 Cognitive substrate for AI agents. Context infrastructure that understands, not just stores.
 

@@ -49,6 +49,7 @@ class RelationshipType(StrEnum):
     CAUSES = "CAUSES"
     CORROBORATES = "CORROBORATES"
     PREVENTS = "PREVENTS"
+    SUPERSEDES = "SUPERSEDES"
 
 
 class Layer(StrEnum):

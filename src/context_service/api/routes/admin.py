@@ -7,7 +7,7 @@ exposed in production without authentication.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -52,9 +52,24 @@ class TombstoneRequest(BaseModel):
         default_factory=list,
         description="Explicit edge IDs to tombstone. If provided, filter fields are ignored.",
     )
-    edge_type: str | None = Field(
+    edge_type: (
+        Literal[
+            "CAUSES",
+            "CORROBORATES",
+            "PREVENTS",
+            "CONTRADICTS",
+            "REFERENCES",
+            "RELATED_TO",
+            "DERIVES_FROM",
+            "DEPENDS_ON",
+            "COMPOSES",
+            "SPECIALIZES",
+            "INSTANTIATES",
+        ]
+        | None
+    ) = Field(
         default=None,
-        description="Filter by edge type (CAUSES, CORROBORATES, PREVENTS).",
+        description="Filter by edge type.",
     )
     confidence_below: float | None = Field(
         default=None,

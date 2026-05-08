@@ -375,8 +375,8 @@ class ContextService:
             MATCH (n:Node {id: $id, silo_id: $silo_id})
             RETURN n.id AS id, n.type AS type, n.content AS content,
                    n.silo_id AS silo_id, n.source_uri AS source_uri,
-                   n.content_hash AS content_hash, n.confidence AS confidence,
-                   n.created_at AS created_at, labels(n) AS labels
+                   n.content_hash AS content_hash, n.created_at AS created_at,
+                   labels(n) AS labels, properties(n) AS props
             """,
             {"id": str(node_id), "silo_id": str(silo_id)},
         )
@@ -401,6 +401,7 @@ class ContextService:
             created_at = datetime.fromtimestamp(raw_created_at / 1_000_000, tz=UTC)
         else:
             created_at = raw_created_at
+        all_props = row.get("props") or {}
         node = Node(
             id=uuid.UUID(row["id"]),
             type=node_type,
@@ -408,10 +409,7 @@ class ContextService:
             silo_id=uuid.UUID(row["silo_id"]) if row.get("silo_id") else None,
             source_uri=row.get("source_uri"),
             content_hash=row.get("content_hash"),
-            properties={
-                "confidence": row.get("confidence"),
-                "created_at": raw_created_at,
-            },
+            properties=all_props,
             created_at=created_at,
         )
 
@@ -1514,6 +1512,22 @@ class ContextService:
             """,
             {"from_id": from_node, "to_id": to_node, "silo_id": silo_id, "props": props},
         )
+
+        if rel_type == "SUPERSEDES":
+            now = datetime.now(UTC).isoformat()
+            await self._memgraph.execute_write(
+                """
+                MATCH (n {id: $to_id, silo_id: $silo_id})
+                SET n.valid_to = $valid_to, n.superseded_by = $superseded_by
+                """,
+                {"to_id": to_node, "silo_id": silo_id, "valid_to": now, "superseded_by": from_node},
+            )
+            logger.info(
+                "node_superseded",
+                old_node=to_node,
+                new_node=from_node,
+                valid_to=now,
+            )
 
         logger.info(
             "link_created",

@@ -75,7 +75,8 @@ def register(mcp: FastMCP) -> None:
         description=(
             "Create a typed relationship between two context nodes. "
             "Relationship types: REFERENCES, SUPPORTS, CONTRADICTS, DERIVED_FROM, RELATED_TO, "
-            "CAUSES, CORROBORATES, PREVENTS."
+            "CAUSES, CORROBORATES, PREVENTS, SUPERSEDES. "
+            "SUPERSEDES also closes the old node (sets valid_to and superseded_by)."
         ),
     )
     async def context_link(
@@ -89,9 +90,9 @@ def register(mcp: FastMCP) -> None:
         """Create a relationship between nodes.
 
         Args:
-            from_node: Source node ID.
-            to_node: Target node ID.
-            relationship: REFERENCES|SUPPORTS|CONTRADICTS|DERIVED_FROM|RELATED_TO|CAUSES|CORROBORATES|PREVENTS.
+            from_node: Source node ID. For SUPERSEDES, this is the new/replacement node.
+            to_node: Target node ID. For SUPERSEDES, this is the old node being superseded.
+            relationship: REFERENCES|SUPPORTS|CONTRADICTS|DERIVED_FROM|RELATED_TO|CAUSES|CORROBORATES|PREVENTS|SUPERSEDES.
             weight: Edge weight 0.0-10.0 (default 1.0).
             note: Optional annotation on the edge.
             silo_id: UUID of the silo. Optional; defaults to the org's primary silo
