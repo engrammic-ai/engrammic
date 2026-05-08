@@ -81,7 +81,9 @@ async def import_skill(
     """Import a skill from a remote Engrammic instance."""
     service = _get_skill_service()
     try:
-        result: SkillResponse = await service.import_from(silo_id, request.source_url, request.name, request.token)
+        result: SkillResponse = await service.import_from(
+            silo_id, request.source_url, request.name, request.token
+        )
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e

@@ -103,7 +103,9 @@ def get_silo_service() -> SiloService:
 def get_skill_service() -> SkillService:
     """Get the configured SkillService instance."""
     if "skills" not in _services:
-        raise RuntimeError("SkillService not configured — call configure_services() with db_session at startup")
+        raise RuntimeError(
+            "SkillService not configured — call configure_services() with db_session at startup"
+        )
     from context_service.services.skills import SkillService as _SKS
 
     return cast(_SKS, _services["skills"])
