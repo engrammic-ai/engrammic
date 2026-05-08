@@ -136,7 +136,7 @@ services:
       context: ..
       dockerfile: context-service/Dockerfile
     container_name: context-service-dagster-web
-    command: ["uv", "run", "dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "workspace.yaml"]
+    command: ["uv", "run", "--frozen", "dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "workspace.yaml"]
     ports:
       - "3002:3000"
     env_file:
@@ -164,7 +164,7 @@ services:
       context: ..
       dockerfile: context-service/Dockerfile
     container_name: context-service-dagster-daemon
-    command: ["uv", "run", "dagster-daemon", "run"]
+    command: ["uv", "run", "--frozen", "dagster-daemon", "run"]
     env_file:
       - .env
     environment:
@@ -201,7 +201,7 @@ services:
     restart: unless-stopped
 
   jaeger:
-    image: jaegertracing/all-in-one:1.57
+    image: jaegertracing/all-in-one:2
     container_name: context-service-jaeger
     ports:
       - "16686:16686"
