@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import dagster as dg
+from dagster import AssetExecutionContext
 
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import MemgraphResource
@@ -30,7 +31,7 @@ def _run_async(coro: Any) -> Any:
     retry_policy=dg.RetryPolicy(max_retries=2, delay=10.0, backoff=dg.Backoff.EXPONENTIAL),
 )
 def proposal_cleanup(
-    context: dg.AssetExecutionContext,
+    context: AssetExecutionContext,
     memgraph: MemgraphResource,
 ) -> dg.Output[dict[str, Any]]:
     """Delete ProposedBelief nodes past their expires_at timestamp."""

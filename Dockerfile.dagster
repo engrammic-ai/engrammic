@@ -15,14 +15,14 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-# Dagster user with writable /app for sqlite storage
-RUN groupadd -r dagster && useradd -r -g dagster dagster \
+# Dagster user with writable dirs for sqlite storage and telemetry
+RUN groupadd -r dagster && useradd -r -g dagster -m dagster \
     && chown dagster:dagster /app
 
 COPY --from=builder --chown=dagster:dagster /app/.venv /app/.venv
 COPY --from=builder --chown=dagster:dagster /primitives /primitives
 
-COPY --chown=dagster:dagster context-service/pyproject.toml context-service/uv.lock context-service/README.md ./
+COPY --chown=dagster:dagster context-service/pyproject.toml context-service/uv.lock context-service/README.md context-service/dagster.yaml ./
 COPY --chown=dagster:dagster context-service/src/ /app/src/
 
 ENV PATH="/app/.venv/bin:$PATH"

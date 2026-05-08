@@ -7,6 +7,7 @@ import concurrent.futures
 from typing import Any
 
 import dagster as dg
+from dagster import AssetExecutionContext
 
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import MemgraphResource
@@ -31,7 +32,7 @@ def _run_async(coro: Any) -> Any:
     tags={"dagster/concurrency_key": "proposal_detection"},
 )
 def proposal_detection(
-    context: dg.AssetExecutionContext,
+    context: AssetExecutionContext,
     memgraph: MemgraphResource,
     clustering: dg.Nothing,  # type: ignore[valid-type]  # noqa: ARG001
 ) -> dg.Output[dict[str, Any]]:
