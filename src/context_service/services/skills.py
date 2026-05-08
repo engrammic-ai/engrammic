@@ -16,12 +16,9 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
-_BUILTIN_UUID_NAMESPACE = uuid.UUID("6ba7b810-9dad-11d1-80b4-00c04fd430c8")  # uuid.NAMESPACE_DNS
-
-
 def _builtin_id(name: str) -> uuid.UUID:
     """Generate a stable deterministic UUID for a builtin skill."""
-    return uuid.uuid5(_BUILTIN_UUID_NAMESPACE, f"engrammic.skill.{name}")
+    return uuid.uuid5(uuid.NAMESPACE_DNS, f"engrammic.skill.{name}")
 
 
 class SkillService:
