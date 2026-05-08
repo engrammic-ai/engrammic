@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import structlog
 import yaml
+from sqlalchemy import delete, select
 
-from context_service.schemas.skill import SkillResponse
+from context_service.models.postgres.skill import Skill
+from context_service.schemas.skill import SkillCreate, SkillResponse, SkillUpdate
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -86,3 +89,118 @@ class SkillService:
             )
 
         logger.info("Loaded builtin skills", count=len(self._builtin))
+
+    async def list(
+        self,
+        silo_id: str,
+        namespace: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[SkillResponse]:
+        """List skills (builtins + user skills for silo). Merge, filter by namespace, paginate."""
+        builtins = list(self._builtin.values())
+
+        stmt = select(Skill).where(Skill.silo_id == silo_id)
+        result = await self._db.execute(stmt)
+        user_skills = [SkillResponse.model_validate(s) for s in result.scalars().all()]
+
+        merged = builtins + user_skills
+
+        if namespace is not None:
+            prefix = f"{namespace}:"
+            merged = [s for s in merged if s.name.startswith(prefix)]
+
+        return merged[offset : offset + limit]
+
+    async def search(
+        self,
+        silo_id: str,
+        query: str,
+        namespace: str | None = None,
+        limit: int = 50,
+    ) -> list[SkillResponse]:
+        """Search skills by name/description substring match."""
+        all_skills = await self.list(silo_id, namespace=namespace, limit=10_000, offset=0)
+        q = query.lower()
+        return [
+            s for s in all_skills if q in s.name.lower() or q in s.description.lower()
+        ][:limit]
+
+    async def get(self, silo_id: str, name: str) -> SkillResponse | None:
+        """Get skill by name. Check builtins first, then DB."""
+        if name in self._builtin:
+            return self._builtin[name]
+
+        stmt = select(Skill).where(Skill.silo_id == silo_id, Skill.name == name)
+        result = await self._db.execute(stmt)
+        row = result.scalars().first()
+        if row is None:
+            return None
+        return SkillResponse.model_validate(row)
+
+    async def create(self, silo_id: str, skill: SkillCreate) -> SkillResponse:
+        """Create user skill. Sanitize body, insert to DB."""
+        sanitized_body = _sanitize_skill_body(skill.body)
+        db_skill = Skill(
+            name=skill.name,
+            description=skill.description,
+            body=sanitized_body,
+            allowed_tools=skill.allowed_tools,
+            source="user",
+            version="1.0.0",
+            silo_id=silo_id,
+        )
+        self._db.add(db_skill)
+        await self._db.flush()
+        await self._db.refresh(db_skill)
+        return SkillResponse.model_validate(db_skill)
+
+    async def update(self, silo_id: str, name: str, skill: SkillUpdate) -> SkillResponse:
+        """Update user skill. 403 (PermissionError) if builtin. Auto-increment patch version."""
+        if name in self._builtin:
+            raise PermissionError(f"Cannot modify builtin skill '{name}'")
+
+        stmt = select(Skill).where(Skill.silo_id == silo_id, Skill.name == name)
+        result = await self._db.execute(stmt)
+        db_skill = result.scalars().first()
+        if db_skill is None:
+            raise KeyError(f"Skill '{name}' not found")
+
+        if skill.description is not None:
+            db_skill.description = skill.description
+        if skill.body is not None:
+            db_skill.body = _sanitize_skill_body(skill.body)
+        if skill.allowed_tools is not None:
+            db_skill.allowed_tools = skill.allowed_tools
+
+        db_skill.version = _increment_patch_version(db_skill.version)
+
+        await self._db.flush()
+        await self._db.refresh(db_skill)
+        return SkillResponse.model_validate(db_skill)
+
+    async def delete(self, silo_id: str, name: str) -> None:
+        """Delete user skill. 403 (PermissionError) if builtin."""
+        if name in self._builtin:
+            raise PermissionError(f"Cannot delete builtin skill '{name}'")
+
+        stmt = delete(Skill).where(Skill.silo_id == silo_id, Skill.name == name)
+        await self._db.execute(stmt)
+
+
+def _sanitize_skill_body(body: str) -> str:
+    """Strip control characters, normalize whitespace."""
+    body = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", body)
+    return body.strip()
+
+
+def _increment_patch_version(version: str) -> str:
+    """Increment patch version: 1.0.9 -> 1.0.10"""
+    parts = version.split(".")
+    if len(parts) != 3:
+        return "1.0.1"
+    try:
+        major, minor, patch = int(parts[0]), int(parts[1]), int(parts[2])
+        return f"{major}.{minor}.{patch + 1}"
+    except ValueError:
+        return "1.0.1"
