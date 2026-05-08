@@ -13,7 +13,6 @@ from pydantic_ai.usage import UsageLimits
 
 from tests.fakes.fake_graph_store import FakeGraphStore
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -37,7 +36,7 @@ def _make_cluster_rows(
 ) -> list[dict[str, Any]]:
     return [
         {"cluster_id": cid, "fact_count": fc}
-        for cid, fc in zip(cluster_ids, fact_counts)
+        for cid, fc in zip(cluster_ids, fact_counts, strict=True)
     ]
 
 
@@ -400,7 +399,7 @@ async def test_create_proposal_node_params_are_correct() -> None:
     assert "expires_at" in params
     assert "created_at" in params
     # TTL: expires_at > created_at by PROPOSAL_TTL_DAYS
-    from datetime import datetime, timezone
+    from datetime import datetime
     created = datetime.fromisoformat(params["created_at"])
     expires = datetime.fromisoformat(params["expires_at"])
     delta_days = (expires - created).days

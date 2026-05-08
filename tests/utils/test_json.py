@@ -1,12 +1,11 @@
 """Edge-case tests for context_service.utils.json (orjson-backed helpers)."""
 
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 
 import pytest
 
-from context_service.utils.json import dumps, loads, JSONDecodeError
-
+from context_service.utils.json import JSONDecodeError, dumps, loads
 
 # ---------------------------------------------------------------------------
 # datetime serialization
@@ -15,7 +14,7 @@ from context_service.utils.json import dumps, loads, JSONDecodeError
 
 class TestDatetimeSerialization:
     def test_utc_aware_datetime(self) -> None:
-        dt = datetime(2024, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
+        dt = datetime(2024, 6, 1, 12, 0, 0, tzinfo=UTC)
         result = loads(dumps({"ts": dt}))
         assert result["ts"] == "2024-06-01T12:00:00+00:00"
 
@@ -32,13 +31,13 @@ class TestDatetimeSerialization:
         assert "2024-01-15" in result
 
     def test_datetime_in_list(self) -> None:
-        dts = [datetime(2024, i, 1, tzinfo=timezone.utc) for i in range(1, 4)]
+        dts = [datetime(2024, i, 1, tzinfo=UTC) for i in range(1, 4)]
         result = loads(dumps(dts))
         assert len(result) == 3
         assert all("2024" in s for s in result)
 
     def test_datetime_microseconds_preserved(self) -> None:
-        dt = datetime(2024, 1, 1, 0, 0, 0, 123456, tzinfo=timezone.utc)
+        dt = datetime(2024, 1, 1, 0, 0, 0, 123456, tzinfo=UTC)
         result = loads(dumps({"ts": dt}))
         assert "123456" in result["ts"]
 
@@ -90,7 +89,7 @@ class TestNestedMixedTypes:
 
     def test_nested_mixed_with_datetime_and_uuid(self) -> None:
         uid = uuid.uuid4()
-        dt = datetime(2025, 1, 1, tzinfo=timezone.utc)
+        dt = datetime(2025, 1, 1, tzinfo=UTC)
         data = {"meta": {"uid": uid, "created": dt, "tags": ["a", "b"]}}
         result = loads(dumps(data))
         assert result["meta"]["uid"] == str(uid)
@@ -139,7 +138,7 @@ class TestEdgeCases:
         depth = 50
         obj: dict = {}
         node = obj
-        for i in range(depth - 1):
+        for _ in range(depth - 1):
             node["child"] = {}
             node = node["child"]
         node["leaf"] = "deep"
@@ -182,7 +181,6 @@ class TestSortKeys:
     def test_sort_keys_produces_sorted_output(self) -> None:
         data = {"z": 1, "a": 2, "m": 3}
         result = dumps(data, sort_keys=True)
-        keys = [k for k in ["a", "m", "z"] if k in result]
         # Verify ordering in the raw string
         pos_a = result.index('"a"')
         pos_m = result.index('"m"')

@@ -298,6 +298,7 @@ async def _context_admin(
             return {"error": "missing_ref", "message": "ref (node_id) required for belief_history"}
         ctx_svc = get_context_service()
         bh = await ctx_svc.belief_history(silo_id, ref)
+
         def _format_ts(val: Any) -> str | None:
             if val is None:
                 return None

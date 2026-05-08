@@ -501,7 +501,9 @@ async def _context_reason(
                 if isinstance(cryst.claim, str):
                     belief_text = cryst.claim
                 else:
-                    belief_text = f"{cryst.claim.subject} {cryst.claim.predicate} {cryst.claim.object}"
+                    belief_text = (
+                        f"{cryst.claim.subject} {cryst.claim.predicate} {cryst.claim.object}"
+                    )
                 commitment_node = await ctx_svc.commit_belief(
                     scope=scope,
                     belief=belief_text,

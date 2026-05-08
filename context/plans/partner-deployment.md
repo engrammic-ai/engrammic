@@ -57,7 +57,7 @@ INSTALL_ID=<uuid>
 
 ## docker-compose.yml
 
-- Pulls pre-built image: `ghcr.io/engrammic/context-service:latest`
+- Pulls pre-built image: `engrammic/context-service:latest` (Docker Hub)
 - All infra services (Memgraph, Qdrant, Redis, Postgres) included
 - Volumes mount to ./data/ for persistence
 - Internal networking, only port 8000 exposed
@@ -136,9 +136,11 @@ If JINA_API_KEY not set, fall back to Gemini embeddings.
 
 ## CI/CD
 
-- GitHub Actions builds and pushes to GHCR on release tags
+- GitHub Actions builds from `Dockerfile.partners` (bytecode-only, no source)
+- Pushes to Docker Hub: `engrammic/context-service`
 - `latest` tag for stable, `edge` for main branch
 - Multi-arch: linux/amd64, linux/arm64
+- Internal builds use standard `Dockerfile` for debugging
 
 ## Future: DRM/Licensing
 

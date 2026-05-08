@@ -18,7 +18,6 @@ import pytest
 from context_service.engine.protocols import Closeable, HealthCheckable, HyperGraphStore
 from tests.fakes.fake_graph_store import FakeGraphStore
 
-
 # ---------------------------------------------------------------------------
 # HealthCheckable protocol
 # ---------------------------------------------------------------------------

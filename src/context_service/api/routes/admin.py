@@ -52,19 +52,22 @@ class TombstoneRequest(BaseModel):
         default_factory=list,
         description="Explicit edge IDs to tombstone. If provided, filter fields are ignored.",
     )
-    edge_type: Literal[
-        "CAUSES",
-        "CORROBORATES",
-        "PREVENTS",
-        "CONTRADICTS",
-        "REFERENCES",
-        "RELATED_TO",
-        "DERIVES_FROM",
-        "DEPENDS_ON",
-        "COMPOSES",
-        "SPECIALIZES",
-        "INSTANTIATES",
-    ] | None = Field(
+    edge_type: (
+        Literal[
+            "CAUSES",
+            "CORROBORATES",
+            "PREVENTS",
+            "CONTRADICTS",
+            "REFERENCES",
+            "RELATED_TO",
+            "DERIVES_FROM",
+            "DEPENDS_ON",
+            "COMPOSES",
+            "SPECIALIZES",
+            "INSTANTIATES",
+        ]
+        | None
+    ) = Field(
         default=None,
         description="Filter by edge type.",
     )

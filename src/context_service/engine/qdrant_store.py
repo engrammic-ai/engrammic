@@ -429,9 +429,7 @@ class EngineQdrantStore:
                 logger.error(
                     "Failed to ensure cluster Qdrant collection", collection=name, error=str(e)
                 )
-                raise QdrantOperationError(
-                    f"Failed to ensure cluster collection: {e}"
-                ) from e
+                raise QdrantOperationError(f"Failed to ensure cluster collection: {e}") from e
         return name
 
     async def upsert_cluster_embedding(
@@ -530,9 +528,7 @@ class EngineQdrantStore:
                 limit=limit,
             )
         except Exception as e:
-            logger.error(
-                "Qdrant search_clusters failed", silo_id=silo_id, error=str(e)
-            )
+            logger.error("Qdrant search_clusters failed", silo_id=silo_id, error=str(e))
             raise QdrantOperationError(f"Failed to search clusters: {e}") from e
         return [
             ClusterSearchResult(
