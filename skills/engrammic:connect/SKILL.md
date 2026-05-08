@@ -11,11 +11,11 @@ Create a typed relationship between two nodes.
 context_link(
   from_node: "{source_node_id}",
   to_node: "{target_node_id}",
-  relation_type: "{type}"
+  relationship: "{type}"
 )
 ```
 
-**Common relation_type values:**
+**Common relationship values:**
 - `SUPPORTS` - evidence supports a claim
 - `CONTRADICTS` - evidence contradicts a claim
 - `DERIVED_FROM` - conclusion derived from premises
