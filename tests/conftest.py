@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from collections.abc import Generator
 from pathlib import Path
 from types import ModuleType
 
@@ -67,12 +68,14 @@ _bootstrap_custodian_models()
 
 
 @pytest.fixture(autouse=True)
-def reset_settings_cache() -> None:
-    """Reset the Settings singleton cache before each test.
+def reset_settings_cache() -> Generator[None, None, None]:
+    """Reset the Settings singleton cache before and after each test.
 
     This prevents test pollution where one test's Settings modifications
     affect subsequent tests.
     """
     import context_service.config.settings as settings_mod
 
+    settings_mod._settings_cache = None
+    yield
     settings_mod._settings_cache = None
