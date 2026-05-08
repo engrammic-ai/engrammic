@@ -97,7 +97,9 @@ async def _context_remember(
         observed_from=observed_from,
         agent_id=auth.agent_id,
     )
-    CONTEXT_STORE_LATENCY.labels(silo_id=validated_silo_id, layer="memory").observe(time.perf_counter() - _start)
+    CONTEXT_STORE_LATENCY.labels(silo_id=validated_silo_id, layer="memory").observe(
+        time.perf_counter() - _start
+    )
 
     return {
         "node_id": str(node.id),
@@ -174,6 +176,7 @@ async def _context_assert(
                 evidence_nodes.append(result.node_id)
 
     scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
+    _start = time.perf_counter()
     node = await ctx_svc.assert_claim(
         scope=scope,
         claim=parsed_claim,
@@ -184,6 +187,9 @@ async def _context_assert(
         tags=tags,
         agent_id=auth.agent_id,
         source_tier=source_tier,
+    )
+    CONTEXT_STORE_LATENCY.labels(silo_id=expected_silo_id, layer="knowledge").observe(
+        time.perf_counter() - _start
     )
 
     promoted = False
@@ -241,6 +247,7 @@ async def _context_commit(
     agent_id = auth.agent_id or auth.org_id
 
     scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
+    _start = time.perf_counter()
     node = await ctx_svc.commit_belief(
         scope=scope,
         belief=belief,
@@ -250,6 +257,9 @@ async def _context_commit(
         metadata=metadata,
         tags=tags,
         agent_id=agent_id,
+    )
+    CONTEXT_STORE_LATENCY.labels(silo_id=expected_silo_id, layer="wisdom").observe(
+        time.perf_counter() - _start
     )
 
     result: dict[str, Any] = {
@@ -326,6 +336,7 @@ async def _context_reflect(
             )
 
     scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
+    _start = time.perf_counter()
     node = await ctx_svc.reflect(
         scope=scope,
         observation=observation,
@@ -334,6 +345,9 @@ async def _context_reflect(
         confidence=confidence,
         metadata=metadata,
         agent_id=agent_id,
+    )
+    CONTEXT_STORE_LATENCY.labels(silo_id=expected_silo_id, layer="meta").observe(
+        time.perf_counter() - _start
     )
 
     return {
@@ -448,6 +462,7 @@ async def _context_reason(
 
     from context_service.services.models import derive_org_uuid
 
+    _start = time.perf_counter()
     await saga.write_chain(
         chain_id=chain_id,
         silo_id=expected_silo_id,
@@ -459,6 +474,9 @@ async def _context_reason(
         conclusion=conclusion,
         evidence_used=evidence_used,
         org_id=derive_org_uuid(auth.org_id),
+    )
+    CONTEXT_STORE_LATENCY.labels(silo_id=expected_silo_id, layer="intelligence").observe(
+        time.perf_counter() - _start
     )
 
     await attach_chain_to_session(store, str(chain_id), resolved_session_id, str(expected_silo_id))
@@ -574,6 +592,7 @@ async def _context_store_belief(
     belief_id = str(uuid.uuid4())
     now = datetime.now(UTC).isoformat()
 
+    _start = time.perf_counter()
     await store.execute_write(
         q.CREATE_WORKING_HYPOTHESIS,
         {
@@ -585,6 +604,9 @@ async def _context_store_belief(
             "created_at": now,
             "about_ids": about,
         },
+    )
+    CONTEXT_STORE_LATENCY.labels(silo_id=silo_id, layer="belief").observe(
+        time.perf_counter() - _start
     )
 
     conflict_rows = await store.execute_query(
