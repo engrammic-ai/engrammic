@@ -9,8 +9,8 @@ from typing import Any, Literal
 
 import structlog
 
-from context_service.api.metrics import CONTEXT_QUERY_LATENCY
 from context_service.config.settings import get_settings
+from context_service.telemetry.metrics import record_mcp_tool
 from context_service.engine.reflection_triggers import compute_reflection_suggested
 from context_service.mcp.server import (
     get_context_service,
@@ -88,7 +88,7 @@ async def _context_query(
             top_k=top_k,
         )
         elapsed_s = time.perf_counter() - start
-        CONTEXT_QUERY_LATENCY.labels(silo_id=silo_id).observe(elapsed_s)
+        record_mcp_tool("context_query", elapsed_s * 1000)
         elapsed_ms = int(elapsed_s * 1000)
         response: dict[str, Any] = {
             "results": temporal_results,
@@ -112,7 +112,7 @@ async def _context_query(
         search_mode=search_mode,
     )
     elapsed_s = time.perf_counter() - start
-    CONTEXT_QUERY_LATENCY.labels(silo_id=silo_id).observe(elapsed_s)
+    record_mcp_tool("context_query", elapsed_s * 1000)
     elapsed_ms = int(elapsed_s * 1000)
 
     redis = get_redis()

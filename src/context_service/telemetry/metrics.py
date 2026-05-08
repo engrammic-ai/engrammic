@@ -23,12 +23,14 @@ _request_counter: metrics.Counter | None = None
 _active_requests: metrics.UpDownCounter | None = None
 _db_query_duration: metrics.Histogram | None = None
 _embedding_duration: metrics.Histogram | None = None
+_mcp_tool_duration: metrics.Histogram | None = None
+_mcp_tool_counter: metrics.Counter | None = None
 
 
 def setup_metrics(service_name: str = "context-service") -> None:
     """Initialize OpenTelemetry metrics if OTEL_EXPORTER_OTLP_ENDPOINT is set."""
     global _meter, _request_duration, _request_counter, _active_requests
-    global _db_query_duration, _embedding_duration
+    global _db_query_duration, _embedding_duration, _mcp_tool_duration, _mcp_tool_counter
 
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     if not endpoint:
@@ -78,6 +80,18 @@ def setup_metrics(service_name: str = "context-service") -> None:
         unit="ms",
     )
 
+    _mcp_tool_duration = _meter.create_histogram(
+        name="mcp.tool.duration",
+        description="MCP tool invocation duration",
+        unit="ms",
+    )
+
+    _mcp_tool_counter = _meter.create_counter(
+        name="mcp.tool.invocations",
+        description="MCP tool invocation count",
+        unit="1",
+    )
+
 
 def record_request(method: str, path: str, status: int, duration_ms: float) -> None:
     """Record HTTP request metrics."""
@@ -114,6 +128,15 @@ def record_embedding(model: str, duration_ms: float) -> None:
     if _embedding_duration is None:
         return
     _embedding_duration.record(duration_ms, {"model": model})
+
+
+def record_mcp_tool(tool: str, duration_ms: float, success: bool = True) -> None:
+    """Record MCP tool invocation metrics."""
+    attrs = {"mcp.tool": tool, "success": str(success).lower()}
+    if _mcp_tool_duration:
+        _mcp_tool_duration.record(duration_ms, attrs)
+    if _mcp_tool_counter:
+        _mcp_tool_counter.add(1, attrs)
 
 
 @contextmanager

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from context_service.mcp.server import get_mcp_auth_context
+from context_service.telemetry.metrics import record_mcp_tool
 from context_service.mcp.tools.context_get import _context_get
 from context_service.mcp.tools.context_graph import _context_graph
 from context_service.mcp.tools.context_query import _context_query
@@ -259,7 +261,8 @@ def register(mcp: FastMCP) -> None:
         """
         auth = await get_mcp_auth_context()
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
-        return await _context_recall(
+        start = time.perf_counter()
+        result = await _context_recall(
             silo_id=resolved_silo_id,
             query=query,
             node_ids=node_ids,
@@ -273,3 +276,5 @@ def register(mcp: FastMCP) -> None:
             include_content=include_content,
             include_proposals=include_proposals,
         )
+        record_mcp_tool("context_recall", (time.perf_counter() - start) * 1000)
+        return result

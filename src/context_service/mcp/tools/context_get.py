@@ -9,8 +9,8 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from context_service.api.metrics import CONTEXT_GET_LATENCY
 from context_service.db.queries import GET_REFLECTIONS_FOR_NODE_BY_AGENT
+from context_service.telemetry.metrics import record_mcp_tool
 from context_service.mcp.server import (
     get_context_service,
     get_mcp_auth_context,
@@ -80,16 +80,12 @@ async def _context_get(
                 invalid_ids.append({"error": "invalid_node_id", "node_id": nid})
 
         if not node_uuids:
-            CONTEXT_GET_LATENCY.labels(silo_id=str(resolved_silo_id)).observe(
-                time.perf_counter() - _start
-            )
+            record_mcp_tool("context_get", (time.perf_counter() - _start) * 1000)
             return {"nodes": invalid_ids}
 
         temporal_results = await ctx_svc.get_temporal(node_uuids, resolved_silo_id, as_of_dt)
 
-        CONTEXT_GET_LATENCY.labels(silo_id=str(resolved_silo_id)).observe(
-            time.perf_counter() - _start
-        )
+        record_mcp_tool("context_get", (time.perf_counter() - _start) * 1000)
         return {"nodes": invalid_ids + temporal_results}
 
     _start = time.perf_counter()
@@ -182,5 +178,5 @@ async def _context_get(
         if emits:
             await asyncio.gather(*emits)
 
-    CONTEXT_GET_LATENCY.labels(silo_id=str(resolved_silo_id)).observe(time.perf_counter() - _start)
+    record_mcp_tool("context_get", (time.perf_counter() - _start) * 1000)
     return {"nodes": nodes_out}

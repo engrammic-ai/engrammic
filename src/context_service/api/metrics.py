@@ -41,27 +41,11 @@ HTTP_REQUESTS_TOTAL = Counter(
 # MCP tool metrics
 # ---------------------------------------------------------------------------
 
-CONTEXT_QUERY_LATENCY = Histogram(
-    "context_query_latency_seconds",
-    "Latency of context_query MCP tool calls",
-    labelnames=["silo_id"],
-    buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5),
-    registry=REGISTRY,
-)
-
 CONTEXT_STORE_LATENCY = Histogram(
     "context_store_latency_seconds",
     "Latency of context store write operations",
     labelnames=["silo_id", "layer"],
     buckets=(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5),
-    registry=REGISTRY,
-)
-
-CONTEXT_GET_LATENCY = Histogram(
-    "context_get_latency_seconds",
-    "Latency of context_get MCP tool calls",
-    labelnames=["silo_id"],
-    buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5),
     registry=REGISTRY,
 )
 
@@ -156,9 +140,7 @@ __all__ = [
     "REGISTRY",
     "HTTP_REQUEST_LATENCY",
     "HTTP_REQUESTS_TOTAL",
-    "CONTEXT_QUERY_LATENCY",
     "CONTEXT_STORE_LATENCY",
-    "CONTEXT_GET_LATENCY",
     "EXTRACTION_CLAIMS_TOTAL",
     "CUSTODIAN_PROMOTIONS_TOTAL",
     "CUSTODIAN_REJECTIONS_TOTAL",
