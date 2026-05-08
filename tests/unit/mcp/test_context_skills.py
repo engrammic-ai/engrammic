@@ -60,7 +60,10 @@ async def test_search_action_requires_query() -> None:
 async def test_get_action_returns_skill() -> None:
     """Get action with valid name returns skill."""
     mock_skill = MagicMock()
-    mock_skill.model_dump.return_value = {"name": "engrammic:observe", "description": "Store observation"}
+    mock_skill.model_dump.return_value = {
+        "name": "engrammic:observe",
+        "description": "Store observation",
+    }
     mock_service = MagicMock()
     mock_service.get = AsyncMock(return_value=mock_skill)
 
@@ -96,7 +99,10 @@ async def test_get_action_not_found() -> None:
 async def test_search_action_returns_results() -> None:
     """Search action returns matching skills."""
     mock_skill = MagicMock()
-    mock_skill.model_dump.return_value = {"name": "engrammic:observe", "description": "Store observation"}
+    mock_skill.model_dump.return_value = {
+        "name": "engrammic:observe",
+        "description": "Store observation",
+    }
     mock_service = MagicMock()
     mock_service.search = AsyncMock(return_value=[mock_skill])
 

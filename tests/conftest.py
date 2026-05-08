@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from types import ModuleType
 
+import pytest
+
 _SRC = Path(__file__).parent.parent / "src"
 
 
@@ -62,3 +64,15 @@ def _bootstrap_custodian_models() -> None:
 
 
 _bootstrap_custodian_models()
+
+
+@pytest.fixture(autouse=True)
+def reset_settings_cache() -> None:
+    """Reset the Settings singleton cache before each test.
+
+    This prevents test pollution where one test's Settings modifications
+    affect subsequent tests.
+    """
+    import context_service.config.settings as settings_mod
+
+    settings_mod._settings_cache = None
