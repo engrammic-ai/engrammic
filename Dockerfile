@@ -35,7 +35,7 @@ COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /primitives /primitives
 
 # Copy application code
-COPY context-service/pyproject.toml ./
+COPY context-service/pyproject.toml context-service/uv.lock ./
 COPY context-service/config/ /app/config/
 COPY context-service/src/ /app/src/
 COPY context-service/alembic.ini /app/alembic.ini
