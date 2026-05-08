@@ -264,15 +264,19 @@ class MemgraphClient:
                     return result
             raise MemgraphOperationError("Retry loop exited without result or exception")
         except ServiceUnavailable as e:
+            record_db_query("read_error", (time.perf_counter() - start) * 1000)
             logger.error("memgraph_service_unavailable", error=str(e))
             raise MemgraphOperationError(f"Database unavailable: {e}") from e
         except RetryError as e:
+            record_db_query("read_error", (time.perf_counter() - start) * 1000)
             logger.error("memgraph_retry_exhausted", error=str(e))
             raise MemgraphOperationError(f"Database unavailable: {e}") from e
         except ClientError as e:
+            record_db_query("read_error", (time.perf_counter() - start) * 1000)
             logger.error("memgraph_query_error", error=str(e))
             raise MemgraphOperationError(f"Query failed: {e}") from e
         except Exception as e:
+            record_db_query("read_error", (time.perf_counter() - start) * 1000)
             logger.error("memgraph_unexpected_error", error=str(e))
             raise MemgraphOperationError(f"Database operation failed: {e}") from e
 
@@ -331,15 +335,19 @@ class MemgraphClient:
                     return result
             raise MemgraphOperationError("Retry loop exhausted")
         except ServiceUnavailable as e:
+            record_db_query("write_error", (time.perf_counter() - start) * 1000)
             logger.error("memgraph_service_unavailable", error=str(e))
             raise MemgraphOperationError(f"Database unavailable: {e}") from e
         except RetryError as e:
+            record_db_query("write_error", (time.perf_counter() - start) * 1000)
             logger.error("memgraph_write_retry_exhausted", error=str(e))
             raise MemgraphOperationError(f"Database unavailable: {e}") from e
         except ClientError as e:
+            record_db_query("write_error", (time.perf_counter() - start) * 1000)
             logger.error("memgraph_write_error", error=str(e))
             raise MemgraphOperationError(f"Write failed: {e}") from e
         except Exception as e:
+            record_db_query("write_error", (time.perf_counter() - start) * 1000)
             logger.error("memgraph_unexpected_write_error", error=str(e))
             raise MemgraphOperationError(f"Database write failed: {e}") from e
 
