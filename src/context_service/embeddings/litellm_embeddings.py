@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 
 import litellm
 
 from context_service.config.config_loader import load_config
 from context_service.config.logging import get_logger
+from context_service.telemetry.metrics import record_embedding
 
 if TYPE_CHECKING:
     from context_service.cache.embedding_cache import EmbeddingCache
@@ -132,9 +134,12 @@ class LiteLLMEmbeddingService:
             LiteLLMEmbeddingError: If embedding generation fails.
         """
         try:
+            start = time.perf_counter()
             response = await litellm.aembedding(
                 model=self._model, input=texts, dimensions=self._dimensions
             )
+            duration_ms = (time.perf_counter() - start) * 1000
+            record_embedding(self._model, duration_ms)
             return [item["embedding"] for item in response.data]
         except Exception as e:
             logger.error("LiteLLM embedding failed", error=str(e), model=self._model)
