@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
-from context_service.models.postgres.skill import MAX_BODY_SIZE, Skill
+from context_service.models.postgres.skill import MAX_BODY_SIZE
 from context_service.schemas.skill import SkillCreate, SkillUpdate
 
 

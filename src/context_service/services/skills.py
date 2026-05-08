@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import ipaddress
 import re
 import socket
@@ -11,7 +12,6 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlparse
 
 import httpx
-
 import structlog
 import yaml
 from sqlalchemy import delete, select
@@ -102,15 +102,15 @@ class SkillService:
         namespace: str | None = None,
         limit: int = 50,
         offset: int = 0,
-    ) -> list[SkillResponse]:
+    ) -> builtins.list[SkillResponse]:
         """List skills (builtins + user skills for silo). Merge, filter by namespace, paginate."""
-        builtins = list(self._builtin.values())
+        builtin_skills = list(self._builtin.values())
 
         stmt = select(Skill).where(Skill.silo_id == silo_id)
         result = await self._db.execute(stmt)
         user_skills = [SkillResponse.model_validate(s) for s in result.scalars().all()]
 
-        merged = builtins + user_skills
+        merged = builtin_skills + user_skills
 
         if namespace is not None:
             prefix = f"{namespace}:"
@@ -124,7 +124,7 @@ class SkillService:
         query: str,
         namespace: str | None = None,
         limit: int = 50,
-    ) -> list[SkillResponse]:
+    ) -> builtins.list[SkillResponse]:
         """Search skills by name/description substring match."""
         all_skills = await self.list(silo_id, namespace=namespace, limit=10_000, offset=0)
         q = query.lower()
@@ -190,7 +190,7 @@ class SkillService:
 
         stmt = delete(Skill).where(Skill.silo_id == silo_id, Skill.name == name)
         result = await self._db.execute(stmt)
-        if result.rowcount == 0:
+        if result.rowcount == 0:  # type: ignore[attr-defined]
             raise KeyError(f"Skill '{name}' not found")
 
     async def import_from(

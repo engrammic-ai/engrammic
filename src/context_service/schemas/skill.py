@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from context_service.models.postgres.skill import MAX_BODY_SIZE, _NAME_PATTERN
+from context_service.models.postgres.skill import _NAME_PATTERN, MAX_BODY_SIZE
 
 
 class SkillCreate(BaseModel):

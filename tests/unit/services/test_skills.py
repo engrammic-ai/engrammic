@@ -287,7 +287,7 @@ async def test_create_skill(skills_dir: Path):
     db.refresh = fake_refresh
 
     service = SkillService(db, skills_dir)
-    result = await service.create(
+    await service.create(
         "silo-123",
         SkillCreate(name="org:newtool", description="New tool", body="  body\x00content  "),
     )
