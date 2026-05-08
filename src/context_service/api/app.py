@@ -196,7 +196,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             version=__version__,
             registry=REGISTRY,
             silos=settings.telemetry.silos if settings.telemetry.tier2_enabled else None,
-            all_silos=settings.telemetry.all_silos,
+            all_silos=settings.telemetry.all_silos if settings.telemetry.tier2_enabled else False,
         )
         beacon = BeaconService(
             collector=collector,

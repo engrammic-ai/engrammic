@@ -38,8 +38,7 @@ class TelemetryPayload:
     total_store_ops: int = 0
     total_recall_ops: int = 0
     error_rate: float = 0.0
-    latency_p50_ms: float = 0.0
-    latency_p95_ms: float = 0.0
+    latency_mean_ms: float = 0.0
     silo_metrics: dict[str, SiloMetrics] = field(default_factory=dict)
 
 
@@ -101,7 +100,9 @@ class TelemetryCollector:
                 elif name == "context_store_latency_seconds_sum":
                     latency_sum += value
                     latency_count += int(
-                        self._get_sample_value(metric, "context_store_latency_seconds_count", labels)
+                        self._get_sample_value(
+                            metric, "context_store_latency_seconds_count", labels
+                        )
                     )
 
         payload.total_store_ops = store_sum
@@ -109,11 +110,9 @@ class TelemetryCollector:
         payload.total_silos = len(silos_seen)
 
         if latency_count > 0:
-            payload.latency_p50_ms = (latency_sum / latency_count) * 1000
+            payload.latency_mean_ms = (latency_sum / latency_count) * 1000
 
-    def _get_sample_value(
-        self, metric: object, name: str, labels: dict[str, str]
-    ) -> float:
+    def _get_sample_value(self, metric: object, name: str, labels: dict[str, str]) -> float:
         """Get a specific sample value from a metric family."""
         for sample in getattr(metric, "samples", []):
             if sample.name == name and sample.labels == labels:
