@@ -25,8 +25,8 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Create non-root user and writable directories
 RUN groupadd -r context-service && useradd -r -g context-service context-service \
-    && mkdir -p /var/lib/engrammic \
-    && chown context-service:context-service /var/lib/engrammic
+    && mkdir -p /var/lib/engrammic /home/context-service/.cache/uv \
+    && chown -R context-service:context-service /var/lib/engrammic /home/context-service
 
 # Copy virtual environment from builder
 COPY --from=builder /app/.venv /app/.venv
