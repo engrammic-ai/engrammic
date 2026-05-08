@@ -106,19 +106,25 @@ def register(mcp: FastMCP) -> None:
         auth = await get_mcp_auth_context()
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         start = time.perf_counter()
-        result = await _context_link(
-            silo_id=resolved_silo_id,
-            from_node=from_node,
-            to_node=to_node,
-            relationship=relationship,
-            weight=weight,
-            note=note,
-        )
-        record_mcp_tool("context_link", (time.perf_counter() - start) * 1000)
+        success = True
+        try:
+            result = await _context_link(
+                silo_id=resolved_silo_id,
+                from_node=from_node,
+                to_node=to_node,
+                relationship=relationship,
+                weight=weight,
+                note=note,
+            )
 
-        if "error" not in result and get_settings().write_events_enabled:
-            redis = get_redis()
-            if redis is not None:
-                await emit_access_event(redis, resolved_silo_id, to_node, event_type="write")
+            if "error" not in result and get_settings().write_events_enabled:
+                redis = get_redis()
+                if redis is not None:
+                    await emit_access_event(redis, resolved_silo_id, to_node, event_type="write")
 
-        return result
+            return result
+        except Exception:
+            success = False
+            raise
+        finally:
+            record_mcp_tool("context_link", (time.perf_counter() - start) * 1000, success=success)

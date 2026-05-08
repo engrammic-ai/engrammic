@@ -262,19 +262,25 @@ def register(mcp: FastMCP) -> None:
         auth = await get_mcp_auth_context()
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         start = time.perf_counter()
-        result = await _context_recall(
-            silo_id=resolved_silo_id,
-            query=query,
-            node_ids=node_ids,
-            depth=depth,
-            layers=layers,
-            top_k=top_k,
-            as_of=as_of,
-            include_reflections=include_reflections,
-            reflections_agent_id=reflections_agent_id,
-            include_steps=include_steps,
-            include_content=include_content,
-            include_proposals=include_proposals,
-        )
-        record_mcp_tool("context_recall", (time.perf_counter() - start) * 1000)
-        return result
+        success = True
+        try:
+            result = await _context_recall(
+                silo_id=resolved_silo_id,
+                query=query,
+                node_ids=node_ids,
+                depth=depth,
+                layers=layers,
+                top_k=top_k,
+                as_of=as_of,
+                include_reflections=include_reflections,
+                reflections_agent_id=reflections_agent_id,
+                include_steps=include_steps,
+                include_content=include_content,
+                include_proposals=include_proposals,
+            )
+            return result
+        except Exception:
+            success = False
+            raise
+        finally:
+            record_mcp_tool("context_recall", (time.perf_counter() - start) * 1000, success=success)

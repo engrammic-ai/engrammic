@@ -836,36 +836,41 @@ def register(mcp: FastMCP) -> None:
             potential_conflicts when other beliefs in the session target the same nodes.
         """
         start = time.perf_counter()
-        auth = await get_mcp_auth_context()
-        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
+        success = True
+        try:
+            auth = await get_mcp_auth_context()
+            resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
+            result = await _context_store(
+                silo_id=resolved_silo_id,
+                content=content,
+                layer=layer,
+                evidence=evidence,
+                source_type=source_type,
+                confidence=confidence,
+                about=about,
+                reasoning=reasoning,
+                steps=steps,
+                observation_type=observation_type,
+                metadata=metadata,
+                tags=tags,
+                decay_class=decay_class,
+                parent_chain_id=parent_chain_id,
+                session_id=session_id,
+            )
 
-        result = await _context_store(
-            silo_id=resolved_silo_id,
-            content=content,
-            layer=layer,
-            evidence=evidence,
-            source_type=source_type,
-            confidence=confidence,
-            about=about,
-            reasoning=reasoning,
-            steps=steps,
-            observation_type=observation_type,
-            metadata=metadata,
-            tags=tags,
-            decay_class=decay_class,
-            parent_chain_id=parent_chain_id,
-            session_id=session_id,
-        )
+            if "error" not in result and get_settings().write_events_enabled:
+                redis = get_redis()
+                if redis is not None:
+                    node_id = result.get("node_id") or result.get("chain_id") or result.get("belief_id")
+                    if node_id:
+                        node_label = _layer_to_label(layer)
+                        await emit_access_event(
+                            redis, resolved_silo_id, str(node_id), event_type="write", layer=node_label
+                        )
 
-        if "error" not in result and get_settings().write_events_enabled:
-            redis = get_redis()
-            if redis is not None:
-                node_id = result.get("node_id") or result.get("chain_id") or result.get("belief_id")
-                if node_id:
-                    node_label = _layer_to_label(layer)
-                    await emit_access_event(
-                        redis, resolved_silo_id, str(node_id), event_type="write", layer=node_label
-                    )
-
-        record_mcp_tool("context_store", (time.perf_counter() - start) * 1000)
-        return result
+            return result
+        except Exception:
+            success = False
+            raise
+        finally:
+            record_mcp_tool("context_store", (time.perf_counter() - start) * 1000, success=success)

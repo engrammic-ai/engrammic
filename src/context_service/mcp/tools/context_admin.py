@@ -421,11 +421,17 @@ def register(mcp: FastMCP) -> None:
         auth = await get_mcp_auth_context()
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         start = time.perf_counter()
-        result = await _context_admin(
-            action=action,
-            silo_id=resolved_silo_id,
-            ref=ref,
-            name=name,
-        )
-        record_mcp_tool("context_admin", (time.perf_counter() - start) * 1000)
-        return result
+        success = True
+        try:
+            result = await _context_admin(
+                action=action,
+                silo_id=resolved_silo_id,
+                ref=ref,
+                name=name,
+            )
+            return result
+        except Exception:
+            success = False
+            raise
+        finally:
+            record_mcp_tool("context_admin", (time.perf_counter() - start) * 1000, success=success)

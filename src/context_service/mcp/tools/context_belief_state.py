@@ -109,10 +109,16 @@ def register(mcp: FastMCP) -> None:
                 return err
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         start = time.perf_counter()
-        result = await _context_belief_state(
-            session_id=session_id,
-            silo_id=resolved_silo_id,
-            about=about,
-        )
-        record_mcp_tool("context_belief_state", (time.perf_counter() - start) * 1000)
-        return result
+        success = True
+        try:
+            result = await _context_belief_state(
+                session_id=session_id,
+                silo_id=resolved_silo_id,
+                about=about,
+            )
+            return result
+        except Exception:
+            success = False
+            raise
+        finally:
+            record_mcp_tool("context_belief_state", (time.perf_counter() - start) * 1000, success=success)
