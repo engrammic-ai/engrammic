@@ -46,7 +46,6 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("name"),
     )
     op.create_index(op.f("ix_skills_name"), "skills", ["name"], unique=True)
     op.create_index(op.f("ix_skills_silo_id"), "skills", ["silo_id"], unique=False)
