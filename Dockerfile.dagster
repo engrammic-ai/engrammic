@@ -1,0 +1,33 @@
+# Dagster worker image - needs writable DAGSTER_HOME and uv for runtime
+FROM python:3.13-slim AS builder
+
+WORKDIR /app
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+COPY primitives/ /primitives/
+COPY context-service/pyproject.toml context-service/uv.lock context-service/README.md ./
+
+RUN uv sync --frozen --no-dev --no-install-project
+
+# Runtime
+FROM python:3.13-slim
+
+WORKDIR /app
+
+# Dagster user with writable /app for sqlite storage
+RUN groupadd -r dagster && useradd -r -g dagster dagster \
+    && chown dagster:dagster /app
+
+COPY --from=builder --chown=dagster:dagster /app/.venv /app/.venv
+COPY --from=builder --chown=dagster:dagster /primitives /primitives
+
+COPY --chown=dagster:dagster context-service/pyproject.toml context-service/uv.lock context-service/README.md ./
+COPY --chown=dagster:dagster context-service/src/ /app/src/
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app/src"
+ENV PYTHONUNBUFFERED=1
+ENV DAGSTER_HOME=/app
+
+USER dagster

@@ -134,9 +134,9 @@ services:
   dagster-webserver:
     build:
       context: ..
-      dockerfile: context-service/Dockerfile
+      dockerfile: context-service/Dockerfile.dagster
     container_name: context-service-dagster-web
-    command: ["uv", "run", "--frozen", "dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "workspace.yaml"]
+    command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "workspace.yaml"]
     ports:
       - "3002:3000"
     env_file:
@@ -162,9 +162,9 @@ services:
   dagster-daemon:
     build:
       context: ..
-      dockerfile: context-service/Dockerfile
+      dockerfile: context-service/Dockerfile.dagster
     container_name: context-service-dagster-daemon
-    command: ["uv", "run", "--frozen", "dagster-daemon", "run"]
+    command: ["dagster-daemon", "run"]
     env_file:
       - .env
     environment:

@@ -20,19 +20,14 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-# Install uv for runtime commands (dagster, etc.)
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-
-# Create non-root user and writable directories
+# Create non-root user
 RUN groupadd -r context-service && useradd -r -g context-service context-service \
-    && mkdir -p /var/lib/engrammic /home/context-service/.cache/uv /app/history \
-    && chown -R context-service:context-service /var/lib/engrammic /home/context-service /app/history
+    && mkdir -p /var/lib/engrammic \
+    && chown context-service:context-service /var/lib/engrammic
 
-# Copy virtual environment from builder (chown for uv to modify)
-COPY --from=builder --chown=context-service:context-service /app/.venv /app/.venv
-
-# Copy primitives (needed at runtime for imports)
-COPY --from=builder --chown=context-service:context-service /primitives /primitives
+# Copy virtual environment and primitives from builder
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /primitives /primitives
 
 # Copy application code
 COPY context-service/pyproject.toml context-service/uv.lock context-service/README.md ./
