@@ -205,7 +205,7 @@ services:
     restart: unless-stopped
 
   jaeger:
-    image: jaegertracing/all-in-one:2
+    image: jaegertracing/all-in-one:1.76
     container_name: context-service-jaeger
     ports:
       - "16686:16686" # UI
