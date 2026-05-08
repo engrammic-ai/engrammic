@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import os
-import time
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Generator
 
 from opentelemetry import metrics
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
@@ -138,15 +137,3 @@ def record_mcp_tool(tool: str, duration_ms: float, success: bool = True) -> None
     if _mcp_tool_counter:
         _mcp_tool_counter.add(1, attrs)
 
-
-@contextmanager
-def timed_operation(
-    record_fn: callable, **attrs: str
-) -> Generator[None, None, None]:
-    """Context manager to time an operation and record it."""
-    start = time.perf_counter()
-    try:
-        yield
-    finally:
-        duration_ms = (time.perf_counter() - start) * 1000
-        record_fn(duration_ms=duration_ms, **attrs)
