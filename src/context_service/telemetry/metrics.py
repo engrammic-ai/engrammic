@@ -97,7 +97,7 @@ def record_request(method: str, path: str, status: int, duration_ms: float) -> N
     """Record HTTP request metrics."""
     if _request_duration is None:
         return
-    attrs = {"http.method": method, "http.route": path, "http.status_code": status}
+    attrs: dict[str, str | int] = {"http.method": method, "http.route": path, "http.status_code": status}
     _request_duration.record(duration_ms, attrs)
     if _request_counter:
         _request_counter.add(1, attrs)
