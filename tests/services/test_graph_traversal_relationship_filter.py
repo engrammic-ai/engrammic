@@ -18,7 +18,7 @@ def service_capturing_queries() -> tuple[ContextService, list[tuple[str, dict[st
 
     async def execute_query(query: str, params: dict[str, Any]) -> list[dict[str, Any]]:
         captured.append((query, params))
-        if "MATCH (a {id: nid})" in query:
+        if "MATCH (a:Node {id: nid})" in query:
             return []
         return [
             {
@@ -54,7 +54,7 @@ async def test_graph_traversal_passes_rel_types_as_list(
         relationship_types=["REFERENCES", "SUPPORTS"],
     )
 
-    edge_calls = [c for c in captured if "MATCH (a {id: nid})" in c[0]]
+    edge_calls = [c for c in captured if "MATCH (a:Node {id: nid})" in c[0]]
     assert edge_calls, "edge query was not issued"
     query, params = edge_calls[0]
 
@@ -70,7 +70,7 @@ async def test_graph_traversal_omits_rel_filter_when_none(
 
     await svc.graph_traversal(silo_id="s1", seed_nodes=["n1"])
 
-    edge_calls = [c for c in captured if "MATCH (a {id: nid})" in c[0]]
+    edge_calls = [c for c in captured if "MATCH (a:Node {id: nid})" in c[0]]
     assert edge_calls
     query, params = edge_calls[0]
     assert "rel_types" not in params

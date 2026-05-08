@@ -1595,8 +1595,8 @@ class ContextService:
         rows = await self._memgraph.execute_query(
             f"""
             UNWIND $start_ids AS seed_id
-            MATCH (seed {{id: seed_id, silo_id: $silo_id}})
-            OPTIONAL MATCH path = (seed)-[*1..{max_depth}]-(neighbor)
+            MATCH (seed:Node {{id: seed_id, silo_id: $silo_id}})
+            OPTIONAL MATCH path = (seed)-[*1..{max_depth}]-(neighbor:Node)
             WHERE neighbor.silo_id = $silo_id {layer_filter}
             WITH seed, [x IN COLLECT(DISTINCT neighbor) WHERE x IS NOT NULL] AS neighbors
             WITH [seed] + neighbors AS all_nodes
@@ -1624,7 +1624,7 @@ class ContextService:
                 edge_rows = await self._memgraph.execute_query(
                     f"""
                     UNWIND $node_ids AS nid
-                    MATCH (a {{id: nid}})-[r]->(b)
+                    MATCH (a:Node {{id: nid}})-[r]->(b:Node)
                     WHERE b.id IN $node_ids {rel_filter}
                     RETURN a.id AS from_node, b.id AS to_node, type(r) AS relationship,
                            COALESCE(r.weight, 1.0) AS weight,

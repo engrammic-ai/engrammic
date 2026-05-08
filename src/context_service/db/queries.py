@@ -606,7 +606,7 @@ TEMPORAL_QUERY_FILTERED = (
 GET_NODES_BY_IDS_TEMPORAL = """
 UNWIND $node_ids AS nid
 OPTIONAL MATCH (n {id: nid, silo_id: $silo_id})
-WHERE n.tombstoned_at IS NULL
+WHERE n.tombstoned_at IS NULL AND n.committed = true
 OPTIONAL MATCH (n)-[:SUPERSEDES]->(successor)
 RETURN
     nid AS requested_id,
@@ -1088,7 +1088,7 @@ GET_SUPERSESSION_CHAIN = (
     "WITH collect(DISTINCT related) + [start] AS all_nodes "
     "UNWIND all_nodes AS n "
     "WITH DISTINCT n "
-    "OPTIONAL MATCH (n)-[:SUPERSEDES]->(superseded_by_node) "
+    "OPTIONAL MATCH (superseded_by_node)-[:SUPERSEDES]->(n) "
     "RETURN n.id AS id, n.content AS content, "
     "       n.confidence AS confidence, "
     "       n.valid_from AS valid_from, n.valid_to AS valid_to, "
