@@ -106,15 +106,20 @@ async def _context_get(
     else:
         resolved_silo_id = derive_silo_id(auth.org_id)
 
-    nodes_out: list[dict[str, Any]] = []
+    bad_ids: list[dict[str, Any]] = []
+    valid_node_ids: list[str] = []
     for nid in node_ids:
         try:
-            node_uuid = uuid.UUID(nid)
+            uuid.UUID(nid)
+            valid_node_ids.append(nid)
         except ValueError:
-            nodes_out.append({"error": "invalid_node_id", "node_id": nid})
-            continue
+            bad_ids.append({"error": "invalid_node_id", "node_id": nid})
 
-        node = await ctx_svc.get(node_uuid, resolved_silo_id)
+    node_map = await ctx_svc._batch_fetch_nodes(valid_node_ids, resolved_silo_id)
+
+    nodes_out: list[dict[str, Any]] = []
+    for nid in valid_node_ids:
+        node = node_map.get(nid)
         if node is None:
             nodes_out.append(
                 {
@@ -139,17 +144,29 @@ async def _context_get(
                 "tags": props.get("tags"),
                 "created_at": (node.created_at.isoformat() if node.created_at else None),
             }
-            if include_reflections:
-                rows = await ctx_svc.graph_store.execute_query(
-                    GET_REFLECTIONS_FOR_NODE_BY_AGENT,
-                    {
-                        "node_id": str(node.id),
-                        "silo_id": str(resolved_silo_id),
-                        "agent_id": reflections_agent_id,
-                    },
-                )
-                node_dict["reflections"] = [dict(r) for r in rows]
             nodes_out.append(node_dict)
+
+    if include_reflections and nodes_out:
+        reflection_tasks = [
+            ctx_svc.graph_store.execute_query(
+                GET_REFLECTIONS_FOR_NODE_BY_AGENT,
+                {
+                    "node_id": n["node_id"],
+                    "silo_id": str(resolved_silo_id),
+                    "agent_id": reflections_agent_id,
+                },
+            )
+            for n in nodes_out
+            if n.get("node_id") is not None
+        ]
+        reflection_results = await asyncio.gather(*reflection_tasks)
+        idx = 0
+        for n in nodes_out:
+            if n.get("node_id") is not None:
+                n["reflections"] = [dict(r) for r in reflection_results[idx]]
+                idx += 1
+
+    nodes_out = bad_ids + nodes_out
 
     redis = get_redis()
     if redis is not None:
