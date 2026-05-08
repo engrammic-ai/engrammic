@@ -10,7 +10,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 COPY primitives/ /primitives/
 
 # Copy dependency files
-COPY context-service/pyproject.toml context-service/uv.lock ./
+COPY context-service/pyproject.toml context-service/uv.lock context-service/README.md ./
 
 # Install production dependencies only
 RUN uv sync --frozen --no-dev --no-install-project
@@ -35,7 +35,7 @@ COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /primitives /primitives
 
 # Copy application code
-COPY context-service/pyproject.toml context-service/uv.lock ./
+COPY context-service/pyproject.toml context-service/uv.lock context-service/README.md ./
 COPY context-service/config/ /app/config/
 COPY context-service/src/ /app/src/
 COPY context-service/alembic.ini /app/alembic.ini
