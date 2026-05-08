@@ -97,7 +97,7 @@ async def _context_remember(
         observed_from=observed_from,
         agent_id=auth.agent_id,
     )
-    CONTEXT_STORE_LATENCY.labels(tool="context_remember").observe(time.perf_counter() - _start)
+    CONTEXT_STORE_LATENCY.labels(silo_id=validated_silo_id, layer="memory").observe(time.perf_counter() - _start)
 
     return {
         "node_id": str(node.id),
