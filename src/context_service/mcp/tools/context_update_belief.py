@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from context_service.services.models import derive_silo_id
+from context_service.telemetry.metrics import record_mcp_tool
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -98,10 +100,13 @@ def register(mcp: FastMCP) -> None:
             if err is not None:
                 return err
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
-        return await _context_update_belief(
+        start = time.perf_counter()
+        result = await _context_update_belief(
             belief_id=belief_id,
             confidence=confidence,
             reason=reason,
             silo_id=resolved_silo_id,
             content=content,
         )
+        record_mcp_tool("context_update_belief", (time.perf_counter() - start) * 1000)
+        return result

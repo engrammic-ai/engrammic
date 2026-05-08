@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import structlog
 
 from context_service.api.metrics import CONTEXT_STORE_LATENCY
+from context_service.telemetry.metrics import record_mcp_tool
 from context_service.config.settings import get_settings
 from context_service.mcp.server import (
     get_context_service,
@@ -865,4 +866,5 @@ def register(mcp: FastMCP) -> None:
                         redis, resolved_silo_id, str(node_id), event_type="write", layer=node_label
                     )
 
+        record_mcp_tool("context_store", 0)  # latency tracked per-layer via Prometheus
         return result

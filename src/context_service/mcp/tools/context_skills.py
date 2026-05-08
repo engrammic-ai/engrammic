@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 
 from context_service.mcp.server import get_mcp_auth_context
 from context_service.services.models import derive_silo_id
+from context_service.telemetry.metrics import record_mcp_tool
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -88,7 +90,8 @@ def register(mcp: FastMCP, service: SkillService) -> None:
 
         limit = min(limit, 200)
 
-        return await _context_skills_impl(
+        start = time.perf_counter()
+        result = await _context_skills_impl(
             service=service,
             silo_id=silo_id,
             action=action,
@@ -98,3 +101,5 @@ def register(mcp: FastMCP, service: SkillService) -> None:
             limit=limit,
             offset=offset,
         )
+        record_mcp_tool("context_skills", (time.perf_counter() - start) * 1000)
+        return result

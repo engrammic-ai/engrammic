@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from context_service.config.settings import get_settings
+from context_service.telemetry.metrics import record_mcp_tool
 from context_service.mcp.server import (
     get_context_service,
     get_mcp_auth_context,
@@ -103,6 +105,7 @@ def register(mcp: FastMCP) -> None:
         """
         auth = await get_mcp_auth_context()
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
+        start = time.perf_counter()
         result = await _context_link(
             silo_id=resolved_silo_id,
             from_node=from_node,
@@ -111,6 +114,7 @@ def register(mcp: FastMCP) -> None:
             weight=weight,
             note=note,
         )
+        record_mcp_tool("context_link", (time.perf_counter() - start) * 1000)
 
         if "error" not in result and get_settings().write_events_enabled:
             redis = get_redis()

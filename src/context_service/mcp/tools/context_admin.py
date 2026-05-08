@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from context_service.config.settings import get_settings
+from context_service.telemetry.metrics import record_mcp_tool
 from context_service.db.queries import (
     CREATE_CHAIN_REFERENCES_EDGE,
     GET_CHAIN_FOR_CLOSE,
@@ -418,9 +420,12 @@ def register(mcp: FastMCP) -> None:
         """
         auth = await get_mcp_auth_context()
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
-        return await _context_admin(
+        start = time.perf_counter()
+        result = await _context_admin(
             action=action,
             silo_id=resolved_silo_id,
             ref=ref,
             name=name,
         )
+        record_mcp_tool("context_admin", (time.perf_counter() - start) * 1000)
+        return result
