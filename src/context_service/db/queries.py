@@ -418,7 +418,7 @@ WITH path, nodes(path) AS ns, relationships(path) AS rs
 UNWIND range(0, size(ns) - 1) AS i
 WITH
     ns[i].id AS node_id,
-    labels(ns[i])[0] AS layer,
+    coalesce(ns[i].type, labels(ns[i])[0]) AS layer,
     CASE WHEN i < size(rs) THEN type(rs[i]) ELSE null END AS relationship,
     coalesce(ns[i].confidence, 1.0) AS confidence,
     length(path) AS depth
@@ -432,7 +432,7 @@ MATCH path = (start {id: $node_id, silo_id: $silo_id})-[:DERIVED_FROM|PROMOTED_F
 WHERE NOT (source)-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM|REFERENCES]->()
 RETURN DISTINCT
     source.id AS node_id,
-    labels(source)[0] AS layer,
+    coalesce(source.type, labels(source)[0]) AS layer,
     source.content AS content,
     coalesce(source.confidence, 1.0) AS confidence
 """

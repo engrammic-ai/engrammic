@@ -16,7 +16,7 @@ import pytest
 
 from context_service.config.settings import get_settings
 from context_service.pipelines.assets.extraction import extraction as _extraction_asset
-from context_service.pipelines.resources import LLMResource, MemgraphResource
+from context_service.pipelines.resources import LLMResource, MemgraphResource, RedisResource
 from context_service.stores import MemgraphClient, create_memgraph_driver
 from tests.integration.conftest import docker_available
 
@@ -144,12 +144,23 @@ class TestExtractionPipeline:
         llm_res.get_client.return_value = mock_provider
         return llm_res
 
+    @pytest.fixture
+    def mock_redis_resource(self) -> RedisResource:
+        """Mock RedisResource for extraction asset."""
+        redis_res = MagicMock(spec=RedisResource)
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=None)
+        mock_client.set = AsyncMock(return_value=True)
+        redis_res.client = AsyncMock(return_value=mock_client)
+        return redis_res
+
     def test_extraction_writes_claims_for_each_doc(
         self,
         unique_silo_id: uuid.UUID,
         seeded_docs: list[str],
         memgraph_resource_factory: Any,
         mock_llm_resource: LLMResource,
+        mock_redis_resource: RedisResource,
         cleanup_silo: None,
     ) -> None:
         """Each seeded Document should produce at least one :Claim node."""
@@ -159,7 +170,7 @@ class TestExtractionPipeline:
         ctx.partition_key = silo_id
         ctx.log = MagicMock()
 
-        result = _extraction_fn(ctx, memgraph=memgraph_resource_factory(), llm=mock_llm_resource)
+        result = _extraction_fn(ctx, memgraph=memgraph_resource_factory(), llm=mock_llm_resource, redis=mock_redis_resource)
 
         assert isinstance(result, dg.Output)
         assert result.value["docs_processed"] == len(seeded_docs)
@@ -187,6 +198,7 @@ class TestExtractionPipeline:
         seeded_docs: list[str],
         memgraph_resource_factory: Any,
         mock_llm_resource: LLMResource,
+        mock_redis_resource: RedisResource,
         cleanup_silo: None,
     ) -> None:
         """Extracted :Claim nodes must be attached via EXTRACTED_FROM to their source :Document."""
@@ -196,7 +208,7 @@ class TestExtractionPipeline:
         ctx.partition_key = silo_id
         ctx.log = MagicMock()
 
-        _extraction_fn(ctx, memgraph=memgraph_resource_factory(), llm=mock_llm_resource)
+        _extraction_fn(ctx, memgraph=memgraph_resource_factory(), llm=mock_llm_resource, redis=mock_redis_resource)
 
         async def _verify() -> int:
             settings = get_settings()
@@ -223,6 +235,7 @@ class TestExtractionPipeline:
         seeded_docs: list[str],
         memgraph_resource_factory: Any,
         mock_llm_resource: LLMResource,
+        mock_redis_resource: RedisResource,
         cleanup_silo: None,
     ) -> None:
         """Running the asset twice on the same silo must not double-write :Claim nodes."""
@@ -232,7 +245,7 @@ class TestExtractionPipeline:
         ctx.partition_key = silo_id
         ctx.log = MagicMock()
 
-        _extraction_fn(ctx, memgraph=memgraph_resource_factory(), llm=mock_llm_resource)
+        _extraction_fn(ctx, memgraph=memgraph_resource_factory(), llm=mock_llm_resource, redis=mock_redis_resource)
 
         async def _count() -> int:
             settings = get_settings()
@@ -250,7 +263,7 @@ class TestExtractionPipeline:
         count_first = _sync_run(_count())
 
         # Second run: no pending docs remain (all have EXTRACTED_FROM edges now).
-        result2 = _extraction_fn(ctx, memgraph=memgraph_resource_factory(), llm=mock_llm_resource)
+        result2 = _extraction_fn(ctx, memgraph=memgraph_resource_factory(), llm=mock_llm_resource, redis=mock_redis_resource)
         assert result2.value["docs_processed"] == 0
 
         count_second = _sync_run(_count())

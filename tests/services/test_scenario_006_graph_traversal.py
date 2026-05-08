@@ -9,8 +9,6 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
-import pytest
-
 from context_service.services.context import ContextService
 
 MEMORY_ID = "mem-001"
@@ -23,14 +21,44 @@ def _make_service() -> tuple[ContextService, list[tuple[str, dict[str, Any]]]]:
 
     # Simulates the full three-layer node set: wisdom, knowledge, memory
     traversal_rows = [
-        {"node_id": WISDOM_ID, "type": "context", "content": "social structures", "layer": "wisdom", "confidence": 0.9},
-        {"node_id": KNOWLEDGE_ID, "type": "context", "content": "evolutionary evidence", "layer": "knowledge", "confidence": 0.8},
-        {"node_id": MEMORY_ID, "type": "context", "content": "laryngeal muscles", "layer": "memory", "confidence": None},
+        {
+            "node_id": WISDOM_ID,
+            "type": "context",
+            "content": "social structures",
+            "layer": "wisdom",
+            "confidence": 0.9,
+        },
+        {
+            "node_id": KNOWLEDGE_ID,
+            "type": "context",
+            "content": "evolutionary evidence",
+            "layer": "knowledge",
+            "confidence": 0.8,
+        },
+        {
+            "node_id": MEMORY_ID,
+            "type": "context",
+            "content": "laryngeal muscles",
+            "layer": "memory",
+            "confidence": None,
+        },
     ]
 
     edge_rows = [
-        {"from_node": WISDOM_ID, "to_node": KNOWLEDGE_ID, "relationship": "DERIVED_FROM", "weight": 1.0, "inferred": False},
-        {"from_node": KNOWLEDGE_ID, "to_node": MEMORY_ID, "relationship": "DERIVED_FROM", "weight": 1.0, "inferred": False},
+        {
+            "from_node": WISDOM_ID,
+            "to_node": KNOWLEDGE_ID,
+            "relationship": "DERIVED_FROM",
+            "weight": 1.0,
+            "inferred": False,
+        },
+        {
+            "from_node": KNOWLEDGE_ID,
+            "to_node": MEMORY_ID,
+            "relationship": "DERIVED_FROM",
+            "weight": 1.0,
+            "inferred": False,
+        },
     ]
 
     async def execute_query(query: str, params: dict[str, Any]) -> list[dict[str, Any]]:

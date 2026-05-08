@@ -79,21 +79,22 @@ class TestSiloValidation:
         assert result is not None
         assert result["error"] == "silo_not_found"
 
-    async def test_valid_uuid_correct_org_not_in_db_returns_error(
+    async def test_valid_uuid_correct_org_not_in_db_auto_creates(
         self,
         silo_service: SiloService,
         unique_org_id: str,
         unique_silo_id: uuid.UUID,
+        cleanup_silo: None,
     ) -> None:
-        """Valid UUID, correct org, but silo not created in DB."""
+        """Valid UUID, correct org, silo not in DB - auto-creates it (MVP 1:1 model)."""
         result = await validate_silo_ownership(
             silo_service,
             str(unique_silo_id),
             unique_org_id,
         )
 
-        assert result is not None
-        assert result["error"] == "silo_not_found"
+        # MVP model: auto-creates silo if it doesn't exist, returns success (None)
+        assert result is None
 
 
 # ============================================================================
