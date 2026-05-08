@@ -345,6 +345,39 @@ class FeaturesConfig(BaseModel):
     docs_enabled: bool = False
 
 
+class TelemetryConfig(BaseModel):
+    """Self-hosted telemetry configuration."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    enabled: bool = Field(
+        default=True,
+        description="Tier 1: anonymous aggregate telemetry (default on)",
+    )
+    silos: list[str] = Field(
+        default_factory=list,
+        description="Tier 2: silo IDs to include in telemetry. Empty = tier 1 only. ['*'] = all silos.",
+    )
+    beacon_url: str = Field(
+        default="https://tel.engrammic.com/v1/beacon",
+        description="Endpoint for telemetry heartbeats",
+    )
+    beacon_interval_hours: int = Field(
+        default=24,
+        ge=1,
+        le=168,
+        description="Hours between beacon heartbeats",
+    )
+
+    @property
+    def all_silos(self) -> bool:
+        return self.silos == ["*"]
+
+    @property
+    def tier2_enabled(self) -> bool:
+        return len(self.silos) > 0
+
+
 class CacheConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -534,6 +567,7 @@ class Settings(BaseSettings):
     causal: CausalConfig = Field(default_factory=CausalConfig)
     pattern: PatternConfig = Field(default_factory=PatternConfig)
     weak_links: WeakLinksSettings = Field(default_factory=WeakLinksSettings)
+    telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
 
     # =========================================================================
     # Application Meta

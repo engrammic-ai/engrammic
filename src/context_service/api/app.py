@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from context_service import __version__
-from context_service.api.metrics import metrics_endpoint
+from context_service.api.metrics import REGISTRY, metrics_endpoint
 from context_service.api.middleware import PrometheusTimingMiddleware
 from context_service.api.routes import admin, health
 from context_service.config.logging import configure_logging, get_logger
@@ -23,6 +23,9 @@ from context_service.stores import (
     create_memgraph_driver,
     create_redis_pool,
 )
+from context_service.telemetry.beacon import BeaconService
+from context_service.telemetry.collector import TelemetryCollector, mark_start_time
+from context_service.telemetry.install_id import get_or_create_install_id
 
 logger = get_logger(__name__)
 
@@ -183,7 +186,30 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.error("database_connection_failed", error=str(e))
         raise
 
+    # Telemetry beacon
+    mark_start_time()
+    beacon: BeaconService | None = None
+    if settings.telemetry.enabled:
+        install_id = get_or_create_install_id()
+        collector = TelemetryCollector(
+            install_id=install_id,
+            version=__version__,
+            registry=REGISTRY,
+            silos=settings.telemetry.silos if settings.telemetry.tier2_enabled else None,
+            all_silos=settings.telemetry.all_silos if settings.telemetry.tier2_enabled else False,
+        )
+        beacon = BeaconService(
+            collector=collector,
+            beacon_url=settings.telemetry.beacon_url,
+            interval_hours=settings.telemetry.beacon_interval_hours,
+        )
+        await beacon.start()
+
     yield
+
+    if beacon:
+        await beacon.stop()
+        logger.info("telemetry_beacon_stopped")
 
     logger.info("closing_database_connections")
 

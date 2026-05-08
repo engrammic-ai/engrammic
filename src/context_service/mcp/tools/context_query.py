@@ -88,7 +88,7 @@ async def _context_query(
             top_k=top_k,
         )
         elapsed_s = time.perf_counter() - start
-        CONTEXT_QUERY_LATENCY.observe(elapsed_s)
+        CONTEXT_QUERY_LATENCY.labels(silo_id=silo_id).observe(elapsed_s)
         elapsed_ms = int(elapsed_s * 1000)
         response: dict[str, Any] = {
             "results": temporal_results,
@@ -112,7 +112,7 @@ async def _context_query(
         search_mode=search_mode,
     )
     elapsed_s = time.perf_counter() - start
-    CONTEXT_QUERY_LATENCY.observe(elapsed_s)
+    CONTEXT_QUERY_LATENCY.labels(silo_id=silo_id).observe(elapsed_s)
     elapsed_ms = int(elapsed_s * 1000)
 
     redis = get_redis()
