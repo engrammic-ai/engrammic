@@ -50,8 +50,9 @@ def _layer_to_label(layer: str) -> str:
     return _LAYER_TO_LABEL.get(layer, "Document")
 
 
-# Minimum evidence count for R1 single-source promotion.
-_R1_THRESHOLD = 1
+# Minimum evidence count for R1 promotion. Per T5 spec, consensus requires
+# multiple sources - single evidence should not auto-promote to Fact.
+_R1_THRESHOLD = 3
 
 _VALID_SOURCE_TIERS = ("authoritative", "validated", "community", "unknown")
 
@@ -483,26 +484,33 @@ async def _context_reason(
                 parent_chain_id=parent_chain_id,
             )
 
-    # Crystallize claims from reasoning (Intelligence -> Knowledge)
-    # Parallel claim creation + batch edge write for performance
+    # Crystallize reasoning to Wisdom layer via T7 (commit).
+    # Per EAG spec, single-agent crystallizations create Commitments (Wisdom),
+    # not Claims (Knowledge). T5 consensus is required for Knowledge promotion.
     crystallized_ids: list[str] = []
     if parsed_cryst:
         import asyncio
 
         scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
 
-        async def create_claim(cryst: Crystallization) -> str | None:
+        effective_agent_id = agent_id or auth.org_id
+
+        async def create_commitment(cryst: Crystallization) -> str | None:
             try:
-                claim_node = await ctx_svc.assert_claim(
+                # Convert claim to string if it's an SPOClaim
+                if isinstance(cryst.claim, str):
+                    belief_text = cryst.claim
+                else:
+                    belief_text = f"{cryst.claim.subject} {cryst.claim.predicate} {cryst.claim.object}"
+                commitment_node = await ctx_svc.commit_belief(
                     scope=scope,
-                    claim=cryst.claim,
-                    evidence=[str(chain_id)],
-                    source_type=SourceType.AGENT,
+                    belief=belief_text,
+                    about=[],  # No specific entity refs from reasoning
                     confidence=cryst.confidence,
-                    agent_id=agent_id,
-                    source_tier="validated",
+                    reasoning=f"Crystallized from reasoning chain {chain_id}",
+                    agent_id=effective_agent_id,
                 )
-                return str(claim_node.id)
+                return str(commitment_node.id)
             except Exception:
                 logger.warning(
                     "context_reason_crystallization_failed",
@@ -512,7 +520,7 @@ async def _context_reason(
                 )
                 return None
 
-        results = await asyncio.gather(*[create_claim(c) for c in parsed_cryst])
+        results = await asyncio.gather(*[create_commitment(c) for c in parsed_cryst])
         crystallized_ids = [r for r in results if r is not None]
 
         # Batch create all edges in one query
@@ -521,11 +529,11 @@ async def _context_reason(
             edges = [
                 {
                     "chain_id": str(chain_id),
-                    "claim_id": claim_id,
+                    "claim_id": commitment_id,  # Now commitment IDs
                     "silo_id": str(expected_silo_id),
                     "created_at": now,
                 }
-                for claim_id in crystallized_ids
+                for commitment_id in crystallized_ids
             ]
             await store.execute_write(q.BATCH_CREATE_CRYSTALLIZES_EDGES, {"edges": edges})
 
