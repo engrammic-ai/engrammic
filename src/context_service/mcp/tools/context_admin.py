@@ -304,7 +304,7 @@ async def _context_admin(
             if isinstance(val, str):
                 return val
             if hasattr(val, "isoformat"):
-                return val.isoformat()
+                return str(val.isoformat())
             return str(val)
 
         return {
