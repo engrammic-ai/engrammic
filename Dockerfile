@@ -28,11 +28,11 @@ RUN groupadd -r context-service && useradd -r -g context-service context-service
     && mkdir -p /var/lib/engrammic /home/context-service/.cache/uv \
     && chown -R context-service:context-service /var/lib/engrammic /home/context-service
 
-# Copy virtual environment from builder
-COPY --from=builder /app/.venv /app/.venv
+# Copy virtual environment from builder (chown for uv to modify)
+COPY --from=builder --chown=context-service:context-service /app/.venv /app/.venv
 
 # Copy primitives (needed at runtime for imports)
-COPY --from=builder /primitives /primitives
+COPY --from=builder --chown=context-service:context-service /primitives /primitives
 
 # Copy application code
 COPY context-service/pyproject.toml context-service/uv.lock context-service/README.md ./
