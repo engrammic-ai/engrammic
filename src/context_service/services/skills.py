@@ -60,7 +60,7 @@ class SkillService:
             try:
                 meta = yaml.safe_load(parts[1])
             except yaml.YAMLError as e:
-                raise RuntimeError(f"Skill file has malformed YAML: {skill_file}: {e}")
+                raise RuntimeError(f"Skill file has malformed YAML: {skill_file}: {e}") from e
 
             if not isinstance(meta, dict) or "name" not in meta:
                 raise RuntimeError(f"Skill file missing 'name' in frontmatter: {skill_file}")
