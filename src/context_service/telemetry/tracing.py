@@ -17,10 +17,14 @@ from context_service import __version__
 
 
 def setup_tracing(service_name: str = "context-service") -> None:
-    """Initialize OpenTelemetry tracing if OTEL_EXPORTER_OTLP_ENDPOINT is set."""
+    """Initialize OpenTelemetry tracing and metrics if OTEL_EXPORTER_OTLP_ENDPOINT is set."""
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     if not endpoint:
         return
+
+    from context_service.telemetry.metrics import setup_metrics
+
+    setup_metrics(service_name)
 
     resource = Resource.create(
         {
