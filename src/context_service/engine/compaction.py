@@ -16,6 +16,7 @@ batch_compact_chains(store, silo_id, statuses, limit) -> list[str]
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from datetime import UTC, datetime
@@ -196,15 +197,16 @@ async def batch_compact_chains(
         {"silo_id": silo_id, "statuses": resolved_statuses, "limit": limit},
     )
 
-    event_ids: list[str] = []
-    for row in chain_rows:
+    async def _compact_one(row: dict[str, Any]) -> str | None:
         chain_id = row["id"]
-        # Default outcome for batch compaction: published -> committed, else expired
         outcome: OutcomeT = "committed" if row.get("status") == "published" else "expired"
         try:
-            eid = await compact_reasoning_chain(store, chain_id, silo_id, outcome)
-            event_ids.append(eid)
+            return await compact_reasoning_chain(store, chain_id, silo_id, outcome)
         except ValueError as exc:
             logger.warning("batch_compact_skip", chain_id=chain_id, reason=str(exc))
+            return None
+
+    results = await asyncio.gather(*[_compact_one(row) for row in chain_rows])
+    event_ids = [r for r in results if isinstance(r, str)]
 
     return event_ids
