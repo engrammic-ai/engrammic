@@ -222,18 +222,22 @@ class SkillService:
         if token is not None:
             headers["Authorization"] = f"Bearer {token}"
 
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"{source_url.rstrip('/')}/api/skills/{name}",
-                headers=headers,
-                follow_redirects=False,
-            )
-            response.raise_for_status()
-            data = response.json()
+        fetch_url = f"{source_url.rstrip('/')}/api/skills/{name}"
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0), follow_redirects=False) as client:
+            try:
+                response = await client.get(fetch_url, headers=headers)
+                response.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                raise ValueError(f"Remote server returned {e.response.status_code}") from e
+            except httpx.RequestError as e:
+                raise ValueError(f"Failed to fetch from remote: {e}") from e
 
-        body = _sanitize_skill_body(data.get("body", ""))
-        description = str(data.get("description", ""))
+        data = response.json()
+        body = _sanitize_skill_body(str(data.get("body") or ""))
+        description = str(data.get("description") or "")
         allowed_tools = data.get("allowed_tools")
+        if allowed_tools is not None and not isinstance(allowed_tools, list):
+            raise ValueError("Invalid allowed_tools in remote skill")
 
         db_skill = Skill(
             name=name,
@@ -262,21 +266,35 @@ def _validate_import_url(url: str, allow_http: bool = False) -> None:
         raise ValueError("URL must have a hostname")
 
     try:
-        ip = socket.gethostbyname(parsed.hostname)
+        addrs = socket.getaddrinfo(parsed.hostname, None)
     except socket.gaierror as e:
         raise ValueError(f"Cannot resolve hostname: {e}") from e
 
-    blocked = [
+    blocked_v4 = [
         ipaddress.ip_network("127.0.0.0/8"),
         ipaddress.ip_network("10.0.0.0/8"),
         ipaddress.ip_network("172.16.0.0/12"),
         ipaddress.ip_network("192.168.0.0/16"),
         ipaddress.ip_network("169.254.0.0/16"),
     ]
-    ip_addr = ipaddress.ip_address(ip)
-    for net in blocked:
-        if ip_addr in net:
-            raise ValueError("Internal network addresses not allowed")
+    blocked_v6 = [
+        ipaddress.ip_network("::1/128"),
+        ipaddress.ip_network("fc00::/7"),
+        ipaddress.ip_network("fe80::/10"),
+    ]
+
+    for _family, _type, _proto, _canonname, sockaddr in addrs:
+        ip_str = sockaddr[0]
+        ip_addr = ipaddress.ip_address(ip_str)
+
+        if ip_addr.version == 4:
+            for net in blocked_v4:
+                if ip_addr in net:
+                    raise ValueError("Internal network addresses not allowed")
+        else:
+            for net in blocked_v6:
+                if ip_addr in net:
+                    raise ValueError("Internal network addresses not allowed")
 
 
 def _sanitize_skill_body(body: str) -> str:
