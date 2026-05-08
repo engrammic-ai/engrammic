@@ -16,6 +16,7 @@ from context_service.mcp.tools.context_crystallize import register as register_c
 from context_service.mcp.tools.context_link import register as register_link
 from context_service.mcp.tools.context_recall import register as register_recall
 from context_service.mcp.tools.context_reject_belief import register as register_reject_belief
+from context_service.mcp.tools.context_skills import register as register_skills
 from context_service.mcp.tools.context_store import register as register_store
 from context_service.mcp.tools.context_update_belief import register as register_update_belief
 
@@ -32,10 +33,19 @@ def register_all(mcp: FastMCP) -> None:
     register_accept_belief(mcp)
     register_reject_belief(mcp)
 
+    from context_service.mcp.server import get_skill_service
+
+    try:
+        skill_svc = get_skill_service()
+        register_skills(mcp, skill_svc)
+    except RuntimeError:
+        pass  # SkillService not configured (no db_session); skip tool registration
+
 
 __all__ = [
     "register_all",
     "context_skills",
+    "register_skills",
     "register_accept_belief",
     "register_admin",
     "register_belief_state",

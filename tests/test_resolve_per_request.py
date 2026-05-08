@@ -59,8 +59,13 @@ async def test_missing_header_raises_when_auth_enabled(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(server, "get_http_headers", lambda **_kw: {})
+    monkeypatch.setenv("AUTH_ENABLED", "true")
+    monkeypatch.setenv("WORKOS_API_KEY", "test-key")
+    monkeypatch.setenv("WORKOS_CLIENT_ID", "test-client")
+    monkeypatch.setenv("WORKOS_COOKIE_PASSWORD", "test-cookie-password-32-bytes-min!")
+    auth_on = Settings(_env_file=None)
     with (
-        patch("context_service.config.settings.get_settings", return_value=_AUTH_ON),
+        patch("context_service.config.settings.get_settings", return_value=auth_on),
         pytest.raises(MCPAuthError, match="Missing Authorization header"),
     ):
         await server.get_mcp_auth_context()

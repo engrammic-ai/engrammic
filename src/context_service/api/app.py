@@ -3,6 +3,7 @@
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -13,6 +14,7 @@ from context_service import __version__
 from context_service.api.metrics import REGISTRY, metrics_endpoint
 from context_service.api.middleware import PrometheusTimingMiddleware
 from context_service.api.routes import admin, health
+from context_service.api.routes.skills import router as skills_router
 from context_service.config.logging import configure_logging, get_logger
 from context_service.config.settings import get_settings
 from context_service.core.service_registry import ServiceRegistry
@@ -173,6 +175,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 )
             logger.info("auto_tagging_configured")
 
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        from context_service.db.postgres import get_engine
+        from context_service.services.skills import SkillService
+
+        skills_session = AsyncSession(get_engine(), expire_on_commit=False)
+        app.state.skills_session = skills_session
+        skill_service = SkillService(db=skills_session, skills_dir=Path("skills"))
+        app.state.skill_service = skill_service
+
         configure_services(
             memgraph=memgraph_store,
             qdrant=qdrant_client,
@@ -180,6 +192,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             embedding=embedding_service,
             splade=splade_encoder,
             auto_tagging=auto_tagging,
+            db_session=skills_session,
+            skills_dir=Path("skills"),
         )
         logger.info("mcp_services_configured")
 
@@ -228,6 +242,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await app.state.qdrant.close()
         logger.info("qdrant_closed")
 
+    if hasattr(app.state, "skills_session"):
+        await app.state.skills_session.close()
+        logger.info("skills_session_closed")
+
     from context_service.db.postgres import close_postgres
 
     await close_postgres()
@@ -272,6 +290,7 @@ def create_app() -> ASGIApp:
 
     app.include_router(health.router)
     app.include_router(admin.router)
+    app.include_router(skills_router)
     app.add_route("/metrics", metrics_endpoint, include_in_schema=False)
 
     if settings.mcp_enabled:

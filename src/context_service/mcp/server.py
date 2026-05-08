@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import structlog
@@ -19,6 +20,7 @@ if TYPE_CHECKING:
     from context_service.services.context import ContextService
     from context_service.services.evidence import EvidenceValidator
     from context_service.services.silo import SiloService
+    from context_service.services.skills import SkillService
     from context_service.stores import QdrantClient, RedisClient
 
 logger = structlog.get_logger(__name__)
@@ -33,6 +35,8 @@ def configure_services(
     embedding: EmbeddingService | None = None,
     splade: SpladeEncoder | None = None,
     auto_tagging: AutoTaggingService | None = None,
+    db_session: Any | None = None,
+    skills_dir: Path | None = None,
 ) -> None:
     """Configure MCP service dependencies.
 
@@ -55,6 +59,15 @@ def configure_services(
     _services["silo"] = SiloService(memgraph=memgraph, ownership_cache=ownership_cache)
     _services["evidence"] = EvidenceValidator(store=memgraph)
     _services["redis"] = redis
+
+    if db_session is not None:
+        from context_service.services.skills import SkillService
+
+        _services["skills"] = SkillService(
+            db=db_session,
+            skills_dir=skills_dir or Path("skills"),
+        )
+
     logger.info("MCP services configured")
 
 
@@ -85,6 +98,15 @@ def get_silo_service() -> SiloService:
     from context_service.services.silo import SiloService as _SS
 
     return cast(_SS, _services["silo"])
+
+
+def get_skill_service() -> SkillService:
+    """Get the configured SkillService instance."""
+    if "skills" not in _services:
+        raise RuntimeError("SkillService not configured — call configure_services() with db_session at startup")
+    from context_service.services.skills import SkillService as _SKS
+
+    return cast(_SKS, _services["skills"])
 
 
 def get_redis() -> RedisClient | None:

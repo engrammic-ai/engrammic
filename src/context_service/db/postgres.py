@@ -61,6 +61,13 @@ async def init_postgres() -> AsyncEngine:
     return _engine
 
 
+def get_engine() -> AsyncEngine:
+    """Return the current async engine (must call init_postgres first)."""
+    if _engine is None:
+        raise RuntimeError("Postgres not initialized — call init_postgres() at startup")
+    return _engine
+
+
 async def close_postgres() -> None:
     """Close the Postgres connection pool."""
     global _engine, _session_factory
