@@ -26,6 +26,7 @@ from context_service.stores import (
 from context_service.telemetry.beacon import BeaconService
 from context_service.telemetry.collector import TelemetryCollector, mark_start_time
 from context_service.telemetry.install_id import get_or_create_install_id
+from context_service.telemetry.tracing import instrument_fastapi, setup_tracing
 
 logger = get_logger(__name__)
 
@@ -241,6 +242,8 @@ def create_app() -> ASGIApp:
     json_format = settings.environment != "development"
     configure_logging(log_level=log_level, json_format=json_format)
 
+    setup_tracing()
+
     docs_enabled = settings.environment not in ("production", "staging")
 
     app = FastAPI(
@@ -265,6 +268,7 @@ def create_app() -> ASGIApp:
         )
 
     app.add_middleware(PrometheusTimingMiddleware)
+    instrument_fastapi(app)
 
     app.include_router(health.router)
     app.include_router(admin.router)
