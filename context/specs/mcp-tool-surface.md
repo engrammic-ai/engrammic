@@ -20,43 +20,36 @@ Secondary: Human-in-loop with approval gates
 
 ## Tool Catalogue
 
-### Write Tools (Intent Verbs)
+9 tools registered. Consolidated from earlier intent-verb design into unified surfaces.
 
-| Tool | Layer | Evidence | Purpose |
-|------|-------|----------|---------|
-| `context_remember` | Memory | No | Store experiences, observations, events |
-| `context_assert` | Knowledge | Required | Assert claims with grounded evidence |
-| `context_commit` | Wisdom | No (refs Knowledge) | Declare beliefs, stances |
-| `context_reflect` | Meta | No (refs any) | Meta-observations about cognition |
-| `context_link` | Cross-layer | No | Create relationships |
-
-### Read Tools
+### Write / Unified
 
 | Tool | Purpose |
 |------|---------|
-| `context_query` | Semantic search with layer/filter support |
-| `context_get` | Retrieve by ID with optional edges |
-| `context_graph` | Graph traversal from semantic seed |
+| `context_store` | Unified writes to any layer (belief layer creates WorkingHypothesis) |
+| `context_link` | Create typed relationships between nodes |
 
-### Meta-Memory Tools
-
-| Tool | Purpose |
-|------|---------|
-| `context_provenance` | Trace citation chain to source |
-| `context_history` | Belief/fact evolution over time |
-
-### Intelligence Tools
+### Read / Unified
 
 | Tool | Purpose |
 |------|---------|
-| `context_reason` | Store reasoning chains with crystallizations |
+| `context_recall` | Unified reads: flat, semantic search, graph traversal, time-travel |
 
-### Silo Management
+### Utility
 
 | Tool | Purpose |
 |------|---------|
-| `silo_create` | Create tenancy boundary |
-| `silo_list` | List silos for org |
+| `context_admin` | Silo management, provenance, history (explicit node_id/chain_id/session_id params) |
+
+### Belief / Intelligence Layer
+
+| Tool | Purpose |
+|------|---------|
+| `context_belief_state` | Query live session WorkingHypotheses and detect contradictions |
+| `context_update_belief` | Mutate a WorkingHypothesis in-place |
+| `context_crystallize` | Promote WorkingHypotheses to Commitments (Wisdom layer) |
+| `context_accept_belief` | Accept a ProposedBelief, converting it to a Belief |
+| `context_reject_belief` | Reject a ProposedBelief with optional reason |
 
 ---
 
