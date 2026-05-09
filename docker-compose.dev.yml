@@ -253,6 +253,9 @@ services:
     environment:
       - ClickHouseUrl=tcp://signoz-clickhouse:9000
       - STORAGE=clickhouse
+      - SIGNOZ_LOCAL_DB_PATH=/var/lib/signoz/signoz.db
+    volumes:
+      - signoz-query-data:/var/lib/signoz
     depends_on:
       signoz-clickhouse:
         condition: service_healthy
@@ -276,3 +279,4 @@ volumes:
   postgres-data:
   signoz-zookeeper-data:
   signoz-clickhouse-data:
+  signoz-query-data:

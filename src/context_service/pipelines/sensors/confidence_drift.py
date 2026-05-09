@@ -12,6 +12,7 @@ from typing import Any
 
 import dagster as dg
 import structlog
+from dagster import SensorEvaluationContext
 
 from context_service.pipelines.resources import MemgraphResource
 from context_service.utils.json import JSONDecodeError, dumps, loads
@@ -65,7 +66,7 @@ def _parse_cursor(cursor: str | None) -> dict[str, dict[str, float]]:
     ),
 )
 def confidence_drift_sensor(
-    context: dg.SensorEvaluationContext,
+    context: SensorEvaluationContext,
     memgraph: MemgraphResource,
 ) -> dg.SensorResult:
     """Check mean confidence per silo and warn on drift."""

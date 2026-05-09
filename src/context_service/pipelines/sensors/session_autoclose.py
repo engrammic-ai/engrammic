@@ -17,6 +17,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import dagster as dg
+from dagster import SensorEvaluationContext
 
 from context_service.db.queries import GET_ALL_STALE_OPEN_SESSIONS
 from context_service.pipelines.resources import MemgraphResource
@@ -31,7 +32,7 @@ from context_service.pipelines.resources import MemgraphResource
     ),
 )
 def session_autoclose_sensor(
-    context: dg.SensorEvaluationContext,
+    context: SensorEvaluationContext,
     memgraph: MemgraphResource,
 ) -> dg.SensorResult:
     """Poll for stale open sessions and close them."""
