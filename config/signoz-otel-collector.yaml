@@ -1,0 +1,38 @@
+# SigNoz OTEL Collector config
+# This collector receives from context-service's otel-collector and writes to ClickHouse
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 1024
+
+exporters:
+  clickhousetraces:
+    datasource: tcp://signoz-clickhouse:9000/?database=signoz_traces
+  clickhousemetricswrite:
+    endpoint: tcp://signoz-clickhouse:9000/?database=signoz_metrics
+  clickhouselogs:
+    dsn: tcp://signoz-clickhouse:9000/?database=signoz_logs
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [clickhousetraces]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [clickhousemetricswrite]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [clickhouselogs]

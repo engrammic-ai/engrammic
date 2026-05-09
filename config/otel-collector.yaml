@@ -12,8 +12,10 @@ processors:
     send_batch_size: 1024
 
 exporters:
-  otlp/jaeger:
-    endpoint: jaeger:4317
+  # SigNoz backend (or any OTLP-compatible backend)
+  # Configure via SIGNOZ_ENDPOINT env var, defaults to signoz-otel-collector:4317
+  otlp/signoz:
+    endpoint: ${SIGNOZ_ENDPOINT:-signoz-otel-collector:4317}
     tls:
       insecure: true
   debug:
@@ -24,8 +26,12 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlp/jaeger, debug]
+      exporters: [otlp/signoz, debug]
     metrics:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+      exporters: [otlp/signoz, debug]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlp/signoz, debug]
