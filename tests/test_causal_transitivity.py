@@ -145,8 +145,10 @@ class TestCausalQueryStructure:
         assert "{depth}" in _SCAN_CAUSES_CHAINS
 
     def test_not_exists_prevents_duplicates(self) -> None:
-        assert "NOT EXISTS" in _SCAN_CAUSES_CHAINS
+        # Query uses size() = 0 pattern to check for non-existence
+        assert "size(" in _SCAN_CAUSES_CHAINS
         assert "inferred: true" in _SCAN_CAUSES_CHAINS
+        assert "= 0" in _SCAN_CAUSES_CHAINS
 
 
 class TestCorroborationAggregation:
@@ -183,9 +185,9 @@ class TestCycleTermination:
     """Verify cycle handling in query structure."""
 
     def test_not_exists_breaks_cycles(self) -> None:
-        # The NOT EXISTS clause prevents re-inferring already-inferred edges
-        # Query uses {{ for escaped braces in Python
-        assert "NOT EXISTS((a)-[:CAUSES {{inferred: true}}]->(c))" in _SCAN_CAUSES_CHAINS
+        # The size() = 0 clause prevents re-inferring already-inferred edges
+        # Query uses {{ for escaped braces in Python f-string
+        assert "size([(a)-[r:CAUSES {{inferred: true}}]->(c) | r]) = 0" in _SCAN_CAUSES_CHAINS
 
     def test_self_loop_guard(self) -> None:
         # Prevents A->...->A cycles from creating self-referential edges

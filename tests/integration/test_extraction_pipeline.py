@@ -170,7 +170,12 @@ class TestExtractionPipeline:
         ctx.partition_key = silo_id
         ctx.log = MagicMock()
 
-        result = _extraction_fn(ctx, memgraph=memgraph_resource_factory(), llm=mock_llm_resource, redis=mock_redis_resource)
+        result = _extraction_fn(
+            ctx,
+            memgraph=memgraph_resource_factory(),
+            llm=mock_llm_resource,
+            redis=mock_redis_resource,
+        )
 
         assert isinstance(result, dg.Output)
         assert result.value["docs_processed"] == len(seeded_docs)
@@ -208,7 +213,12 @@ class TestExtractionPipeline:
         ctx.partition_key = silo_id
         ctx.log = MagicMock()
 
-        _extraction_fn(ctx, memgraph=memgraph_resource_factory(), llm=mock_llm_resource, redis=mock_redis_resource)
+        _extraction_fn(
+            ctx,
+            memgraph=memgraph_resource_factory(),
+            llm=mock_llm_resource,
+            redis=mock_redis_resource,
+        )
 
         async def _verify() -> int:
             settings = get_settings()
@@ -245,7 +255,12 @@ class TestExtractionPipeline:
         ctx.partition_key = silo_id
         ctx.log = MagicMock()
 
-        _extraction_fn(ctx, memgraph=memgraph_resource_factory(), llm=mock_llm_resource, redis=mock_redis_resource)
+        _extraction_fn(
+            ctx,
+            memgraph=memgraph_resource_factory(),
+            llm=mock_llm_resource,
+            redis=mock_redis_resource,
+        )
 
         async def _count() -> int:
             settings = get_settings()
@@ -263,7 +278,12 @@ class TestExtractionPipeline:
         count_first = _sync_run(_count())
 
         # Second run: no pending docs remain (all have EXTRACTED_FROM edges now).
-        result2 = _extraction_fn(ctx, memgraph=memgraph_resource_factory(), llm=mock_llm_resource, redis=mock_redis_resource)
+        result2 = _extraction_fn(
+            ctx,
+            memgraph=memgraph_resource_factory(),
+            llm=mock_llm_resource,
+            redis=mock_redis_resource,
+        )
         assert result2.value["docs_processed"] == 0
 
         count_second = _sync_run(_count())

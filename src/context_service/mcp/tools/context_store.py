@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import structlog
 
 from context_service.api.metrics import CONTEXT_STORE_LATENCY
+from context_service.telemetry.metrics import record_mcp_tool
 from context_service.config.settings import get_settings
 from context_service.mcp.server import (
     get_context_service,
@@ -834,35 +835,42 @@ def register(mcp: FastMCP) -> None:
             Belief layer returns {belief_id, layer, session_id, created_at} and includes
             potential_conflicts when other beliefs in the session target the same nodes.
         """
-        auth = await get_mcp_auth_context()
-        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
+        start = time.perf_counter()
+        success = True
+        try:
+            auth = await get_mcp_auth_context()
+            resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
+            result = await _context_store(
+                silo_id=resolved_silo_id,
+                content=content,
+                layer=layer,
+                evidence=evidence,
+                source_type=source_type,
+                confidence=confidence,
+                about=about,
+                reasoning=reasoning,
+                steps=steps,
+                observation_type=observation_type,
+                metadata=metadata,
+                tags=tags,
+                decay_class=decay_class,
+                parent_chain_id=parent_chain_id,
+                session_id=session_id,
+            )
 
-        result = await _context_store(
-            silo_id=resolved_silo_id,
-            content=content,
-            layer=layer,
-            evidence=evidence,
-            source_type=source_type,
-            confidence=confidence,
-            about=about,
-            reasoning=reasoning,
-            steps=steps,
-            observation_type=observation_type,
-            metadata=metadata,
-            tags=tags,
-            decay_class=decay_class,
-            parent_chain_id=parent_chain_id,
-            session_id=session_id,
-        )
+            if "error" not in result and get_settings().write_events_enabled:
+                redis = get_redis()
+                if redis is not None:
+                    node_id = result.get("node_id") or result.get("chain_id") or result.get("belief_id")
+                    if node_id:
+                        node_label = _layer_to_label(layer)
+                        await emit_access_event(
+                            redis, resolved_silo_id, str(node_id), event_type="write", layer=node_label
+                        )
 
-        if "error" not in result and get_settings().write_events_enabled:
-            redis = get_redis()
-            if redis is not None:
-                node_id = result.get("node_id") or result.get("chain_id") or result.get("belief_id")
-                if node_id:
-                    node_label = _layer_to_label(layer)
-                    await emit_access_event(
-                        redis, resolved_silo_id, str(node_id), event_type="write", layer=node_label
-                    )
-
-        return result
+            return result
+        except Exception:
+            success = False
+            raise
+        finally:
+            record_mcp_tool("context_store", (time.perf_counter() - start) * 1000, success=success)

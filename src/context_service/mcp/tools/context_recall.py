@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -10,6 +11,7 @@ from context_service.mcp.tools.context_get import _context_get
 from context_service.mcp.tools.context_graph import _context_graph
 from context_service.mcp.tools.context_query import _context_query
 from context_service.services.models import derive_silo_id
+from context_service.telemetry.metrics import record_mcp_tool
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -259,17 +261,28 @@ def register(mcp: FastMCP) -> None:
         """
         auth = await get_mcp_auth_context()
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
-        return await _context_recall(
-            silo_id=resolved_silo_id,
-            query=query,
-            node_ids=node_ids,
-            depth=depth,
-            layers=layers,
-            top_k=top_k,
-            as_of=as_of,
-            include_reflections=include_reflections,
-            reflections_agent_id=reflections_agent_id,
-            include_steps=include_steps,
-            include_content=include_content,
-            include_proposals=include_proposals,
-        )
+        start = time.perf_counter()
+        success = True
+        try:
+            result = await _context_recall(
+                silo_id=resolved_silo_id,
+                query=query,
+                node_ids=node_ids,
+                depth=depth,
+                layers=layers,
+                top_k=top_k,
+                as_of=as_of,
+                include_reflections=include_reflections,
+                reflections_agent_id=reflections_agent_id,
+                include_steps=include_steps,
+                include_content=include_content,
+                include_proposals=include_proposals,
+            )
+            return result
+        except Exception:
+            success = False
+            raise
+        finally:
+            # Note: Sub-tools (_context_get, _context_query, _context_graph) also emit
+            # their own metrics with their respective names when dispatched from here.
+            record_mcp_tool("context_recall", (time.perf_counter() - start) * 1000, success=success)

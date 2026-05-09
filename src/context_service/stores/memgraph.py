@@ -4,6 +4,7 @@ The neo4j driver works with Memgraph via the Bolt protocol.
 """
 
 import contextlib
+import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -22,6 +23,7 @@ from tenacity import (
 
 from context_service.config.logging import get_logger
 from context_service.config.settings import Settings, get_settings
+from context_service.telemetry.metrics import record_db_query
 
 logger = get_logger(__name__)
 
@@ -241,6 +243,7 @@ class MemgraphClient:
                 data: list[dict[str, Any]] = await result.data()
                 return data
 
+        start = time.perf_counter()
         try:
             async for attempt in AsyncRetrying(
                 retry=retry_if_exception_type(ServiceUnavailable),
@@ -256,18 +259,24 @@ class MemgraphClient:
                             attempt=attempt_number,
                             max_attempts=_READ_RETRY_MAX_ATTEMPTS,
                         )
-                    return await _run_once()
+                    result = await _run_once()
+                    record_db_query("read", (time.perf_counter() - start) * 1000)
+                    return result
             raise MemgraphOperationError("Retry loop exited without result or exception")
         except ServiceUnavailable as e:
+            record_db_query("read_error", (time.perf_counter() - start) * 1000)
             logger.error("memgraph_service_unavailable", error=str(e))
             raise MemgraphOperationError(f"Database unavailable: {e}") from e
         except RetryError as e:
+            record_db_query("read_error", (time.perf_counter() - start) * 1000)
             logger.error("memgraph_retry_exhausted", error=str(e))
             raise MemgraphOperationError(f"Database unavailable: {e}") from e
         except ClientError as e:
+            record_db_query("read_error", (time.perf_counter() - start) * 1000)
             logger.error("memgraph_query_error", error=str(e))
             raise MemgraphOperationError(f"Query failed: {e}") from e
         except Exception as e:
+            record_db_query("read_error", (time.perf_counter() - start) * 1000)
             logger.error("memgraph_unexpected_error", error=str(e))
             raise MemgraphOperationError(f"Database operation failed: {e}") from e
 
@@ -305,6 +314,7 @@ class MemgraphClient:
             _is_transient_client_error
         )
 
+        start = time.perf_counter()
         try:
             async for attempt in AsyncRetrying(
                 retry=retry_policy,
@@ -320,18 +330,24 @@ class MemgraphClient:
                             attempt=attempt_number,
                             max_attempts=_WRITE_RETRY_MAX_ATTEMPTS,
                         )
-                    return await _run_once()
+                    result = await _run_once()
+                    record_db_query("write", (time.perf_counter() - start) * 1000)
+                    return result
             raise MemgraphOperationError("Retry loop exhausted")
         except ServiceUnavailable as e:
+            record_db_query("write_error", (time.perf_counter() - start) * 1000)
             logger.error("memgraph_service_unavailable", error=str(e))
             raise MemgraphOperationError(f"Database unavailable: {e}") from e
         except RetryError as e:
+            record_db_query("write_error", (time.perf_counter() - start) * 1000)
             logger.error("memgraph_write_retry_exhausted", error=str(e))
             raise MemgraphOperationError(f"Database unavailable: {e}") from e
         except ClientError as e:
+            record_db_query("write_error", (time.perf_counter() - start) * 1000)
             logger.error("memgraph_write_error", error=str(e))
             raise MemgraphOperationError(f"Write failed: {e}") from e
         except Exception as e:
+            record_db_query("write_error", (time.perf_counter() - start) * 1000)
             logger.error("memgraph_unexpected_write_error", error=str(e))
             raise MemgraphOperationError(f"Database write failed: {e}") from e
 

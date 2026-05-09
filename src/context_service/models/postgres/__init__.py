@@ -3,6 +3,7 @@
 from context_service.models.postgres.audit import AuditEvents, Events
 from context_service.models.postgres.org import OrgPreferences, SiloConfig
 from context_service.models.postgres.reasoning import OrphanedChains, ReasoningChainSteps
+from context_service.models.postgres.skill import Skill
 
 __all__ = [
     "AuditEvents",
@@ -10,5 +11,6 @@ __all__ = [
     "OrgPreferences",
     "OrphanedChains",
     "ReasoningChainSteps",
+    "Skill",
     "SiloConfig",
 ]

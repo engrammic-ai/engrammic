@@ -24,16 +24,18 @@ def _load_invalidation_queries() -> tuple[str, str]:
 
     import re
 
-    find_match = re.search(r'_FIND_DERIVED_EDGES\s*=\s*"""(.+?)"""', source, re.DOTALL)
+    find_match = re.search(r'_FIND_DERIVED_EDGES_BATCH\s*=\s*"""(.+?)"""', source, re.DOTALL)
     find_query = find_match.group(1) if find_match else ""
 
-    tombstone_match = re.search(r'_TOMBSTONE_DERIVED_EDGE\s*=\s*"""(.+?)"""', source, re.DOTALL)
+    tombstone_match = re.search(
+        r'_TOMBSTONE_DERIVED_EDGES_BATCH\s*=\s*"""(.+?)"""', source, re.DOTALL
+    )
     tombstone_query = tombstone_match.group(1) if tombstone_match else ""
 
     return find_query, tombstone_query
 
 
-_FIND_DERIVED_EDGES, _TOMBSTONE_DERIVED_EDGE = _load_invalidation_queries()
+_FIND_DERIVED_EDGES_BATCH, _TOMBSTONE_DERIVED_EDGES_BATCH = _load_invalidation_queries()
 
 
 # ---------------------------------------------------------------------------
@@ -82,7 +84,7 @@ class TestMaxInvalidationDepthConfig:
 
 
 # ---------------------------------------------------------------------------
-# _FIND_DERIVED_EDGES query structure
+# _FIND_DERIVED_EDGES_BATCH query structure
 # ---------------------------------------------------------------------------
 
 
@@ -90,23 +92,23 @@ class TestFindDerivedEdgesQuery:
     """Verify the reverse-lookup query for derived edges is structurally correct."""
 
     def test_query_filters_by_silo(self) -> None:
-        assert "$silo_id" in _FIND_DERIVED_EDGES
+        assert "$silo_id" in _FIND_DERIVED_EDGES_BATCH
 
     def test_query_filters_inferred_only(self) -> None:
-        assert "inferred" in _FIND_DERIVED_EDGES
+        assert "inferred" in _FIND_DERIVED_EDGES_BATCH
 
     def test_query_uses_inferred_from_edge_ids(self) -> None:
-        assert "inferred_from_edge_ids" in _FIND_DERIVED_EDGES
+        assert "inferred_from_edge_ids" in _FIND_DERIVED_EDGES_BATCH
 
     def test_query_returns_derived_edge_id(self) -> None:
-        assert "derived_edge_id" in _FIND_DERIVED_EDGES
+        assert "derived_edge_id" in _FIND_DERIVED_EDGES_BATCH
 
-    def test_query_matches_superseded_param(self) -> None:
-        assert "$superseded_edge_id" in _FIND_DERIVED_EDGES
+    def test_query_uses_edge_ids_param(self) -> None:
+        assert "$edge_ids" in _FIND_DERIVED_EDGES_BATCH
 
 
 # ---------------------------------------------------------------------------
-# _TOMBSTONE_DERIVED_EDGE query structure
+# _TOMBSTONE_DERIVED_EDGES_BATCH query structure
 # ---------------------------------------------------------------------------
 
 
@@ -114,19 +116,19 @@ class TestTombstoneDerivedEdgeQuery:
     """Verify the tombstone SET query marks the correct fields."""
 
     def test_sets_invalidated_flag(self) -> None:
-        assert "invalidated = true" in _TOMBSTONE_DERIVED_EDGE
+        assert "invalidated = true" in _TOMBSTONE_DERIVED_EDGES_BATCH
 
     def test_sets_invalidated_at(self) -> None:
-        assert "invalidated_at" in _TOMBSTONE_DERIVED_EDGE
+        assert "invalidated_at" in _TOMBSTONE_DERIVED_EDGES_BATCH
 
     def test_sets_invalidation_reason(self) -> None:
-        assert "invalidation_reason" in _TOMBSTONE_DERIVED_EDGE
+        assert "invalidation_reason" in _TOMBSTONE_DERIVED_EDGES_BATCH
 
     def test_filters_by_silo(self) -> None:
-        assert "$silo_id" in _TOMBSTONE_DERIVED_EDGE
+        assert "$silo_id" in _TOMBSTONE_DERIVED_EDGES_BATCH
 
-    def test_matches_by_edge_id(self) -> None:
-        assert "$edge_id" in _TOMBSTONE_DERIVED_EDGE
+    def test_uses_edge_ids_param(self) -> None:
+        assert "$edge_ids" in _TOMBSTONE_DERIVED_EDGES_BATCH
 
 
 # ---------------------------------------------------------------------------
