@@ -1,5 +1,31 @@
 # Custodian Identity Split Implementation Plan
 
+> **Status:** Core implementation COMPLETE. Tech debt in progress.
+
+## Progress (2026-05-09)
+
+| Task | Status | Notes |
+|------|--------|-------|
+| 1. Config Infrastructure | Done | identities.yaml + settings models |
+| 2. Base Classes | Done | IdentityDeps, CustodianTrigger protocol |
+| 3. AsyncBatchTrigger | Done | Micro-batch trigger |
+| 4. Groundskeeper Identity | Done | GC logic complete |
+| 5. Validator Identity | Done | Wired into context_crystallize |
+| 6. Custodian Identity | Done | Wired into context.py post-write |
+| 7. Synthesizer Identity | Done | Stub only |
+| 8. Integration Test | Done | 12 tests passing |
+
+### Remaining Tech Debt
+
+| Item | Status | Branch |
+|------|--------|--------|
+| Groundskeeper Dagster job | In progress | fix/identity-tech-debt |
+| Synthesizer Dagster sensor | In progress | fix/identity-tech-debt |
+| LLM contradiction detection | Planned | - |
+| LLM synthesis | Planned | - |
+
+---
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Split the monolithic Custodian into 4 focused identities (Custodian, Synthesizer, Groundskeeper, Validator), each owning specific EAG transitions.

@@ -5,6 +5,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 ## Current state (2026-05-09)
 
 **Shipped:**
+- v2.1 Custodian Identity Split (4 identities: Custodian, Synthesizer, Groundskeeper, Validator)
 - v2 Architecture Fixes (error envelopes, outbox pattern, raw Cypher mixin, hydration registry, ProposedBelief flow)
 - v1.7 Auto-Tagging (tag config, cosine matching, Dagster pipelines)
 - v1.6 Hybrid Storage (Postgres+Memgraph saga, consolidation, crystallization, GC)
@@ -16,12 +17,14 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Status | Description |
 |------|--------|-------------|
-| [2026-05-09-custodian-identity-split.md](./2026-05-09-custodian-identity-split.md) | Active | Split Custodian into 4 identities (Custodian, Synthesizer, Groundskeeper, Validator) |
+| [2026-05-09-custodian-identity-split.md](./2026-05-09-custodian-identity-split.md) | Tech debt | Dagster jobs, LLM wiring remaining |
 | [2026-05-08-self-hosted-telemetry.md](./2026-05-08-self-hosted-telemetry.md) | Active | Two-tier telemetry for self-hosted deployments |
 | [2026-05-06-mcp-client-scaffold.md](./2026-05-06-mcp-client-scaffold.md) | Active | MCP marketplace client repo scaffold |
 
 Next candidates:
 - Clustering algorithm evaluation (spike)
+- LLM-based contradiction detection (Custodian identity)
+- LLM-based synthesis (Synthesizer identity)
 
 ## Spikes / drafts
 
