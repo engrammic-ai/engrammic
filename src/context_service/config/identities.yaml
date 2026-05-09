@@ -1,0 +1,38 @@
+# config/identities.yaml
+identities:
+  custodian:
+    enabled: true
+    model: "google-vertex:gemini-2.5-flash"
+    timeout_seconds: 30
+    batch_size: 5
+    batch_window_seconds: 2.0
+
+  synthesizer:
+    enabled: true
+    model: "google-vertex:gemini-2.5-pro"
+    timeout_seconds: 60
+    threshold_pending_nodes: 50
+    schedule_cron: "0 * * * *"
+
+  groundskeeper:
+    enabled: true
+    schedule_cron: "0 3 * * *"
+    decay_classes:
+      ephemeral:
+        half_life_days: 7
+        hard_delete_days: 14
+      standard:
+        half_life_days: 90
+        hard_delete_days: 180
+      durable:
+        half_life_days: 540
+        hard_delete_days: 1080
+      permanent:
+        half_life_days: 1825
+        hard_delete_days: 3650
+
+  validator:
+    enabled: true
+    model: "google-vertex:gemini-2.5-pro"
+    timeout_seconds: 5
+    fail_open: true

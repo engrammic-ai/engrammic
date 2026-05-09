@@ -71,6 +71,59 @@ class CustodianSettings(BaseModel):
     )
 
 
+class CustodianIdentityConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    enabled: bool = True
+    model: str = "google-vertex:gemini-2.5-flash"
+    timeout_seconds: int = 30
+    batch_size: int = 5
+    batch_window_seconds: float = 2.0
+
+
+class SynthesizerIdentityConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    enabled: bool = True
+    model: str = "google-vertex:gemini-2.5-pro"
+    timeout_seconds: int = 60
+    threshold_pending_nodes: int = 50
+    schedule_cron: str = "0 * * * *"
+
+
+class DecayClassConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    half_life_days: int
+    hard_delete_days: int
+
+
+class GroundskeeperIdentityConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    enabled: bool = True
+    schedule_cron: str = "0 3 * * *"
+    decay_classes: dict[str, DecayClassConfig] = Field(default_factory=dict)
+
+
+class ValidatorIdentityConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    enabled: bool = True
+    model: str = "google-vertex:gemini-2.5-pro"
+    timeout_seconds: int = 5
+    fail_open: bool = True
+
+
+class IdentitiesConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    custodian: CustodianIdentityConfig = Field(default_factory=CustodianIdentityConfig)
+    synthesizer: SynthesizerIdentityConfig = Field(default_factory=SynthesizerIdentityConfig)
+    groundskeeper: GroundskeeperIdentityConfig = Field(default_factory=GroundskeeperIdentityConfig)
+    validator: ValidatorIdentityConfig = Field(default_factory=ValidatorIdentityConfig)
+
+
 class RetrievalTuning(BaseModel):
     """Retrieval-ranking tuning knobs."""
 
@@ -533,6 +586,15 @@ class WeakLinksSettings(BaseModel):
     embedding_model_version: str = Field(default="jina-v3")
 
 
+def _load_identities_config() -> IdentitiesConfig:
+    config_path = Path(__file__).parent / "identities.yaml"
+    if config_path.exists():
+        with open(config_path) as f:
+            data = yaml.safe_load(f)
+            return IdentitiesConfig(**data.get("identities", {}))
+    return IdentitiesConfig()
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -568,6 +630,7 @@ class Settings(BaseSettings):
     pattern: PatternConfig = Field(default_factory=PatternConfig)
     weak_links: WeakLinksSettings = Field(default_factory=WeakLinksSettings)
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
+    identities: IdentitiesConfig = Field(default_factory=_load_identities_config)
 
     # =========================================================================
     # Application Meta
