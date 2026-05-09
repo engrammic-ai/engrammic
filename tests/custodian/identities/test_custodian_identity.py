@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import AsyncMock
+
+import pytest
 
 from context_service.custodian.identities.custodian import CustodianIdentity
 

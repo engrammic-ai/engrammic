@@ -1,9 +1,7 @@
-import pytest
-
 from context_service.custodian.identities import (
     CustodianIdentity,
-    SynthesizerIdentity,
     GroundskeeperIdentity,
+    SynthesizerIdentity,
     ValidatorIdentity,
 )
 

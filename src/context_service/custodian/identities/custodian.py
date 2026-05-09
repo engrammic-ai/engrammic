@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel
 
 from context_service.config.logging import get_logger
+from context_service.config.settings import get_settings
 
 if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
@@ -75,3 +76,25 @@ class CustodianIdentity:
             reason=reason,
             identity="custodian",
         )
+
+
+async def on_custodian_batch_fire(silo_id: str, node_ids: list[str]) -> None:
+    """Callback for AsyncBatchTrigger. Processes a batch of nodes."""
+    from context_service.mcp.server import get_context_service
+
+    settings = get_settings()
+    store = get_context_service().graph_store
+
+    custodian = CustodianIdentity(
+        store=store,
+        silo_id=silo_id,
+        model=settings.identities.custodian.model,
+    )
+
+    for node_id in node_ids:
+        result = await custodian.check_contradiction(node_id)
+        if result.has_contradiction:
+            for old_id in result.supersedes_ids:
+                await custodian.write_supersession(
+                    node_id, old_id, result.reason or "contradiction"
+                )

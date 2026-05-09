@@ -8,7 +8,6 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal
 
 from context_service.config.settings import get_settings
-from context_service.telemetry.metrics import record_mcp_tool
 from context_service.db.queries import (
     CREATE_CHAIN_REFERENCES_EDGE,
     GET_CHAIN_FOR_CLOSE,
@@ -25,6 +24,7 @@ from context_service.mcp.server import (
 from context_service.mcp.tools.context_history import _context_history
 from context_service.services.models import derive_silo_id
 from context_service.services.silo import ensure_silo, validate_silo_ownership
+from context_service.telemetry.metrics import record_mcp_tool
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -241,7 +241,7 @@ async def _context_admin(
     action: str,
     silo_id: str,
     ref: str | None = None,
-    name: str | None = None,  # noqa: ARG001
+    name: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     if action == "silo_list":

@@ -8,8 +8,8 @@
 
 from context_service.custodian.identities.base import IdentityDeps
 from context_service.custodian.identities.custodian import CustodianIdentity
-from context_service.custodian.identities.synthesizer import SynthesizerIdentity
 from context_service.custodian.identities.groundskeeper import GroundskeeperIdentity
+from context_service.custodian.identities.synthesizer import SynthesizerIdentity
 from context_service.custodian.identities.validator import ValidatorIdentity
 
 __all__ = [

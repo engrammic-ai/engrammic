@@ -97,4 +97,6 @@ def register(mcp: FastMCP) -> None:
             success = False
             raise
         finally:
-            record_mcp_tool("context_reject_belief", (time.perf_counter() - start) * 1000, success=success)
+            record_mcp_tool(
+                "context_reject_belief", (time.perf_counter() - start) * 1000, success=success
+            )

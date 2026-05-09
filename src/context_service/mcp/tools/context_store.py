@@ -864,11 +864,17 @@ def register(mcp: FastMCP) -> None:
             if "error" not in result and get_settings().write_events_enabled:
                 redis = get_redis()
                 if redis is not None:
-                    node_id = result.get("node_id") or result.get("chain_id") or result.get("belief_id")
+                    node_id = (
+                        result.get("node_id") or result.get("chain_id") or result.get("belief_id")
+                    )
                     if node_id:
                         node_label = _layer_to_label(layer)
                         await emit_access_event(
-                            redis, resolved_silo_id, str(node_id), event_type="write", layer=node_label
+                            redis,
+                            resolved_silo_id,
+                            str(node_id),
+                            event_type="write",
+                            layer=node_label,
                         )
 
             return result

@@ -2,7 +2,7 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-07)
+## Current state (2026-05-09)
 
 **Shipped:**
 - v2 Architecture Fixes (error envelopes, outbox pattern, raw Cypher mixin, hydration registry, ProposedBelief flow)
@@ -16,6 +16,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Status | Description |
 |------|--------|-------------|
+| [2026-05-09-custodian-identity-split.md](./2026-05-09-custodian-identity-split.md) | Active | Split Custodian into 4 identities (Custodian, Synthesizer, Groundskeeper, Validator) |
 | [2026-05-08-self-hosted-telemetry.md](./2026-05-08-self-hosted-telemetry.md) | Active | Two-tier telemetry for self-hosted deployments |
 | [2026-05-06-mcp-client-scaffold.md](./2026-05-06-mcp-client-scaffold.md) | Active | MCP marketplace client repo scaffold |
 
@@ -42,6 +43,7 @@ Next candidates:
 
 | Plan | Description |
 |------|-------------|
+| [2026-05-09-architecture-review.md](./2026-05-09-architecture-review.md) | Architecture decisions: hypergraph, consistency, custodian split, observability |
 | [eag-integration-audit.md](./eag-integration-audit.md) | Deferred items from EAG port |
 
 ## Archive

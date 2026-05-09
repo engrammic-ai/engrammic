@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from context_service.config.logging import get_logger
@@ -60,9 +60,7 @@ class GroundskeeperIdentity:
 
     async def run_gc(self) -> dict[str, object]:
         """Run garbage collection for expired Memory nodes (T9)."""
-        expired = await get_expired_memory_nodes(
-            self.store, self.silo_id, self.decay_config
-        )
+        expired = await get_expired_memory_nodes(self.store, self.silo_id, self.decay_config)
 
         if not expired:
             return {"deleted": 0, "silo_id": self.silo_id}

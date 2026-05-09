@@ -1,10 +1,11 @@
-import pytest
-from datetime import datetime, timedelta, UTC
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
 
+import pytest
+
 from context_service.custodian.identities.groundskeeper import (
-    get_expired_memory_nodes,
     GroundskeeperIdentity,
+    get_expired_memory_nodes,
 )
 
 

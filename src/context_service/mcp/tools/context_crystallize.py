@@ -48,12 +48,47 @@ async def _context_crystallize(
     reason: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
+    import structlog
+
+    from context_service.config.settings import get_settings
     from context_service.mcp.server import get_context_service
+
+    logger = structlog.get_logger(__name__)
 
     if not belief_ids:
         return {"error": "missing_belief_ids", "message": "belief_ids must be non-empty"}
 
     store = get_context_service().graph_store
+
+    # Validator intercept
+    settings = get_settings()
+    if settings.identities.validator.enabled:
+        from context_service.custodian.identities.validator import ValidatorIdentity
+
+        validator = ValidatorIdentity(
+            store=store,
+            silo_id=silo_id,
+            model=settings.identities.validator.model,
+            timeout_seconds=settings.identities.validator.timeout_seconds,
+        )
+
+        try:
+            validation = await asyncio.wait_for(
+                validator.validate_crystallize(belief_ids),
+                timeout=settings.identities.validator.timeout_seconds,
+            )
+            if not validation.valid:
+                if settings.identities.validator.fail_open:
+                    logger.warning(
+                        "validator.failed_open",
+                        reasons=validation.reasons,
+                        identity="validator",
+                    )
+                else:
+                    return {"error": "validation_failed", "reasons": validation.reasons}
+        except TimeoutError:
+            logger.warning("validator.timeout", identity="validator")
+
     now = datetime.now(UTC).isoformat()
     effective_reason = reason or "crystallized"
 
@@ -127,4 +162,6 @@ def register(mcp: FastMCP) -> None:
             success = False
             raise
         finally:
-            record_mcp_tool("context_crystallize", (time.perf_counter() - start) * 1000, success=success)
+            record_mcp_tool(
+                "context_crystallize", (time.perf_counter() - start) * 1000, success=success
+            )

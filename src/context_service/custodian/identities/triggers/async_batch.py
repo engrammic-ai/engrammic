@@ -21,7 +21,7 @@ class AsyncBatchTrigger(CustodianTrigger):
     _timers: dict[str, asyncio.TimerHandle] = field(default_factory=dict, init=False)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
 
-    async def enqueue(self, silo_id: str, node_id: str, event_type: str) -> None:
+    async def enqueue(self, silo_id: str, node_id: str, event_type: str) -> None:  # noqa: ARG002
         async with self._lock:
             if silo_id not in self._queues:
                 self._queues[silo_id] = []
@@ -47,7 +47,7 @@ class AsyncBatchTrigger(CustodianTrigger):
             await self.on_fire(silo_id, node_ids)
 
     def _schedule_timer(self, silo_id: str) -> None:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         self._timers[silo_id] = loop.call_later(
             self.window_seconds,
             lambda: asyncio.create_task(self._fire_from_timer(silo_id)),

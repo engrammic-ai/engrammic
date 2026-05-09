@@ -588,11 +588,16 @@ class WeakLinksSettings(BaseModel):
 
 def _load_identities_config() -> IdentitiesConfig:
     config_path = Path(__file__).parent / "identities.yaml"
-    if config_path.exists():
+    if not config_path.exists():
+        return IdentitiesConfig()
+    try:
         with open(config_path) as f:
             data = yaml.safe_load(f)
-            return IdentitiesConfig(**data.get("identities", {}))
-    return IdentitiesConfig()
+    except yaml.YAMLError as exc:
+        raise ValueError(f"Failed to parse identities config: {config_path}") from exc
+    if not isinstance(data, dict):
+        return IdentitiesConfig()
+    return IdentitiesConfig(**data.get("identities", {}))
 
 
 class Settings(BaseSettings):

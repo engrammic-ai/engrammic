@@ -10,7 +10,7 @@
 | Hypergraph | Wire up via Option B (structured `derivation` param, validated IDs), stay Memgraph, **HARD LOCK on TypeDB 3 migration** |
 | Consistency | Full saga treatment (retry + dead-letter), scale incrementally |
 | Performance | Staged - observability first, then quick wins |
-| Custodian | Split into 4 identities (Custodian, Synthesizer, Compactor, Validator) using pydantic-ai + Dagster. Trigger mechanisms deferred to separate session. |
+| Custodian | Split into 4 identities (Custodian, Synthesizer, Groundskeeper, Validator) using pydantic-ai + Dagster. See `context/specs/glossary.md` for definitions. |
 | Isolation | Not now, document `scope` field for future |
 | Escape hatches | Auto-scope from auth context, add admin variants |
 | Observability | Migrate from Jaeger to SigNoz on strata-finance box (19GB RAM sufficient) |
@@ -69,7 +69,7 @@ When to consider migration:
 | Strategy | When | Owner |
 |----------|------|-------|
 | Retention by layer | Continuous | Retention service (existing) |
-| Hyperedge compaction | Periodic batch | Compactor (new) |
+| Hyperedge compaction | Periodic batch | Groundskeeper (new) |
 | Deduplication (content-addressed) | Write time | context_store |
 | Summarization | Threshold-based | Synthesizer (new) |
 
@@ -351,18 +351,20 @@ This is too much for one identity with one cadence.
 
 ### Proposed Split: Four Identities
 
-| Identity | Responsibility | Trigger | Latency |
-|----------|----------------|---------|---------|
-| **Custodian** | Contradiction detection, supersession | Per-write (reactive) | Low (~100ms) |
-| **Synthesizer** | Weak synthesis, ProposedBelief creation | Periodic / threshold | Medium |
-| **Compactor** | Hyperedge merging, deduplication, retention enforcement | Scheduled batch (Dagster) | High (batch) |
-| **Validator** | Reasoning structure validation, premise consistency | On crystallize | Low |
+| Identity | Responsibility | EAG Transitions | Trigger | Latency |
+|----------|----------------|-----------------|---------|---------|
+| **Custodian** | Contradiction detection, supersession | T2 | Per-write (async) | Low (~100ms) |
+| **Synthesizer** | Weak synthesis, ProposedBelief creation, revision | T3, T4, T10 | Periodic / threshold | Medium |
+| **Groundskeeper** | Memory lifecycle, decay enforcement, dedup | T6, T9 | Scheduled batch (Dagster) | High (batch) |
+| **Validator** | Reasoning structure validation, premise consistency | T13 | On crystallize | Low |
+
+See `context/specs/glossary.md` for detailed definitions.
 
 ### Rationale
 
 - **Cadence separation**: Real-time contradiction detection vs batch compaction have different SLAs
 - **Prompt simplicity**: Each identity has focused instructions, no context-switching
-- **Failure isolation**: Compactor failure doesn't block writes
+- **Failure isolation**: Groundskeeper failure doesn't block writes
 - **Resource allocation**: Batch jobs can use cheaper compute, different rate limits
 
 ### Implementation Notes
@@ -379,12 +381,12 @@ Use existing stack - no new frameworks needed.
 |----------|-------------------|---------|
 | Custodian | `sensor` on write events | Per-write, reactive |
 | Synthesizer | `ScheduleDefinition` + threshold `sensor` | Periodic |
-| Compactor | Partitioned `job` | Batch |
+| Groundskeeper | Partitioned `job` | Batch |
 | Validator | `op` called from API/MCP | On-demand |
 
 **Skip:** CrewAI, AutoGen, LangGraph - overkill for single-purpose scheduled calls.
 
-**Future consideration:** Temporal for Compactor if exactly-once durability becomes a hard requirement at scale.
+**Future consideration:** Temporal for Groundskeeper if exactly-once durability becomes a hard requirement at scale.
 
 ### Files to Create/Modify
 
@@ -510,7 +512,7 @@ Only emit verbose spans when explicitly enabled. Keeps prod traces lean.
 | Fire-and-forget error logging | Resolved | Add `task.add_done_callback()` to log/meter failures |
 | SigNoz production path | Resolved | strata-finance has 19GB RAM, sufficient for current scale |
 | Qdrant collection fail-fast | Resolved | Fail-fast on collection creation, never fallback to shared collection |
-| Compactor idempotency | Resolved | Use upsert-based operations (Cypher MERGE), reprocessing same inputs = same result |
+| Groundskeeper idempotency | Resolved | Use upsert-based operations (Cypher MERGE), reprocessing same inputs = same result |
 | Embedding API circuit-breaker | Resolved | Fail-fast (Option B), require embedding provider up. Track `embedding_model` in Postgres `SiloEmbeddingConfig`, re-embed via Dagster job on model change |
 | TypeDB review trigger | Resolved | Review if: median graph query >300ms for 7 days, OR escape hatch usage >20/day, OR >3 custom Cypher patterns for hyperedges |
 | Validator timeout | Resolved | 5s soft timeout, crystallize proceeds with `validation_skipped=True` flag |

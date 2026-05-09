@@ -10,7 +10,6 @@ from typing import Any, Literal
 import structlog
 
 from context_service.config.settings import get_settings
-from context_service.telemetry.metrics import record_mcp_tool
 from context_service.engine.reflection_triggers import compute_reflection_suggested
 from context_service.mcp.server import (
     get_context_service,
@@ -22,6 +21,7 @@ from context_service.models.mcp import Layer, QueryFilters
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 from context_service.signals import emit_access_event
+from context_service.telemetry.metrics import record_mcp_tool
 
 logger = structlog.get_logger(__name__)
 

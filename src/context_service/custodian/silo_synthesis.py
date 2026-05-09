@@ -113,7 +113,9 @@ async def run_silo_synthesis(
             silo_id=silo_id,
         )
         if entities:
-            names = [escape_for_prompt(e.get("content") or e.get("node_id", "unknown")) for e in entities]
+            names = [
+                escape_for_prompt(e.get("content") or e.get("node_id", "unknown")) for e in entities
+            ]
             top_down_prior = "This silo frequently references: " + ", ".join(names)
         else:
             top_down_prior = "No silo description or entity context available."

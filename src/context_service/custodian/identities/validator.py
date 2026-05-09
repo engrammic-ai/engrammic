@@ -54,9 +54,7 @@ class ValidatorIdentity:
 
         return ValidationResult(valid=True)
 
-    async def validate_crystallize(
-        self, hypothesis_ids: list[str]
-    ) -> ValidationResult:
+    async def validate_crystallize(self, hypothesis_ids: list[str]) -> ValidationResult:
         """Full validation for crystallize. Called from context_crystallize MCP tool."""
         # For now, just validate premises exist
         # TODO: Add LLM-based reasoning structure validation

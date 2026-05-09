@@ -42,6 +42,28 @@ logger = structlog.get_logger(__name__)
 
 MIN_CONTENT_FOR_EMBEDDING = 10
 
+# Knowledge-layer node types that trigger Custodian identity
+_KNOWLEDGE_LAYER_TYPES: frozenset[str] = frozenset({"Fact", "Claim"})
+
+# Module-level singleton for Custodian trigger
+_custodian_trigger: Any = None
+
+
+def _get_custodian_trigger() -> Any:
+    global _custodian_trigger
+    if _custodian_trigger is None:
+        settings = get_settings()
+        from context_service.custodian.identities.custodian import on_custodian_batch_fire
+        from context_service.custodian.identities.triggers.async_batch import AsyncBatchTrigger
+
+        _custodian_trigger = AsyncBatchTrigger(
+            batch_size=settings.identities.custodian.batch_size,
+            window_seconds=settings.identities.custodian.batch_window_seconds,
+            on_fire=on_custodian_batch_fire,
+        )
+    return _custodian_trigger
+
+
 # node_type values accepted by store(). Drawn from primitives schema plus
 # MetaObservation which is service-specific (not yet promoted to a primitives label).
 _ALLOWED_NODE_TYPES: frozenset[str] = ALL_CITE_LABELS | frozenset({"MetaObservation"})
@@ -336,6 +358,14 @@ class ContextService:
                 raise
 
         logger.info("context_stored", node_id=str(node.id), type=node_type, silo_id=str(silo_id))
+
+        # Fire Custodian identity on Knowledge-layer writes
+        if node_type in _KNOWLEDGE_LAYER_TYPES:
+            settings = get_settings()
+            if settings.identities.custodian.enabled:
+                trigger = _get_custodian_trigger()
+                asyncio.create_task(trigger.enqueue(str(silo_id), str(node.id), "store"))
+
         return node
 
     async def get(self, node_id: uuid.UUID, silo_id: uuid.UUID) -> Node | None:
@@ -727,7 +757,7 @@ class ContextService:
         self,
         silo_id: str,
         node_id: str,
-        max_depth: int = 10,  # noqa: ARG002
+        max_depth: int = 10,  # noqa: ARG002 - Cypher path length hardcoded to 10 in query
     ) -> ProvenanceResult:
         """Trace citation chain from node_id back to Memory-layer sources."""
         from context_service.db import queries as q

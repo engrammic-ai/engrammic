@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 from typing import Any
 
 from context_service.db.queries import GET_REFLECTIONS_FOR_NODE_BY_AGENT
-from context_service.telemetry.metrics import record_mcp_tool
 from context_service.mcp.server import (
     get_context_service,
     get_mcp_auth_context,
@@ -20,6 +19,7 @@ from context_service.mcp.server import (
 from context_service.services.models import derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 from context_service.signals import emit_access_event
+from context_service.telemetry.metrics import record_mcp_tool
 
 
 async def _context_get(
