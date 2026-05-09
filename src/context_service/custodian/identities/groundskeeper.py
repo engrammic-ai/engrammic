@@ -29,8 +29,8 @@ DETACH DELETE n
 async def get_expired_memory_nodes(
     store: HyperGraphStore,
     silo_id: str,
-    decay_config: dict[str, dict],
-) -> list[dict]:
+    decay_config: dict[str, dict[str, object]],
+) -> list[dict[str, object]]:
     """Find Memory-layer nodes past their hard_delete threshold."""
     expired = []
     now = datetime.now(UTC)
@@ -38,7 +38,7 @@ async def get_expired_memory_nodes(
     for decay_class, config in decay_config.items():
         if config is None:
             continue
-        hard_delete_days = config.get("hard_delete_days", 9999)
+        hard_delete_days = float(config.get("hard_delete_days", 9999))  # type: ignore[arg-type]
         cutoff = now - timedelta(days=hard_delete_days)
 
         rows = await store.execute_query(
@@ -56,9 +56,9 @@ class GroundskeeperIdentity:
 
     store: HyperGraphStore
     silo_id: str
-    decay_config: dict[str, dict]
+    decay_config: dict[str, dict[str, object]]
 
-    async def run_gc(self) -> dict:
+    async def run_gc(self) -> dict[str, object]:
         """Run garbage collection for expired Memory nodes (T9)."""
         expired = await get_expired_memory_nodes(
             self.store, self.silo_id, self.decay_config
@@ -82,7 +82,7 @@ class GroundskeeperIdentity:
 
         return {"deleted": len(node_ids), "silo_id": self.silo_id}
 
-    async def run_hyperedge_dedup(self) -> dict:
+    async def run_hyperedge_dedup(self) -> dict[str, object]:
         """Deduplicate exact-match hyperedges. Lossless."""
         # TODO: Implement content-addressed dedup via MERGE
         return {"deduped": 0, "silo_id": self.silo_id}

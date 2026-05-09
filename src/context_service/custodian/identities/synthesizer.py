@@ -30,7 +30,7 @@ class SynthesizerIdentity:
     model: str = "google-vertex:gemini-2.5-pro"
     min_facts_for_synthesis: int = 3
 
-    async def find_synthesis_candidates(self) -> list[dict]:
+    async def find_synthesis_candidates(self) -> list[dict[str, object]]:
         """Find clusters ready for synthesis."""
         rows = await self.store.execute_query(
             SYNTHESIS_CANDIDATES_QUERY,
@@ -38,7 +38,7 @@ class SynthesizerIdentity:
         )
         return list(rows)
 
-    async def run_synthesis(self) -> dict:
+    async def run_synthesis(self) -> dict[str, object]:
         """Run synthesis for all candidates in silo."""
         candidates = await self.find_synthesis_candidates()
 
