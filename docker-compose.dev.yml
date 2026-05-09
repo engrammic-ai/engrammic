@@ -208,12 +208,12 @@ services:
 
   # SigNoz observability stack
   signoz-zookeeper:
-    image: bitnami/zookeeper:3.7.1
+    image: zookeeper:3.9
     container_name: signoz-zookeeper
     environment:
-      - ALLOW_ANONYMOUS_LOGIN=yes
+      - ZOO_4LW_COMMANDS_WHITELIST=*
     volumes:
-      - signoz-zookeeper-data:/bitnami/zookeeper
+      - signoz-zookeeper-data:/data
     restart: unless-stopped
 
   signoz-clickhouse:
