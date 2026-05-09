@@ -301,6 +301,20 @@ def proposal_cleanup_schedule(
         )
 
 
+@dg.schedule(
+    cron_schedule="0 1 * * *",
+    name="groundskeeper_gc_schedule",
+    job_name="groundskeeper_nightly",
+    description="Nightly memory GC (01:00 UTC): delete expired Memory-layer nodes across all silos.",
+    execution_timezone="UTC",
+)
+def groundskeeper_gc_schedule(context: ScheduleEvaluationContext) -> dg.RunRequest:
+    """Emit a single RunRequest for the nightly Groundskeeper GC sweep."""
+    return dg.RunRequest(
+        run_key=f"groundskeeper_gc:{context.scheduled_execution_time.isoformat()}",
+    )
+
+
 all_schedules: list[Any] = [
     clustering_schedule,
     fact_promotion_schedule,
@@ -315,10 +329,12 @@ all_schedules: list[Any] = [
     reconciliation_gc_schedule,
     proposal_detection_schedule,
     proposal_cleanup_schedule,
+    groundskeeper_gc_schedule,
 ]
 
 __all__ = [
     "all_schedules",
+    "groundskeeper_gc_schedule",
     "auto_tagging_schedule",
     "clustering_schedule",
     "custodian_visit_schedule",
