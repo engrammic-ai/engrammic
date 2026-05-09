@@ -91,15 +91,19 @@ def register(mcp: FastMCP, service: SkillService) -> None:
         limit = min(limit, 200)
 
         start = time.perf_counter()
-        result = await _context_skills_impl(
-            service=service,
-            silo_id=silo_id,
-            action=action,
-            name=name,
-            query=query,
-            namespace=namespace,
-            limit=limit,
-            offset=offset,
-        )
-        record_mcp_tool("context_skills", (time.perf_counter() - start) * 1000)
-        return result
+        try:
+            result = await _context_skills_impl(
+                service=service,
+                silo_id=silo_id,
+                action=action,
+                name=name,
+                query=query,
+                namespace=namespace,
+                limit=limit,
+                offset=offset,
+            )
+            record_mcp_tool("context_skills", (time.perf_counter() - start) * 1000, success=True)
+            return result
+        except Exception:
+            record_mcp_tool("context_skills", (time.perf_counter() - start) * 1000, success=False)
+            raise

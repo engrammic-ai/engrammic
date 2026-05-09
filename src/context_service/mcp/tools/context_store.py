@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from datetime import UTC, datetime
@@ -10,12 +11,12 @@ from typing import TYPE_CHECKING, Any, Literal
 import structlog
 
 from context_service.api.metrics import CONTEXT_STORE_LATENCY
-from context_service.telemetry.metrics import record_mcp_tool
 from context_service.config.settings import get_settings
 from context_service.mcp.server import (
     get_context_service,
     get_evidence_validator,
     get_mcp_auth_context,
+    get_postgres_store,
     get_redis,
     get_silo_service,
 )
@@ -30,6 +31,7 @@ from context_service.models.mcp import (
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 from context_service.signals import emit_access_event
+from context_service.telemetry.metrics import record_mcp_tool
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -165,8 +167,10 @@ async def _context_assert(
 
     evidence_nodes: list[str] = []
     if evidence_mode == "sync":
-        for ev_ref in evidence_list:
-            result = await ev_validator.validate(ev_ref, str(expected_silo_id))
+        validation_results = await asyncio.gather(
+            *[ev_validator.validate(ev_ref, str(expected_silo_id)) for ev_ref in evidence_list]
+        )
+        for ev_ref, result in zip(evidence_list, validation_results, strict=True):
             if result.status != "valid":
                 return {
                     "error": "invalid_evidence",
@@ -371,7 +375,6 @@ async def _context_reason(
     """Internal implementation for testing."""
     from context_service.db import queries as q
     from context_service.engine.chain_saga import ChainSagaWriter
-    from context_service.engine.postgres_store import PostgresStore
     from context_service.engine.sessions import attach_chain_to_session, create_or_join_session
     from context_service.models.inference import ChainStep
 
@@ -458,7 +461,7 @@ async def _context_reason(
         for s in parsed_steps
     ]
 
-    postgres_store = PostgresStore()
+    postgres_store = get_postgres_store()
     saga = ChainSagaWriter(postgres_store, store)
 
     from context_service.services.models import derive_org_uuid

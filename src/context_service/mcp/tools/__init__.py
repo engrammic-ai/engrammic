@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import structlog
+
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
@@ -39,7 +41,10 @@ def register_all(mcp: FastMCP) -> None:
         skill_svc = get_skill_service()
         register_skills(mcp, skill_svc)
     except RuntimeError:
-        pass  # SkillService not configured (no db_session); skip tool registration
+        structlog.get_logger(__name__).warning(
+            "context_skills_not_registered",
+            reason="SkillService not configured (no db_session)",
+        )
 
 
 __all__ = [

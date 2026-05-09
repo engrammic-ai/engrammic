@@ -116,6 +116,19 @@ def get_redis() -> RedisClient | None:
     return _services.get("redis")
 
 
+def get_postgres_store() -> Any:
+    """Get or create the PostgresStore instance.
+
+    PostgresStore is stateless (uses get_session() internally), so we lazily
+    create a singleton on first access.
+    """
+    if "postgres_store" not in _services:
+        from context_service.engine.postgres_store import PostgresStore
+
+        _services["postgres_store"] = PostgresStore()
+    return _services["postgres_store"]
+
+
 async def get_mcp_auth_context() -> AuthContext:
     """Resolve the MCP auth context for the current request.
 

@@ -9,6 +9,7 @@ with a (:Finding)-[:SUMMARIZES]->(:Silo) edge.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 from pydantic_ai import Agent
@@ -112,7 +113,7 @@ async def run_silo_synthesis(
             silo_id=silo_id,
         )
         if entities:
-            names = [e.get("content") or e.get("node_id", "unknown") for e in entities]
+            names = [escape_for_prompt(e.get("content") or e.get("node_id", "unknown")) for e in entities]
             top_down_prior = "This silo frequently references: " + ", ".join(names)
         else:
             top_down_prior = "No silo description or entity context available."
@@ -130,7 +131,10 @@ async def run_silo_synthesis(
         system_prompt=SILO_SYNTHESIS_SYSTEM_PROMPT,
     )
 
-    result = await agent.run(user_prompt, usage_limits=silo_synthesis_limits())
+    result = await asyncio.wait_for(
+        agent.run(user_prompt, usage_limits=silo_synthesis_limits()),
+        timeout=60.0,
+    )
 
     # 5. Build FindingOutput (no claims, no edges -- pure summary).
     finding = FindingOutput(

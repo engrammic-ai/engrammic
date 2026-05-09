@@ -39,22 +39,38 @@ def build_find_query(
     edge_type: str | None,
     confidence_below: float | None,
     created_before: datetime | None,
-) -> str:
-    """Build the edge-finder Cypher query from filter arguments."""
-    edge_type_filter = f"AND type(r) = '{edge_type}'" if edge_type else ""
-    confidence_filter = (
-        f"AND (r.consensus_confidence < {confidence_below} OR r.extraction_confidence < {confidence_below})"
-        if confidence_below is not None
-        else ""
-    )
-    created_before_filter = (
-        f"AND r.created_at < '{created_before.isoformat()}'" if created_before else ""
-    )
-    return _FIND_MATCHING_EDGES_TEMPLATE.format(
+) -> tuple[str, dict[str, Any]]:
+    """Build the edge-finder Cypher query from filter arguments.
+
+    Returns (query_string, extra_params) where extra_params should be merged
+    into the execute_query params dict.
+    """
+    extra_params: dict[str, Any] = {}
+
+    if edge_type:
+        edge_type_filter = "AND type(r) = $edge_type"
+        extra_params["edge_type"] = edge_type
+    else:
+        edge_type_filter = ""
+
+    if confidence_below is not None:
+        confidence_filter = "AND (r.consensus_confidence < $confidence_below OR r.extraction_confidence < $confidence_below)"
+        extra_params["confidence_below"] = confidence_below
+    else:
+        confidence_filter = ""
+
+    if created_before:
+        created_before_filter = "AND r.created_at < $created_before"
+        extra_params["created_before"] = created_before.isoformat()
+    else:
+        created_before_filter = ""
+
+    query = _FIND_MATCHING_EDGES_TEMPLATE.format(
         edge_type_filter=edge_type_filter,
         confidence_filter=confidence_filter,
         created_before_filter=created_before_filter,
     )
+    return query, extra_params
 
 
 async def run_tombstone(
@@ -102,10 +118,10 @@ async def run_tombstone(
     if edge_ids is not None:
         target_ids = list(edge_ids)
     else:
-        query = build_find_query(edge_type, confidence_below, created_before)
+        query, extra_params = build_find_query(edge_type, confidence_below, created_before)
         rows = await client.execute_query(
             query,
-            {"silo_id": silo_id, "batch_limit": batch_limit},
+            {"silo_id": silo_id, "batch_limit": batch_limit, **extra_params},
         )
         target_ids = [str(row["edge_id"]) for row in rows]
 

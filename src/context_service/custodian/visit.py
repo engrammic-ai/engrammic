@@ -12,6 +12,7 @@ and a VisitTrace is written to Redis (best-effort, never crashes the visit).
 
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
@@ -532,7 +533,10 @@ async def _run_visit_body(
 
     try:
         t0 = time.monotonic()
-        fast_result = await fast_pass_agent.run(prompt, deps=deps, usage_limits=fast_pass_limits())
+        fast_result = await asyncio.wait_for(
+            fast_pass_agent.run(prompt, deps=deps, usage_limits=fast_pass_limits()),
+            timeout=30.0,
+        )
         elapsed = time.monotonic() - t0
         observation = fast_result.output
         usage_breakdown["fast"] = _extract_usage(fast_result, ov.flash_model, elapsed)
@@ -587,7 +591,10 @@ async def _run_visit_body(
 
     try:
         t0 = time.monotonic()
-        plan_result = await plan_agent.run(prompt, deps=deps, usage_limits=plan_limits())
+        plan_result = await asyncio.wait_for(
+            plan_agent.run(prompt, deps=deps, usage_limits=plan_limits()),
+            timeout=20.0,
+        )
         elapsed = time.monotonic() - t0
         plan = plan_result.output
         usage_breakdown["plan"] = _extract_usage(plan_result, ov.flash_model, elapsed)
@@ -681,7 +688,10 @@ async def _run_visit_body(
 
         try:
             t0 = time.monotonic()
-            deep_result = await agent.run(prompt, deps=deps, usage_limits=deep_pass_limits())
+            deep_result = await asyncio.wait_for(
+                agent.run(prompt, deps=deps, usage_limits=deep_pass_limits()),
+                timeout=120.0,
+            )
             elapsed = time.monotonic() - t0
             usage_breakdown["deep"] = _extract_usage(deep_result, model_name, elapsed)
             record_phase_usage(
@@ -755,7 +765,10 @@ async def _run_visit_body(
 
         try:
             t0 = time.monotonic()
-            stitch_result = await stitch_agent.run(prompt, deps=deps, usage_limits=stitch_limits())
+            stitch_result = await asyncio.wait_for(
+                stitch_agent.run(prompt, deps=deps, usage_limits=stitch_limits()),
+                timeout=30.0,
+            )
             elapsed = time.monotonic() - t0
             stitch_summary = stitch_result.output
             usage_breakdown["stitch"] = _extract_usage(stitch_result, ov.flash_model, elapsed)

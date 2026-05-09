@@ -23,16 +23,14 @@ async def _get_silo_id(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],  # noqa: ARG001
 ) -> str:
     """Extract silo_id from auth token."""
-    # TODO: Integrate with actual auth system
-    return "default-silo"
+    raise HTTPException(status_code=501, detail="Skills auth not configured")
 
 
 async def _require_admin(
     credentials: Annotated[HTTPAuthorizationCredentials, Depends(_bearer)],  # noqa: ARG001
 ) -> None:
     """Validate user has admin role."""
-    # TODO: Integrate with actual auth system
-    pass
+    raise HTTPException(status_code=501, detail="Skills auth not configured")
 
 
 # Service getter - will be wired up in integration task
@@ -143,6 +141,8 @@ async def update_skill(
     try:
         updated: SkillResponse = await service.update(silo_id, name, skill)
         return updated
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e)) from e
     except KeyError as e:

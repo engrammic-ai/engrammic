@@ -6,6 +6,7 @@ auto_synthesis_threshold, and creates ProposedBelief nodes awaiting validation.
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -117,7 +118,10 @@ async def synthesize_proposal_content(fact_contents: list[str]) -> str:
     )
     user_prompt += "\n\nSynthesize a belief statement that captures the pattern."
 
-    result = await agent.run(user_prompt, usage_limits=proposal_synthesis_limits())
+    result = await asyncio.wait_for(
+        agent.run(user_prompt, usage_limits=proposal_synthesis_limits()),
+        timeout=20.0,
+    )
     return str(result.output).strip()
 
 

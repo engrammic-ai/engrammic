@@ -27,9 +27,9 @@ async def _fetch_chain_steps(
     steps are omitted from the result.
     """
     if postgres_store is None:
-        from context_service.engine.postgres_store import PostgresStore
+        from context_service.mcp.server import get_postgres_store
 
-        postgres_store = PostgresStore()
+        postgres_store = get_postgres_store()
 
     result: dict[str, list[dict[str, Any]]] = {}
     uuids = [UUID(cid) for cid in chain_ids]
