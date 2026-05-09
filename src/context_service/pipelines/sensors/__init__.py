@@ -13,6 +13,7 @@ from context_service.pipelines.sensors.confidence_drift import confidence_drift_
 from context_service.pipelines.sensors.document_arrival import document_arrival_sensor
 from context_service.pipelines.sensors.poison_queue_sensor import poison_queue_sensor
 from context_service.pipelines.sensors.session_autoclose import session_autoclose_sensor
+from context_service.pipelines.sensors.synthesizer_sensor import synthesizer_threshold_sensor
 
 all_sensors: list[Any] = [
     document_arrival_sensor,
@@ -24,4 +25,5 @@ all_sensors: list[Any] = [
     chain_stitch_sensor,
     belief_merge_sensor,
     cascade_review_sensor,
+    synthesizer_threshold_sensor,
 ]
