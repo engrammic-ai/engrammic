@@ -19,7 +19,7 @@ exporters:
     datasource: tcp://signoz-clickhouse:9000/?database=signoz_traces
   clickhousemetricswrite:
     endpoint: tcp://signoz-clickhouse:9000/?database=signoz_metrics
-  clickhouselogs:
+  clickhouselogsexporter:
     dsn: tcp://signoz-clickhouse:9000/?database=signoz_logs
 
 service:
@@ -35,4 +35,4 @@ service:
     logs:
       receivers: [otlp]
       processors: [batch]
-      exporters: [clickhouselogs]
+      exporters: [clickhouselogsexporter]
