@@ -18,7 +18,7 @@ services:
       - POSTGRES_PASSWORD=context
       - POSTGRES_DATABASE=context_service
       - GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-sa.json
-      - OTEL_EXPORTER_OTLP_ENDPOINT=  # disabled until SigNoz OpAmp is configured
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz-otel-collector:4317
       - OTEL_SERVICE_NAME=context-service
     volumes:
       - ./secrets:/app/secrets:ro
