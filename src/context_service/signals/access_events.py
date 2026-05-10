@@ -10,6 +10,7 @@ broken Redis never blocks reads.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import structlog
@@ -18,6 +19,8 @@ if TYPE_CHECKING:
     from context_service.stores import RedisClient
 
 logger = structlog.get_logger(__name__)
+
+_emit_semaphore = asyncio.Semaphore(20)
 
 # Stream cap. Approximate trim — at the default cadence (~1h between heat
 # asset runs), 100k entries permits ~28 events/sec sustained without loss.
@@ -50,32 +53,33 @@ async def emit_access_event(
     """
     from context_service.config.settings import get_settings
 
-    try:
-        settings = get_settings()
+    async with _emit_semaphore:
+        try:
+            settings = get_settings()
 
-        # Dedup: skip if same node was accessed within the cooldown window
-        dedup_key = f"heat:dedup:{silo_id}:{node_id}"
-        is_new = await redis.set_nx(dedup_key, "1", ttl_seconds=settings.heat_dedup_window_seconds)
-        if not is_new:
-            return
+            # Dedup: skip if same node was accessed within the cooldown window
+            dedup_key = f"heat:dedup:{silo_id}:{node_id}"
+            is_new = await redis.set_nx(dedup_key, "1", ttl_seconds=settings.heat_dedup_window_seconds)
+            if not is_new:
+                return
 
-        fields: dict[str, str | bytes] = {"node_id": str(node_id), "event_type": event_type}
-        if layer is not None:
-            fields["layer"] = layer
-        await redis.xadd(
-            access_stream_key(silo_id),
-            fields,
-            maxlen=settings.access_stream_maxlen,
-            approximate=True,
-        )
-    except Exception as exc:
-        logger.warning(
-            "access_event_emit_failed",
-            silo_id=silo_id,
-            node_id=str(node_id),
-            event_type=event_type,
-            error=str(exc),
-        )
+            fields: dict[str, str | bytes] = {"node_id": str(node_id), "event_type": event_type}
+            if layer is not None:
+                fields["layer"] = layer
+            await redis.xadd(
+                access_stream_key(silo_id),
+                fields,
+                maxlen=settings.access_stream_maxlen,
+                approximate=True,
+            )
+        except Exception as exc:
+            logger.warning(
+                "access_event_emit_failed",
+                silo_id=silo_id,
+                node_id=str(node_id),
+                event_type=event_type,
+                error=str(exc),
+            )
 
 
 __all__ = ["ACCESS_STREAM_MAXLEN", "access_stream_key", "emit_access_event"]

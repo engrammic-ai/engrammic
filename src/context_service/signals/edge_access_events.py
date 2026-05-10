@@ -9,6 +9,7 @@ Best-effort: Redis errors are logged and swallowed so broken Redis never blocks 
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 from uuid import NAMESPACE_DNS, uuid5
 
@@ -18,6 +19,8 @@ if TYPE_CHECKING:
     from context_service.stores import RedisClient
 
 logger = structlog.get_logger(__name__)
+
+_emit_semaphore = asyncio.Semaphore(20)
 
 EDGE_ACCESS_STREAM_MAXLEN = 100_000
 
@@ -57,29 +60,30 @@ async def emit_edge_access_event(
         edge_type: Edge type label (e.g. "RELATED_TO").
         traversal_context: Context hint ("recall", "provenance", "graph").
     """
-    try:
-        eid = edge_id(from_node, to_node, edge_type)
-        await redis.xadd(
-            edge_access_stream_key(silo_id),
-            {
-                "edge_id": eid,
-                "from_node": from_node,
-                "to_node": to_node,
-                "edge_type": edge_type,
-                "context": traversal_context,
-            },
-            maxlen=EDGE_ACCESS_STREAM_MAXLEN,
-            approximate=True,
-        )
-    except Exception as exc:
-        logger.warning(
-            "edge_access_event_emit_failed",
-            silo_id=silo_id,
-            from_node=from_node,
-            to_node=to_node,
-            edge_type=edge_type,
-            error=str(exc),
-        )
+    async with _emit_semaphore:
+        try:
+            eid = edge_id(from_node, to_node, edge_type)
+            await redis.xadd(
+                edge_access_stream_key(silo_id),
+                {
+                    "edge_id": eid,
+                    "from_node": from_node,
+                    "to_node": to_node,
+                    "edge_type": edge_type,
+                    "context": traversal_context,
+                },
+                maxlen=EDGE_ACCESS_STREAM_MAXLEN,
+                approximate=True,
+            )
+        except Exception as exc:
+            logger.warning(
+                "edge_access_event_emit_failed",
+                silo_id=silo_id,
+                from_node=from_node,
+                to_node=to_node,
+                edge_type=edge_type,
+                error=str(exc),
+            )
 
 
 __all__ = [
