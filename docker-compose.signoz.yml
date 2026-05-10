@@ -1,0 +1,119 @@
+# SigNoz Observability Stack
+# Run with: docker compose -f docker-compose.signoz.yml up -d
+# Access UI at: http://localhost:3301
+
+services:
+  signoz-zookeeper:
+    image: zookeeper:3.9
+    container_name: signoz-zookeeper
+    hostname: zookeeper-1
+    environment:
+      - ZOO_MY_ID=1
+      - ZOO_4LW_COMMANDS_WHITELIST=*
+    volumes:
+      - signoz-zookeeper-data:/data
+    healthcheck:
+      test: ["CMD", "zkServer.sh", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  signoz-clickhouse:
+    image: clickhouse/clickhouse-server:24.1.2-alpine
+    container_name: signoz-clickhouse
+    hostname: clickhouse
+    depends_on:
+      signoz-zookeeper:
+        condition: service_healthy
+    ports:
+      - "9000:9000"
+      - "8123:8123"
+    volumes:
+      - signoz-clickhouse-data:/var/lib/clickhouse/
+      - ./config/clickhouse/config.xml:/etc/clickhouse-server/config.xml:ro
+      - ./config/clickhouse/users.xml:/etc/clickhouse-server/users.xml:ro
+    environment:
+      - CLICKHOUSE_MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.6
+    ulimits:
+      nproc: 65535
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  signoz-schema-migrator:
+    image: signoz/signoz-schema-migrator:0.111.16
+    container_name: signoz-schema-migrator
+    command: ["sync", "--dsn=tcp://clickhouse:9000", "--up="]
+    depends_on:
+      signoz-clickhouse:
+        condition: service_healthy
+
+  signoz-otel-collector:
+    image: signoz/signoz-otel-collector:0.111.16
+    container_name: signoz-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    volumes:
+      - ./config/signoz-otel-collector.yaml:/etc/otel-collector-config.yaml:ro
+    environment:
+      - OTEL_RESOURCE_ATTRIBUTES=host.name=signoz-host,os.type=linux
+      - LOW_CARDINAL_EXCEPTION_GROUPING=false
+    depends_on:
+      signoz-clickhouse:
+        condition: service_healthy
+      signoz-schema-migrator:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  signoz-query-service:
+    image: signoz/query-service:0.64.0
+    container_name: signoz-query-service
+    command: ["-config=/root/config/prometheus.yml", "--use-logs-new-schema=true", "--use-trace-new-schema=true"]
+    environment:
+      - ClickHouseUrl=tcp://clickhouse:9000
+      - SIGNOZ_LOCAL_DB_PATH=/var/lib/signoz/signoz.db
+      - STORAGE=clickhouse
+      - GODEBUG=netdns=go
+    volumes:
+      - signoz-query-data:/var/lib/signoz/
+      - ./config/signoz-prometheus.yml:/root/config/prometheus.yml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "localhost:8080/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      signoz-clickhouse:
+        condition: service_healthy
+      signoz-schema-migrator:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  signoz-frontend:
+    image: signoz/frontend:0.64.0
+    container_name: signoz-frontend
+    ports:
+      - "3301:3301"
+    depends_on:
+      signoz-query-service:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  signoz-zookeeper-data:
+  signoz-clickhouse-data:
+  signoz-query-data:
+
+networks:
+  default:
+    name: context-service_default
+    external: true

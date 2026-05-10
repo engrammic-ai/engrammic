@@ -1,5 +1,5 @@
 # SigNoz OTEL Collector config
-# This collector receives from context-service's otel-collector and writes to ClickHouse
+# Used by docker-compose.signoz.yml
 
 receivers:
   otlp:
@@ -16,11 +16,11 @@ processors:
 
 exporters:
   clickhousetraces:
-    datasource: tcp://signoz-clickhouse:9000/signoz_traces
+    datasource: tcp://clickhouse:9000/signoz_traces
   clickhousemetricswrite:
-    endpoint: tcp://signoz-clickhouse:9000/signoz_metrics
+    endpoint: tcp://clickhouse:9000/signoz_metrics
   clickhouselogsexporter:
-    dsn: tcp://signoz-clickhouse:9000/signoz_logs
+    dsn: tcp://clickhouse:9000/signoz_logs
 
 service:
   pipelines:
