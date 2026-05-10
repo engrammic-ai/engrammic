@@ -153,8 +153,12 @@ services:
       - QDRANT_HOST=qdrant
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
+      - POSTGRES_USER=context
+      - POSTGRES_PASSWORD=context
+      - POSTGRES_DATABASE=context_service
     volumes:
       - ./src:/app/src
+      - ./dagster.yaml:/app/dagster.yaml:ro
       - ./config:/app/config:ro
     depends_on:
       - postgres
@@ -185,6 +189,9 @@ services:
       - QDRANT_HOST=qdrant
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
+      - POSTGRES_USER=context
+      - POSTGRES_PASSWORD=context
+      - POSTGRES_DATABASE=context_service
     volumes:
       - ./src:/app/src
       - ./workspace.yaml:/app/workspace.yaml:ro
@@ -213,12 +220,17 @@ services:
       - QDRANT_HOST=qdrant
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
+      - POSTGRES_USER=context
+      - POSTGRES_PASSWORD=context
+      - POSTGRES_DATABASE=context_service
     volumes:
       - ./src:/app/src
       - ./workspace.yaml:/app/workspace.yaml:ro
       - ./dagster.yaml:/app/dagster.yaml:ro
       - ./config:/app/config:ro
     depends_on:
+      postgres:
+        condition: service_healthy
       dagster-code-server:
         condition: service_healthy
       memgraph:

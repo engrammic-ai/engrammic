@@ -1,3 +1,15 @@
+storage:
+  postgres:
+    postgres_db:
+      hostname:
+        env: POSTGRES_HOST
+      username:
+        env: POSTGRES_USER
+      password:
+        env: POSTGRES_PASSWORD
+      db_name:
+        env: POSTGRES_DATABASE
+
 run_queue:
   max_concurrent_runs: 10
   dequeue_interval_seconds: 5
