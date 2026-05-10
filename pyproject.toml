@@ -26,6 +26,7 @@ dependencies = [
     # Pipelines
     "dagster>=1.7",
     "dagster-webserver>=1.7",
+    "dagster-postgres>=0.23",
     # Custodian agents
     "pydantic-ai>=0.0.14",
     # Observability
