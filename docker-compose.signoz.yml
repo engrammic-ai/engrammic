@@ -27,7 +27,7 @@ services:
       signoz-zookeeper:
         condition: service_healthy
     ports:
-      - "9000:9000"
+      - "9001:9000"   # 9000 used by Portainer
       - "8123:8123"
     volumes:
       - signoz-clickhouse-data:/var/lib/clickhouse/
