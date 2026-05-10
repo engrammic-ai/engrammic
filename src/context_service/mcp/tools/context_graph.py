@@ -14,6 +14,7 @@ from context_service.mcp.server import (
 from context_service.models.mcp import Layer
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
+from context_service.signals.access_events import emit_access_event
 from context_service.signals.edge_access_events import emit_edge_access_event
 
 
@@ -79,6 +80,10 @@ async def _context_graph(
 
     redis = get_redis()
     if redis is not None:
+        for node in result.nodes:
+            node_id = node.get("node_id") or node.get("id")
+            if node_id:
+                await emit_access_event(redis, silo_id, node_id)
         for edge in result.edges:
             await emit_edge_access_event(
                 redis=redis,

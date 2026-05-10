@@ -17,6 +17,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Status | Description |
 |------|--------|-------------|
+| [2026-05-10-pipeline-validation.md](./2026-05-10-pipeline-validation.md) | Active | Q/A validation of heat, extraction, compaction, pattern, belief pipelines |
 | [2026-05-09-custodian-identity-split.md](./2026-05-09-custodian-identity-split.md) | Tech debt | Dagster jobs, LLM wiring remaining |
 | [2026-05-08-self-hosted-telemetry.md](./2026-05-08-self-hosted-telemetry.md) | Active | Two-tier telemetry for self-hosted deployments |
 | [2026-05-06-mcp-client-scaffold.md](./2026-05-06-mcp-client-scaffold.md) | Active | MCP marketplace client repo scaffold |
