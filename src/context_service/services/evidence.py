@@ -49,7 +49,7 @@ class EvidenceValidator:
         if ref.startswith("node:"):
             return await self._validate_node_ref(ref[5:], silo_id)
         elif ref.startswith("http://") or ref.startswith("https://"):
-            return await self._validate_uri(ref)
+            return await self._validate_uri(ref, silo_id)
         elif ref.startswith("file://"):
             return EvidenceResult(
                 status="valid",
@@ -85,8 +85,8 @@ class EvidenceValidator:
             reason=f"Node {node_id} not found in silo {silo_id}",
         )
 
-    async def _validate_uri(self, uri: str) -> EvidenceResult:
-        """Check if URI is reachable."""
+    async def _validate_uri(self, uri: str, silo_id: str) -> EvidenceResult:
+        """Check if URI is reachable and upsert a Document node for it."""
         delays = [0.5, 1.0, 2.0]
         last_error: str = ""
         for attempt, delay in enumerate([0.0, *delays]):
@@ -97,8 +97,11 @@ class EvidenceValidator:
                     response = await client.head(uri, follow_redirects=True)
                 if response.status_code < 400:
                     logger.debug("evidence_uri_valid", uri=uri, status=response.status_code)
+                    # Upsert Document node for valid URI
+                    node_id = await self._upsert_document_for_uri(uri, silo_id)
                     return EvidenceResult(
                         status="valid",
+                        node_id=node_id,
                         confidence=0.7,
                         reason=f"URI reachable (status {response.status_code})",
                     )
@@ -119,6 +122,24 @@ class EvidenceValidator:
             status="invalid",
             reason=f"URI unreachable after retries: {last_error}",
         )
+
+    async def _upsert_document_for_uri(self, uri: str, silo_id: str) -> str:
+        """Find or create a Document node for the given URI."""
+        from uuid import NAMESPACE_URL, uuid5
+
+        # Deterministic ID from URI
+        doc_id = str(uuid5(NAMESPACE_URL, uri))
+
+        query = """
+        MERGE (d:Node:Document {id: $doc_id, silo_id: $silo_id})
+        ON CREATE SET d.uri = $uri, d.created_at = datetime()
+        RETURN d.id AS id
+        """
+        await self._store.execute_query(
+            query,
+            {"doc_id": doc_id, "silo_id": silo_id, "uri": uri},
+        )
+        return doc_id
 
     async def validate_all(self, refs: list[str], silo_id: str) -> list[EvidenceResult]:
         """Validate multiple evidence refs."""
