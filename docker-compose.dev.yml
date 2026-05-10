@@ -198,76 +198,8 @@ services:
       - "4317:4317"   # OTLP gRPC
       - "4318:4318"   # OTLP HTTP
     volumes:
-      - ./config/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - ./config/otel-collector-dev.yaml:/etc/otelcol-contrib/config.yaml:ro
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
-    environment:
-      - SIGNOZ_ENDPOINT=${SIGNOZ_ENDPOINT:-signoz-otel-collector:4317}
-    depends_on:
-      - signoz-otel-collector
-    restart: unless-stopped
-
-  # SigNoz observability stack
-  signoz-zookeeper:
-    image: zookeeper:3.9
-    container_name: signoz-zookeeper
-    environment:
-      - ZOO_4LW_COMMANDS_WHITELIST=*
-    volumes:
-      - signoz-zookeeper-data:/data
-    restart: unless-stopped
-
-  signoz-clickhouse:
-    image: clickhouse/clickhouse-server:23.11.1-alpine
-    container_name: signoz-clickhouse
-    depends_on:
-      - signoz-zookeeper
-    volumes:
-      - signoz-clickhouse-data:/var/lib/clickhouse/
-    environment:
-      - CLICKHOUSE_MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.6
-    ulimits:
-      nofile:
-        soft: 262144
-        hard: 262144
-    healthcheck:
-      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  signoz-otel-collector:
-    image: signoz/signoz-otel-collector:0.102.12
-    container_name: signoz-otel-collector
-    command: ["--config=/etc/otel-collector-config.yaml"]
-    volumes:
-      - ./config/signoz-otel-collector.yaml:/etc/otel-collector-config.yaml:ro
-    depends_on:
-      signoz-clickhouse:
-        condition: service_healthy
-    restart: unless-stopped
-
-  signoz-query-service:
-    image: signoz/query-service:0.52.0
-    container_name: signoz-query-service
-    environment:
-      - ClickHouseUrl=tcp://signoz-clickhouse:9000
-      - STORAGE=clickhouse
-      - SIGNOZ_LOCAL_DB_PATH=/var/lib/signoz/signoz.db
-    volumes:
-      - signoz-query-data:/var/lib/signoz
-    depends_on:
-      signoz-clickhouse:
-        condition: service_healthy
-    restart: unless-stopped
-
-  signoz-frontend:
-    image: signoz/frontend:0.52.0
-    container_name: signoz-frontend
-    ports:
-      - "3301:3301"
-    depends_on:
-      - signoz-query-service
     restart: unless-stopped
 
 volumes:
@@ -277,6 +209,3 @@ volumes:
   qdrant-data:
   redis-data:
   postgres-data:
-  signoz-zookeeper-data:
-  signoz-clickhouse-data:
-  signoz-query-data:
