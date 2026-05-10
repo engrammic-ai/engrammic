@@ -20,15 +20,38 @@ Load skill content from `{skill}/SKILL.md` into your agent's system prompt on-de
 
 ## Skills
 
+### Cognitive Guide
+
+| Skill | Trigger | Purpose |
+|-------|---------|---------|
+| `eag-guide` | "how should I use memory", "when to form beliefs" | Cognitive framework for EAG layer usage |
+
+### Write Operations
+
 | Skill | Trigger | Layer |
 |-------|---------|-------|
 | `observe` | "remember this", "note that" | memory |
 | `learn` | "assert that", "we know that" | knowledge |
-| `recall` | "what do I know", "search for" | read |
 | `reason` | "figure out", "derive" | intelligence |
-| `reflect` | "I was wrong", "update belief" | meta |
-| `trace` | "why do I believe", "provenance" | admin |
+| `reflect` | "I was wrong", "flag contradiction" | meta |
 | `connect` | "X relates to Y", "link these" | link |
+
+### Belief Operations
+
+| Skill | Trigger | Layer |
+|-------|---------|-------|
+| `belief-state` | "what hypotheses", "session beliefs" | intelligence (read) |
+| `update-belief` | "revise hypothesis", "add evidence" | intelligence |
+| `crystallize` | "commit to", "finalize belief" | wisdom |
+| `accept` | "accept proposal", "approve belief" | wisdom |
+| `reject` | "reject proposal", "decline belief" | wisdom |
+
+### Read Operations
+
+| Skill | Trigger | Layer |
+|-------|---------|-------|
+| `recall` | "what do I know", "search for" | read |
+| `trace` | "why do I believe", "provenance" | admin |
 
 ## Tagging Guidelines
 
