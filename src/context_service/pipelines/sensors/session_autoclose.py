@@ -29,6 +29,8 @@ from context_service.pipelines.resources import MemgraphResource
         "Closes :ReasoningSession nodes that have been open longer than "
         "session_timeout_minutes (default 30) without activity."
     ),
+    # Housekeeping sensor: requires asset_selection for Dagster but returns no RunRequests
+    asset_selection=dg.AssetSelection.assets("heat"),
 )
 def session_autoclose_sensor(
     context,

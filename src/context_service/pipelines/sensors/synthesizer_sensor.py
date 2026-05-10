@@ -21,6 +21,7 @@ RETURN silo_id, pending
 
 @dg.sensor(
     name="synthesizer_threshold_sensor",
+    asset_selection=dg.AssetSelection.assets("belief_synthesis"),
     minimum_interval_seconds=300,
     description=(
         "Triggers synthesis when uncovered clusters per silo exceed "

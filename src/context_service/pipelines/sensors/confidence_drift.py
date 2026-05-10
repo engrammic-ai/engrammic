@@ -63,6 +63,8 @@ def _parse_cursor(cursor: str | None) -> dict[str, dict[str, float]]:
         "Logs a warning when the mean drops more than 0.1 from the established baseline. "
         "Does not block pipeline runs."
     ),
+    # Monitoring-only sensor: requires asset_selection for Dagster but returns no RunRequests
+    asset_selection=dg.AssetSelection.assets("heat"),
 )
 def confidence_drift_sensor(
     context,
