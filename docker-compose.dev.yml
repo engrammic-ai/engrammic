@@ -139,6 +139,36 @@ services:
       - QUICK_CONNECT_MG_PORT=7687
     restart: unless-stopped
 
+  dagster-code-server:
+    build:
+      context: ..
+      dockerfile: context-service/Dockerfile.dagster
+    container_name: context-service-dagster-code
+    command: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-m", "context_service.pipelines.definitions"]
+    env_file:
+      - .env
+    environment:
+      - DAGSTER_HOME=/app
+      - MEMGRAPH_HOST=memgraph
+      - QDRANT_HOST=qdrant
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=postgres
+    volumes:
+      - ./src:/app/src
+      - ./config:/app/config:ro
+    depends_on:
+      - postgres
+      - memgraph
+      - qdrant
+      - redis
+    healthcheck:
+      test: ["CMD", "dagster", "api", "grpc-health-check", "-p", "4000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    restart: unless-stopped
+
   dagster-webserver:
     build:
       context: ..
@@ -158,10 +188,15 @@ services:
     volumes:
       - ./src:/app/src
       - ./workspace.yaml:/app/workspace.yaml:ro
+      - ./dagster.yaml:/app/dagster.yaml:ro
       - ./config:/app/config:ro
     depends_on:
-      - postgres
-      - redis
+      dagster-code-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   dagster-daemon:
@@ -181,12 +216,17 @@ services:
     volumes:
       - ./src:/app/src
       - ./workspace.yaml:/app/workspace.yaml:ro
+      - ./dagster.yaml:/app/dagster.yaml:ro
       - ./config:/app/config:ro
     depends_on:
-      - dagster-webserver
-      - memgraph
-      - qdrant
-      - redis
+      dagster-code-server:
+        condition: service_healthy
+      memgraph:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
 
   # otel-collector disabled - use docker-compose.signoz.yml for observability

@@ -131,6 +131,39 @@ services:
           memory: 1G
     restart: unless-stopped
 
+  dagster-code-server:
+    build:
+      context: ..
+      dockerfile: context-service/Dockerfile.dagster
+    container_name: context-service-dagster-code
+    command: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-m", "context_service.pipelines.definitions"]
+    env_file:
+      - .env
+    environment:
+      - DAGSTER_HOME=/app
+      - MEMGRAPH_HOST=memgraph
+      - QDRANT_HOST=qdrant
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=postgres
+    volumes:
+      - ./config:/app/config:ro
+    depends_on:
+      - postgres
+      - memgraph
+      - qdrant
+      - redis
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "dagster", "api", "grpc-health-check", "-p", "4000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   dagster-webserver:
     build:
       context: ..
@@ -149,10 +182,15 @@ services:
       - POSTGRES_HOST=postgres
     volumes:
       - ./workspace.yaml:/app/workspace.yaml:ro
+      - ./dagster.yaml:/app/dagster.yaml:ro
       - ./config:/app/config:ro
     depends_on:
-      - postgres
-      - redis
+      dagster-code-server:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -175,12 +213,17 @@ services:
       - POSTGRES_HOST=postgres
     volumes:
       - ./workspace.yaml:/app/workspace.yaml:ro
+      - ./dagster.yaml:/app/dagster.yaml:ro
       - ./config:/app/config:ro
     depends_on:
-      - dagster-webserver
-      - memgraph
-      - qdrant
-      - redis
+      dagster-code-server:
+        condition: service_healthy
+      memgraph:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     deploy:
       resources:
         limits:
