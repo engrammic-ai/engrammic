@@ -191,16 +191,17 @@ services:
       - redis
     restart: unless-stopped
 
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
-    container_name: context-service-otel
-    ports:
-      - "4317:4317"   # OTLP gRPC
-      - "4318:4318"   # OTLP HTTP
-    volumes:
-      - ./config/otel-collector-dev.yaml:/etc/otelcol-contrib/config.yaml:ro
-    command: ["--config=/etc/otelcol-contrib/config.yaml"]
-    restart: unless-stopped
+  # otel-collector disabled - use docker-compose.signoz.yml for observability
+  # otel-collector:
+  #   image: otel/opentelemetry-collector-contrib:latest
+  #   container_name: context-service-otel
+  #   ports:
+  #     - "4317:4317"
+  #     - "4318:4318"
+  #   volumes:
+  #     - ./config/otel-collector-dev.yaml:/etc/otelcol-contrib/config.yaml:ro
+  #   command: ["--config=/etc/otelcol-contrib/config.yaml"]
+  #   restart: unless-stopped
 
 volumes:
   memgraph-data:
