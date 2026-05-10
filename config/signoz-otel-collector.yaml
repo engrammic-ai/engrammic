@@ -16,11 +16,16 @@ processors:
 
 exporters:
   clickhousetraces:
-    datasource: tcp://signoz-clickhouse:9000/?database=signoz_traces
+    datasource: tcp://signoz-clickhouse:9000/signoz_traces
+    use_new_schema: true
   clickhousemetricswrite:
-    endpoint: tcp://signoz-clickhouse:9000/?database=signoz_metrics
+    endpoint: tcp://signoz-clickhouse:9000/signoz_metrics
+    resource_to_telemetry_conversion:
+      enabled: true
   clickhouselogsexporter:
-    dsn: tcp://signoz-clickhouse:9000/?database=signoz_logs
+    dsn: tcp://signoz-clickhouse:9000/signoz_logs
+    timeout: 10s
+    use_new_schema: true
 
 service:
   pipelines:
