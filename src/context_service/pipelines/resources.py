@@ -30,13 +30,23 @@ def _close_async(coro: object) -> None:
     # asyncio.run() raises RuntimeError if a loop is already running (Dagster runs
     # teardown from within its own event loop). Submit the close to a fresh thread
     # that gets its own loop; block until it completes so the resource is released.
+
+    async def _safe_close() -> None:
+        # Wrap the close in try/except to handle drivers that fail during
+        # event loop teardown (e.g. neo4j raising "Event loop is closed").
+        try:
+            await coro  # type: ignore[misc]
+        except RuntimeError as e:
+            if "Event loop is closed" not in str(e):
+                raise
+
     try:
         asyncio.get_running_loop()
     except RuntimeError:
-        asyncio.run(coro)  # type: ignore[arg-type]
+        asyncio.run(_safe_close())
         return
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-        f: concurrent.futures.Future[None] = pool.submit(asyncio.run, coro)  # type: ignore[arg-type]
+        f: concurrent.futures.Future[None] = pool.submit(lambda: asyncio.run(_safe_close()))
         f.result(timeout=30)
 
 
