@@ -18,8 +18,13 @@ from context_service import __version__
 
 def setup_tracing(service_name: str = "context-service") -> None:
     """Initialize OpenTelemetry tracing and metrics if OTEL_EXPORTER_OTLP_ENDPOINT is set."""
+    import structlog
+    logger = structlog.get_logger(__name__)
+
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+    logger.info("otel_setup_check", endpoint=endpoint)
     if not endpoint:
+        logger.info("otel_disabled", reason="no endpoint")
         return
 
     from context_service.telemetry.metrics import setup_metrics
@@ -40,6 +45,8 @@ def setup_tracing(service_name: str = "context-service") -> None:
 
     HTTPXClientInstrumentor().instrument()
     RedisInstrumentor().instrument()
+
+    logger.info("otel_tracing_enabled", endpoint=endpoint, service=service_name)
 
 
 def instrument_fastapi(app: object) -> None:
