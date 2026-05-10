@@ -103,6 +103,8 @@ services:
     container_name: signoz-frontend
     ports:
       - "3301:3301"
+    volumes:
+      - ./config/signoz-nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       signoz-query-service:
         condition: service_healthy
