@@ -182,10 +182,12 @@ async def _context_assert(
 
     scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
     _start = time.perf_counter()
+    # Use validated node IDs if available, else fall back to raw refs
+    evidence_refs = [f"node:{nid}" for nid in evidence_nodes] if evidence_nodes else evidence_list
     node = await ctx_svc.assert_claim(
         scope=scope,
         claim=parsed_claim,
-        evidence=evidence_list,
+        evidence=evidence_refs,
         source_type=src_type,
         confidence=confidence,
         metadata=metadata,
