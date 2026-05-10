@@ -6,6 +6,7 @@ import time
 from typing import TYPE_CHECKING
 
 import litellm
+from opentelemetry import trace
 
 from context_service.config.config_loader import load_config
 from context_service.config.logging import get_logger
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
     from context_service.cache.embedding_cache import EmbeddingCache
 
 logger = get_logger(__name__)
+tracer = trace.get_tracer(__name__)
 
 
 class LiteLLMEmbeddingError(Exception):
@@ -133,17 +135,24 @@ class LiteLLMEmbeddingService:
         Raises:
             LiteLLMEmbeddingError: If embedding generation fails.
         """
-        try:
-            start = time.perf_counter()
-            response = await litellm.aembedding(
-                model=self._model, input=texts, dimensions=self._dimensions
-            )
-            duration_ms = (time.perf_counter() - start) * 1000
-            record_embedding(self._model, duration_ms)
-            return [item["embedding"] for item in response.data]
-        except Exception as e:
-            logger.error("LiteLLM embedding failed", error=str(e), model=self._model)
-            raise LiteLLMEmbeddingError(f"Embedding failed: {e}") from e
+        with tracer.start_as_current_span(
+            "embedding.litellm",
+            attributes={"model": self._model, "batch_size": len(texts)},
+        ) as span:
+            try:
+                start = time.perf_counter()
+                response = await litellm.aembedding(
+                    model=self._model, input=texts, dimensions=self._dimensions
+                )
+                duration_ms = (time.perf_counter() - start) * 1000
+                span.set_attribute("duration_ms", duration_ms)
+                record_embedding(self._model, duration_ms)
+                return [item["embedding"] for item in response.data]
+            except Exception as e:
+                span.set_attribute("error", True)
+                span.set_attribute("error.message", str(e))
+                logger.error("LiteLLM embedding failed", error=str(e), model=self._model)
+                raise LiteLLMEmbeddingError(f"Embedding failed: {e}") from e
 
     async def embed_single(self, text: str) -> list[float]:
         """Generate embedding for a single text.

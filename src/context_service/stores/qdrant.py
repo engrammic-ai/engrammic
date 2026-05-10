@@ -10,8 +10,11 @@ from typing import TYPE_CHECKING, Any, Literal
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.exceptions import UnexpectedResponse
+from opentelemetry import trace
 
 from context_service.config.logging import get_logger
+
+tracer = trace.get_tracer(__name__)
 
 if TYPE_CHECKING:
     from context_service.config.settings import Settings
@@ -226,36 +229,39 @@ class QdrantClient:
 
         has_sparse = sparse_indices is not None and sparse_values is not None
 
-        try:
-            if has_sparse:
-                point_vector: Any = {
-                    DENSE_VECTOR_NAME: vector,
-                    SPARSE_VECTOR_NAME: models.SparseVector(
-                        indices=sparse_indices,  # type: ignore[arg-type]
-                        values=sparse_values,  # type: ignore[arg-type]
-                    ),
-                }
-            else:
-                point_vector = vector
+        with tracer.start_as_current_span(
+            "qdrant.upsert", attributes={"node_id": node_id, "hybrid": has_sparse}
+        ):
+            try:
+                if has_sparse:
+                    point_vector: Any = {
+                        DENSE_VECTOR_NAME: vector,
+                        SPARSE_VECTOR_NAME: models.SparseVector(
+                            indices=sparse_indices,  # type: ignore[arg-type]
+                            values=sparse_values,  # type: ignore[arg-type]
+                        ),
+                    }
+                else:
+                    point_vector = vector
 
-            await client.upsert(
-                collection_name=_get_collection_name(),
-                points=[
-                    models.PointStruct(
-                        id=node_id,
-                        vector=point_vector,
-                        payload=point_payload,
-                    )
-                ],
-            )
-            logger.debug("qdrant_upsert", node_id=node_id, hybrid=has_sparse)
-            return True
-        except UnexpectedResponse as e:
-            logger.error("qdrant_upsert_error", node_id=node_id, error=str(e))
-            raise QdrantOperationError(f"Failed to upsert vector: {e}") from e
-        except Exception as e:
-            logger.error("qdrant_upsert_unexpected_error", node_id=node_id, error=str(e))
-            raise QdrantOperationError(f"Failed to upsert vector: {e}") from e
+                await client.upsert(
+                    collection_name=_get_collection_name(),
+                    points=[
+                        models.PointStruct(
+                            id=node_id,
+                            vector=point_vector,
+                            payload=point_payload,
+                        )
+                    ],
+                )
+                logger.debug("qdrant_upsert", node_id=node_id, hybrid=has_sparse)
+                return True
+            except UnexpectedResponse as e:
+                logger.error("qdrant_upsert_error", node_id=node_id, error=str(e))
+                raise QdrantOperationError(f"Failed to upsert vector: {e}") from e
+            except Exception as e:
+                logger.error("qdrant_upsert_unexpected_error", node_id=node_id, error=str(e))
+                raise QdrantOperationError(f"Failed to upsert vector: {e}") from e
 
     async def search(
         self,
@@ -320,78 +326,80 @@ class QdrantClient:
             )
             effective_mode = "dense"
 
-        try:
-            if effective_mode == "sparse":
-                if not has_sparse:
-                    raise QdrantOperationError(
-                        "sparse_indices and sparse_values are required for sparse mode"
+        with tracer.start_as_current_span(
+            "qdrant.search", attributes={"limit": limit, "mode": effective_mode}
+        ):
+            try:
+                if effective_mode == "sparse":
+                    if not has_sparse:
+                        raise QdrantOperationError(
+                            "sparse_indices and sparse_values are required for sparse mode"
+                        )
+                    response = await client.query_points(
+                        collection_name=_get_collection_name(),
+                        query=models.SparseVector(
+                            indices=sparse_indices,  # type: ignore[arg-type]
+                            values=sparse_values,  # type: ignore[arg-type]
+                        ),
+                        using=SPARSE_VECTOR_NAME,
+                        limit=limit,
+                        score_threshold=score_threshold,
+                        query_filter=query_filter,
                     )
-                response = await client.query_points(
-                    collection_name=_get_collection_name(),
-                    query=models.SparseVector(
-                        indices=sparse_indices,  # type: ignore[arg-type]
-                        values=sparse_values,  # type: ignore[arg-type]
-                    ),
-                    using=SPARSE_VECTOR_NAME,
-                    limit=limit,
-                    score_threshold=score_threshold,
-                    query_filter=query_filter,
-                )
-            elif effective_mode == "hybrid":
-                response = await client.query_points(
-                    collection_name=_get_collection_name(),
-                    prefetch=[
-                        models.Prefetch(
-                            query=vector,
-                            using=DENSE_VECTOR_NAME,
-                            filter=query_filter,
-                            limit=limit * 2,
-                        ),
-                        models.Prefetch(
-                            query=models.SparseVector(
-                                indices=sparse_indices,  # type: ignore[arg-type]
-                                values=sparse_values,  # type: ignore[arg-type]
+                elif effective_mode == "hybrid":
+                    response = await client.query_points(
+                        collection_name=_get_collection_name(),
+                        prefetch=[
+                            models.Prefetch(
+                                query=vector,
+                                using=DENSE_VECTOR_NAME,
+                                filter=query_filter,
+                                limit=limit * 2,
                             ),
-                            using=SPARSE_VECTOR_NAME,
-                            filter=query_filter,
-                            limit=limit * 2,
-                        ),
-                    ],
-                    query=models.FusionQuery(fusion=models.Fusion.RRF),
-                    limit=limit,
-                    score_threshold=score_threshold,
-                )
-            else:
-                # Dense-only (default legacy path)
-                response = await client.query_points(
-                    collection_name=_get_collection_name(),
-                    query=vector,
-                    limit=limit,
-                    score_threshold=score_threshold,
-                    query_filter=query_filter,
-                )
+                            models.Prefetch(
+                                query=models.SparseVector(
+                                    indices=sparse_indices,  # type: ignore[arg-type]
+                                    values=sparse_values,  # type: ignore[arg-type]
+                                ),
+                                using=SPARSE_VECTOR_NAME,
+                                filter=query_filter,
+                                limit=limit * 2,
+                            ),
+                        ],
+                        query=models.FusionQuery(fusion=models.Fusion.RRF),
+                        limit=limit,
+                        score_threshold=score_threshold,
+                    )
+                else:
+                    response = await client.query_points(
+                        collection_name=_get_collection_name(),
+                        query=vector,
+                        limit=limit,
+                        score_threshold=score_threshold,
+                        query_filter=query_filter,
+                    )
 
-            results = [
-                SearchResult(
-                    node_id=str(r.id),
-                    score=r.score,
-                    payload=r.payload or {},
-                )
-                for r in response.points
-            ]
+                results = [
+                    SearchResult(
+                        node_id=str(r.id),
+                        score=r.score,
+                        payload=r.payload or {},
+                    )
+                    for r in response.points
+                ]
 
-            logger.debug(
-                "qdrant_search",
-                result_count=len(results),
-                search_mode=effective_mode,
-            )
-            return results
-        except UnexpectedResponse as e:
-            logger.error("qdrant_search_error", error=str(e))
-            raise QdrantOperationError(f"Failed to search vectors: {e}") from e
-        except Exception as e:
-            logger.error("qdrant_search_unexpected_error", error=str(e))
-            raise QdrantOperationError(f"Failed to search vectors: {e}") from e
+                logger.debug(
+                    "qdrant_search",
+                    result_count=len(results),
+                    search_mode=effective_mode,
+                )
+                return results
+            except UnexpectedResponse as e:
+                logger.error("qdrant_search_error", error=str(e))
+                raise QdrantOperationError(f"Failed to search vectors: {e}") from e
+            except Exception as e:
+                logger.error("qdrant_search_unexpected_error", error=str(e))
+                raise QdrantOperationError(f"Failed to search vectors: {e}") from e
 
     async def delete(self, node_id: str) -> bool:
         """Delete a vector by node ID.
