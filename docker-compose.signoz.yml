@@ -31,8 +31,8 @@ services:
       - "8123:8123"
     volumes:
       - signoz-clickhouse-data:/var/lib/clickhouse/
-      - ./config/clickhouse/config.xml:/etc/clickhouse-server/config.xml:ro
-      - ./config/clickhouse/users.xml:/etc/clickhouse-server/users.xml:ro
+      - ./config/clickhouse/listen.xml:/etc/clickhouse-server/config.d/listen.xml:ro
+      - ./config/clickhouse/cluster.xml:/etc/clickhouse-server/config.d/cluster.xml:ro
     environment:
       - CLICKHOUSE_MAX_SERVER_MEMORY_USAGE_TO_RAM_RATIO=0.6
     ulimits:
