@@ -10,7 +10,6 @@ chain_stitch asset for the same silo partition.
 from __future__ import annotations
 
 import dagster as dg
-from dagster import SensorEvaluationContext
 
 
 @dg.asset_sensor(
@@ -23,7 +22,7 @@ from dagster import SensorEvaluationContext
     ),
 )
 def causal_transitivity_sensor(
-    context: SensorEvaluationContext,
+    context,
     asset_event: dg.EventLogEntry,
 ) -> dg.RunRequest | None:
     """Yield a RunRequest for causal_transitivity on each claim_to_fact_promotion materialization."""
@@ -55,7 +54,7 @@ def causal_transitivity_sensor(
     ),
 )
 def chain_stitch_sensor(
-    context: SensorEvaluationContext,
+    context,
     asset_event: dg.EventLogEntry,
 ) -> dg.RunRequest | None:
     """Yield a RunRequest for chain_stitch on each custodian_finalize materialization."""

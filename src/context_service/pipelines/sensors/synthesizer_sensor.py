@@ -6,7 +6,6 @@ import asyncio
 from typing import Any
 
 import dagster as dg
-from dagster import SensorEvaluationContext
 
 from context_service.config.settings import get_settings
 from context_service.pipelines.resources import MemgraphResource
@@ -29,7 +28,7 @@ RETURN silo_id, pending
     ),
 )
 def synthesizer_threshold_sensor(
-    context: SensorEvaluationContext,
+    context,
     memgraph: MemgraphResource,
 ) -> dg.SensorResult:
     """Poll for silos with too many uncovered clusters and request synthesis runs."""
