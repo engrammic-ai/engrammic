@@ -79,6 +79,7 @@ class CustodianIdentityConfig(BaseModel):
     timeout_seconds: int = 30
     batch_size: int = 5
     batch_window_seconds: float = 2.0
+    min_confidence_for_supersession: float = 0.7
 
 
 class SynthesizerIdentityConfig(BaseModel):
@@ -89,6 +90,9 @@ class SynthesizerIdentityConfig(BaseModel):
     timeout_seconds: int = 60
     threshold_pending_nodes: int = 50
     schedule_cron: str = "0 * * * *"
+    proposal_confidence_threshold: float = 0.6
+    max_facts_per_synthesis: int = 10
+    min_facts_for_synthesis: int = 3
 
 
 class DecayClassConfig(BaseModel):

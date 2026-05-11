@@ -6,6 +6,7 @@ identities:
     timeout_seconds: 30
     batch_size: 5
     batch_window_seconds: 2.0
+    min_confidence_for_supersession: 0.7
 
   synthesizer:
     enabled: true
@@ -13,6 +14,9 @@ identities:
     timeout_seconds: 60
     threshold_pending_nodes: 50
     schedule_cron: "0 * * * *"
+    proposal_confidence_threshold: 0.6
+    max_facts_per_synthesis: 10
+    min_facts_for_synthesis: 3
 
   groundskeeper:
     enabled: true

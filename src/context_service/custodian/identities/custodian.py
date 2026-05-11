@@ -158,10 +158,13 @@ async def on_custodian_batch_fire(silo_id: str, node_ids: list[str]) -> None:
     settings = get_settings()
     store = get_context_service().graph_store
 
+    cfg = settings.identities.custodian
     custodian = CustodianIdentity(
         store=store,
         silo_id=silo_id,
-        model=settings.identities.custodian.model,
+        model=cfg.model,
+        timeout_seconds=float(cfg.timeout_seconds),
+        min_confidence=cfg.min_confidence_for_supersession,
     )
 
     for node_id in node_ids:
