@@ -8,10 +8,12 @@ threshold per decay class.
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import dagster as dg
-from dagster import OpExecutionContext
+
+if TYPE_CHECKING:
+    from dagster import OpExecutionContext
 
 from context_service.config.settings import get_settings
 from context_service.pipelines.resources import MemgraphResource
