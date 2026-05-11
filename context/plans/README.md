@@ -42,6 +42,7 @@ Next candidates:
 | [oss-engine.md](./oss-engine.md) | W1: Engine repo (single-tenant SQLite) |
 | [oss-manifesto.md](./oss-manifesto.md) | W2: Practitioner manifesto |
 | [oss-launch-prep.md](./oss-launch-prep.md) | W3: Repo hygiene + landing page |
+| [2026-05-11-oss-adoption-helpers.md](./2026-05-11-oss-adoption-helpers.md) | README rewrites for <5min quickstart |
 
 ## Reference
 

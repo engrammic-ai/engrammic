@@ -74,6 +74,7 @@ For local/offline usage, see [engrammic-engine](https://github.com/engrammic/eng
 
 ## Learn More
 
+- [EAG Manifesto](https://github.com/engrammic/primitives/blob/main/docs/manifesto.md) - the paradigm explained
 - [EAG Concepts](docs/eag-concepts.md) - understand the memory model
 - Using Claude Code? Copy [skills/](https://github.com/engrammic/context-service/tree/main/skills) to `~/.claude/skills/` for EAG workflow guidance
 
@@ -217,8 +218,16 @@ curl -s https://raw.githubusercontent.com/engrammic/engine/main/skills/context-s
 
 ## Learn More
 
+- [EAG Manifesto](https://github.com/engrammic/primitives/blob/main/docs/manifesto.md) - the paradigm explained
 - [engrammic-primitives](https://github.com/engrammic/primitives) - EAG schema library
 - [EAG Concepts](https://github.com/engrammic/mcp-client/blob/main/docs/eag-concepts.md) - understand the memory model
+
+## Why Apache 2.0
+
+- No adoption friction - enterprise legal teams approve Apache 2.0 without review
+- Explicit patent grant that MIT lacks
+- The moat is in the hosted service, not the local engine
+- Unambiguously open source
 
 ## License
 
@@ -274,6 +283,10 @@ Building your own EAG-compatible system or extending Engrammic.
 For using Engrammic directly, see:
 - [engrammic-mcp](https://github.com/engrammic/mcp-client) - hosted service
 - [engrammic-engine](https://github.com/engrammic/engine) - local engine
+
+## Learn More
+
+- [EAG Manifesto](docs/manifesto.md) - the paradigm explained
 
 ## Modules
 

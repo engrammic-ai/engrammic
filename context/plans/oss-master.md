@@ -30,7 +30,7 @@ W1 and W2 can run in parallel. W3 depends on both being mostly complete.
 
 ### W1: Engine Repo
 
-Build `delta-prime/engine/` — a single-tenant SQLite-backed engine with basic MCP server.
+Build `engrammic/engine/` — a single-tenant SQLite-backed engine with basic MCP server.
 
 Milestones:
 1. Repo scaffold + Apache 2.0 license
