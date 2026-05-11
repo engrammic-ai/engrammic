@@ -1,8 +1,11 @@
+# Auto-tagging configuration
+# Controls automatic tag extraction and management for nodes
+
 defaults:
-  min_tags: 2
-  max_tags: 5
-  cosine_threshold: 0.4
-  promotion_threshold: 3
-  demotion_days: 30
-  synonym_threshold: 0.85
-  cache_ttl_seconds: 300
+  min_tags: 2                  # minimum tags to assign per node
+  max_tags: 5                  # maximum tags to assign per node
+  cosine_threshold: 0.4        # embedding similarity threshold for tag matching
+  promotion_threshold: 3       # usage count to promote candidate tag to active
+  demotion_days: 30            # days of inactivity before demoting a tag
+  synonym_threshold: 0.85      # similarity threshold to merge synonymous tags
+  cache_ttl_seconds: 300       # tag embedding cache TTL

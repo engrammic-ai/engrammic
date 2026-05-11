@@ -1,26 +1,37 @@
-# config/identities.yaml
+# Custodian Identity Configuration
+# Four identities handle background processing: Custodian, Synthesizer, Groundskeeper, Validator
+#
+# Additional hardcoded values not in this file:
+# - Dagster asset timeouts: 300s (pipelines/assets/*.py)
+# - MCP recall timeout: 2.0s (mcp/tools/context_query.py)
+# - Fingerprint similarity threshold: 0.8 (custodian/fingerprints.py)
+# - Per-provider LLM defaults: see llm/litellm_provider.py
+
 identities:
+  # Custodian: contradiction detection and fact supersession
   custodian:
     enabled: true
-    model: "google-vertex:gemini-2.5-flash"
-    timeout_seconds: 30
-    batch_size: 5
-    batch_window_seconds: 2.0
-    min_confidence_for_supersession: 0.7
+    model: "google-vertex:gemini-2.5-flash"  # LLM for contradiction analysis
+    timeout_seconds: 30                       # LLM call timeout
+    batch_size: 5                             # nodes per batch trigger
+    batch_window_seconds: 2.0                 # batch collection window
+    min_confidence_for_supersession: 0.7      # LLM confidence threshold to create SUPERSEDES edge
 
+  # Synthesizer: cluster-to-belief synthesis
   synthesizer:
     enabled: true
-    model: "google-vertex:gemini-2.5-pro"
-    timeout_seconds: 60
-    threshold_pending_nodes: 50
-    schedule_cron: "0 * * * *"
-    proposal_confidence_threshold: 0.6
-    max_facts_per_synthesis: 10
-    min_facts_for_synthesis: 3
+    model: "google-vertex:gemini-2.5-pro"     # LLM for belief synthesis
+    timeout_seconds: 60                        # LLM call timeout
+    threshold_pending_nodes: 50                # uncovered clusters to trigger synthesis run
+    schedule_cron: "0 * * * *"                 # hourly check for pending clusters
+    proposal_confidence_threshold: 0.6         # min LLM confidence to create ProposedBelief
+    max_facts_per_synthesis: 10                # facts sent to LLM per cluster
+    min_facts_for_synthesis: 3                 # cluster density threshold
 
+  # Groundskeeper: memory garbage collection
   groundskeeper:
     enabled: true
-    schedule_cron: "0 3 * * *"
+    schedule_cron: "0 3 * * *"                 # nightly at 3am
     decay_classes:
       ephemeral:
         half_life_days: 7
@@ -35,8 +46,9 @@ identities:
         half_life_days: 1825
         hard_delete_days: 3650
 
+  # Validator: reasoning structure validation
   validator:
     enabled: true
     model: "google-vertex:gemini-2.5-pro"
     timeout_seconds: 5
-    fail_open: true
+    fail_open: true                            # allow chains on LLM failure
