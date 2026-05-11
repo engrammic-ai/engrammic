@@ -24,12 +24,15 @@ _db_query_duration: metrics.Histogram | None = None
 _embedding_duration: metrics.Histogram | None = None
 _mcp_tool_duration: metrics.Histogram | None = None
 _mcp_tool_counter: metrics.Counter | None = None
+_llm_token_counter: metrics.Counter | None = None
+_context_recall_size: metrics.Histogram | None = None
 
 
 def setup_metrics(service_name: str = "context-service") -> None:
     """Initialize OpenTelemetry metrics if OTEL_EXPORTER_OTLP_ENDPOINT is set."""
     global _meter, _request_duration, _request_counter, _active_requests
     global _db_query_duration, _embedding_duration, _mcp_tool_duration, _mcp_tool_counter
+    global _llm_token_counter, _context_recall_size
 
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     if not endpoint:
@@ -92,6 +95,18 @@ def setup_metrics(service_name: str = "context-service") -> None:
         unit="1",
     )
 
+    _llm_token_counter = _meter.create_counter(
+        name="llm.tokens",
+        description="LLM token usage",
+        unit="1",
+    )
+
+    _context_recall_size = _meter.create_histogram(
+        name="context.recall.size",
+        description="Context recall response size",
+        unit="bytes",
+    )
+
 
 def record_request(method: str, path: str, status: int, duration_ms: float) -> None:
     """Record HTTP request metrics."""
@@ -141,3 +156,18 @@ def record_mcp_tool(tool: str, duration_ms: float, success: bool = True) -> None
         _mcp_tool_duration.record(duration_ms, attrs)
     if _mcp_tool_counter:
         _mcp_tool_counter.add(1, attrs)
+
+
+def record_llm_tokens(model: str, input_tokens: int, output_tokens: int) -> None:
+    """Record LLM token usage."""
+    if _llm_token_counter is None:
+        return
+    _llm_token_counter.add(input_tokens, {"model": model, "type": "input"})
+    _llm_token_counter.add(output_tokens, {"model": model, "type": "output"})
+
+
+def record_context_recall_size(layer: str, bytes_size: int) -> None:
+    """Record context recall response size for token estimation."""
+    if _context_recall_size is None:
+        return
+    _context_recall_size.record(bytes_size, {"layer": layer})

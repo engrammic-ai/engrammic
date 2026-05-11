@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Literal
 
+from opentelemetry import trace
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.exceptions import UnexpectedResponse
-from opentelemetry import trace
 
 from context_service.config.logging import get_logger
+from context_service.telemetry.metrics import record_db_query
 
 tracer = trace.get_tracer(__name__)
 
@@ -122,7 +124,7 @@ class QdrantClient:
                 with a warning if the mode differs.
         """
         client = await self._get_client()
-
+        start = time.perf_counter()
         try:
             collections = await client.get_collections()
             collection_names = [c.name for c in collections.collections]
@@ -170,6 +172,8 @@ class QdrantClient:
             self._client = None
             logger.error("qdrant_ensure_collection_failed", error=str(e))
             raise QdrantOperationError(f"Failed to ensure collection: {e}") from e
+        finally:
+            record_db_query("qdrant.ensure_collection", (time.perf_counter() - start) * 1000)
 
     async def health_check(self) -> bool:
         """Check if Qdrant is reachable.
@@ -177,6 +181,7 @@ class QdrantClient:
         Returns:
             True if healthy, False otherwise.
         """
+        start = time.perf_counter()
         try:
             client = await self._get_client()
             await client.get_collections()
@@ -184,6 +189,8 @@ class QdrantClient:
         except Exception as e:
             logger.warning("qdrant_health_check_failed", error=str(e))
             return False
+        finally:
+            record_db_query("qdrant.health_check", (time.perf_counter() - start) * 1000)
 
     async def upsert(
         self,
@@ -228,7 +235,7 @@ class QdrantClient:
             point_payload["expansion"] = expansion
 
         has_sparse = sparse_indices is not None and sparse_values is not None
-
+        start = time.perf_counter()
         with tracer.start_as_current_span(
             "qdrant.upsert", attributes={"node_id": node_id, "hybrid": has_sparse}
         ):
@@ -262,6 +269,8 @@ class QdrantClient:
             except Exception as e:
                 logger.error("qdrant_upsert_unexpected_error", node_id=node_id, error=str(e))
                 raise QdrantOperationError(f"Failed to upsert vector: {e}") from e
+            finally:
+                record_db_query("qdrant.upsert", (time.perf_counter() - start) * 1000)
 
     async def search(
         self,
@@ -326,6 +335,7 @@ class QdrantClient:
             )
             effective_mode = "dense"
 
+        start = time.perf_counter()
         with tracer.start_as_current_span(
             "qdrant.search", attributes={"limit": limit, "mode": effective_mode}
         ):
@@ -400,6 +410,8 @@ class QdrantClient:
             except Exception as e:
                 logger.error("qdrant_search_unexpected_error", error=str(e))
                 raise QdrantOperationError(f"Failed to search vectors: {e}") from e
+            finally:
+                record_db_query("qdrant.search", (time.perf_counter() - start) * 1000)
 
     async def delete(self, node_id: str) -> bool:
         """Delete a vector by node ID.
@@ -414,7 +426,7 @@ class QdrantClient:
             QdrantOperationError: If the delete fails.
         """
         client = await self._get_client()
-
+        start = time.perf_counter()
         try:
             await client.delete(
                 collection_name=_get_collection_name(),
@@ -430,11 +442,14 @@ class QdrantClient:
         except Exception as e:
             logger.error("qdrant_delete_unexpected_error", node_id=node_id, error=str(e))
             raise QdrantOperationError(f"Failed to delete vector: {e}") from e
+        finally:
+            record_db_query("qdrant.delete", (time.perf_counter() - start) * 1000)
 
     async def delete_silo_collection(self, silo_id: str) -> bool:
         """Delete entire collection for a silo (GDPR erasure)."""
         collection = get_collection_name(silo_id)
         client = await self._get_client()
+        start = time.perf_counter()
         try:
             await client.delete_collection(collection)
             logger.info("qdrant_silo_collection_deleted", silo_id=silo_id, collection=collection)
@@ -444,6 +459,8 @@ class QdrantClient:
                 logger.debug("qdrant_silo_collection_not_found", silo_id=silo_id)
                 return False
             raise QdrantOperationError(f"Failed to delete silo collection: {e}") from e
+        finally:
+            record_db_query("qdrant.delete_collection", (time.perf_counter() - start) * 1000)
 
     async def close(self) -> None:
         """Close the Qdrant client."""

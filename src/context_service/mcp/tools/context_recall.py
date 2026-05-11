@@ -11,7 +11,7 @@ from context_service.mcp.tools.context_get import _context_get
 from context_service.mcp.tools.context_graph import _context_graph
 from context_service.mcp.tools.context_query import _context_query
 from context_service.services.models import derive_silo_id
-from context_service.telemetry.metrics import record_mcp_tool
+from context_service.telemetry.metrics import record_context_recall_size, record_mcp_tool
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -278,6 +278,11 @@ def register(mcp: FastMCP) -> None:
                 include_content=include_content,
                 include_proposals=include_proposals,
             )
+            node_count = len(result.get("results", result.get("nodes", [])))
+            avg_node_bytes = 500 if include_content else 100
+            estimated_bytes = node_count * avg_node_bytes + 200
+            layer_name = (layers[0] if layers and len(layers) == 1 else "mixed") if layers else "all"
+            record_context_recall_size(layer_name, estimated_bytes)
             return result
         except Exception:
             success = False

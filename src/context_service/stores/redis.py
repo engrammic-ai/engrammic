@@ -5,6 +5,7 @@ Uses redis.asyncio with hiredis for performance.
 
 from __future__ import annotations
 
+import time
 from typing import Any, cast
 
 from redis.asyncio import ConnectionPool, Redis
@@ -13,6 +14,7 @@ from redis.exceptions import RedisError
 
 from context_service.config.logging import get_logger
 from context_service.config.settings import Settings, get_settings
+from context_service.telemetry.metrics import record_db_query
 from context_service.utils.json import JSONDecodeError, dumps, loads
 
 logger = get_logger(__name__)
@@ -70,6 +72,7 @@ class RedisClient:
         Returns:
             True if healthy, False otherwise.
         """
+        start = time.perf_counter()
         try:
             result = await self._redis.ping()  # type: ignore[misc]
             return bool(result)
@@ -79,6 +82,8 @@ class RedisClient:
         except Exception as e:
             logger.warning("redis_health_check_failed", error=str(e))
             return False
+        finally:
+            record_db_query("redis.health_check", (time.perf_counter() - start) * 1000)
 
     # Session operations
 
@@ -104,12 +109,15 @@ class RedisClient:
             RedisOperationError: If the operation fails.
         """
         key = self._session_key(silo_id, session_id)
+        start = time.perf_counter()
         try:
             await self._redis.set(key, dumps(data).encode(), ex=ttl_seconds)
             return True
         except (RedisConnectionError, RedisError) as e:
             logger.error("redis_set_session_failed", session_id=session_id, error=str(e))
             raise RedisOperationError(f"Failed to store session: {e}") from e
+        finally:
+            record_db_query("redis.set_session", (time.perf_counter() - start) * 1000)
 
     async def get_session(self, silo_id: str, session_id: str) -> dict[str, Any] | None:
         """Retrieve session data.
@@ -122,6 +130,7 @@ class RedisClient:
             Session data or None if not found or corrupted.
         """
         key = self._session_key(silo_id, session_id)
+        start = time.perf_counter()
         try:
             data: bytes | None = await self._redis.get(key)
             if data is None:
@@ -134,6 +143,8 @@ class RedisClient:
         except (RedisConnectionError, RedisError) as e:
             logger.error("redis_get_session_failed", session_id=session_id, error=str(e))
             raise RedisOperationError(f"Failed to retrieve session: {e}") from e
+        finally:
+            record_db_query("redis.get_session", (time.perf_counter() - start) * 1000)
 
     async def delete_session(self, silo_id: str, session_id: str) -> bool:
         """Delete a session and its associated nodes.
@@ -150,7 +161,7 @@ class RedisClient:
         """
         session_key = self._session_key(silo_id, session_id)
         nodes_key = self._session_nodes_key(silo_id, session_id)
-
+        start = time.perf_counter()
         try:
             pipeline = self._redis.pipeline()
             pipeline.delete(session_key)
@@ -160,6 +171,8 @@ class RedisClient:
         except (RedisConnectionError, RedisError) as e:
             logger.error("redis_delete_session_failed", session_id=session_id, error=str(e))
             raise RedisOperationError(f"Failed to delete session: {e}") from e
+        finally:
+            record_db_query("redis.delete_session", (time.perf_counter() - start) * 1000)
 
     async def add_session_node(self, silo_id: str, session_id: str, node_id: str) -> bool:
         """Add a node ID to a session's node set.
@@ -176,6 +189,7 @@ class RedisClient:
             RedisOperationError: If the operation fails.
         """
         key = self._session_nodes_key(silo_id, session_id)
+        start = time.perf_counter()
         try:
             result = await self._redis.sadd(key, node_id.encode())  # type: ignore[misc]
             return bool(result)
@@ -187,6 +201,8 @@ class RedisClient:
                 error=str(e),
             )
             raise RedisOperationError(f"Failed to add session node: {e}") from e
+        finally:
+            record_db_query("redis.add_session_node", (time.perf_counter() - start) * 1000)
 
     async def get_session_nodes(self, silo_id: str, session_id: str) -> list[str]:
         """Get all node IDs associated with a session.
@@ -202,12 +218,15 @@ class RedisClient:
             RedisOperationError: If the operation fails.
         """
         key = self._session_nodes_key(silo_id, session_id)
+        start = time.perf_counter()
         try:
             members = await self._redis.smembers(key)  # type: ignore[misc]
             return [m.decode() for m in members]
         except (RedisConnectionError, RedisError) as e:
             logger.error("redis_get_session_nodes_failed", session_id=session_id, error=str(e))
             raise RedisOperationError(f"Failed to get session nodes: {e}") from e
+        finally:
+            record_db_query("redis.get_session_nodes", (time.perf_counter() - start) * 1000)
 
     async def remove_session_node(self, silo_id: str, session_id: str, node_id: str) -> bool:
         """Remove a node ID from a session's node set.
@@ -224,6 +243,7 @@ class RedisClient:
             RedisOperationError: If the operation fails.
         """
         key = self._session_nodes_key(silo_id, session_id)
+        start = time.perf_counter()
         try:
             result = await self._redis.srem(key, node_id.encode())  # type: ignore[misc]
             return bool(result)
@@ -235,6 +255,8 @@ class RedisClient:
                 error=str(e),
             )
             raise RedisOperationError(f"Failed to remove session node: {e}") from e
+        finally:
+            record_db_query("redis.remove_session_node", (time.perf_counter() - start) * 1000)
 
     # Generic cache operations
 
@@ -259,12 +281,15 @@ class RedisClient:
         """
         if isinstance(value, str):
             value = value.encode()
+        start = time.perf_counter()
         try:
             await self._redis.set(key, value, ex=ttl_seconds)
             return True
         except (RedisConnectionError, RedisError) as e:
             logger.error("redis_set_failed", key=key, error=str(e))
             raise RedisOperationError(f"Failed to set cache value: {e}") from e
+        finally:
+            record_db_query("redis.set", (time.perf_counter() - start) * 1000)
 
     async def set_nx(
         self,
@@ -287,12 +312,15 @@ class RedisClient:
         """
         if isinstance(value, str):
             value = value.encode()
+        start = time.perf_counter()
         try:
             result = await self._redis.set(key, value, ex=ttl_seconds, nx=True)
             return result is not None
         except (RedisConnectionError, RedisError) as e:
             logger.error("redis_set_nx_failed", key=key, error=str(e))
             raise RedisOperationError(f"Failed to set_nx cache value: {e}") from e
+        finally:
+            record_db_query("redis.set_nx", (time.perf_counter() - start) * 1000)
 
     async def get(self, key: str) -> bytes | None:
         """Get a cache value.
@@ -306,12 +334,15 @@ class RedisClient:
         Raises:
             RedisOperationError: If the operation fails.
         """
+        start = time.perf_counter()
         try:
             result: bytes | None = await self._redis.get(key)
             return result
         except (RedisConnectionError, RedisError) as e:
             logger.error("redis_get_failed", key=key, error=str(e))
             raise RedisOperationError(f"Failed to get cache value: {e}") from e
+        finally:
+            record_db_query("redis.get", (time.perf_counter() - start) * 1000)
 
     async def mset(self, mapping: dict[str, bytes]) -> None:
         """Set multiple cache values in one pipeline roundtrip.
@@ -319,6 +350,7 @@ class RedisClient:
         Raises:
             RedisOperationError: If the operation fails.
         """
+        start = time.perf_counter()
         try:
             pipeline = self._redis.pipeline(transaction=False)
             for key, value in mapping.items():
@@ -327,6 +359,8 @@ class RedisClient:
         except (RedisConnectionError, RedisError) as e:
             logger.error("redis_mset_failed", key_count=len(mapping), error=str(e))
             raise RedisOperationError(f"Failed to mset cache values: {e}") from e
+        finally:
+            record_db_query("redis.mset", (time.perf_counter() - start) * 1000)
 
     async def mget(self, keys: list[str]) -> list[bytes | None]:
         """Get multiple cache values in one roundtrip.
@@ -340,12 +374,15 @@ class RedisClient:
         Raises:
             RedisOperationError: If the operation fails.
         """
+        start = time.perf_counter()
         try:
             result: list[bytes | None] = await self._redis.mget(keys)
             return result
         except (RedisConnectionError, RedisError) as e:
             logger.error("redis_mget_failed", key_count=len(keys), error=str(e))
             raise RedisOperationError(f"Failed to mget cache values: {e}") from e
+        finally:
+            record_db_query("redis.mget", (time.perf_counter() - start) * 1000)
 
     async def delete(self, key: str) -> bool:
         """Delete a cache key.
@@ -359,12 +396,15 @@ class RedisClient:
         Raises:
             RedisOperationError: If the operation fails.
         """
+        start = time.perf_counter()
         try:
             result = await self._redis.delete(key)
             return bool(result)
         except (RedisConnectionError, RedisError) as e:
             logger.error("redis_delete_failed", key=key, error=str(e))
             raise RedisOperationError(f"Failed to delete cache value: {e}") from e
+        finally:
+            record_db_query("redis.delete", (time.perf_counter() - start) * 1000)
 
     async def xadd(
         self,
@@ -399,6 +439,7 @@ class RedisClient:
                 for k, v in fields.items()
             },
         )
+        start = time.perf_counter()
         try:
             if maxlen is not None:
                 entry_id = await self._redis.xadd(
@@ -410,6 +451,8 @@ class RedisClient:
         except (RedisConnectionError, RedisError) as e:
             logger.warning("redis_xadd_failed", stream_key=stream_key, error=str(e))
             return None
+        finally:
+            record_db_query("redis.xadd", (time.perf_counter() - start) * 1000)
 
     async def close(self) -> None:
         """Close the Redis connection pool."""

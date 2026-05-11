@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -25,6 +26,7 @@ from qdrant_client.models import Filter as QdrantFilter
 
 from context_service.config.logging import get_logger
 from context_service.stores.qdrant import QdrantOperationError
+from context_service.telemetry.metrics import record_db_query
 
 if TYPE_CHECKING:
     import uuid
@@ -180,6 +182,7 @@ class EngineQdrantStore:
                 payload=payload,
             )
 
+        start = time.perf_counter()
         try:
             await client.upsert(
                 collection_name=collection,
@@ -188,6 +191,8 @@ class EngineQdrantStore:
         except (UnexpectedResponse, ConnectionError) as e:
             logger.error("Qdrant upsert failed", node_id=str(node_id), error=str(e))
             raise
+        finally:
+            record_db_query("qdrant_store.upsert", (time.perf_counter() - start) * 1000)
 
     async def batch_upsert(
         self,
@@ -239,6 +244,7 @@ class EngineQdrantStore:
             else:
                 points.append(PointStruct(id=str(node_id), vector=vector, payload=payload))
 
+        start = time.perf_counter()
         try:
             await client.upsert(collection_name=collection, points=points)
         except Exception as e:
@@ -246,6 +252,8 @@ class EngineQdrantStore:
                 "Qdrant batch_upsert failed", silo_id=silo_id, count=len(points), error=str(e)
             )
             raise QdrantOperationError(f"Failed to batch upsert vectors: {e}") from e
+        finally:
+            record_db_query("qdrant_store.batch_upsert", (time.perf_counter() - start) * 1000)
 
     async def query(
         self,
@@ -299,6 +307,7 @@ class EngineQdrantStore:
             )
             effective_mode = "dense"
 
+        start = time.perf_counter()
         try:
             if effective_mode == "dense":
                 response = await client.query_points(
@@ -355,6 +364,8 @@ class EngineQdrantStore:
         except Exception as e:
             logger.error("Qdrant query failed", silo_id=silo_id, mode=effective_mode, error=str(e))
             raise QdrantOperationError(f"Failed to query vectors: {e}") from e
+        finally:
+            record_db_query("qdrant_store.query", (time.perf_counter() - start) * 1000)
 
         return [
             VectorSearchResult(
@@ -371,6 +382,7 @@ class EngineQdrantStore:
         client = await self._qdrant._get_client()
         from qdrant_client.models import PointIdsList
 
+        start = time.perf_counter()
         try:
             await client.delete(
                 collection_name=collection,
@@ -381,16 +393,21 @@ class EngineQdrantStore:
                 "Qdrant delete failed", node_id=str(node_id), silo_id=silo_id, error=str(e)
             )
             raise QdrantOperationError(f"Failed to delete vector {node_id}: {e}") from e
+        finally:
+            record_db_query("qdrant_store.delete", (time.perf_counter() - start) * 1000)
 
     async def delete_collection(self, silo_id: str) -> None:
         """Delete entire tenant collection (for GDPR erasure)."""
         name = self._collection_name(silo_id)
         client = await self._qdrant._get_client()
+        start = time.perf_counter()
         try:
             await client.delete_collection(name)
         except Exception as e:
             logger.error("Qdrant delete_collection failed", collection=name, error=str(e))
             raise QdrantOperationError(f"Failed to delete collection {name}: {e}") from e
+        finally:
+            record_db_query("qdrant_store.delete_collection", (time.perf_counter() - start) * 1000)
         self._ensured_collections.discard(name)
         logger.info(f"Deleted Qdrant collection: {name}")
 
@@ -409,6 +426,7 @@ class EngineQdrantStore:
         async with self._ensure_lock:
             if name in self._ensured_collections:
                 return name
+            start = time.perf_counter()
             try:
                 client = await self._qdrant._get_client()
                 collections = await client.get_collections()
@@ -430,6 +448,8 @@ class EngineQdrantStore:
                     "Failed to ensure cluster Qdrant collection", collection=name, error=str(e)
                 )
                 raise QdrantOperationError(f"Failed to ensure cluster collection: {e}") from e
+            finally:
+                record_db_query("qdrant_store.ensure_cluster_collection", (time.perf_counter() - start) * 1000)
         return name
 
     async def upsert_cluster_embedding(
@@ -452,6 +472,7 @@ class EngineQdrantStore:
                 "silo_id": silo_id,
             },
         )
+        start = time.perf_counter()
         try:
             await client.upsert(collection_name=collection, points=[point])
         except Exception as e:
@@ -464,6 +485,8 @@ class EngineQdrantStore:
             raise QdrantOperationError(
                 f"Failed to upsert cluster embedding {cluster_id}: {e}"
             ) from e
+        finally:
+            record_db_query("qdrant_store.upsert_cluster_embedding", (time.perf_counter() - start) * 1000)
 
     async def batch_upsert_cluster_embeddings(
         self,
@@ -491,6 +514,7 @@ class EngineQdrantStore:
             )
             for item in items
         ]
+        start = time.perf_counter()
         try:
             await client.upsert(collection_name=collection, points=points)
         except Exception as e:
@@ -501,6 +525,8 @@ class EngineQdrantStore:
                 error=str(e),
             )
             raise QdrantOperationError(f"Failed to batch upsert cluster embeddings: {e}") from e
+        finally:
+            record_db_query("qdrant_store.batch_upsert_cluster_embeddings", (time.perf_counter() - start) * 1000)
         return len(points)
 
     async def search_clusters(
@@ -520,6 +546,7 @@ class EngineQdrantStore:
             must.append(FieldCondition(key="level", match=MatchValue(value=level)))
         query_filter = QdrantFilter(must=must) if must else None
 
+        start = time.perf_counter()
         try:
             response = await client.query_points(
                 collection_name=collection,
@@ -530,6 +557,8 @@ class EngineQdrantStore:
         except Exception as e:
             logger.error("Qdrant search_clusters failed", silo_id=silo_id, error=str(e))
             raise QdrantOperationError(f"Failed to search clusters: {e}") from e
+        finally:
+            record_db_query("qdrant_store.search_clusters", (time.perf_counter() - start) * 1000)
         return [
             ClusterSearchResult(
                 cluster_id=str(r.id),
@@ -544,9 +573,12 @@ class EngineQdrantStore:
         """Delete the cluster summary collection for a tenant."""
         name = self._cluster_collection_name(silo_id)
         client = await self._qdrant._get_client()
+        start = time.perf_counter()
         try:
             await client.delete_collection(name)
             self._ensured_collections.discard(name)
             logger.info(f"Deleted cluster Qdrant collection: {name}")
         except Exception:
             logger.debug(f"Cluster collection {name} not found, skipping delete")
+        finally:
+            record_db_query("qdrant_store.delete_cluster_collection", (time.perf_counter() - start) * 1000)

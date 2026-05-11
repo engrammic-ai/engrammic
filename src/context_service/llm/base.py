@@ -6,6 +6,7 @@ import abc
 from typing import Any
 
 from context_service.config.logging import get_logger
+from context_service.telemetry.metrics import record_llm_tokens
 from context_service.utils.json import JSONDecodeError, loads
 
 logger = get_logger(__name__)
@@ -72,6 +73,7 @@ class LLMProvider(abc.ABC):
         self._total_input_tokens += usage.input_tokens
         self._total_output_tokens += usage.output_tokens
         self._total_calls += 1
+        record_llm_tokens(usage.model, usage.input_tokens, usage.output_tokens)
 
     @property
     def cumulative_usage(self) -> dict[str, int]:
