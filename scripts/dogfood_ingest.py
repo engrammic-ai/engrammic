@@ -149,6 +149,7 @@ async def wipe_silo(org_id: str = "dev-org") -> None:
     client = MemgraphClient(driver)
     try:
         from context_service.engine.memgraph_store import MemgraphStore
+
         store = MemgraphStore(client)
         deleted = await store.reset_silo(silo_id)
         print(f"Silo wiped — {deleted} nodes deleted (silo {silo_id}).")
@@ -172,7 +173,9 @@ async def wipe_all() -> None:
         await client.close()
 
 
-async def run(url: str, *, dry_run: bool, wipe: bool, wipe_all_silos: bool, concurrency: int) -> None:
+async def run(
+    url: str, *, dry_run: bool, wipe: bool, wipe_all_silos: bool, concurrency: int
+) -> None:
     all_items = API_ITEMS + CLAUDE_ITEMS + PLANS_ITEMS
     phase1 = [it for it in all_items if it["layer"] in ("memory", "knowledge")]
     phase2 = [it for it in all_items if it["layer"] in ("wisdom", "intelligence", "meta")]
@@ -210,12 +213,12 @@ async def run(url: str, *, dry_run: bool, wipe: bool, wipe_all_silos: bool, conc
             tag_map = await _store_batch(
                 session, phase1, {}, dry_run=False, concurrency=concurrency
             )
-            print(f"\nPhase 1 done — {sum(len(v) for v in tag_map.values())} IDs collected across {len(tag_map)} tags.")
+            print(
+                f"\nPhase 1 done — {sum(len(v) for v in tag_map.values())} IDs collected across {len(tag_map)} tags."
+            )
 
             print("\n--- Phase 2: wisdom + intelligence ---")
-            await _store_batch(
-                session, phase2, tag_map, dry_run=False, concurrency=concurrency
-            )
+            await _store_batch(session, phase2, tag_map, dry_run=False, concurrency=concurrency)
             print("\nIngest complete.")
 
 
@@ -224,7 +227,9 @@ def main() -> None:
     parser.add_argument("--url", default=_DEFAULT_URL, help="MCP SSE endpoint URL.")
     parser.add_argument("--dry-run", action="store_true", help="Print items without writing.")
     parser.add_argument("--wipe", action="store_true", help="Reset the dev silo before ingesting.")
-    parser.add_argument("--wipe-all", action="store_true", help="Delete ALL silos before ingesting.")
+    parser.add_argument(
+        "--wipe-all", action="store_true", help="Delete ALL silos before ingesting."
+    )
     parser.add_argument(
         "--concurrency",
         type=int,
@@ -232,7 +237,15 @@ def main() -> None:
         help=f"Max parallel context_store calls (default: {_DEFAULT_CONCURRENCY}).",
     )
     args = parser.parse_args()
-    asyncio.run(run(args.url, dry_run=args.dry_run, wipe=args.wipe, wipe_all_silos=args.wipe_all, concurrency=args.concurrency))
+    asyncio.run(
+        run(
+            args.url,
+            dry_run=args.dry_run,
+            wipe=args.wipe,
+            wipe_all_silos=args.wipe_all,
+            concurrency=args.concurrency,
+        )
+    )
 
 
 if __name__ == "__main__":

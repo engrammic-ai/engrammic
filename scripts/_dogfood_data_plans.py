@@ -1,5 +1,7 @@
 """Ingest data: plans/ — project decisions, EAG gaps, and phase status."""
+
 from __future__ import annotations
+
 from typing import Any
 
 ITEMS: list[dict[str, Any]] = [
@@ -314,9 +316,21 @@ ITEMS: list[dict[str, Any]] = [
         "evidence": [],
         "about": [],
         "steps": [
-            {"step": 1, "reasoning": "Benchmark Louvain vs Leiden on a sample silo. Accept Louvain if quality is within range — lowest-risk change.", "confidence": 0.8},
-            {"step": 2, "reasoning": "Spike LPA: run 10 times on the same sample silo and compare community assignments for stability.", "confidence": 0.75},
-            {"step": 3, "reasoning": "If LPA stability is unacceptable, spike HDBSCAN as a hybrid: embed-space candidate clusters + graph connectivity rejection pass.", "confidence": 0.7},
+            {
+                "step": 1,
+                "reasoning": "Benchmark Louvain vs Leiden on a sample silo. Accept Louvain if quality is within range — lowest-risk change.",
+                "confidence": 0.8,
+            },
+            {
+                "step": 2,
+                "reasoning": "Spike LPA: run 10 times on the same sample silo and compare community assignments for stability.",
+                "confidence": 0.75,
+            },
+            {
+                "step": 3,
+                "reasoning": "If LPA stability is unacceptable, spike HDBSCAN as a hybrid: embed-space candidate clusters + graph connectivity rejection pass.",
+                "confidence": 0.7,
+            },
         ],
     },
 ]

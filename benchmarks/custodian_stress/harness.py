@@ -110,4 +110,6 @@ class StressHarness:
             print(f"{status:4}  {s.name:45} {s.duration_s:6.2f}s{metrics_str}{error_str}")
 
         agg = self.aggregate()
-        print(f"\nTotal: {agg.passed} passed, {agg.failed} failed, {agg.warned} warned in {agg.total_time_s:.2f}s")
+        print(
+            f"\nTotal: {agg.passed} passed, {agg.failed} failed, {agg.warned} warned in {agg.total_time_s:.2f}s"
+        )

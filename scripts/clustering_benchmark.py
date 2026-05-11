@@ -103,9 +103,11 @@ async def run_benchmark(
             assignment_runs.append(assignments)
             community_counts.append(len(set(assignments.values())))
 
-            print(f"  {algorithm} run {i+1}: {elapsed_ms:.1f}ms, {community_counts[-1]} communities")
+            print(
+                f"  {algorithm} run {i + 1}: {elapsed_ms:.1f}ms, {community_counts[-1]} communities"
+            )
         except Exception as e:
-            print(f"  {algorithm} run {i+1}: FAILED - {e}")
+            print(f"  {algorithm} run {i + 1}: FAILED - {e}")
             return BenchmarkResult(
                 algorithm=algorithm,
                 runs=i,
@@ -166,13 +168,21 @@ async def main(silo_id: str, num_runs: int = 5) -> None:
         print("\n" + "=" * 70)
         print("RESULTS SUMMARY")
         print("=" * 70)
-        print(f"{'Algorithm':<25} {'Mean (ms)':<12} {'StdDev':<10} {'Communities':<15} {'Stability':<10}")
+        print(
+            f"{'Algorithm':<25} {'Mean (ms)':<12} {'StdDev':<10} {'Communities':<15} {'Stability':<10}"
+        )
         print("-" * 70)
 
         for r in results:
             if r.runs > 0:
-                comm_range = f"{min(r.community_counts)}-{max(r.community_counts)}" if r.community_counts else "N/A"
-                print(f"{r.algorithm:<25} {r.mean_ms:<12.1f} {r.stddev_ms:<10.1f} {comm_range:<15} {r.stability*100:.1f}%")
+                comm_range = (
+                    f"{min(r.community_counts)}-{max(r.community_counts)}"
+                    if r.community_counts
+                    else "N/A"
+                )
+                print(
+                    f"{r.algorithm:<25} {r.mean_ms:<12.1f} {r.stddev_ms:<10.1f} {comm_range:<15} {r.stability * 100:.1f}%"
+                )
             else:
                 print(f"{r.algorithm:<25} FAILED")
 

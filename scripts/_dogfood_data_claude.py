@@ -1,5 +1,7 @@
 """Ingest data: CLAUDE.md — project architecture, rules, and conventions."""
+
 from __future__ import annotations
+
 from typing import Any
 
 ITEMS: list[dict[str, Any]] = [

@@ -62,9 +62,7 @@ RETURN DISTINCT c.silo_id AS silo_id
 """
 
 
-async def migrate_silo(
-    client: MemgraphClient, silo_id: str, *, dry_run: bool = False
-) -> int:
+async def migrate_silo(client: MemgraphClient, silo_id: str, *, dry_run: bool = False) -> int:
     """Migrate BELONGS_TO -> MEMBER_OF for one silo.
 
     When dry_run=True, counts edges that would be migrated without mutating.
@@ -72,9 +70,7 @@ async def migrate_silo(
     """
     log = get_logger(__name__)
     if dry_run:
-        rows: list[dict[str, Any]] = await client.execute_query(
-            _DRY_RUN_SILO, {"silo_id": silo_id}
-        )
+        rows: list[dict[str, Any]] = await client.execute_query(_DRY_RUN_SILO, {"silo_id": silo_id})
         count: int = rows[0]["would_migrate"] if rows else 0
         log.info("silo_dry_run", silo_id=silo_id, would_migrate=count)
         return count
@@ -103,9 +99,7 @@ async def main() -> None:
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--silo-id", metavar="ID", help="Migrate a single silo.")
-    group.add_argument(
-        "--all-silos", action="store_true", help="Discover and migrate all silos."
-    )
+    group.add_argument("--all-silos", action="store_true", help="Discover and migrate all silos.")
     group.add_argument(
         "--verify",
         action="store_true",
@@ -157,9 +151,7 @@ async def main() -> None:
         if args.dry_run:
             log.info("dry_run_complete", would_migrate_total=total_processed, silos=len(silo_ids))
         else:
-            log.info(
-                "migration_complete", total_processed=total_processed, silos=len(silo_ids)
-            )
+            log.info("migration_complete", total_processed=total_processed, silos=len(silo_ids))
     finally:
         await client.close()
 

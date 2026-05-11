@@ -9,7 +9,7 @@ authors = [{ name = "Aliasgar Khimani", email = "khimanialiasgar@gmail.com" }]
 
 dependencies = [
     # Internal
-    "primitives",
+    "engrammic-primitives",
     # Web
     "fastapi>=0.111",
     "uvicorn[standard]>=0.29",
@@ -113,4 +113,4 @@ markers = [
 ]
 
 [tool.uv.sources]
-primitives = { path = "../primitives", editable = true }
+engrammic-primitives = { path = "../primitives", editable = true }

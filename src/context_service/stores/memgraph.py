@@ -12,6 +12,7 @@ from typing import Any
 
 from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncSession, AsyncTransaction
 from neo4j.exceptions import ClientError, ServiceUnavailable
+from opentelemetry import trace
 from tenacity import (
     AsyncRetrying,
     RetryError,
@@ -20,8 +21,6 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
-
-from opentelemetry import trace
 
 from context_service.config.logging import get_logger
 from context_service.config.settings import Settings, get_settings

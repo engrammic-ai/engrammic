@@ -201,9 +201,7 @@ async def export_vectors(
 
 
 async def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Export a silo's graph state to JSONL."
-    )
+    parser = argparse.ArgumentParser(description="Export a silo's graph state to JSONL.")
     parser.add_argument("--silo-id", required=True, metavar="UUID", help="Silo to export.")
     parser.add_argument("--out", required=True, metavar="PATH", help="Output JSONL file.")
     parser.add_argument(
@@ -258,15 +256,11 @@ async def main() -> None:
             f.write(json.dumps(manifest) + "\n")
 
             # Nodes
-            nodes_written = await export_nodes(
-                client, args.silo_id, f, page_size=args.page_size
-            )
+            nodes_written = await export_nodes(client, args.silo_id, f, page_size=args.page_size)
             log.info("nodes_exported", count=nodes_written)
 
             # Edges
-            edges_written = await export_edges(
-                client, args.silo_id, f, page_size=args.page_size
-            )
+            edges_written = await export_edges(client, args.silo_id, f, page_size=args.page_size)
             log.info("edges_exported", count=edges_written)
 
             # Vectors (optional)

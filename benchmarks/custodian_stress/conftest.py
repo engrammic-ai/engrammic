@@ -28,6 +28,7 @@ def docker_stack_available() -> bool:
 
     try:
         import socket
+
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(2)
         result = sock.connect_ex((memgraph_host, int(memgraph_port)))

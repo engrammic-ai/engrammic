@@ -19,6 +19,7 @@ from context_service import __version__
 def setup_tracing(service_name: str = "context-service") -> None:
     """Initialize OpenTelemetry tracing and metrics if OTEL_EXPORTER_OTLP_ENDPOINT is set."""
     import structlog
+
     logger = structlog.get_logger(__name__)
 
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")

@@ -112,14 +112,14 @@ async def _backfill_silo(
     collections = await client.get_collections()
     existing = {c.name for c in collections.collections}
     if get_collection_name(silo_id) not in existing:
-        log.warning("backfill_collection_missing", collection=get_collection_name(silo_id), silo_id=silo_id)
+        log.warning(
+            "backfill_collection_missing", collection=get_collection_name(silo_id), silo_id=silo_id
+        )
         return 0
 
     from qdrant_client.models import FieldCondition, Filter, MatchValue
 
-    query_filter = Filter(
-        must=[FieldCondition(key="silo_id", match=MatchValue(value=silo_id))]
-    )
+    query_filter = Filter(must=[FieldCondition(key="silo_id", match=MatchValue(value=silo_id))])
 
     # Resume: restore last offset for this silo if available.
     resume_offset: str | int | None = resume_state.get(silo_id)
@@ -150,8 +150,7 @@ async def _backfill_silo(
         needs_expansion = [
             p
             for p in points
-            if p.payload is not None
-            and not str(p.payload.get("expansion") or "").strip()
+            if p.payload is not None and not str(p.payload.get("expansion") or "").strip()
         ]
 
         if needs_expansion and not dry_run:
@@ -194,9 +193,7 @@ async def _backfill_silo(
             from qdrant_client.models import PointStruct, SparseVector
 
             updated_points: list[PointStruct] = []
-            for p, expansion, sparse in zip(
-                needs_expansion, expansions, sparse_vecs, strict=False
-            ):
+            for p, expansion, sparse in zip(needs_expansion, expansions, sparse_vecs, strict=False):
                 indices, values = encoder.to_qdrant(sparse)
                 if not indices:
                     # SPLADE produced an empty vector — skip rather than corrupt.

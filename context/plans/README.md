@@ -2,7 +2,7 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-09)
+## Current state (2026-05-11)
 
 **Shipped:**
 - v2.1 Custodian Identity Split (4 identities: Custodian, Synthesizer, Groundskeeper, Validator)
@@ -10,19 +10,22 @@ Active implementation plans for context-service. Completed plans are moved to `a
 - v1.7 Auto-Tagging (tag config, cosine matching, Dagster pipelines)
 - v1.6 Hybrid Storage (Postgres+Memgraph saga, consolidation, crystallization, GC)
 - v1.5 Agent Identity (agent nodes, reflection filtering, chain continuity, per-silo config)
-- v1.4.1 MCP QoL (consolidated to 4 tools: store, recall, link, admin; removed 4 legacy tool files)
+- v1.4.1 MCP QoL (consolidated to 10 tools: store, recall, link, admin, belief_state, update_belief, crystallize, accept_belief, reject_belief, skills)
 - v1d Signals Enhancement (heat ranking, unified decay, write events)
+- OSS Adoption Helpers (manifesto, quickstart READMEs for primitives/engine/mcp-client)
+- MCP Client Scaffold (engrammic-mcp repo shipped)
+- Pipeline Validation (heat, extraction, pattern detection validated)
 
 ## Active plans
 
 | Plan | Status | Description |
 |------|--------|-------------|
-| [2026-05-10-pipeline-validation.md](./2026-05-10-pipeline-validation.md) | Active | Q/A validation of heat, extraction, compaction, pattern, belief pipelines |
+| [2026-05-11-telemetry-expansion.md](./2026-05-11-telemetry-expansion.md) | Draft | OTEL metrics for all storage backends, LLM tokens, chain reuse |
 | [2026-05-09-custodian-identity-split.md](./2026-05-09-custodian-identity-split.md) | Tech debt | Dagster jobs, LLM wiring remaining |
 | [2026-05-08-self-hosted-telemetry.md](./2026-05-08-self-hosted-telemetry.md) | Active | Two-tier telemetry for self-hosted deployments |
-| [2026-05-06-mcp-client-scaffold.md](./2026-05-06-mcp-client-scaffold.md) | Active | MCP marketplace client repo scaffold |
 
 Next candidates:
+- Beacon receiving endpoint (Cloud Run)
 - Clustering algorithm evaluation (spike)
 - LLM-based contradiction detection (Custodian identity)
 - LLM-based synthesis (Synthesizer identity)
@@ -40,9 +43,7 @@ Next candidates:
 |------|-------------|
 | [oss-master.md](./oss-master.md) | Master plan for open-source launch |
 | [oss-engine.md](./oss-engine.md) | W1: Engine repo (single-tenant SQLite) |
-| [oss-manifesto.md](./oss-manifesto.md) | W2: Practitioner manifesto |
 | [oss-launch-prep.md](./oss-launch-prep.md) | W3: Repo hygiene + landing page |
-| [2026-05-11-oss-adoption-helpers.md](./2026-05-11-oss-adoption-helpers.md) | README rewrites for <5min quickstart |
 
 ## Reference
 
@@ -54,6 +55,10 @@ Next candidates:
 ## Archive
 
 Completed plans in `archive/`:
+- OSS Adoption Helpers (2026-05-11)
+- Pipeline Validation (2026-05-10)
+- MCP Client Scaffold (2026-05-06)
+- OSS Manifesto (2026-05-11)
 - v2 Architecture Fixes (2026-05-07)
 - E2E test scenarios (2026-05-06)
 - as_of time-travel for node_ids (2026-05-06)

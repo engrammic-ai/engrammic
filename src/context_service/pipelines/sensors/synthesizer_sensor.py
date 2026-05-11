@@ -46,7 +46,11 @@ def synthesizer_threshold_sensor(
         driver = await memgraph.driver()
         client = MemgraphClient(driver)
         rows = await client.execute_query(_PENDING_CLUSTERS_BY_SILO, {"threshold": threshold})
-        return [{"silo_id": str(r["silo_id"]), "pending": int(r["pending"])} for r in rows if r.get("silo_id")]
+        return [
+            {"silo_id": str(r["silo_id"]), "pending": int(r["pending"])}
+            for r in rows
+            if r.get("silo_id")
+        ]
 
     candidates = asyncio.run(_poll())
 
@@ -57,18 +61,12 @@ def synthesizer_threshold_sensor(
     for c in candidates:
         silo_id: str = c["silo_id"]
         pending: int = c["pending"]
-        context.log.info(
-            f"synthesizer_threshold_sensor: silo={silo_id} pending_clusters={pending}"
-        )
+        context.log.info(f"synthesizer_threshold_sensor: silo={silo_id} pending_clusters={pending}")
         run_requests.append(
             dg.RunRequest(
                 run_key=f"synthesizer:{silo_id}:{context.cursor or 'init'}",
                 partition_key=silo_id,
-                run_config={
-                    "ops": {
-                        "synthesizer_sweep_op": {"config": {"silo_id": silo_id}}
-                    }
-                },
+                run_config={"ops": {"synthesizer_sweep_op": {"config": {"silo_id": silo_id}}}},
                 tags={"dagster/concurrency_key": silo_id},
             )
         )

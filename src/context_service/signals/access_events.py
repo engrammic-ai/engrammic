@@ -59,7 +59,9 @@ async def emit_access_event(
 
             # Dedup: skip if same node was accessed within the cooldown window
             dedup_key = f"heat:dedup:{silo_id}:{node_id}"
-            is_new = await redis.set_nx(dedup_key, "1", ttl_seconds=settings.heat_dedup_window_seconds)
+            is_new = await redis.set_nx(
+                dedup_key, "1", ttl_seconds=settings.heat_dedup_window_seconds
+            )
             if not is_new:
                 return
 

@@ -509,6 +509,7 @@ dependencies = [
     { name = "dagster" },
     { name = "dagster-postgres" },
     { name = "dagster-webserver" },
+    { name = "engrammic-primitives" },
     { name = "fastapi" },
     { name = "fastmcp" },
     { name = "httpx" },
@@ -522,7 +523,6 @@ dependencies = [
     { name = "opentelemetry-instrumentation-redis" },
     { name = "opentelemetry-sdk" },
     { name = "orjson" },
-    { name = "primitives" },
     { name = "prometheus-client" },
     { name = "pydantic" },
     { name = "pydantic-ai" },
@@ -570,6 +570,7 @@ requires-dist = [
     { name = "dagster", specifier = ">=1.7" },
     { name = "dagster-postgres", specifier = ">=0.23" },
     { name = "dagster-webserver", specifier = ">=1.7" },
+    { name = "engrammic-primitives", editable = "../primitives" },
     { name = "fastapi", specifier = ">=0.111" },
     { name = "fastmcp", specifier = ">=2.0" },
     { name = "httpx", specifier = ">=0.27" },
@@ -583,7 +584,6 @@ requires-dist = [
     { name = "opentelemetry-instrumentation-redis", specifier = ">=0.46b0" },
     { name = "opentelemetry-sdk", specifier = ">=1.25" },
     { name = "orjson", specifier = ">=3.9" },
-    { name = "primitives", editable = "../primitives" },
     { name = "prometheus-client", specifier = ">=0.20" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pydantic-ai", specifier = ">=0.0.14" },
@@ -981,6 +981,25 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/f5/22/900cb125c76b7aaa450ce02fd727f452243f2e91a61af068b40adba60ea9/email_validator-2.3.0.tar.gz", hash = "sha256:9fc05c37f2f6cf439ff414f8fc46d917929974a82244c20eb10231ba60c54426", size = 51238, upload-time = "2025-08-26T13:09:06.831Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/de/15/545e2b6cf2e3be84bc1ed85613edd75b8aea69807a71c26f4ca6a9258e82/email_validator-2.3.0-py3-none-any.whl", hash = "sha256:80f13f623413e6b197ae73bb10bf4eb0908faf509ad8362c5edeb0be7fd450b4", size = 35604, upload-time = "2025-08-26T13:09:05.858Z" },
+]
+
+[[package]]
+name = "engrammic-primitives"
+version = "0.1.0"
+source = { editable = "../primitives" }
+dependencies = [
+    { name = "pydantic" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2.0" }]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mypy", specifier = ">=1.10" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-asyncio", specifier = ">=0.23" },
+    { name = "ruff", specifier = ">=0.4" },
 ]
 
 [[package]]
@@ -3030,25 +3049,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5e/77/65b857a69ed876e1951e88aaba60f5ce6120c33703f7cb61a3c894b8c1b6/portalocker-3.2.0.tar.gz", hash = "sha256:1f3002956a54a8c3730586c5c77bf18fae4149e07eaf1c29fc3faf4d5a3f89ac", size = 95644, upload-time = "2025-06-14T13:20:40.03Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4b/a6/38c8e2f318bf67d338f4d629e93b0b4b9af331f455f0390ea8ce4a099b26/portalocker-3.2.0-py3-none-any.whl", hash = "sha256:3cdc5f565312224bc570c49337bd21428bba0ef363bbcf58b9ef4a9f11779968", size = 22424, upload-time = "2025-06-14T13:20:38.083Z" },
-]
-
-[[package]]
-name = "primitives"
-version = "0.1.0"
-source = { editable = "../primitives" }
-dependencies = [
-    { name = "pydantic" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2.0" }]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mypy", specifier = ">=1.10" },
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "pytest-asyncio", specifier = ">=0.23" },
-    { name = "ruff", specifier = ">=0.4" },
 ]
 
 [[package]]

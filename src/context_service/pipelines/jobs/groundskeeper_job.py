@@ -40,16 +40,12 @@ def groundskeeper_gc_op(context) -> dict[str, Any]:
 
         total_deleted = 0
         for silo_id in silos:
-            gk = GroundskeeperIdentity(
-                store=store, silo_id=silo_id, decay_config=decay_config
-            )
+            gk = GroundskeeperIdentity(store=store, silo_id=silo_id, decay_config=decay_config)
             result = await gk.run_gc()
             deleted = result["deleted"]
             assert isinstance(deleted, int)
             total_deleted += deleted
-            context.log.info(
-                f"groundskeeper.gc: silo={silo_id} deleted={deleted}"
-            )
+            context.log.info(f"groundskeeper.gc: silo={silo_id} deleted={deleted}")
 
         return {"total_deleted": total_deleted, "silos_processed": len(silos)}
 

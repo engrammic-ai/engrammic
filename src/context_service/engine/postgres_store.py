@@ -115,9 +115,7 @@ class PostgresStore:
                 result = await session.execute(stmt)
                 return {row.chain_id: row.steps for row in result}
         finally:
-            record_db_query(
-                "postgres.get_chain_steps_batch", (time.perf_counter() - start) * 1000
-            )
+            record_db_query("postgres.get_chain_steps_batch", (time.perf_counter() - start) * 1000)
 
     async def add_orphaned_chain(self, chain_id: UUID, silo_id: UUID, error: str) -> None:
         """Add chain to dead-letter table."""

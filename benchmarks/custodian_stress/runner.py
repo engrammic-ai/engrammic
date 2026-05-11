@@ -33,9 +33,13 @@ async def run_all_scenarios(
     harness.add_result(await volume.test_uneven_cluster_scaling(store, mock_llm=mock_llm))
 
     # Edge case scenarios
-    harness.add_result(await edge_cases.test_supersession_chain_terminal_only(store, mock_llm=mock_llm))
+    harness.add_result(
+        await edge_cases.test_supersession_chain_terminal_only(store, mock_llm=mock_llm)
+    )
     harness.add_result(await edge_cases.test_circular_dep_no_hang(store))
-    harness.add_result(await edge_cases.test_cross_cluster_supersession_chain(store, mock_llm=mock_llm))
+    harness.add_result(
+        await edge_cases.test_cross_cluster_supersession_chain(store, mock_llm=mock_llm)
+    )
 
     # Concurrency scenarios
     harness.add_result(await concurrency.test_no_duplicate_findings(store))
@@ -49,7 +53,9 @@ async def run_all_scenarios(
     harness.add_result(await security.test_cross_tenant_citation_rejected(store))
 
     # Synthesis scenarios
-    harness.add_result(await synthesis.test_silo_synthesis_creates_summary(store, mock_llm=mock_llm))
+    harness.add_result(
+        await synthesis.test_silo_synthesis_creates_summary(store, mock_llm=mock_llm)
+    )
 
     # History scenarios
     harness.add_result(await history.test_finding_history_trim(store))

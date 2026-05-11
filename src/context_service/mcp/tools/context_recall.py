@@ -281,7 +281,9 @@ def register(mcp: FastMCP) -> None:
             node_count = len(result.get("results", result.get("nodes", [])))
             avg_node_bytes = 500 if include_content else 100
             estimated_bytes = node_count * avg_node_bytes + 200
-            layer_name = (layers[0] if layers and len(layers) == 1 else "mixed") if layers else "all"
+            layer_name = (
+                (layers[0] if layers and len(layers) == 1 else "mixed") if layers else "all"
+            )
             record_context_recall_size(layer_name, estimated_bytes)
             return result
         except Exception:

@@ -449,7 +449,9 @@ class EngineQdrantStore:
                 )
                 raise QdrantOperationError(f"Failed to ensure cluster collection: {e}") from e
             finally:
-                record_db_query("qdrant_store.ensure_cluster_collection", (time.perf_counter() - start) * 1000)
+                record_db_query(
+                    "qdrant_store.ensure_cluster_collection", (time.perf_counter() - start) * 1000
+                )
         return name
 
     async def upsert_cluster_embedding(
@@ -486,7 +488,9 @@ class EngineQdrantStore:
                 f"Failed to upsert cluster embedding {cluster_id}: {e}"
             ) from e
         finally:
-            record_db_query("qdrant_store.upsert_cluster_embedding", (time.perf_counter() - start) * 1000)
+            record_db_query(
+                "qdrant_store.upsert_cluster_embedding", (time.perf_counter() - start) * 1000
+            )
 
     async def batch_upsert_cluster_embeddings(
         self,
@@ -526,7 +530,9 @@ class EngineQdrantStore:
             )
             raise QdrantOperationError(f"Failed to batch upsert cluster embeddings: {e}") from e
         finally:
-            record_db_query("qdrant_store.batch_upsert_cluster_embeddings", (time.perf_counter() - start) * 1000)
+            record_db_query(
+                "qdrant_store.batch_upsert_cluster_embeddings", (time.perf_counter() - start) * 1000
+            )
         return len(points)
 
     async def search_clusters(
@@ -581,4 +587,6 @@ class EngineQdrantStore:
         except Exception:
             logger.debug(f"Cluster collection {name} not found, skipping delete")
         finally:
-            record_db_query("qdrant_store.delete_cluster_collection", (time.perf_counter() - start) * 1000)
+            record_db_query(
+                "qdrant_store.delete_cluster_collection", (time.perf_counter() - start) * 1000
+            )

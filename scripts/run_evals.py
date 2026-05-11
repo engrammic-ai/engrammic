@@ -12,7 +12,9 @@ PROVIDER_CHOICES = click.Choice(["vertex", "gemini", "anthropic", "openai"])
 
 
 @click.command()
-@click.option("--scenario", help="Run a specific scenario by keyword (e.g. recall, claim_promotion).")
+@click.option(
+    "--scenario", help="Run a specific scenario by keyword (e.g. recall, claim_promotion)."
+)
 @click.option("--with-llm", is_flag=True, help="Enable eval cases that call live LLM APIs.")
 @click.option(
     "--provider",

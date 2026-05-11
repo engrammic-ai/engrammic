@@ -1,5 +1,7 @@
 """Ingest data: api-examples.md — MCP tool contracts and patterns."""
+
 from __future__ import annotations
+
 from typing import Any
 
 ITEMS: list[dict[str, Any]] = [
@@ -322,10 +324,26 @@ ITEMS: list[dict[str, Any]] = [
         "evidence": [],
         "about": [],
         "steps": [
-            {"step": 1, "reasoning": "Call context_store with layer=memory to persist the observation; capture node_id from the response.", "confidence": 0.95},
-            {"step": 2, "reasoning": "Later, call context_recall with mode=search and the current query to surface semantically relevant nodes.", "confidence": 0.95},
-            {"step": 3, "reasoning": "For each top result, call context_recall with mode=fetch and the node_id to retrieve full content.", "confidence": 0.9},
-            {"step": 4, "reasoning": "Inject fetched content into the prompt context before generating a response.", "confidence": 0.9},
+            {
+                "step": 1,
+                "reasoning": "Call context_store with layer=memory to persist the observation; capture node_id from the response.",
+                "confidence": 0.95,
+            },
+            {
+                "step": 2,
+                "reasoning": "Later, call context_recall with mode=search and the current query to surface semantically relevant nodes.",
+                "confidence": 0.95,
+            },
+            {
+                "step": 3,
+                "reasoning": "For each top result, call context_recall with mode=fetch and the node_id to retrieve full content.",
+                "confidence": 0.9,
+            },
+            {
+                "step": 4,
+                "reasoning": "Inject fetched content into the prompt context before generating a response.",
+                "confidence": 0.9,
+            },
         ],
     },
     {
@@ -335,9 +353,21 @@ ITEMS: list[dict[str, Any]] = [
         "evidence": [],
         "about": [],
         "steps": [
-            {"step": 1, "reasoning": "Identify the memory node that supports the claim; note its node_id.", "confidence": 0.95},
-            {"step": 2, "reasoning": "Call context_store with layer=knowledge, the claim as content, and evidence=[f'node:{node_id}'].", "confidence": 0.95},
-            {"step": 3, "reasoning": "Check promoted_to_fact in the response to confirm evidence was accepted.", "confidence": 0.85},
+            {
+                "step": 1,
+                "reasoning": "Identify the memory node that supports the claim; note its node_id.",
+                "confidence": 0.95,
+            },
+            {
+                "step": 2,
+                "reasoning": "Call context_store with layer=knowledge, the claim as content, and evidence=[f'node:{node_id}'].",
+                "confidence": 0.95,
+            },
+            {
+                "step": 3,
+                "reasoning": "Check promoted_to_fact in the response to confirm evidence was accepted.",
+                "confidence": 0.85,
+            },
         ],
     },
     {
@@ -347,9 +377,21 @@ ITEMS: list[dict[str, Any]] = [
         "evidence": [],
         "about": [],
         "steps": [
-            {"step": 1, "reasoning": "Agent A stores shared context to memory with descriptive tags; silo_id is implicit from auth.", "confidence": 0.95},
-            {"step": 2, "reasoning": "Agent B, authenticated to the same silo, calls context_recall search; shared context is visible without extra configuration.", "confidence": 0.95},
-            {"step": 3, "reasoning": "No silo_id param is needed in either call; the session token determines the addressed silo.", "confidence": 0.98},
+            {
+                "step": 1,
+                "reasoning": "Agent A stores shared context to memory with descriptive tags; silo_id is implicit from auth.",
+                "confidence": 0.95,
+            },
+            {
+                "step": 2,
+                "reasoning": "Agent B, authenticated to the same silo, calls context_recall search; shared context is visible without extra configuration.",
+                "confidence": 0.95,
+            },
+            {
+                "step": 3,
+                "reasoning": "No silo_id param is needed in either call; the session token determines the addressed silo.",
+                "confidence": 0.98,
+            },
         ],
     },
     {
@@ -359,9 +401,21 @@ ITEMS: list[dict[str, Any]] = [
         "evidence": [],
         "about": [],
         "steps": [
-            {"step": 1, "reasoning": "Call context_recall with mode=graph, a semantic query string, depth=2, and top_k=30.", "confidence": 0.95},
-            {"step": 2, "reasoning": "Inspect traversal_stats to understand depth_reached and nodes_visited.", "confidence": 0.85},
-            {"step": 3, "reasoning": "Use the returned nodes and edges to build a local context graph for reasoning.", "confidence": 0.9},
+            {
+                "step": 1,
+                "reasoning": "Call context_recall with mode=graph, a semantic query string, depth=2, and top_k=30.",
+                "confidence": 0.95,
+            },
+            {
+                "step": 2,
+                "reasoning": "Inspect traversal_stats to understand depth_reached and nodes_visited.",
+                "confidence": 0.85,
+            },
+            {
+                "step": 3,
+                "reasoning": "Use the returned nodes and edges to build a local context graph for reasoning.",
+                "confidence": 0.9,
+            },
         ],
     },
     {
@@ -371,9 +425,21 @@ ITEMS: list[dict[str, Any]] = [
         "evidence": [],
         "about": [],
         "steps": [
-            {"step": 1, "reasoning": "Construct a steps list where each entry has step (int), reasoning (str), and optionally confidence (float).", "confidence": 0.95},
-            {"step": 2, "reasoning": "Call context_store with layer=intelligence, a summary conclusion as content, and the steps list.", "confidence": 0.95},
-            {"step": 3, "reasoning": "Check crystallizations_queued in the response to confirm emergent claims were extracted.", "confidence": 0.85},
+            {
+                "step": 1,
+                "reasoning": "Construct a steps list where each entry has step (int), reasoning (str), and optionally confidence (float).",
+                "confidence": 0.95,
+            },
+            {
+                "step": 2,
+                "reasoning": "Call context_store with layer=intelligence, a summary conclusion as content, and the steps list.",
+                "confidence": 0.95,
+            },
+            {
+                "step": 3,
+                "reasoning": "Check crystallizations_queued in the response to confirm emergent claims were extracted.",
+                "confidence": 0.85,
+            },
         ],
     },
     {
@@ -383,9 +449,21 @@ ITEMS: list[dict[str, Any]] = [
         "evidence": [],
         "about": [],
         "steps": [
-            {"step": 1, "reasoning": "Collect node IDs of knowledge nodes and intelligence chains that ground the belief.", "confidence": 0.95},
-            {"step": 2, "reasoning": "Call context_store with layer=wisdom, the belief as content, and about=[knowledge_node_id, chain_node_id].", "confidence": 0.95},
-            {"step": 3, "reasoning": "Verify declared_by in the response matches the agent's identity.", "confidence": 0.8},
+            {
+                "step": 1,
+                "reasoning": "Collect node IDs of knowledge nodes and intelligence chains that ground the belief.",
+                "confidence": 0.95,
+            },
+            {
+                "step": 2,
+                "reasoning": "Call context_store with layer=wisdom, the belief as content, and about=[knowledge_node_id, chain_node_id].",
+                "confidence": 0.95,
+            },
+            {
+                "step": 3,
+                "reasoning": "Verify declared_by in the response matches the agent's identity.",
+                "confidence": 0.8,
+            },
         ],
     },
     {
@@ -395,9 +473,21 @@ ITEMS: list[dict[str, Any]] = [
         "evidence": [],
         "about": [],
         "steps": [
-            {"step": 1, "reasoning": "Call context_recall with mode=provenance and the target node_id to retrieve the citation chain and root_sources.", "confidence": 0.95},
-            {"step": 2, "reasoning": "Call context_recall with mode=history and the same node_id to retrieve the SUPERSEDES timeline.", "confidence": 0.95},
-            {"step": 3, "reasoning": "Compare root_sources with timeline entries to understand how raw observations became validated facts.", "confidence": 0.9},
+            {
+                "step": 1,
+                "reasoning": "Call context_recall with mode=provenance and the target node_id to retrieve the citation chain and root_sources.",
+                "confidence": 0.95,
+            },
+            {
+                "step": 2,
+                "reasoning": "Call context_recall with mode=history and the same node_id to retrieve the SUPERSEDES timeline.",
+                "confidence": 0.95,
+            },
+            {
+                "step": 3,
+                "reasoning": "Compare root_sources with timeline entries to understand how raw observations became validated facts.",
+                "confidence": 0.9,
+            },
         ],
     },
 ]

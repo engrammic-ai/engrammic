@@ -6,16 +6,13 @@ import asyncio
 import os
 from logging.config import fileConfig
 
-from sqlalchemy.ext.asyncio import async_engine_from_config
 from sqlalchemy import pool
+from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
 # Import Base so SQLAlchemy metadata is populated.
 from context_service.db.postgres import Base  # noqa: F401
-
-# Import models to register them against Base.metadata before autogenerate runs.
-from context_service.models.tag_config import SiloTagConfig  # noqa: F401
 from context_service.models.postgres import (  # noqa: F401
     AuditEvents,
     Events,
@@ -24,6 +21,9 @@ from context_service.models.postgres import (  # noqa: F401
     ReasoningChainSteps,
     SiloConfig,
 )
+
+# Import models to register them against Base.metadata before autogenerate runs.
+from context_service.models.tag_config import SiloTagConfig  # noqa: F401
 
 config = context.config
 

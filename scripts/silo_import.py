@@ -211,9 +211,7 @@ class SiloImporter:
         )
         await self._client.execute_write(cypher, params)
 
-    async def import_vector(
-        self, record: dict[str, Any], qdrant: QdrantClient
-    ) -> None:
+    async def import_vector(self, record: dict[str, Any], qdrant: QdrantClient) -> None:
         node_id: str = record["node_id"]
         dense: list[float] = record.get("dense", [])
         if not dense:
@@ -339,9 +337,7 @@ async def main() -> None:
     try:
         # Pre-existing silo guard
         if not args.force and not args.dry_run:
-            rows = await client.execute_query(
-                _COUNT_SILO_NODES, {"silo_id": target_silo_id}
-            )
+            rows = await client.execute_query(_COUNT_SILO_NODES, {"silo_id": target_silo_id})
             existing_count: int = rows[0]["cnt"] if rows else 0
             if existing_count > 0:
                 log.error(

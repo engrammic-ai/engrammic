@@ -70,9 +70,7 @@ async def _backfill_silo(
 
     from qdrant_client.models import FieldCondition, Filter, MatchValue
 
-    query_filter = Filter(
-        must=[FieldCondition(key="silo_id", match=MatchValue(value=silo_id))]
-    )
+    query_filter = Filter(must=[FieldCondition(key="silo_id", match=MatchValue(value=silo_id))])
 
     total_updated = 0
     offset: str | int | None = None
