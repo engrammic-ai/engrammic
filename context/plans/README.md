@@ -20,8 +20,9 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Status | Description |
 |------|--------|-------------|
+| [2026-05-11-reasoning-chain-applicability.md](./2026-05-11-reasoning-chain-applicability.md) | Ready | Three-layer chain reuse matching (query/DTW/evidence), implicit feedback |
 | [2026-05-11-telemetry-expansion.md](./2026-05-11-telemetry-expansion.md) | Draft | OTEL metrics for all storage backends, LLM tokens, chain reuse |
-| [2026-05-09-custodian-identity-split.md](./2026-05-09-custodian-identity-split.md) | Tech debt | Dagster jobs, LLM wiring remaining |
+| [2026-05-09-custodian-identity-split.md](./2026-05-09-custodian-identity-split.md) | Tech debt | Dagster jobs remaining (LLM wiring done) |
 | [2026-05-08-self-hosted-telemetry.md](./2026-05-08-self-hosted-telemetry.md) | Active | Two-tier telemetry for self-hosted deployments |
 
 Next candidates:
@@ -51,6 +52,7 @@ Next candidates:
 |------|-------------|
 | [2026-05-09-architecture-review.md](./2026-05-09-architecture-review.md) | Architecture decisions: hypergraph, consistency, custodian split, observability |
 | [eag-integration-audit.md](./eag-integration-audit.md) | Deferred items from EAG port |
+| [../specs/reasoning-chain-applicability.md](../specs/reasoning-chain-applicability.md) | Spec: reasoning chain applicability matching design |
 
 ## Archive
 

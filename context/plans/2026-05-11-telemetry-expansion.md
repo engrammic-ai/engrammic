@@ -174,6 +174,24 @@ def _record_usage(self, usage: Usage) -> None:
 
 ## Phase 4: Reasoning Chain Reuse Tracking
 
+**Superseded by dedicated spec and plan.**
+
+The naive hash-based approach below was found to produce false positives (chains sharing intermediate steps without being semantically substitutable). A proper design was developed:
+
+- **Spec:** [`../specs/reasoning-chain-applicability.md`](../specs/reasoning-chain-applicability.md)
+- **Plan:** [`2026-05-11-reasoning-chain-applicability.md`](./2026-05-11-reasoning-chain-applicability.md)
+
+Key changes from original approach:
+- Three-layer matching: query intent (embedding+ANN), step similarity (DTW), evidence accessibility
+- "Applicability" not "equivalence" - can this chain answer the new query?
+- Implicit feedback via session correlation for threshold tuning
+- 11 implementation tasks, ~4-5 hours
+
+Execute the dedicated plan instead of the steps below.
+
+<details>
+<summary>Original (deprecated) approach</summary>
+
 ### 4.1 Add hash lookup before chain creation
 
 File: `src/context_service/mcp/tools/context_store.py`, function `_context_reason` (~line 410)
@@ -217,6 +235,8 @@ ORDER BY c.created_at DESC
 LIMIT 1
 """
 ```
+
+</details>
 
 ---
 

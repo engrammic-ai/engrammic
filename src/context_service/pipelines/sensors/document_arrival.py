@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import dagster as dg
+from dagster import SensorEvaluationContext
 
 from context_service.pipelines.resources import MemgraphResource
 from context_service.utils.json import JSONDecodeError, dumps, loads
@@ -50,7 +51,7 @@ def _parse_iso_datetime(ts: str) -> datetime | None:
     description="Triggers extraction and embedding assets for silos with pending :Document nodes.",
 )
 def document_arrival_sensor(
-    context,
+    context: SensorEvaluationContext,
     memgraph: MemgraphResource,
 ) -> dg.SensorResult:
     """Poll for pending documents per silo and request extraction runs."""

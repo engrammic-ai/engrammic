@@ -6,6 +6,7 @@ import asyncio
 from typing import Any
 
 import dagster as dg
+from dagster import SensorEvaluationContext
 
 from context_service.engine.synthesis import _get_min_facts_for_belief
 from context_service.pipelines.resources import MemgraphResource
@@ -48,7 +49,7 @@ def _parse_cursor(cursor: str | None) -> dict[str, list[str]]:
     ),
 )
 def belief_synthesis_sensor(
-    context,
+    context: SensorEvaluationContext,
     memgraph: MemgraphResource,
 ) -> dg.SensorResult:
     """Poll for dense clusters and request synthesis runs for uncovered ones."""
