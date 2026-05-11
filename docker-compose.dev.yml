@@ -25,6 +25,7 @@ services:
       - ./src:/app/src
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./config:/app/config:ro
+      - ./skills:/app/skills:ro
     depends_on:
       memgraph:
         condition: service_healthy

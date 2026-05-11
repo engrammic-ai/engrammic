@@ -23,6 +23,7 @@ services:
     volumes:
       - ./secrets:/app/secrets:ro
       - ./config:/app/config:ro
+      - ./skills:/app/skills:ro
     depends_on:
       memgraph:
         condition: service_healthy
