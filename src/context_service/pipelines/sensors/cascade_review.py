@@ -6,7 +6,6 @@ import time
 from typing import Any
 
 import dagster as dg
-from dagster import SensorEvaluationContext
 
 from context_service.pipelines.resources import MemgraphResource
 from context_service.pipelines.utils import run_async
@@ -30,7 +29,7 @@ _CASCADE_PENDING_LIMIT = 100
     ),
 )
 def cascade_review_sensor(
-    context: SensorEvaluationContext,
+    context,
     memgraph: MemgraphResource,
 ) -> dg.SensorResult:
     """Check for cascade-pending beliefs per silo and trigger review runs."""

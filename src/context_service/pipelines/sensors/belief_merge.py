@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import dagster as dg
-from dagster import SensorEvaluationContext
 
 from context_service.pipelines.resources import MemgraphResource
 from context_service.pipelines.utils import run_async
@@ -40,7 +39,7 @@ RETURN DISTINCT b.silo_id AS silo_id
     ),
 )
 def belief_merge_sensor(
-    context: SensorEvaluationContext,
+    context,
     memgraph: MemgraphResource,
 ) -> dg.SensorResult:
     """Poll for overlapping beliefs and request merge runs for qualifying pairs.

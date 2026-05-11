@@ -103,6 +103,12 @@ ignore = ["E501"]
 python_version = "3.12"
 strict = true
 
+# Dagster sensors/ops don't support typed context parameters at runtime
+[[tool.mypy.overrides]]
+module = ["context_service.pipelines.sensors.*", "context_service.pipelines.jobs.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

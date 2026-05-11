@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import dagster as dg
-from dagster import SensorEvaluationContext
 
 # Query used when the resummarization asset is wired up.
 FIND_PENDING_SUMMARIZATIONS = """
@@ -23,7 +22,7 @@ LIMIT 10
     description="Retry Events with pending summarization.",
 )
 def summarization_retry_sensor(
-    context: SensorEvaluationContext,
+    context,
 ) -> Iterator[dg.RunRequest]:
     """Find Events with pending summarization and log them.
 

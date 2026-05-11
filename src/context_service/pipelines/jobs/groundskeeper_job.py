@@ -8,12 +8,9 @@ threshold per decay class.
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import dagster as dg
-
-if TYPE_CHECKING:
-    from dagster import OpExecutionContext
 
 from context_service.config.settings import get_settings
 from context_service.pipelines.resources import MemgraphResource
@@ -24,7 +21,7 @@ MATCH (n) WHERE n.silo_id IS NOT NULL RETURN DISTINCT n.silo_id AS silo_id LIMIT
 
 
 @dg.op(required_resource_keys={"memgraph"})
-def groundskeeper_gc_op(context: OpExecutionContext) -> dict[str, Any]:
+def groundskeeper_gc_op(context) -> dict[str, Any]:
     """Run Memory GC for all active silos."""
     from context_service.custodian.identities.groundskeeper import GroundskeeperIdentity
 
