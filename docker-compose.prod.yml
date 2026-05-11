@@ -9,7 +9,7 @@ services:
     env_file:
       - .env
     environment:
-      - ENVIRONMENT=production
+      - ENVIRONMENT=development
       - MEMGRAPH_HOST=memgraph
       - QDRANT_HOST=qdrant
       - REDIS_HOST=redis
@@ -18,7 +18,7 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DATABASE=context_service
       - GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-sa.json
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz-otel-collector:4317
       - OTEL_SERVICE_NAME=context-service
     volumes:
       - ./secrets:/app/secrets:ro
