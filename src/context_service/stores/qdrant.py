@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass
-from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Literal
 
 from opentelemetry import trace
@@ -33,19 +32,6 @@ def get_collection_name(silo_id: str) -> str:
     return f"{COLLECTION_PREFIX}{silo_id}"
 
 
-@lru_cache
-def _get_collection_name() -> str:
-    """Legacy: load global collection name from config. Deprecated - use get_collection_name(silo_id)."""
-    from context_service.config.config_loader import load_config
-
-    logger.warning("_get_collection_name is deprecated, use get_collection_name(silo_id)")
-    try:
-        config = load_config("embeddings")
-        return str(config.get("qdrant_collection", "context_vectors"))
-    except FileNotFoundError:
-        return "context_vectors"
-
-
 SPARSE_VECTOR_NAME = "sparse"
 
 
@@ -70,6 +56,7 @@ class QdrantClient:
         url: str = "http://localhost:6333",
         api_key: str | None = None,
         vector_size: int = 1024,
+        collection_name: str = "context_vectors",
     ) -> None:
         """Initialize the Qdrant client.
 
@@ -77,10 +64,12 @@ class QdrantClient:
             url: Qdrant server URL.
             api_key: Optional API key for authentication.
             vector_size: Dimension of embedding vectors.
+            collection_name: Qdrant collection name.
         """
         self._url = url
         self._api_key = api_key
         self._vector_size = vector_size
+        self._collection_name = collection_name
         self._client: AsyncQdrantClient | None = None
         self._init_lock: asyncio.Lock = asyncio.Lock()
 
@@ -98,10 +87,12 @@ class QdrantClient:
 
         embed_config = load_config("embeddings")
         api_key = settings.qdrant_api_key.get_secret_value() if settings.qdrant_api_key else None
+        collection_name = str(embed_config.get("qdrant_collection", "context_vectors"))
         return cls(
             url=settings.qdrant_url,
             api_key=api_key,
             vector_size=embed_config["dimensions"],
+            collection_name=collection_name,
         )
 
     async def _get_client(self) -> AsyncQdrantClient:
@@ -129,10 +120,10 @@ class QdrantClient:
             collections = await client.get_collections()
             collection_names = [c.name for c in collections.collections]
 
-            if _get_collection_name() not in collection_names:
+            if self._collection_name not in collection_names:
                 if hybrid:
                     await client.create_collection(
-                        collection_name=_get_collection_name(),
+                        collection_name=self._collection_name,
                         vectors_config={
                             DENSE_VECTOR_NAME: models.VectorParams(
                                 size=self._vector_size,
@@ -145,7 +136,7 @@ class QdrantClient:
                     )
                 else:
                     await client.create_collection(
-                        collection_name=_get_collection_name(),
+                        collection_name=self._collection_name,
                         vectors_config=models.VectorParams(
                             size=self._vector_size,
                             distance=models.Distance.COSINE,
@@ -153,21 +144,21 @@ class QdrantClient:
                     )
                 logger.info(
                     "qdrant_collection_created",
-                    collection=_get_collection_name(),
+                    collection=self._collection_name,
                     hybrid=hybrid,
                 )
             else:
                 if hybrid:
                     logger.warning(
                         "qdrant_collection_exists_hybrid_mismatch",
-                        collection=_get_collection_name(),
+                        collection=self._collection_name,
                         message=(
                             "Collection exists; if created without hybrid mode, "
                             "named-vector upserts will fail. Recreate to enable hybrid."
                         ),
                     )
                 else:
-                    logger.debug("qdrant_collection_exists", collection=_get_collection_name())
+                    logger.debug("qdrant_collection_exists", collection=self._collection_name)
         except Exception as e:
             self._client = None
             logger.error("qdrant_ensure_collection_failed", error=str(e))
@@ -252,7 +243,7 @@ class QdrantClient:
                     point_vector = vector
 
                 await client.upsert(
-                    collection_name=_get_collection_name(),
+                    collection_name=self._collection_name,
                     points=[
                         models.PointStruct(
                             id=node_id,
@@ -346,7 +337,7 @@ class QdrantClient:
                             "sparse_indices and sparse_values are required for sparse mode"
                         )
                     response = await client.query_points(
-                        collection_name=_get_collection_name(),
+                        collection_name=self._collection_name,
                         query=models.SparseVector(
                             indices=sparse_indices,  # type: ignore[arg-type]
                             values=sparse_values,  # type: ignore[arg-type]
@@ -358,7 +349,7 @@ class QdrantClient:
                     )
                 elif effective_mode == "hybrid":
                     response = await client.query_points(
-                        collection_name=_get_collection_name(),
+                        collection_name=self._collection_name,
                         prefetch=[
                             models.Prefetch(
                                 query=vector,
@@ -382,7 +373,7 @@ class QdrantClient:
                     )
                 else:
                     response = await client.query_points(
-                        collection_name=_get_collection_name(),
+                        collection_name=self._collection_name,
                         query=vector,
                         limit=limit,
                         score_threshold=score_threshold,
@@ -429,7 +420,7 @@ class QdrantClient:
         start = time.perf_counter()
         try:
             await client.delete(
-                collection_name=_get_collection_name(),
+                collection_name=self._collection_name,
                 points_selector=models.PointIdsList(
                     points=[node_id],
                 ),
