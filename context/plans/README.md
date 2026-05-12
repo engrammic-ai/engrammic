@@ -2,10 +2,11 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-11)
+## Current state (2026-05-12)
 
 **Shipped:**
-- v2.1 Custodian Identity Split (4 identities: Custodian, Synthesizer, Groundskeeper, Validator)
+- v2.2 Reasoning Chain Applicability (three-layer matching, DTW, implicit feedback)
+- v2.1 Custodian Identity Split (4 identities with full LLM wiring + Dagster jobs/sensors)
 - v2 Architecture Fixes (error envelopes, outbox pattern, raw Cypher mixin, hydration registry, ProposedBelief flow)
 - v1.7 Auto-Tagging (tag config, cosine matching, Dagster pipelines)
 - v1.6 Hybrid Storage (Postgres+Memgraph saga, consolidation, crystallization, GC)
@@ -20,9 +21,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Status | Description |
 |------|--------|-------------|
-| [2026-05-11-reasoning-chain-applicability.md](./2026-05-11-reasoning-chain-applicability.md) | Ready | Three-layer chain reuse matching (query/DTW/evidence), implicit feedback |
 | [2026-05-11-telemetry-expansion.md](./2026-05-11-telemetry-expansion.md) | Draft | OTEL metrics for all storage backends, LLM tokens, chain reuse |
-| [2026-05-09-custodian-identity-split.md](./2026-05-09-custodian-identity-split.md) | Tech debt | Dagster jobs remaining (LLM wiring done) |
 | [2026-05-08-self-hosted-telemetry.md](./2026-05-08-self-hosted-telemetry.md) | Active | Two-tier telemetry for self-hosted deployments |
 
 Next candidates:
@@ -57,6 +56,8 @@ Next candidates:
 ## Archive
 
 Completed plans in `archive/`:
+- Reasoning Chain Applicability (2026-05-12) - three-layer matching, DTW, implicit feedback
+- Custodian Identity Split (2026-05-12) - 4 identities with LLM wiring + Dagster jobs
 - OSS Adoption Helpers (2026-05-11)
 - Pipeline Validation (2026-05-10)
 - MCP Client Scaffold (2026-05-06)
