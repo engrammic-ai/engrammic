@@ -234,7 +234,8 @@ class ContextService:
                 valid_from: $valid_from,
                 heat_score: 0.0,
                 tier: 'COLD',
-                tags: []
+                tags: [],
+                committed: true
             }})
             {"SET n += $extra_props" if extra_props else ""}
             RETURN n
@@ -1203,6 +1204,7 @@ class ContextService:
 
         # MetaObservations don't decay (per spec)
         props["decay_class"] = "permanent"
+        props["layer"] = "meta"
 
         node = await self.store(
             scope=scope,

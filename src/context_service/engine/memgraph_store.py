@@ -994,7 +994,7 @@ class MemgraphStore(EAGKnowledgeStore):
         now = datetime.now(UTC).isoformat()
         await self._client.execute_write(
             """
-            MERGE (n:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+            MERGE (n:ReasoningChain:Node {id: $chain_id, silo_id: $silo_id})
             ON CREATE SET
                 n.step_count = $step_count,
                 n.first_step = $first_step,
@@ -1007,6 +1007,9 @@ class MemgraphStore(EAGKnowledgeStore):
                 n.query_context_hash = $query_context_hash,
                 n.status = $status,
                 n.source = $source,
+                n.layer = "intelligence",
+                n.type = "ReasoningChain",
+                n.committed = true,
                 n.created_at = $now
             ON MATCH SET
                 n.step_count = $step_count,
