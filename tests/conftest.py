@@ -44,6 +44,7 @@ def _bootstrap_custodian_models() -> None:
     # Stub only sub-packages that haven't been loaded yet.
     # Set __path__ so they behave as packages with submodules.
     for pkg in [
+        "context_service.config",
         "context_service.core",
         "context_service.custodian",
         "context_service.extraction",
@@ -53,6 +54,10 @@ def _bootstrap_custodian_models() -> None:
             parts = pkg.split(".")
             stub.__path__ = [str(_SRC / Path(*parts))]
             sys.modules[pkg] = stub
+            # Also set the attribute on the parent so `import a.b.c` resolves.
+            parent = sys.modules.get(".".join(parts[:-1]))
+            if parent is not None:
+                setattr(parent, parts[-1], stub)
 
     # Load config.settings directly so custodian.models can call get_settings().
     _load_module_direct("context_service.config.settings")
