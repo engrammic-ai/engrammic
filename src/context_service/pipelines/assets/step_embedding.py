@@ -62,11 +62,13 @@ async def get_chains_needing_embedding(limit: int = 100) -> list[dict[str, Any]]
         payload = point.payload or {}
         step_embeddings = payload.get("step_embeddings", [])
         if not step_embeddings:  # Empty list means needs embedding
-            chains.append({
-                "point_id": point.id,
-                "chain_id": payload.get("node_id", str(point.id)),
-                "silo_id": payload.get("silo_id"),
-            })
+            chains.append(
+                {
+                    "point_id": point.id,
+                    "chain_id": payload.get("node_id", str(point.id)),
+                    "silo_id": payload.get("silo_id"),
+                }
+            )
             if len(chains) >= limit:
                 break
 
@@ -258,7 +260,9 @@ async def get_unembedded_hypotheses(limit: int = 100) -> list[dict[str, Any]]:
     """
 
     try:
-        result = await store.execute_query(query, {"cutoff": cutoff.isoformat(), "limit": limit * 2})
+        result = await store.execute_query(
+            query, {"cutoff": cutoff.isoformat(), "limit": limit * 2}
+        )
     except Exception as e:
         log.warning("get_unembedded_hypotheses_query_failed", error=str(e))
         return []
@@ -268,9 +272,7 @@ async def get_unembedded_hypotheses(limit: int = 100) -> list[dict[str, Any]]:
 
     # Get already-embedded hypothesis IDs
     async with get_pg_session() as session:
-        embedded_result = await session.execute(
-            select(SessionStepEmbedding.hypothesis_id)
-        )
+        embedded_result = await session.execute(select(SessionStepEmbedding.hypothesis_id))
         embedded_ids = {str(r) for r in embedded_result.scalars().all()}
 
     # Filter to unembedded
@@ -278,11 +280,13 @@ async def get_unembedded_hypotheses(limit: int = 100) -> list[dict[str, Any]]:
     for row in result:
         hyp_id = row.get("id")
         if hyp_id and str(hyp_id) not in embedded_ids:
-            hypotheses.append({
-                "hypothesis_id": hyp_id,
-                "session_id": row.get("session_id"),
-                "content": row.get("content"),
-            })
+            hypotheses.append(
+                {
+                    "hypothesis_id": hyp_id,
+                    "session_id": row.get("session_id"),
+                    "content": row.get("content"),
+                }
+            )
             if len(hypotheses) >= limit:
                 break
 

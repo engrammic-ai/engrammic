@@ -169,9 +169,7 @@ class TestFindApplicableChainEndToEnd:
             "find_applicable_chain should return the seeded chain when "
             "query embedding exactly matches the stored vector"
         )
-        assert result["id"] == str(chain_id), (
-            f"Expected chain id {chain_id}, got {result['id']}"
-        )
+        assert result["id"] == str(chain_id), f"Expected chain id {chain_id}, got {result['id']}"
 
         # Cleanup
         await _cleanup_silo_collection(silo_id_a)
@@ -254,9 +252,7 @@ class TestFindApplicableChainEndToEnd:
                 session_id=session_id,
             )
 
-        assert result is None, (
-            "Chain with inaccessible evidence should be filtered by Layer 3"
-        )
+        assert result is None, "Chain with inaccessible evidence should be filtered by Layer 3"
 
         await _cleanup_silo_collection(silo_id_a)
 
@@ -302,9 +298,7 @@ class TestCrossSimoIsolation:
                 session_id=session_id,
             )
 
-        assert result is None, (
-            "Chain seeded in silo A must not be returned when querying silo B"
-        )
+        assert result is None, "Chain seeded in silo A must not be returned when querying silo B"
 
         # Cleanup both silos
         await _cleanup_silo_collection(silo_id_a)
@@ -422,8 +416,7 @@ class TestColdVsWarmStartThresholds:
 
         assert "threshold" in captured, "search_chains was not called"
         assert captured["threshold"] == pytest.approx(expected_threshold), (
-            f"Cold start should use threshold {expected_threshold}, "
-            f"got {captured['threshold']}"
+            f"Cold start should use threshold {expected_threshold}, got {captured['threshold']}"
         )
 
     async def test_warm_start_uses_relaxed_threshold(self, session_id: str) -> None:
@@ -472,8 +465,7 @@ class TestColdVsWarmStartThresholds:
 
         assert "threshold" in captured, "search_chains was not called"
         assert captured["threshold"] == pytest.approx(expected_threshold), (
-            f"Warm start should use threshold {expected_threshold}, "
-            f"got {captured['threshold']}"
+            f"Warm start should use threshold {expected_threshold}, got {captured['threshold']}"
         )
 
     async def test_cold_threshold_stricter_than_warm(self) -> None:
@@ -537,6 +529,4 @@ class TestColdVsWarmStartThresholds:
             )
 
         # Candidate is skipped because it has no step_embeddings for DTW comparison.
-        assert result is None, (
-            "Warm-start candidates with empty step_embeddings should be skipped"
-        )
+        assert result is None, "Warm-start candidates with empty step_embeddings should be skipped"
