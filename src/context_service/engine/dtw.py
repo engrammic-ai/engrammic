@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
-from dtaidistance import dtw_ndim
+from dtaidistance import dtw_ndim  # type: ignore[import-untyped]
 
 
 def dtw_similarity(
@@ -25,7 +25,7 @@ def dtw_similarity(
     arr_a = np.array(steps_a, dtype=np.float64)
     arr_b = np.array(steps_b, dtype=np.float64)
 
-    distance = dtw_ndim.distance(arr_a, arr_b)
+    distance: float = float(dtw_ndim.distance(arr_a, arr_b))
 
     # Convert distance to similarity: 1/(1+d)
     return 1.0 / (1.0 + distance)

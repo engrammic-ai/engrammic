@@ -202,24 +202,36 @@ def record_context_recall_size(layer: str, bytes_size: int) -> None:
     _context_recall_size.record(bytes_size, {"layer": layer})
 
 
+def _bucket_similarity(score: float) -> str:
+    """Bucket a similarity score into a fixed label to avoid high cardinality."""
+    if score >= 0.9:
+        return "0.9-1.0"
+    if score >= 0.8:
+        return "0.8-0.9"
+    if score >= 0.7:
+        return "0.7-0.8"
+    if score >= 0.5:
+        return "0.5-0.7"
+    return "0.0-0.5"
+
+
 def record_chain_lookup(
     hit: bool,
     layer_reached: int,
-    similarity_score: float | None,  # noqa: ARG001
+    similarity_score: float | None,
     cold_start: bool,
     latency_ms: float,
 ) -> None:
     """Record reasoning chain lookup attempt."""
     if _chain_lookup_counter is None:
         return
-    _chain_lookup_counter.add(
-        1,
-        {
-            "hit": str(hit).lower(),
-            "layer": str(layer_reached),
-            "cold_start": str(cold_start).lower(),
-        },
-    )
+    attrs: dict[str, str] = {
+        "hit": str(hit).lower(),
+        "layer": str(layer_reached),
+        "cold_start": str(cold_start).lower(),
+        "similarity_bucket": _bucket_similarity(similarity_score) if similarity_score is not None else "none",
+    }
+    _chain_lookup_counter.add(1, attrs)
     if _chain_lookup_latency is not None:
         _chain_lookup_latency.record(
             latency_ms,
