@@ -1,0 +1,13 @@
+# Reasoning chain applicability matching configuration
+reasoning_chain_matching:
+  query_threshold_cold: 0.95   # Stricter threshold when no step hints
+  query_threshold_warm: 0.88   # Relaxed threshold with step hints
+  step_threshold: 0.85         # DTW step similarity threshold
+  top_k_candidates: 5          # Max candidates from Qdrant
+  dtw_latency_warn_ms: 50      # Log warning above this
+  dtw_latency_abort_ms: 100    # Abort candidate loop above this
+
+chain_feedback:
+  evaluation_delay_minutes: 5  # Wait before evaluating usefulness
+  min_subsequent_steps: 3      # Min steps to trigger evaluation
+  max_wait_minutes: 30         # Max wait for subsequent steps
