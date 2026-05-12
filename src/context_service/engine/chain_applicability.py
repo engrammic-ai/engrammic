@@ -99,14 +99,36 @@ async def search_chains(
     ]
 
 
-async def get_session_step_embeddings(session_id: str) -> list[list[float]]:  # noqa: ARG001
+async def get_session_step_embeddings(session_id: str) -> list[list[float]]:
     """Return pre-computed step embeddings for the current session's reasoning.
 
     Returns an empty list when no steps have been recorded (cold start).
-    Full implementation requires a session store that persists step embeddings
-    as reasoning chains are built.
+    Queries session_step_embedding table populated by background job.
     """
-    return []
+    from uuid import UUID
+
+    from sqlalchemy import select
+
+    from context_service.db.postgres import get_session
+    from context_service.models.postgres.chain_feedback import SessionStepEmbedding
+
+    try:
+        session_uuid = UUID(session_id)
+    except ValueError:
+        return []
+
+    try:
+        async with get_session() as db:
+            result = await db.execute(
+                select(SessionStepEmbedding.embedding)
+                .where(SessionStepEmbedding.session_id == session_uuid)
+                .order_by(SessionStepEmbedding.created_at)
+            )
+            rows = result.scalars().all()
+            return [list(r) for r in rows]
+    except Exception as e:
+        log.warning("session_step_embeddings_failed", session_id=session_id, error=str(e))
+        return []
 
 
 async def get_accessible_evidence(silo_id: str, session_id: str) -> set[str]:  # noqa: ARG001
