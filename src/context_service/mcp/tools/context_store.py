@@ -38,6 +38,91 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
+REASONING_CHAINS_COLLECTION = "reasoning_chains"
+
+
+async def embed(text: str) -> list[float]:
+    """Embed text using the configured embedding service."""
+    from context_service.embeddings import build_embedding_service
+
+    svc = build_embedding_service()
+    return await svc.embed_single(text)
+
+
+async def _upsert_chain_embedding(
+    chain_id: uuid.UUID,
+    silo_id: str,
+    embedding: list[float],
+    evidence_used: list[str] | None = None,
+) -> None:
+    """Upsert a query embedding for a reasoning chain into Qdrant.
+
+    Creates the reasoning_chains collection on first use.
+    Failures are logged but do not propagate — the embedding is
+    enhancement metadata, not a hard requirement.
+
+    Args:
+        chain_id: The chain's UUID.
+        silo_id: Tenant isolation ID.
+        embedding: Query embedding vector.
+        evidence_used: List of evidence node IDs referenced by this chain (for Layer 3 check).
+    """
+    from qdrant_client.http import models as qdrant_models
+    from qdrant_client.http.exceptions import UnexpectedResponse
+
+    ctx_svc = get_context_service()
+    try:
+        raw_client = await ctx_svc._qdrant._get_client()
+        vector_size = len(embedding)
+
+        # Ensure collection exists.
+        collections = await raw_client.get_collections()
+        existing = {c.name for c in collections.collections}
+        if REASONING_CHAINS_COLLECTION not in existing:
+            await raw_client.create_collection(
+                collection_name=REASONING_CHAINS_COLLECTION,
+                vectors_config=qdrant_models.VectorParams(
+                    size=vector_size,
+                    distance=qdrant_models.Distance.COSINE,
+                ),
+            )
+            logger.info(
+                "reasoning_chains_collection_created",
+                collection=REASONING_CHAINS_COLLECTION,
+                vector_size=vector_size,
+            )
+
+        await raw_client.upsert(
+            collection_name=REASONING_CHAINS_COLLECTION,
+            points=[
+                qdrant_models.PointStruct(
+                    id=str(chain_id),
+                    vector=embedding,
+                    payload={
+                        "silo_id": silo_id,
+                        "node_id": str(chain_id),
+                        "evidence_used": evidence_used or [],
+                        # step_embeddings computed async - placeholder for future enhancement
+                        "step_embeddings": [],
+                    },
+                )
+            ],
+        )
+        logger.debug("chain_query_embedding_upserted", chain_id=str(chain_id))
+    except UnexpectedResponse as exc:
+        logger.warning(
+            "chain_query_embedding_upsert_failed",
+            chain_id=str(chain_id),
+            error=str(exc),
+        )
+    except Exception as exc:
+        logger.warning(
+            "chain_query_embedding_upsert_failed",
+            chain_id=str(chain_id),
+            error=str(exc),
+        )
+
+
 _LAYER_TO_LABEL: dict[str, str] = {
     "memory": "Document",
     "knowledge": "Claim",
@@ -484,6 +569,25 @@ async def _context_reason(
     CONTEXT_STORE_LATENCY.labels(silo_id=expected_silo_id, layer="intelligence").observe(
         time.perf_counter() - _start
     )
+
+    # Attach query embedding to the chain for Layer 1 applicability matching.
+    # Uses conclusion as the query text if no explicit query is available.
+    query_text = conclusion
+    if query_text:
+        try:
+            query_embedding = await embed(query_text)
+            await _upsert_chain_embedding(
+                chain_id,
+                str(expected_silo_id),
+                query_embedding,
+                evidence_used=evidence_used,
+            )
+        except Exception:
+            logger.warning(
+                "chain_query_embedding_failed",
+                exc_info=True,
+                chain_id=str(chain_id),
+            )
 
     await attach_chain_to_session(store, str(chain_id), resolved_session_id, str(expected_silo_id))
 

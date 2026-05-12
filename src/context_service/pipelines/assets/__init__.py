@@ -8,6 +8,7 @@ from context_service.pipelines.assets.belief_synthesis import belief_synthesis_a
 from context_service.pipelines.assets.cascade_review import cascade_review_asset
 from context_service.pipelines.assets.causal import causal_transitivity
 from context_service.pipelines.assets.causal_tombstone import causal_tombstone
+from context_service.pipelines.assets.chain_feedback import chain_usefulness_signals
 from context_service.pipelines.assets.chain_stitch import chain_stitch
 from context_service.pipelines.assets.clustering import clustering
 from context_service.pipelines.assets.compaction import reasoning_compaction
@@ -24,6 +25,10 @@ from context_service.pipelines.assets.proposal_cleanup import proposal_cleanup
 from context_service.pipelines.assets.proposal_detection import proposal_detection
 from context_service.pipelines.assets.reconciliation_gc import reconciliation_gc
 from context_service.pipelines.assets.retention import retention_sweep
+from context_service.pipelines.assets.step_embedding import (
+    session_step_embedding,
+    step_embedding_backfill,
+)
 from context_service.pipelines.assets.tag_maintenance import tag_maintenance
 from context_service.pipelines.assets.weak_link_creation import (
     create_weak_links_for_node as create_weak_links_for_node,
@@ -55,4 +60,7 @@ all_assets: list[Any] = [
     reconciliation_gc,
     proposal_detection,
     proposal_cleanup,
+    chain_usefulness_signals,
+    step_embedding_backfill,
+    session_step_embedding,
 ]

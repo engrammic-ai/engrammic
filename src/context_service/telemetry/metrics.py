@@ -26,6 +26,10 @@ _mcp_tool_duration: metrics.Histogram | None = None
 _mcp_tool_counter: metrics.Counter | None = None
 _llm_token_counter: metrics.Counter | None = None
 _context_recall_size: metrics.Histogram | None = None
+_chain_lookup_counter: metrics.Counter | None = None
+_chain_lookup_latency: metrics.Histogram | None = None
+_chain_feedback_counter: metrics.Counter | None = None
+_chain_evidence_modified_counter: metrics.Counter | None = None
 
 
 def setup_metrics(service_name: str = "context-service") -> None:
@@ -33,6 +37,11 @@ def setup_metrics(service_name: str = "context-service") -> None:
     global _meter, _request_duration, _request_counter, _active_requests
     global _db_query_duration, _embedding_duration, _mcp_tool_duration, _mcp_tool_counter
     global _llm_token_counter, _context_recall_size
+    global \
+        _chain_lookup_counter, \
+        _chain_lookup_latency, \
+        _chain_feedback_counter, \
+        _chain_evidence_modified_counter
 
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     if not endpoint:
@@ -107,6 +116,30 @@ def setup_metrics(service_name: str = "context-service") -> None:
         unit="bytes",
     )
 
+    _chain_lookup_counter = _meter.create_counter(
+        name="reasoning.chain.lookup",
+        description="Reasoning chain lookup attempts",
+        unit="1",
+    )
+
+    _chain_lookup_latency = _meter.create_histogram(
+        name="reasoning.chain.lookup.latency",
+        description="Reasoning chain lookup latency",
+        unit="ms",
+    )
+
+    _chain_feedback_counter = _meter.create_counter(
+        name="reasoning.chain.feedback",
+        description="Reasoning chain usefulness feedback",
+        unit="1",
+    )
+
+    _chain_evidence_modified_counter = _meter.create_counter(
+        name="reasoning.chain.evidence_modified_post_creation",
+        description="Chains returned where evidence was modified after chain creation",
+        unit="1",
+    )
+
 
 def record_request(method: str, path: str, status: int, duration_ms: float) -> None:
     """Record HTTP request metrics."""
@@ -171,3 +204,56 @@ def record_context_recall_size(layer: str, bytes_size: int) -> None:
     if _context_recall_size is None:
         return
     _context_recall_size.record(bytes_size, {"layer": layer})
+
+
+def _bucket_similarity(score: float) -> str:
+    """Bucket a similarity score into a fixed label to avoid high cardinality."""
+    if score >= 0.9:
+        return "0.9-1.0"
+    if score >= 0.8:
+        return "0.8-0.9"
+    if score >= 0.7:
+        return "0.7-0.8"
+    if score >= 0.5:
+        return "0.5-0.7"
+    return "0.0-0.5"
+
+
+def record_chain_lookup(
+    hit: bool,
+    layer_reached: int,
+    similarity_score: float | None,
+    cold_start: bool,
+    latency_ms: float,
+) -> None:
+    """Record reasoning chain lookup attempt."""
+    if _chain_lookup_counter is None:
+        return
+    attrs: dict[str, str] = {
+        "hit": str(hit).lower(),
+        "layer": str(layer_reached),
+        "cold_start": str(cold_start).lower(),
+        "similarity_bucket": _bucket_similarity(similarity_score)
+        if similarity_score is not None
+        else "none",
+    }
+    _chain_lookup_counter.add(1, attrs)
+    if _chain_lookup_latency is not None:
+        _chain_lookup_latency.record(
+            latency_ms,
+            {"hit": str(hit).lower(), "cold_start": str(cold_start).lower()},
+        )
+
+
+def record_chain_feedback(signal: str) -> None:
+    """Record reasoning chain usefulness feedback."""
+    if _chain_feedback_counter is None:
+        return
+    _chain_feedback_counter.add(1, {"signal": signal})
+
+
+def record_chain_evidence_modified() -> None:
+    """Record when a returned chain has evidence modified after creation."""
+    if _chain_evidence_modified_counter is None:
+        return
+    _chain_evidence_modified_counter.add(1)

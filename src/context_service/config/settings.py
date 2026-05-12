@@ -564,6 +564,29 @@ class CausalConfig(BaseModel):
     )
 
 
+class ReasoningChainMatchingConfig(BaseModel):
+    """Reasoning chain applicability matching configuration."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    query_threshold_cold: float = Field(default=0.95, ge=0.0, le=1.0)
+    query_threshold_warm: float = Field(default=0.88, ge=0.0, le=1.0)
+    step_threshold: float = Field(default=0.85, ge=0.0, le=1.0)
+    top_k_candidates: int = Field(default=5, ge=1)
+    dtw_latency_warn_ms: int = Field(default=50, ge=1)
+    dtw_latency_abort_ms: int = Field(default=100, ge=1)
+
+
+class ChainFeedbackConfig(BaseModel):
+    """Chain feedback evaluation configuration."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    evaluation_delay_minutes: int = Field(default=5, ge=1)
+    min_subsequent_steps: int = Field(default=3, ge=1)
+    max_wait_minutes: int = Field(default=30, ge=1)
+
+
 class WeakLinksSettings(BaseModel):
     """Weak links (speculative RELATED_TO edges) configuration."""
 
@@ -640,6 +663,10 @@ class Settings(BaseSettings):
     weak_links: WeakLinksSettings = Field(default_factory=WeakLinksSettings)
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
     identities: IdentitiesConfig = Field(default_factory=_load_identities_config)
+    reasoning_chain_matching: ReasoningChainMatchingConfig = Field(
+        default_factory=ReasoningChainMatchingConfig
+    )
+    chain_feedback: ChainFeedbackConfig = Field(default_factory=ChainFeedbackConfig)
 
     # =========================================================================
     # Application Meta

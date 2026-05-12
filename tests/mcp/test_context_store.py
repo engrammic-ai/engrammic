@@ -346,3 +346,128 @@ async def test_store_meta_routes_to_reflect(mock_reflect):
     call_kwargs = mock_reflect.call_args.kwargs
     assert call_kwargs["observation"] == "test reflection"
     assert call_kwargs["silo_id"] == _SILO_ID
+
+
+@pytest.fixture
+def mock_reason_deps():
+    """Mock all dependencies for direct _context_reason tests."""
+    from context_service.auth.context import AuthContext
+
+    auth = AuthContext(
+        org_id=_ORG_ID,
+        user_id="user-1",
+        email="user@test.com",
+        is_dev=True,
+        agent_id=None,
+        session_id=None,
+    )
+
+    ctx_svc = MagicMock()
+
+    graph_store = AsyncMock()
+    graph_store.execute_query = AsyncMock(return_value=[])
+    ctx_svc.graph_store = graph_store
+
+    postgres_store = AsyncMock()
+    postgres_store.upsert_chain_steps = AsyncMock(return_value=None)
+    postgres_store.upsert_reasoning_chain = AsyncMock(return_value=None)
+
+    with (
+        patch(
+            "context_service.mcp.tools.context_store.get_mcp_auth_context",
+            new_callable=AsyncMock,
+            return_value=auth,
+        ),
+        patch(
+            "context_service.mcp.tools.context_store.get_context_service",
+            return_value=ctx_svc,
+        ),
+        patch(
+            "context_service.mcp.tools.context_store.get_postgres_store",
+            return_value=postgres_store,
+        ),
+        patch(
+            "context_service.mcp.tools.context_store.get_silo_service",
+            return_value=MagicMock(),
+        ),
+        patch(
+            "context_service.mcp.tools.context_store.validate_silo_ownership",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "context_service.engine.chain_saga.ChainSagaWriter.write_chain",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "context_service.engine.sessions.create_or_join_session",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+        patch(
+            "context_service.engine.sessions.attach_chain_to_session",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+    ):
+        yield {"auth": auth, "ctx_svc": ctx_svc, "postgres_store": postgres_store}
+
+
+@pytest.mark.asyncio
+async def test_context_reason_attaches_query_embedding(mock_reason_deps):
+    """_context_reason calls embed and upserts query embedding on chain creation."""
+    from context_service.mcp.tools.context_store import _context_reason
+
+    with (
+        patch(
+            "context_service.mcp.tools.context_store.embed",
+            new_callable=AsyncMock,
+            return_value=[0.1] * 768,
+        ) as mock_embed,
+        patch(
+            "context_service.mcp.tools.context_store._upsert_chain_embedding",
+            new_callable=AsyncMock,
+            return_value=None,
+        ) as mock_upsert,
+    ):
+        result = await _context_reason(
+            silo_id=_SILO_ID,
+            steps=[{"step": 1, "reasoning": "A implies B"}],
+            conclusion="Therefore B is true",
+        )
+
+        assert "error" not in result
+        assert result["layer"] == "intelligence"
+        mock_embed.assert_called_once_with("Therefore B is true")
+        mock_upsert.assert_called_once()
+        upsert_kwargs = mock_upsert.call_args
+        assert upsert_kwargs[0][1] == _SILO_ID
+        assert upsert_kwargs[0][2] == [0.1] * 768
+
+
+@pytest.mark.asyncio
+async def test_context_reason_skips_embedding_when_no_conclusion(mock_reason_deps):
+    """_context_reason does not call embed when conclusion is None."""
+    from context_service.mcp.tools.context_store import _context_reason
+
+    with (
+        patch(
+            "context_service.mcp.tools.context_store.embed",
+            new_callable=AsyncMock,
+            return_value=[0.1] * 768,
+        ) as mock_embed,
+        patch(
+            "context_service.mcp.tools.context_store._upsert_chain_embedding",
+            new_callable=AsyncMock,
+            return_value=None,
+        ),
+    ):
+        result = await _context_reason(
+            silo_id=_SILO_ID,
+            steps=[{"step": 1, "reasoning": "A implies B"}],
+            conclusion=None,
+        )
+
+        assert "error" not in result
+        mock_embed.assert_not_called()
