@@ -50,6 +50,7 @@ async def search_chains(
     """Search Qdrant for chains similar to the given query embedding.
 
     Queries the dedicated reasoning_chains collection with silo_id filter.
+    Uses the shared Qdrant client from context service for connection reuse.
 
     Returns a list of dicts with keys:
         id (str): Chain node ID.
@@ -58,38 +59,33 @@ async def search_chains(
         evidence_used (list[str]): Evidence node IDs referenced by the chain.
         payload (dict): Raw Qdrant payload.
     """
-    from qdrant_client import AsyncQdrantClient
     from qdrant_client.http import models as qdrant_models
 
-    settings = get_settings()
-    client = AsyncQdrantClient(
-        url=settings.qdrant_url,
-        api_key=settings.qdrant_api_key.get_secret_value() if settings.qdrant_api_key else None,
+    from context_service.mcp.server import get_context_service
+
+    ctx_svc = get_context_service()
+    client = await ctx_svc._qdrant._get_client()
+
+    # Check if collection exists
+    collections = await client.get_collections()
+    if REASONING_CHAINS_COLLECTION not in {c.name for c in collections.collections}:
+        return []
+
+    response = await client.query_points(
+        collection_name=REASONING_CHAINS_COLLECTION,
+        query=query_embedding,
+        query_filter=qdrant_models.Filter(
+            must=[
+                qdrant_models.FieldCondition(
+                    key="silo_id",
+                    match=qdrant_models.MatchValue(value=silo_id),
+                )
+            ]
+        ),
+        limit=top_k,
+        score_threshold=threshold,
     )
-
-    try:
-        # Check if collection exists
-        collections = await client.get_collections()
-        if REASONING_CHAINS_COLLECTION not in {c.name for c in collections.collections}:
-            return []
-
-        response = await client.query_points(
-            collection_name=REASONING_CHAINS_COLLECTION,
-            query=query_embedding,
-            query_filter=qdrant_models.Filter(
-                must=[
-                    qdrant_models.FieldCondition(
-                        key="silo_id",
-                        match=qdrant_models.MatchValue(value=silo_id),
-                    )
-                ]
-            ),
-            limit=top_k,
-            score_threshold=threshold,
-        )
-        results = response.points
-    finally:
-        await client.close()
+    results = response.points
 
     return [
         {
@@ -141,19 +137,31 @@ async def log_chain_delivery(
         from context_service.db.postgres import get_session
         from context_service.models.postgres.chain_feedback import ChainDelivery
 
+        # Validate UUIDs before DB operation
+        session_uuid = UUID(session_id)
+        chain_uuid = UUID(chain_id)
+
         async with get_session() as db:
             delivery = ChainDelivery(
-                session_id=UUID(session_id),
-                chain_id=UUID(chain_id),
+                session_id=session_uuid,
+                chain_id=chain_uuid,
                 query=query,
                 similarity_score=similarity_score,
             )
             db.add(delivery)
-    except Exception:
+    except ValueError as e:
         log.warning(
             "chain_delivery_log_failed",
             session_id=session_id,
             chain_id=chain_id,
+            error=f"Invalid UUID: {e}",
+        )
+    except Exception as e:
+        log.warning(
+            "chain_delivery_log_failed",
+            session_id=session_id,
+            chain_id=chain_id,
+            error=str(e),
         )
 
 
@@ -240,7 +248,16 @@ async def find_applicable_chain(
                 continue
 
             dtw_start = time.perf_counter()
-            similarity_score = dtw_similarity(chain_steps, step_hints)
+            try:
+                similarity_score = dtw_similarity(chain_steps, step_hints)
+            except (ValueError, IndexError) as e:
+                # Dimension mismatch between chain and session embeddings (e.g., model change)
+                log.warning(
+                    "dtw_dimension_mismatch",
+                    chain_id=chain["id"],
+                    error=str(e),
+                )
+                continue
             dtw_elapsed_ms = (time.perf_counter() - dtw_start) * 1000
             cumulative_dtw_ms += dtw_elapsed_ms
 
@@ -272,6 +289,12 @@ async def find_applicable_chain(
             chain_id=chain["id"],
             query=query,
             similarity_score=similarity_score,
+        )
+
+        # Monitoring: check if evidence was modified after chain creation (non-blocking)
+        await record_evidence_modification(
+            list(evidence_used),
+            chain.get("payload", {}).get("created_at"),
         )
 
         latency_ms = (time.perf_counter() - start_time) * 1000

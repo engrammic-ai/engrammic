@@ -53,12 +53,19 @@ async def _upsert_chain_embedding(
     chain_id: uuid.UUID,
     silo_id: str,
     embedding: list[float],
+    evidence_used: list[str] | None = None,
 ) -> None:
     """Upsert a query embedding for a reasoning chain into Qdrant.
 
     Creates the reasoning_chains collection on first use.
     Failures are logged but do not propagate — the embedding is
     enhancement metadata, not a hard requirement.
+
+    Args:
+        chain_id: The chain's UUID.
+        silo_id: Tenant isolation ID.
+        embedding: Query embedding vector.
+        evidence_used: List of evidence node IDs referenced by this chain (for Layer 3 check).
     """
     from qdrant_client.http import models as qdrant_models
     from qdrant_client.http.exceptions import UnexpectedResponse
@@ -91,7 +98,13 @@ async def _upsert_chain_embedding(
                 qdrant_models.PointStruct(
                     id=str(chain_id),
                     vector=embedding,
-                    payload={"silo_id": silo_id, "node_id": str(chain_id)},
+                    payload={
+                        "silo_id": silo_id,
+                        "node_id": str(chain_id),
+                        "evidence_used": evidence_used or [],
+                        # step_embeddings computed async - placeholder for future enhancement
+                        "step_embeddings": [],
+                    },
                 )
             ],
         )
@@ -108,6 +121,7 @@ async def _upsert_chain_embedding(
             chain_id=str(chain_id),
             error=str(exc),
         )
+
 
 _LAYER_TO_LABEL: dict[str, str] = {
     "memory": "Document",
@@ -562,7 +576,12 @@ async def _context_reason(
     if query_text:
         try:
             query_embedding = await embed(query_text)
-            await _upsert_chain_embedding(chain_id, str(expected_silo_id), query_embedding)
+            await _upsert_chain_embedding(
+                chain_id,
+                str(expected_silo_id),
+                query_embedding,
+                evidence_used=evidence_used,
+            )
         except Exception:
             logger.warning(
                 "chain_query_embedding_failed",

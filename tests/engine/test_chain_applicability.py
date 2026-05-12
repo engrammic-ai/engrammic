@@ -177,9 +177,7 @@ async def test_dtw_latency_abort_stops_early() -> None:
         time.sleep(0.008)  # 8 ms per call; two calls exceeds 12 ms abort threshold
         return 0.5  # Below step_threshold; would normally continue
 
-    chains = [
-        _make_chain(step_embeddings=[[0.1] * 4]) for _ in range(5)
-    ]
+    chains = [_make_chain(step_embeddings=[[0.1] * 4]) for _ in range(5)]
 
     with (
         patch(f"{MODULE}.get_settings", return_value=cfg),

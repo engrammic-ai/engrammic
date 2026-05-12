@@ -51,9 +51,7 @@ def test_chain_usefulness_signals_asset_exists():
 def test_chain_usefulness_signals_group():
     from context_service.pipelines.assets.chain_feedback import chain_usefulness_signals
 
-    spec = chain_usefulness_signals.specs_by_key[
-        list(chain_usefulness_signals.keys)[0]
-    ]
+    spec = chain_usefulness_signals.specs_by_key[list(chain_usefulness_signals.keys)[0]]
     assert spec.group_name == "chain_feedback"
 
 

@@ -8,6 +8,7 @@ from context_service.pipelines.assets.belief_synthesis import belief_synthesis_a
 from context_service.pipelines.assets.cascade_review import cascade_review_asset
 from context_service.pipelines.assets.causal import causal_transitivity
 from context_service.pipelines.assets.causal_tombstone import causal_tombstone
+from context_service.pipelines.assets.chain_feedback import chain_usefulness_signals
 from context_service.pipelines.assets.chain_stitch import chain_stitch
 from context_service.pipelines.assets.clustering import clustering
 from context_service.pipelines.assets.compaction import reasoning_compaction
@@ -55,4 +56,5 @@ all_assets: list[Any] = [
     reconciliation_gc,
     proposal_detection,
     proposal_cleanup,
+    chain_usefulness_signals,
 ]

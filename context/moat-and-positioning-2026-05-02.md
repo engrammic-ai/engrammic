@@ -244,6 +244,14 @@ Or:
 
 ---
 
+## Tagline
+
+**Memory is storage. Meaning is Engrammic.**
+
+Decided: 2026-05-12
+
+---
+
 ## Final Positioning Statements
 
 ### For Investors

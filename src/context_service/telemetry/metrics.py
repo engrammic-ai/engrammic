@@ -37,7 +37,11 @@ def setup_metrics(service_name: str = "context-service") -> None:
     global _meter, _request_duration, _request_counter, _active_requests
     global _db_query_duration, _embedding_duration, _mcp_tool_duration, _mcp_tool_counter
     global _llm_token_counter, _context_recall_size
-    global _chain_lookup_counter, _chain_lookup_latency, _chain_feedback_counter, _chain_evidence_modified_counter
+    global \
+        _chain_lookup_counter, \
+        _chain_lookup_latency, \
+        _chain_feedback_counter, \
+        _chain_evidence_modified_counter
 
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     if not endpoint:
@@ -229,7 +233,9 @@ def record_chain_lookup(
         "hit": str(hit).lower(),
         "layer": str(layer_reached),
         "cold_start": str(cold_start).lower(),
-        "similarity_bucket": _bucket_similarity(similarity_score) if similarity_score is not None else "none",
+        "similarity_bucket": _bucket_similarity(similarity_score)
+        if similarity_score is not None
+        else "none",
     }
     _chain_lookup_counter.add(1, attrs)
     if _chain_lookup_latency is not None:

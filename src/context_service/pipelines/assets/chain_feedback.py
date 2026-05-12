@@ -31,18 +31,27 @@ def _run_async(coro: Any) -> Any:
         return pool.submit(asyncio.run, coro).result(timeout=300)
 
 
-async def get_recent_deliveries(hours: int = 1) -> list[dict[str, Any]]:
-    """Return chain deliveries from the last N hours."""
+async def get_recent_deliveries(hours: int = 1, delay_minutes: int = 5) -> list[dict[str, Any]]:
+    """Return chain deliveries from the last N hours, excluding recent ones.
+
+    Args:
+        hours: Look back this many hours for deliveries.
+        delay_minutes: Exclude deliveries newer than this (wait for subsequent steps).
+    """
     from sqlalchemy import select
 
     from context_service.db import get_session
     from context_service.models.postgres.chain_feedback import ChainDelivery
 
-    cutoff = datetime.now(UTC) - timedelta(hours=hours)
+    cutoff_old = datetime.now(UTC) - timedelta(hours=hours)
+    cutoff_recent = datetime.now(UTC) - timedelta(minutes=delay_minutes)
 
     async with get_session() as session:
         result = await session.execute(
-            select(ChainDelivery).where(ChainDelivery.delivered_at > cutoff)
+            select(ChainDelivery).where(
+                ChainDelivery.delivered_at > cutoff_old,
+                ChainDelivery.delivered_at < cutoff_recent,  # Exclude too-recent
+            )
         )
         rows = result.scalars().all()
         return [
@@ -155,7 +164,13 @@ def chain_usefulness_signals(context) -> dg.Output[dict[str, Any]]:  # type: ign
     t0 = time.monotonic()
 
     async def _run() -> tuple[int, int, int, int]:
-        deliveries = await get_recent_deliveries(hours=1)
+        from context_service.config.settings import get_settings
+
+        config = get_settings().chain_feedback
+        deliveries = await get_recent_deliveries(
+            hours=1,
+            delay_minutes=config.evaluation_delay_minutes,
+        )
         processed = useful = not_useful = unclear = 0
 
         for delivery in deliveries:
@@ -170,9 +185,7 @@ def chain_usefulness_signals(context) -> dg.Output[dict[str, Any]]:  # type: ign
                     else:
                         unclear += 1
             except Exception as exc:
-                context.log.warning(
-                    f"Failed to process delivery {delivery['chain_id']}: {exc}"
-                )
+                context.log.warning(f"Failed to process delivery {delivery['chain_id']}: {exc}")
 
         return len(deliveries), processed, useful, not_useful
 

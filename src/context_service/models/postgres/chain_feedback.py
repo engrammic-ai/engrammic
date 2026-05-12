@@ -17,9 +17,7 @@ class ChainDelivery(Base):
 
     __tablename__ = "chain_delivery"
 
-    id: Mapped[UUID] = mapped_column(
-        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
-    )
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     session_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
     chain_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
     query: Mapped[str] = mapped_column(Text, nullable=False)
@@ -37,9 +35,7 @@ class ChainFeedback(Base):
 
     __tablename__ = "chain_feedback"
 
-    id: Mapped[UUID] = mapped_column(
-        PG_UUID(as_uuid=True), primary_key=True, default=uuid4
-    )
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
     chain_id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
     signal: Mapped[str] = mapped_column(String(20), nullable=False)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
