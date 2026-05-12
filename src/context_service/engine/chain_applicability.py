@@ -38,6 +38,9 @@ async def embed_query(query: str) -> list[float]:
     return await svc.embed_single(query)
 
 
+REASONING_CHAINS_COLLECTION = "reasoning_chains"
+
+
 async def search_chains(
     query_embedding: list[float],
     top_k: int,
@@ -46,6 +49,8 @@ async def search_chains(
 ) -> list[dict[str, Any]]:
     """Search Qdrant for chains similar to the given query embedding.
 
+    Queries the dedicated reasoning_chains collection with silo_id filter.
+
     Returns a list of dicts with keys:
         id (str): Chain node ID.
         score (float): Similarity score.
@@ -53,34 +58,46 @@ async def search_chains(
         evidence_used (list[str]): Evidence node IDs referenced by the chain.
         payload (dict): Raw Qdrant payload.
     """
-    from context_service.engine.qdrant_store import EngineQdrantStore
-    from context_service.stores.qdrant import QdrantClient
+    from qdrant_client import AsyncQdrantClient
+    from qdrant_client.http import models as qdrant_models
 
     settings = get_settings()
-    qdrant_client = QdrantClient(
+    client = AsyncQdrantClient(
         url=settings.qdrant_url,
         api_key=settings.qdrant_api_key.get_secret_value() if settings.qdrant_api_key else None,
     )
-    store = EngineQdrantStore(qdrant_client)
 
     try:
-        results = await store.query(
-            vector=query_embedding,
-            silo_id=silo_id,
+        # Check if collection exists
+        collections = await client.get_collections()
+        if REASONING_CHAINS_COLLECTION not in {c.name for c in collections.collections}:
+            return []
+
+        response = await client.query_points(
+            collection_name=REASONING_CHAINS_COLLECTION,
+            query=query_embedding,
+            query_filter=qdrant_models.Filter(
+                must=[
+                    qdrant_models.FieldCondition(
+                        key="silo_id",
+                        match=qdrant_models.MatchValue(value=silo_id),
+                    )
+                ]
+            ),
             limit=top_k,
-            search_mode="dense",
             score_threshold=threshold,
         )
+        results = response.points
     finally:
-        await store.close()
+        await client.close()
 
     return [
         {
-            "id": r.node_id,
+            "id": r.payload.get("node_id", str(r.id)) if r.payload else str(r.id),
             "score": r.score,
-            "step_embeddings": [],
-            "evidence_used": [],
-            "payload": {},
+            "step_embeddings": r.payload.get("step_embeddings", []) if r.payload else [],
+            "evidence_used": r.payload.get("evidence_used", []) if r.payload else [],
+            "payload": r.payload or {},
         }
         for r in results
     ]
