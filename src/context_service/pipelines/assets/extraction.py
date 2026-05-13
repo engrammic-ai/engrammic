@@ -52,6 +52,7 @@ def extraction(
 
     set_dagster_context(context)
     silo_id: str = context.partition_key
+    context.log.info(f"Starting extraction for silo {silo_id}")
     t0 = time.monotonic()
 
     async def _run() -> tuple[int, int, int, float, int]:
@@ -128,9 +129,11 @@ def extraction(
 
                 try:
                     result: ExtractionResult
+                    context.log.info(f"Extracting doc {doc_id} ({len(content)} chars)")
                     result, usage = await svc.extract(content)
                     tokens_used += usage.total_tokens
                     docs_processed += 1
+                    context.log.info(f"Extracted {len(result.entities)} entities, {len(result.relationships)} relationships from {doc_id}")
                 except Exception as exc:
                     context.log.warning(f"extraction failed for doc {doc_id}: {exc}")
                     continue
