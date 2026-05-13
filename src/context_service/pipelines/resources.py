@@ -243,7 +243,10 @@ def build_default_resources() -> dict[str, dg.ConfigurableResource]:  # type: ig
             url=settings.qdrant_url,
             api_key=qdrant_api_key,
         ),
-        "llm": LLMResource(provider=_infer_llm_provider(settings.default_llm_model)),
+        "llm": LLMResource(
+            provider=_infer_llm_provider(settings.default_llm_model),
+            model=_extract_model_name(settings.default_llm_model),
+        ),
         "embedding": EmbeddingResource(),
     }
 
@@ -258,6 +261,13 @@ def _infer_llm_provider(default_model: str) -> str:
     if "vertex" in lower:
         return "vertex_gemini"
     return "gemini"
+
+
+def _extract_model_name(default_model: str) -> str:
+    """Extract the model name from a provider-prefixed string like 'google-vertex:gemini-2.0-flash'."""
+    if ":" in default_model:
+        return default_model.split(":", 1)[1]
+    return default_model
 
 
 __all__ = [
