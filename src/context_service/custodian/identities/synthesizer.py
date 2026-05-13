@@ -54,7 +54,8 @@ SYNTHESIS_CANDIDATES_QUERY = """
 MATCH (c:Cluster {silo_id: $silo_id})
 OPTIONAL MATCH (c)<-[:COVERS]-(b:Belief)
 OPTIONAL MATCH (c)<-[:COVERS]-(pb:ProposedBelief {status: 'pending'})
-WITH c, b, pb, size((c)-[:CONTAINS]->()) AS fact_count
+OPTIONAL MATCH (c)-[:CONTAINS]->(f)
+WITH c, b, pb, count(f) AS fact_count
 WHERE b IS NULL AND pb IS NULL AND fact_count >= $min_facts
 RETURN c.id AS cluster_id, fact_count, c.confidence AS confidence
 ORDER BY fact_count DESC
