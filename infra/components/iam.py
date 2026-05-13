@@ -54,6 +54,7 @@ class IAMStack(pulumi.ComponentResource):
             "roles/secretmanager.secretAccessor",
             "roles/logging.logWriter",
             "roles/monitoring.metricWriter",
+            "roles/artifactregistry.reader",  # Pull images from AR
         ]
         for role in gce_roles:
             role_suffix = role.split("/")[1].replace(".", "-")
@@ -82,7 +83,34 @@ class IAMStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self),
         )
 
+        # Cloud Build service account
+        self.cloud_build = serviceaccount.Account(
+            f"{name}-cloud-build",
+            account_id=f"cloudbuild-{env}",
+            display_name=f"Cloud Build ({env})",
+            opts=pulumi.ResourceOptions(parent=self),
+        )
+
+        # Cloud Build roles
+        cloud_build_roles = [
+            "roles/storage.objectAdmin",        # Upload source to GCS
+            "roles/artifactregistry.writer",    # Push images to AR
+            "roles/logging.logWriter",          # Write build logs
+        ]
+        for role in cloud_build_roles:
+            role_suffix = role.split("/")[1].replace(".", "-")
+            projects.IAMMember(
+                f"{name}-cloudbuild-{role_suffix}",
+                project=project,
+                role=role,
+                member=self.cloud_build.email.apply(
+                    lambda email: f"serviceAccount:{email}"
+                ),
+                opts=pulumi.ResourceOptions(parent=self),
+            )
+
         self.register_outputs({
             "context_service_run_email": self.context_service_run.email,
             "stateful_host_email": self.stateful_host.email,
+            "cloud_build_email": self.cloud_build.email,
         })

@@ -6,5 +6,5 @@ runtime:
 description: Engrammic GCP infrastructure
 
 config:
-  gcp:region: us-central1
-  gcp:zone: us-central1-a
+  gcp:region: europe-north1
+  gcp:zone: europe-north1-a

@@ -3,6 +3,9 @@
 # Variables
 dc := "docker compose -f docker-compose.dev.yml"
 
+# Import infra recipes
+import 'infra/just.infra'
+
 # List available recipes
 default:
     @just --list
