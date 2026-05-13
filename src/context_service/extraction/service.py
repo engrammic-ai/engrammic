@@ -149,15 +149,30 @@ class ExtractionService:
                     f"Skipping relationship {source} -> {target}: missing relationship_type"
                 )
                 continue
-            # Normalize to the closed vocabulary; drop anything outside it.
+            # Normalize to the closed vocabulary; fallback to RELATED_TO for unknowns.
+            rel_type_str = str(raw_rel_type).upper().replace(" ", "_").replace("-", "_")
+            # Common synonyms
+            synonyms = {
+                "CONTAINS": "COMPOSES", "PART_OF": "COMPOSES", "HAS": "COMPOSES",
+                "USES": "DEPENDS_ON", "REQUIRES": "DEPENDS_ON", "NEEDS": "DEPENDS_ON",
+                "IS_A": "SPECIALIZES", "TYPE_OF": "SPECIALIZES", "KIND_OF": "SPECIALIZES",
+                "INSTANCE_OF": "INSTANTIATES", "EXAMPLE_OF": "INSTANTIATES",
+                "LEADS_TO": "CAUSES", "RESULTS_IN": "CAUSES", "TRIGGERS": "CAUSES",
+                "BLOCKS": "PREVENTS", "INHIBITS": "PREVENTS", "STOPS": "PREVENTS",
+                "SUPPORTS": "CORROBORATES", "CONFIRMS": "CORROBORATES",
+                "OPPOSES": "CONTRADICTS", "CONFLICTS_WITH": "CONTRADICTS",
+                "MENTIONS": "REFERENCES", "CITES": "REFERENCES", "DESCRIBES": "REFERENCES",
+                "ASSOCIATED_WITH": "RELATED_TO", "CONNECTED_TO": "RELATED_TO",
+            }
+            rel_type_str = synonyms.get(rel_type_str, rel_type_str)
             try:
-                rel_type = RelationshipType(str(raw_rel_type).upper())
+                rel_type = RelationshipType(rel_type_str)
             except ValueError:
                 logger.warning(
-                    f"Skipping relationship {source} -> {target}: "
-                    f"unknown relationship_type {raw_rel_type!r}"
+                    f"Unknown relationship_type {raw_rel_type!r} for {source} -> {target}; "
+                    f"falling back to RELATED_TO"
                 )
-                continue
+                rel_type = RelationshipType.RELATED_TO
 
             kind = str(r.get("kind") or "").strip().lower().replace(" ", "_")
             # LLM may omit directed; fall back to type-driven default.
