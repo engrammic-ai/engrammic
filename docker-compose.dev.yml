@@ -9,6 +9,7 @@ services:
     env_file:
       - .env
     environment:
+      - HOME=/home/context-service
       - ENVIRONMENT=${ENVIRONMENT:-development}
       - MEMGRAPH_HOST=memgraph
       - QDRANT_HOST=qdrant
@@ -17,11 +18,10 @@ services:
       - POSTGRES_USER=context
       - POSTGRES_PASSWORD=context
       - POSTGRES_DATABASE=context_service
-      - GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-sa.json
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz-otel-collector:4317
       - OTEL_SERVICE_NAME=context-service
     volumes:
-      - ./secrets:/app/secrets:ro
+      - ~/.config/gcloud:/home/context-service/.config/gcloud:ro
       - ./src:/app/src
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./config:/app/config:ro
@@ -157,12 +157,12 @@ services:
       - POSTGRES_USER=context
       - POSTGRES_PASSWORD=context
       - POSTGRES_DATABASE=context_service
-      - GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-sa.json
+      - HOME=/home/dagster
     volumes:
       - ./src:/app/src
       - ./dagster.yaml:/app/dagster.yaml:ro
       - ./config:/app/config:ro
-      - ./secrets:/app/secrets:ro
+      - ~/.config/gcloud:/home/dagster/.config/gcloud:ro
     depends_on:
       - postgres
       - memgraph
@@ -195,13 +195,13 @@ services:
       - POSTGRES_USER=context
       - POSTGRES_PASSWORD=context
       - POSTGRES_DATABASE=context_service
-      - GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-sa.json
+      - HOME=/home/dagster
     volumes:
       - ./src:/app/src
       - ./workspace.yaml:/app/workspace.yaml:ro
       - ./dagster.yaml:/app/dagster.yaml:ro
       - ./config:/app/config:ro
-      - ./secrets:/app/secrets:ro
+      - ~/.config/gcloud:/home/dagster/.config/gcloud:ro
     depends_on:
       dagster-code-server:
         condition: service_healthy
@@ -228,13 +228,13 @@ services:
       - POSTGRES_USER=context
       - POSTGRES_PASSWORD=context
       - POSTGRES_DATABASE=context_service
-      - GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-sa.json
+      - HOME=/home/dagster
     volumes:
       - ./src:/app/src
       - ./workspace.yaml:/app/workspace.yaml:ro
       - ./dagster.yaml:/app/dagster.yaml:ro
       - ./config:/app/config:ro
-      - ./secrets:/app/secrets:ro
+      - ~/.config/gcloud:/home/dagster/.config/gcloud:ro
     depends_on:
       postgres:
         condition: service_healthy
