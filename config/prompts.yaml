@@ -8,10 +8,8 @@ extraction:
       - Extract factual claims with clear subjects and objects
       - Identify named entities and their types
       - Extract relationships between entities using ONLY these types:
-    COMPOSES (X is part of Y), DEPENDS_ON (X requires Y), DERIVES_FROM (X comes from Y),
-    SPECIALIZES (X is a kind of Y), INSTANTIATES (X is instance of Y), CAUSES (X triggers Y),
-    PREVENTS (X blocks Y), CORROBORATES (X supports Y), CONTRADICTS (X opposes Y),
-    REFERENCES (X mentions Y), RELATED_TO (fallback for unclear relations)
+        COMPOSES, DEPENDS_ON, DERIVES_FROM, SPECIALIZES, INSTANTIATES,
+        CAUSES, PREVENTS, CORROBORATES, CONTRADICTS, REFERENCES, RELATED_TO
       - Be precise and avoid speculation
 
       Causal extraction rules:
@@ -53,10 +51,8 @@ extraction:
       - Extract factual claims with clear subjects and objects
       - Identify named entities and their types
       - Extract relationships between entities using ONLY these types:
-    COMPOSES (X is part of Y), DEPENDS_ON (X requires Y), DERIVES_FROM (X comes from Y),
-    SPECIALIZES (X is a kind of Y), INSTANTIATES (X is instance of Y), CAUSES (X triggers Y),
-    PREVENTS (X blocks Y), CORROBORATES (X supports Y), CONTRADICTS (X opposes Y),
-    REFERENCES (X mentions Y), RELATED_TO (fallback for unclear relations)
+        COMPOSES, DEPENDS_ON, DERIVES_FROM, SPECIALIZES, INSTANTIATES,
+        CAUSES, PREVENTS, CORROBORATES, CONTRADICTS, REFERENCES, RELATED_TO
       - Be precise and avoid speculation
 
       Causal extraction rules:
@@ -98,10 +94,8 @@ extraction:
       - Extract factual claims with clear subjects and objects
       - Identify named entities and their types
       - Extract relationships between entities using ONLY these types:
-    COMPOSES (X is part of Y), DEPENDS_ON (X requires Y), DERIVES_FROM (X comes from Y),
-    SPECIALIZES (X is a kind of Y), INSTANTIATES (X is instance of Y), CAUSES (X triggers Y),
-    PREVENTS (X blocks Y), CORROBORATES (X supports Y), CONTRADICTS (X opposes Y),
-    REFERENCES (X mentions Y), RELATED_TO (fallback for unclear relations)
+        COMPOSES, DEPENDS_ON, DERIVES_FROM, SPECIALIZES, INSTANTIATES,
+        CAUSES, PREVENTS, CORROBORATES, CONTRADICTS, REFERENCES, RELATED_TO
       - Be precise and avoid speculation
 
       Causal extraction rules:
