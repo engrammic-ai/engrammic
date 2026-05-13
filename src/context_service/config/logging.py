@@ -6,8 +6,18 @@ Uses structlog for structured JSON logging.
 
 import logging
 import sys
+from contextvars import ContextVar
+from typing import TYPE_CHECKING, Any
 
 import structlog
+
+if TYPE_CHECKING:
+    from dagster import AssetExecutionContext
+
+# Dagster context for log bridging
+_dagster_context: ContextVar["AssetExecutionContext | None"] = ContextVar(
+    "dagster_context", default=None
+)
 
 
 def configure_logging(log_level: str = "INFO", json_format: bool = True) -> None:
@@ -24,6 +34,7 @@ def configure_logging(log_level: str = "INFO", json_format: bool = True) -> None
         structlog.stdlib.PositionalArgumentsFormatter(),
         structlog.processors.StackInfoRenderer(),
         structlog.processors.UnicodeDecoder(),
+        _dagster_bridge,
     ]
 
     if json_format:
@@ -63,3 +74,22 @@ def get_logger(name: str) -> structlog.stdlib.BoundLogger:
     """Get a logger instance."""
     logger: structlog.stdlib.BoundLogger = structlog.get_logger(name)
     return logger
+
+
+def set_dagster_context(ctx: "AssetExecutionContext | None") -> None:
+    """Set Dagster context for log bridging."""
+    _dagster_context.set(ctx)
+
+
+def _dagster_bridge(
+    logger: logging.Logger, method_name: str, event_dict: dict[str, Any]
+) -> dict[str, Any]:
+    """Processor that forwards logs to Dagster context if available."""
+    ctx = _dagster_context.get()
+    if ctx is not None:
+        level = event_dict.get("level", "info").lower()
+        event = event_dict.get("event", "")
+        extra = {k: v for k, v in event_dict.items() if k not in ("event", "level", "timestamp")}
+        msg = f"{event} {extra}" if extra else event
+        getattr(ctx.log, level, ctx.log.info)(msg)
+    return event_dict

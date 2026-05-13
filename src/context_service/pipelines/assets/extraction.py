@@ -48,6 +48,9 @@ def extraction(
     redis: RedisResource,
 ) -> dg.Output[dict[str, Any]]:
     """Read pending :Document nodes for the partition's silo, run LLM extraction, write :Claim nodes."""
+    from context_service.config.logging import set_dagster_context
+
+    set_dagster_context(context)
     silo_id: str = context.partition_key
     t0 = time.monotonic()
 
