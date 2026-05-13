@@ -12,10 +12,8 @@ processors:
     send_batch_size: 1024
 
 exporters:
-  # SigNoz backend (or any OTLP-compatible backend)
-  # Configure via SIGNOZ_ENDPOINT env var, defaults to signoz-otel-collector:4317
   otlp/signoz:
-    endpoint: ${SIGNOZ_ENDPOINT:-signoz-otel-collector:4317}
+    endpoint: signoz-otel-collector:4317
     tls:
       insecure: true
   debug:

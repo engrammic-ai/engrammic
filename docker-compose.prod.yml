@@ -252,9 +252,6 @@ services:
     volumes:
       - ./config/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
-    environment:
-      # Point to SigNoz on strata-finance or external host
-      - SIGNOZ_ENDPOINT=${SIGNOZ_ENDPOINT:-signoz-otel-collector:4317}
     deploy:
       resources:
         limits:

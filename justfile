@@ -186,6 +186,24 @@ evals-scenario scenario:
 evals-output:
     uv run python scripts/run_evals.py --output evals-output.json -v
 
+# --- Observability (SigNoz) ---
+
+# Start SigNoz observability stack
+signoz-up:
+    docker compose -f docker-compose.signoz.yml up -d
+
+# Stop SigNoz stack
+signoz-down:
+    docker compose -f docker-compose.signoz.yml down
+
+# View SigNoz logs
+signoz-logs:
+    docker compose -f docker-compose.signoz.yml logs -f
+
+# Restart OTEL collector (after config changes)
+otel-restart:
+    docker restart context-service-otel
+
 # --- Cleanup ---
 
 # Remove cache and build artifacts
