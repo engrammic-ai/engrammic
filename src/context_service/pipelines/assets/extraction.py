@@ -215,6 +215,12 @@ def extraction(
                         t.valid_to,
                         t.source_doc_id,
                     )
+                    if source_uri and "arxiv.org" in source_uri:
+                        src_tier = "AUTHORITATIVE"
+                    elif source_uri:
+                        src_tier = "VALIDATED"
+                    else:
+                        src_tier = "COMMUNITY"
                     all_claim_rows.append(
                         {
                             "claim_id": cid,
@@ -227,6 +233,7 @@ def extraction(
                             "source_doc_id": t.source_doc_id,
                             "source_passage_id": t.source_passage_id,
                             "confidence": t.confidence,
+                            "source_tier": src_tier,
                             "created_at": now,
                         }
                     )

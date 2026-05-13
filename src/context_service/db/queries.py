@@ -527,6 +527,7 @@ ON CREATE SET
     n.source_doc_id = c.source_doc_id,
     n.source_passage_id = c.source_passage_id,
     n.confidence = c.confidence,
+    n.source_tier = c.source_tier,
     n.created_at = c.created_at,
     n.committed = true
 RETURN n.id AS id

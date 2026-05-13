@@ -48,7 +48,7 @@ services:
     restart: unless-stopped
 
   memgraph:
-    image: memgraph/memgraph-mage:2.18
+    image: memgraph/memgraph-mage:3.10.0
     container_name: context-service-memgraph
     ports:
       - "7687:7687"
