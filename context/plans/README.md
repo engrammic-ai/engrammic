@@ -2,9 +2,10 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-12)
+## Current state (2026-05-13)
 
 **Shipped:**
+- v2.3 Telemetry Expansion (OTEL metrics for all storage backends, LLM tokens, chain reuse)
 - v2.2 Reasoning Chain Applicability (three-layer matching, DTW, implicit feedback)
 - v2.1 Custodian Identity Split (4 identities with full LLM wiring + Dagster jobs/sensors)
 - v2 Architecture Fixes (error envelopes, outbox pattern, raw Cypher mixin, hydration registry, ProposedBelief flow)
@@ -21,7 +22,6 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Status | Description |
 |------|--------|-------------|
-| [2026-05-11-telemetry-expansion.md](./2026-05-11-telemetry-expansion.md) | Draft | OTEL metrics for all storage backends, LLM tokens, chain reuse |
 | [2026-05-08-self-hosted-telemetry.md](./2026-05-08-self-hosted-telemetry.md) | Active | Two-tier telemetry for self-hosted deployments |
 
 Next candidates:
@@ -56,6 +56,7 @@ Next candidates:
 ## Archive
 
 Completed plans in `archive/`:
+- Telemetry Expansion (2026-05-13) - OTEL metrics for storage backends, LLM tokens
 - Reasoning Chain Applicability (2026-05-12) - three-layer matching, DTW, implicit feedback
 - Custodian Identity Split (2026-05-12) - 4 identities with LLM wiring + Dagster jobs
 - OSS Adoption Helpers (2026-05-11)
