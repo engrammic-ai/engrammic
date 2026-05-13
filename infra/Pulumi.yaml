@@ -1,0 +1,10 @@
+name: engrammic-infra
+runtime:
+  name: python
+  options:
+    toolchain: uv
+description: Engrammic GCP infrastructure
+
+config:
+  gcp:region: us-central1
+  gcp:zone: us-central1-a

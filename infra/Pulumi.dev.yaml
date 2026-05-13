@@ -1,0 +1,5 @@
+config:
+  gcp:project: engrammic
+  engrammic-infra:environment: dev
+  engrammic-infra:instance_type: e2-standard-4
+  engrammic-infra:min_cloudrun_instances: 0

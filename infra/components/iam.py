@@ -1,0 +1,88 @@
+"""Service accounts and IAM bindings."""
+
+import pulumi
+from pulumi_gcp import projects, serviceaccount
+
+
+class IAMStack(pulumi.ComponentResource):
+    """Service accounts for Cloud Run and GCE with appropriate role bindings."""
+
+    def __init__(self, name: str, opts: pulumi.ResourceOptions | None = None):
+        super().__init__("engrammic:iam:IAMStack", name, None, opts)
+
+        config = pulumi.Config()
+        env = config.require("environment")
+        gcp_config = pulumi.Config("gcp")
+        project = gcp_config.require("project")
+
+        # Cloud Run service account
+        self.context_service_run = serviceaccount.Account(
+            f"{name}-context-service-run",
+            account_id=f"context-service-run-{env}",
+            display_name=f"Context Service Cloud Run ({env})",
+            opts=pulumi.ResourceOptions(parent=self),
+        )
+
+        # Cloud Run roles
+        cloud_run_roles = [
+            "roles/secretmanager.secretAccessor",
+            "roles/cloudtrace.agent",
+            "roles/monitoring.metricWriter",
+        ]
+        for role in cloud_run_roles:
+            role_suffix = role.split("/")[1].replace(".", "-")
+            projects.IAMMember(
+                f"{name}-run-{role_suffix}",
+                project=project,
+                role=role,
+                member=self.context_service_run.email.apply(
+                    lambda email: f"serviceAccount:{email}"
+                ),
+                opts=pulumi.ResourceOptions(parent=self),
+            )
+
+        # GCE stateful host service account
+        self.stateful_host = serviceaccount.Account(
+            f"{name}-stateful-host",
+            account_id=f"stateful-host-{env}",
+            display_name=f"Stateful Host GCE ({env})",
+            opts=pulumi.ResourceOptions(parent=self),
+        )
+
+        # GCE roles
+        gce_roles = [
+            "roles/secretmanager.secretAccessor",
+            "roles/logging.logWriter",
+            "roles/monitoring.metricWriter",
+        ]
+        for role in gce_roles:
+            role_suffix = role.split("/")[1].replace(".", "-")
+            projects.IAMMember(
+                f"{name}-gce-{role_suffix}",
+                project=project,
+                role=role,
+                member=self.stateful_host.email.apply(
+                    lambda email: f"serviceAccount:{email}"
+                ),
+                opts=pulumi.ResourceOptions(parent=self),
+            )
+
+        # Storage object admin on backup bucket (bucket-level binding)
+        # Note: For bucket-specific binding, use storage.BucketIAMMember
+        # with the actual bucket name when the storage component is created.
+        # Project-level storage.objectAdmin is too broad for production.
+        # This is a placeholder that should be replaced with bucket-level binding.
+        projects.IAMMember(
+            f"{name}-gce-storage-objectAdmin",
+            project=project,
+            role="roles/storage.objectAdmin",
+            member=self.stateful_host.email.apply(
+                lambda email: f"serviceAccount:{email}"
+            ),
+            opts=pulumi.ResourceOptions(parent=self),
+        )
+
+        self.register_outputs({
+            "context_service_run_email": self.context_service_run.email,
+            "stateful_host_email": self.stateful_host.email,
+        })

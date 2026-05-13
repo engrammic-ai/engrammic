@@ -5,6 +5,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 ## Current state (2026-05-13)
 
 **Shipped:**
+- Self-Hosted Telemetry (two-tier beacon system, install ID, collector, docs)
 - v2.3 Telemetry Expansion (OTEL metrics for all storage backends, LLM tokens, chain reuse)
 - v2.2 Reasoning Chain Applicability (three-layer matching, DTW, implicit feedback)
 - v2.1 Custodian Identity Split (4 identities with full LLM wiring + Dagster jobs/sensors)
@@ -27,8 +28,8 @@ Active implementation plans for context-service. Completed plans are moved to `a
 Next candidates:
 - Beacon receiving endpoint (Cloud Run)
 - Clustering algorithm evaluation (spike)
-- LLM-based contradiction detection (Custodian identity)
-- LLM-based synthesis (Synthesizer identity)
+- **LLM-based contradiction detection (Custodian identity)** - next session
+- **LLM-based synthesis (Synthesizer identity)** - next session
 
 ## Spikes / drafts
 
