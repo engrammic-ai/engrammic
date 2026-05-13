@@ -7,6 +7,10 @@ receivers:
         endpoint: 0.0.0.0:4318
 
 processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 200
+    spike_limit_mib: 50
   batch:
     timeout: 1s
     send_batch_size: 1024
@@ -16,20 +20,17 @@ exporters:
     endpoint: signoz-otel-collector:4317
     tls:
       insecure: true
-  debug:
-    verbosity: basic
-
 service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
-      exporters: [otlp/signoz, debug]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/signoz]
     metrics:
       receivers: [otlp]
-      processors: [batch]
-      exporters: [otlp/signoz, debug]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/signoz]
     logs:
       receivers: [otlp]
-      processors: [batch]
-      exporters: [otlp/signoz, debug]
+      processors: [memory_limiter, batch]
+      exporters: [otlp/signoz]

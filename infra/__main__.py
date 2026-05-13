@@ -16,8 +16,8 @@ iam = IAMStack("engrammic-iam")
 # Network - VPC, subnets, NAT
 network = NetworkStack("engrammic-network")
 
-# Storage - backup buckets
-storage = StorageStack("engrammic-storage")
+# Storage - backup buckets (IAM binding needs stateful host SA)
+storage = StorageStack("engrammic-storage", stateful_host_email=iam.stateful_host.email)
 
 # Secrets - Secret Manager resources
 secrets = SecretsStack("engrammic-secrets")
@@ -50,6 +50,11 @@ context_service = ContextServiceRun(
     },
     secrets={
         "POSTGRES_PASSWORD": secrets.secrets["postgres-password"].id,
+        "MEMGRAPH_PASSWORD": secrets.secrets["memgraph-password"].id,
+        "WORKOS_API_KEY": secrets.secrets["workos-api-key"].id,
+        "ANTHROPIC_API_KEY": secrets.secrets["anthropic-api-key"].id,
+        "OPENAI_API_KEY": secrets.secrets["openai-api-key"].id,
+        "GOOGLE_API_KEY": secrets.secrets["google-api-key"].id,
     },
 )
 

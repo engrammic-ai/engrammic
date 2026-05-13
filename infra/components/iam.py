@@ -69,20 +69,6 @@ class IAMStack(pulumi.ComponentResource):
                 opts=pulumi.ResourceOptions(parent=self),
             )
 
-        # Storage object admin on backup bucket (bucket-level binding)
-        # Note: For bucket-specific binding, use storage.BucketIAMMember
-        # with the actual bucket name when the storage component is created.
-        # Project-level storage.objectAdmin is too broad for production.
-        # This is a placeholder that should be replaced with bucket-level binding.
-        projects.IAMMember(
-            f"{name}-gce-storage-objectAdmin",
-            project=project,
-            role="roles/storage.objectAdmin",
-            member=self.stateful_host.email.apply(
-                lambda email: f"serviceAccount:{email}"
-            ),
-            opts=pulumi.ResourceOptions(parent=self),
-        )
 
         # Cloud Build service account
         self.cloud_build = serviceaccount.Account(

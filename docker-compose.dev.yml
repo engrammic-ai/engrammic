@@ -60,7 +60,7 @@ services:
       - MEMGRAPH_PASSWORD=${MEMGRAPH_PASSWORD:-}
     command: ["--log-level=WARNING", "--storage-properties-on-edges=true"]
     healthcheck:
-      test: ["CMD", "echo", ">", "/dev/tcp/localhost/7687"]
+      test: ["CMD-SHELL", "echo > /dev/tcp/localhost/7687"]
       interval: 10s
       timeout: 5s
       retries: 5
