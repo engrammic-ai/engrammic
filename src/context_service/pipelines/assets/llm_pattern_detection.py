@@ -54,7 +54,7 @@ def _run_async(coro: Any) -> Any:
 @dg.asset(
     name="llm_pattern_detection",
     partitions_def=silo_partitions,
-    ins={"pattern_detection": dg.AssetIn("pattern_detection")},
+    deps=["pattern_detection"],
     description=(
         "LLM-based semantic pattern detection for the silo partition.  "
         "Classifies Leiden cluster facts via Haiku and persists accepted patterns "
@@ -67,7 +67,6 @@ def _run_async(coro: Any) -> Any:
 def llm_pattern_detection(
     context: AssetExecutionContext,
     memgraph: MemgraphResource,
-    pattern_detection: dg.Nothing,  # type: ignore[valid-type]  # noqa: ARG001 — Dagster dep marker
 ) -> dg.Output[dict[str, Any]]:
     """Run LLM-based pattern detection for the silo partition."""
     settings = get_settings()

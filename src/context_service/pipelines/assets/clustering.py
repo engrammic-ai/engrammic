@@ -31,7 +31,7 @@ def _run_async(coro: Any) -> Any:
 @dg.asset(
     name="clustering",
     partitions_def=silo_partitions,
-    ins={"custodian_finalize": dg.AssetIn("custodian_finalize")},
+    deps=["custodian_finalize"],
     description="Run Leiden clustering + hierarchical summaries for settled :Finding nodes per silo.",
     retry_policy=dg.RetryPolicy(max_retries=3, delay=10.0, backoff=dg.Backoff.EXPONENTIAL),
     tags={"dagster/concurrency_key": "clustering"},
@@ -43,7 +43,6 @@ def clustering(
     redis: RedisResource,
     llm: LLMResource,
     embedding: EmbeddingResource,
-    custodian_finalize: dg.Nothing,  # type: ignore[valid-type]  # noqa: ARG001 — Dagster dep marker, runtime sentinel
 ) -> dg.Output[dict[str, Any]]:
     """Detect communities via Leiden, build cluster hierarchy, generate LLM summaries, embed."""
     silo_id: str = context.partition_key

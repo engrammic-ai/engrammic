@@ -24,7 +24,7 @@ def _run_async(coro: Any) -> Any:
 @dg.asset(
     name="proposal_detection",
     partitions_def=silo_partitions,
-    ins={"clustering": dg.AssetIn("clustering")},
+    deps=["clustering"],
     description="Detect weak synthesis candidates and create ProposedBelief nodes.",
     retry_policy=dg.RetryPolicy(max_retries=2, delay=10.0, backoff=dg.Backoff.EXPONENTIAL),
     tags={"dagster/concurrency_key": "proposal_detection"},
@@ -32,7 +32,6 @@ def _run_async(coro: Any) -> Any:
 def proposal_detection(
     context: AssetExecutionContext,
     memgraph: MemgraphResource,
-    clustering: dg.Nothing,  # type: ignore[valid-type]  # noqa: ARG001
 ) -> dg.Output[dict[str, Any]]:
     """Create ProposedBelief nodes for clusters in the proposal confidence range."""
     silo_id: str = context.partition_key

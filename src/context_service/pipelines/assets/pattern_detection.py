@@ -30,7 +30,7 @@ def _run_async(coro: Any) -> Any:
 @dg.asset(
     name="pattern_detection",
     partitions_def=silo_partitions,
-    ins={"claim_to_fact_promotion": dg.AssetIn("claim_to_fact_promotion")},
+    deps=["claim_to_fact_promotion"],
     description=(
         "Detect co_occurrence and causal_chain :Pattern nodes for the silo partition.  "
         "Gated behind settings.pattern.detection_enabled.  "
@@ -42,7 +42,6 @@ def _run_async(coro: Any) -> Any:
 def pattern_detection(
     context: AssetExecutionContext,
     memgraph: MemgraphResource,
-    claim_to_fact_promotion: dg.Nothing,  # type: ignore[valid-type]  # noqa: ARG001 — Dagster dep marker
 ) -> dg.Output[dict[str, Any]]:
     """Run co_occurrence and causal_chain detection plus pattern decay for the silo partition."""
     settings = get_settings()

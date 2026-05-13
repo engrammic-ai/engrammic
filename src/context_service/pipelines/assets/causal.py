@@ -115,7 +115,7 @@ def _compute_confidence(edge_confidences: list[tuple[str, float]], formula: str)
 @dg.asset(
     name="causal_transitivity",
     partitions_def=silo_partitions,
-    ins={"claim_to_fact_promotion": dg.AssetIn("claim_to_fact_promotion")},
+    deps=["claim_to_fact_promotion"],
     description="Infer transitive CAUSES edges up to max_transitivity_depth hops per silo.",
     retry_policy=dg.RetryPolicy(max_retries=3, delay=10.0, backoff=dg.Backoff.EXPONENTIAL),
     tags={"dagster/concurrency_key": "causal_transitivity"},
@@ -123,7 +123,6 @@ def _compute_confidence(edge_confidences: list[tuple[str, float]], formula: str)
 def causal_transitivity(
     context: AssetExecutionContext,
     memgraph: MemgraphResource,
-    claim_to_fact_promotion: dg.Nothing,  # type: ignore[valid-type]  # noqa: ARG001 — Dagster dep marker, runtime sentinel
 ) -> dg.Output[dict[str, Any]]:
     """Traverse CAUSES chains and materialise inferred transitive edges for the silo partition."""
     settings = get_settings()

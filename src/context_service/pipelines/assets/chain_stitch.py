@@ -25,7 +25,7 @@ def _run_async(coro: Any) -> Any:
 @dg.asset(
     name="chain_stitch",
     partitions_def=silo_partitions,
-    ins={"custodian_finalize": dg.AssetIn("custodian_finalize")},
+    deps=["custodian_finalize"],
     description="Verify cross-cluster supersession chains and identify terminal nodes per silo.",
     retry_policy=dg.RetryPolicy(max_retries=2, delay=5.0, backoff=dg.Backoff.EXPONENTIAL),
     tags={"dagster/concurrency_key": "chain_stitch"},
@@ -33,7 +33,6 @@ def _run_async(coro: Any) -> Any:
 def chain_stitch(
     context: AssetExecutionContext,
     memgraph: MemgraphResource,
-    custodian_finalize: dg.Nothing,  # type: ignore[valid-type]  # noqa: ARG001 — Dagster dep marker, runtime sentinel
 ) -> dg.Output[dict[str, Any]]:
     """Run chain stitching pass after custodian finalize completes."""
     silo_id: str = context.partition_key

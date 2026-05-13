@@ -35,7 +35,7 @@ LIMIT $batch_size
 @dg.asset(
     name="custodian_finalize",
     partitions_def=silo_partitions,
-    ins={"custodian_visit": dg.AssetIn("custodian_visit")},
+    deps=["custodian_visit"],
     description="Promote :Claim:Commitment nodes to :Finding via R2 consensus per silo.",
     retry_policy=dg.RetryPolicy(max_retries=3, delay=10.0, backoff=dg.Backoff.EXPONENTIAL),
     tags={"dagster/concurrency_key": "custodian_finalize"},
@@ -43,7 +43,6 @@ LIMIT $batch_size
 def custodian_finalize(
     context: AssetExecutionContext,
     memgraph: MemgraphResource,
-    custodian_visit: dg.Nothing,  # type: ignore[valid-type]  # noqa: ARG001 — Dagster dep marker, runtime sentinel
 ) -> dg.Output[dict[str, Any]]:
     """Scan commitments with R2 consensus chains and promote to :Finding nodes."""
     silo_id: str = context.partition_key
