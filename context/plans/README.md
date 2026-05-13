@@ -28,8 +28,6 @@ Active implementation plans for context-service. Completed plans are moved to `a
 Next candidates:
 - Beacon receiving endpoint (Cloud Run)
 - Clustering algorithm evaluation (spike)
-- **LLM-based contradiction detection (Custodian identity)** - next session
-- **LLM-based synthesis (Synthesizer identity)** - next session
 
 ## Spikes / drafts
 
