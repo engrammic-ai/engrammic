@@ -363,7 +363,7 @@ class MemgraphStore(EAGKnowledgeStore):
 
     async def get_node(self, node_id: uuid.UUID, silo_id: str) -> Node | None:
         result = await self._client.execute_query(
-            queries.GET_NODE,
+            queries.GET_NODE_RETRIEVAL,
             {"id": str(node_id), "silo_id": silo_id},
         )
         if not result:

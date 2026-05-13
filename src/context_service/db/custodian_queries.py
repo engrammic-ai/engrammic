@@ -696,7 +696,9 @@ RETURN DISTINCT
 FIND_CHAIN_TERMINALS = """
 MATCH (terminal)-[:SUPERSEDES*1..]->(superseded)
 WHERE terminal.silo_id = $silo_id
-  AND NOT EXISTS { MATCH (other)-[:SUPERSEDES]->(terminal) WHERE other.silo_id = $silo_id }
+OPTIONAL MATCH (other)-[:SUPERSEDES]->(terminal) WHERE other.silo_id = $silo_id
+WITH terminal, superseded, other
+WHERE other IS NULL
 WITH terminal, collect(DISTINCT superseded.id) AS chain_ids
 RETURN terminal.id AS terminal_id,
        terminal.cluster_id AS terminal_cluster,

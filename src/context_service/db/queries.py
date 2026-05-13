@@ -1276,8 +1276,10 @@ CREATE (cm:Node:Commitment {
 })
 WITH wb, cm
 OPTIONAL MATCH (wb)-[:ABOUT]->(n)<-[:ABOUT]-(existing:Commitment)
-WHERE NOT EXISTS { (existing)<-[:SUPERSEDES]-(:Commitment) }
-  AND existing.silo_id = $silo_id
+WHERE existing.silo_id = $silo_id
+OPTIONAL MATCH (superseding:Commitment)-[:SUPERSEDES]->(existing)
+WITH wb, cm, existing, superseding
+WHERE superseding IS NULL
 WITH wb, cm, collect(DISTINCT existing) AS to_supersede
 MATCH (wb)-[:ABOUT]->(n)
 CREATE (cm)-[:ABOUT]->(n)

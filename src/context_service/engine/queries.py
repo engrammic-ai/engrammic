@@ -117,11 +117,6 @@ WHERE {content_union_predicate("n")}
 RETURN n, labels(n) AS _labels
 """
 
-# Legacy alias kept for call sites that have not yet been split.
-# Resolves to the retrieval variant (committed=true). Search for
-# GET_NODE usages and migrate to _RETRIEVAL or _INTERNAL explicitly.
-GET_NODE = GET_NODE_RETRIEVAL
-
 BATCH_GET_NODES = f"""
 MATCH (n)
 WHERE {content_union_predicate("n")}
@@ -381,10 +376,15 @@ FILTER_FINDING_STATUS = (
 # Bi-temporal read — internal, no committed filter (used by version audits).
 GET_NODE_AS_OF = f"""
 MATCH (n) WHERE {content_union_predicate("n")} AND n.silo_id = $silo_id
-  AND (n.id = $id OR n.supersedes_id = $id OR
-      EXISTS {{ MATCH (n)-[:SUPERSEDES*]->(root) WHERE root.id = $id }})
+  AND (n.id = $id OR n.supersedes_id = $id)
 WITH n
 WHERE coalesce(n.valid_from, n.created_at) <= $as_of
+  AND (n.valid_to IS NULL OR n.valid_to > $as_of)
+RETURN n
+UNION
+MATCH (n)-[:SUPERSEDES*]->(root)
+WHERE {content_union_predicate("n")} AND n.silo_id = $silo_id AND root.id = $id
+  AND coalesce(n.valid_from, n.created_at) <= $as_of
   AND (n.valid_to IS NULL OR n.valid_to > $as_of)
 RETURN n
 LIMIT 1
@@ -1027,9 +1027,11 @@ LIMIT $limit
 
 CHECK_CHAIN_AUDIT_LINKED = f"""
 MATCH (c:{_LABEL_REASONING_CHAIN} {{id: $chain_id}})
-WHERE EXISTS {{ MATCH (c)<-[:PROMOTED_FROM]-(f1:Finding) WHERE {FILTER_FINDING_STATUS.format(var="f1")} }}
-   OR size([(c)<-[:DERIVED_FROM_EVIDENCE]-(rc:{_LABEL_REASONING_CHAIN}) | rc]) > 0
-   OR EXISTS {{ MATCH (c)-[:CRYSTALLIZED_INTO]->(f2:Finding) WHERE {FILTER_FINDING_STATUS.format(var="f2")} }}
+OPTIONAL MATCH (c)<-[:PROMOTED_FROM]-(f1:Finding) WHERE {FILTER_FINDING_STATUS.format(var="f1")}
+OPTIONAL MATCH (c)<-[:DERIVED_FROM_EVIDENCE]-(rc:{_LABEL_REASONING_CHAIN})
+OPTIONAL MATCH (c)-[:CRYSTALLIZED_INTO]->(f2:Finding) WHERE {FILTER_FINDING_STATUS.format(var="f2")}
+WITH c, f1, rc, f2
+WHERE f1 IS NOT NULL OR rc IS NOT NULL OR f2 IS NOT NULL
 RETURN true AS linked
 """
 

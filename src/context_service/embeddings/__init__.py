@@ -12,13 +12,6 @@ from context_service.embeddings.splade import SpladeEncoder, SpladeEncoderError
 if TYPE_CHECKING:
     from context_service.cache.embedding_cache import EmbeddingCache
 
-# Backward-compat aliases
-JinaEmbeddingService = LiteLLMEmbeddingService
-JinaEmbeddingError = LiteLLMEmbeddingError
-VertexAIEmbeddingService = LiteLLMEmbeddingService
-VertexAIEmbeddingError = LiteLLMEmbeddingError
-
-
 def build_embedding_service(
     embedding_cache: "EmbeddingCache | None" = None,
 ) -> EmbeddingService:
@@ -36,12 +29,8 @@ def build_embedding_service(
 __all__ = [
     "EmbeddingService",
     "build_embedding_service",
-    "JinaEmbeddingError",
-    "JinaEmbeddingService",
     "LiteLLMEmbeddingError",
     "LiteLLMEmbeddingService",
     "SpladeEncoder",
     "SpladeEncoderError",
-    "VertexAIEmbeddingError",
-    "VertexAIEmbeddingService",
 ]

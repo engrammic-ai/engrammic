@@ -6,6 +6,7 @@ Uses structlog for structured JSON logging.
 
 import logging
 import sys
+from collections.abc import Mapping, MutableMapping
 from contextvars import ContextVar
 from typing import TYPE_CHECKING, Any
 
@@ -82,14 +83,13 @@ def set_dagster_context(ctx: "AssetExecutionContext | None") -> None:
 
 
 def _dagster_bridge(
-    logger: logging.Logger, method_name: str, event_dict: dict[str, Any]
-) -> dict[str, Any]:
+    _logger: logging.Logger, method_name: str, event_dict: MutableMapping[str, Any]
+) -> Mapping[str, Any]:
     """Processor that forwards logs to Dagster context if available."""
     ctx = _dagster_context.get()
     if ctx is not None:
-        level = event_dict.get("level", "info").lower()
         event = event_dict.get("event", "")
         extra = {k: v for k, v in event_dict.items() if k not in ("event", "level", "timestamp")}
         msg = f"{event} {extra}" if extra else event
-        getattr(ctx.log, level, ctx.log.info)(msg)
+        getattr(ctx.log, method_name, ctx.log.info)(msg)
     return event_dict

@@ -119,7 +119,9 @@ async def get_chain_terminal(
     """
     query = """
     MATCH path = (terminal)-[:SUPERSEDES*0..20]->(target {id: $node_id, silo_id: $silo_id})
-    WHERE NOT EXISTS { MATCH (other)-[:SUPERSEDES]->(terminal) WHERE other.silo_id = $silo_id }
+    OPTIONAL MATCH (other)-[:SUPERSEDES]->(terminal) WHERE other.silo_id = $silo_id
+    WITH terminal, other
+    WHERE other IS NULL
     RETURN terminal.id AS terminal_id
     LIMIT 1
     """
