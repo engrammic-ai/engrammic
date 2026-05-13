@@ -28,9 +28,14 @@ _BATCH_SIZE = 50
 
 _PENDING_DOCUMENTS = """
 MATCH (d:Document {silo_id: $silo_id})
-WHERE size([(d)<-[:EXTRACTED_FROM]-(c:Claim) | c]) = 0
+WHERE d.extracted_at IS NULL
 RETURN d.id AS id, d.content AS content, d.source_uri AS source_uri
 LIMIT $batch
+"""
+
+_MARK_DOC_EXTRACTED = """
+MATCH (d:Document {id: $doc_id, silo_id: $silo_id})
+SET d.extracted_at = $extracted_at
 """
 
 
@@ -134,6 +139,11 @@ def extraction(
                     tokens_used += usage.total_tokens
                     docs_processed += 1
                     context.log.info(f"Extracted {len(result.entities)} entities, {len(result.relationships)} relationships from {doc_id}")
+                    # Mark doc as extracted regardless of claim count
+                    await client.execute_write(
+                        _MARK_DOC_EXTRACTED,
+                        {"doc_id": doc_id, "silo_id": silo_id, "extracted_at": now},
+                    )
                 except Exception as exc:
                     context.log.warning(f"extraction failed for doc {doc_id}: {exc}")
                     continue
