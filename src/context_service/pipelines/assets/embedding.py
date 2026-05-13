@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any
 import dagster as dg
 from dagster import AssetExecutionContext
 
+from context_service.config.logging import set_dagster_context
 from context_service.config.settings import get_settings
 from context_service.pipelines.assets.weak_link_creation import create_weak_links_for_node
 from context_service.pipelines.partitions import silo_partitions
@@ -101,6 +102,7 @@ def embedding_asset(
     embedding: EmbeddingResource,
 ) -> dg.Output[dict[str, Any]]:
     """Read unembedded nodes for the partition's silo, embed in batches, upsert to Qdrant."""
+    set_dagster_context(context)
     silo_id: str = context.partition_key
     t0 = time.monotonic()
 

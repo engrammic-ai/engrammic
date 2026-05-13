@@ -9,6 +9,7 @@ from typing import Any
 import dagster as dg
 from dagster import AssetExecutionContext
 
+from context_service.config.logging import set_dagster_context
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import MemgraphResource
 
@@ -66,6 +67,7 @@ def claim_to_fact_promotion(
     memgraph: MemgraphResource,
 ) -> dg.Output[dict[str, Any]]:
     """Scan unpromoted :Claim nodes in the partition's silo and promote eligible ones."""
+    set_dagster_context(context)
     silo_id: str = context.partition_key
     t0 = time.monotonic()
 

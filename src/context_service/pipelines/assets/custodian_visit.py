@@ -8,6 +8,7 @@ from typing import Any
 import dagster as dg
 from dagster import AssetExecutionContext
 
+from context_service.config.logging import set_dagster_context
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import MemgraphResource, RedisResource
 
@@ -59,6 +60,7 @@ def custodian_visit(
     redis: RedisResource,
 ) -> dg.Output[dict[str, Any]]:
     """Visit each active cluster for the partition's silo and write commitment nodes."""
+    set_dagster_context(context)
     silo_id: str = context.partition_key
     t0 = time.monotonic()
 

@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING, Any
 import dagster as dg
 from dagster import AssetExecutionContext
 
+from context_service.config.logging import set_dagster_context
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import LLMResource, MemgraphResource
 from context_service.pipelines.utils import run_async
@@ -111,6 +112,7 @@ def auto_tagging(
     llm: LLMResource,
 ) -> dg.Output[dict[str, Any]]:
     """Run LLM-based tag refinement for the silo partition."""
+    set_dagster_context(context)
     silo_id: str = context.partition_key
     t0 = time.monotonic()
 
