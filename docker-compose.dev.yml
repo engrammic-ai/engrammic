@@ -195,11 +195,13 @@ services:
       - POSTGRES_USER=context
       - POSTGRES_PASSWORD=context
       - POSTGRES_DATABASE=context_service
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-sa.json
     volumes:
       - ./src:/app/src
       - ./workspace.yaml:/app/workspace.yaml:ro
       - ./dagster.yaml:/app/dagster.yaml:ro
       - ./config:/app/config:ro
+      - ./secrets:/app/secrets:ro
     depends_on:
       dagster-code-server:
         condition: service_healthy
