@@ -1,73 +1,85 @@
 # DAG Architecture
 
-**Status:** Shipped (v1-beta)
-**Date:** 2026-04-28
+**Status:** Shipped (v1-beta, consolidated 2026-05-13)
+**Date:** 2026-05-13
 
-## Shipped DAG Shape
+## Design Principles
 
-The pipeline follows Option B (parallel embed + extract) from the original discussion. Both extraction and embedding run in parallel, sensor-driven, as soon as documents arrive. All assets are partitioned by `silo_id`.
+MCP tool writes (`context_store`, etc.) handle embedding inline and bypass Dagster entirely. The DAG handles background enrichment: custodian synthesis, fact promotion, clustering, and heat scoring.
+
+## Consolidated Pipeline Chains
+
+Assets are grouped into logical chains that respect dependencies. Each chain runs as a unit.
 
 ```
-Document Ingested (via MCP context_remember / REST ingest)
-    |
-    |  document_arrival_sensor (polls every 60s per silo)
-    |
-    +-------------------+
-    |                   |
-    v                   v
-extraction          embedding
-(sensor-driven,     (sensor-driven,
- batched, ~5min)     batched, ~5min)
-    |                   |
-    +--------+----------+
-             |
-             v
-      custodian_visit
-      (scheduled, */15 * * * *)
-             |
-    +--------+----------+
-    |                   |
-    v                   v
-custodian_finalize  claim_to_fact_promotion
-(waits on visit)    (scheduled hourly,
-                     waits on visit)
-    |
-    v
-clustering
-(scheduled daily 04:00 UTC,
- waits on custodian_finalize)
+                    MCP context_store (inline embedding)
+                              |
+                              v
+                    Memgraph + Qdrant (immediate)
+                              |
+      +-----------------------+-----------------------+
+      |                       |                       |
+      v                       v                       v
+CUSTODIAN PIPELINE     KNOWLEDGE PIPELINE      HEAT PIPELINE
+(every 15min)          (hourly)                (daily 02:00)
+      |                       |                       |
+custodian_visit        claim_to_fact_promotion       heat
+      |                       |                       |
+      v                       +---------+             v
+custodian_finalize            |         |         edge_heat
+      |                       v         v             |
+      |              causal_transitivity              v
+      |                       |         |      weak_link_review
+      |                       v         v
+      |              pattern_detection
+      |                       |
+      |                       v
+      |              llm_pattern_detection
+      |
+      +---> CLUSTERING PIPELINE (daily 04:00)
+                    |
+               clustering
+                    |
+                    v
+              chain_stitch
+                    |
+                    v
+           proposal_detection
 ```
 
-Note: extraction and embedding run in parallel with no inter-dependency. custodian_visit waits for both to complete before running.
+## Schedule Summary
 
-## Asset Cadences
+| Schedule                      | Assets                                                                 | Cron               |
+|-------------------------------|------------------------------------------------------------------------|--------------------|
+| `custodian_pipeline_schedule` | custodian_visit -> custodian_finalize                                  | `*/15 * * * *`     |
+| `knowledge_pipeline_schedule` | claim_to_fact_promotion -> causal_transitivity -> pattern_detection -> llm_pattern_detection | `0 * * * *` |
+| `clustering_pipeline_schedule`| clustering -> chain_stitch -> proposal_detection                       | `0 4 * * *`        |
+| `heat_pipeline_schedule`      | heat -> edge_heat -> weak_link_review                                  | `0 2 * * *`        |
 
-| Asset                    | Trigger                             | Cron / cadence             |
-|--------------------------|-------------------------------------|----------------------------|
-| extraction               | document_arrival_sensor             | Every ~5 min or N docs     |
-| embedding                | document_arrival_sensor             | Every ~5 min (parallel)    |
-| custodian_visit          | custodian_visit_schedule            | `*/15 * * * *` (15 min)    |
-| custodian_finalize       | Depends on custodian_visit          | Follows visit schedule     |
-| claim_to_fact_promotion  | fact_promotion_schedule             | `0 * * * *` (hourly)       |
-| clustering               | clustering_schedule                 | `0 4 * * *` (daily 04 UTC) |
-| heat                     | heat_schedule                       | `0 * * * *` (hourly)       |
-| reasoning_compaction     | reasoning_compaction_schedule       | `0 * * * *` (hourly)       |
-| retention_sweep          | retention_schedule                  | `0 3 * * *` (daily 03 UTC) |
-| pattern_detection        | pattern_detection_schedule          | `0 5 * * *` (daily 05 UTC) |
-| llm_pattern_detection    | Depends on pattern_detection        | Follows pattern_detection  |
-| belief_synthesis         | belief_synthesis_sensor             | Event-driven (cluster density >= threshold) |
-| causal_tombstone         | Manual / admin-triggered            | On demand                  |
+### Maintenance Schedules (independent)
+
+| Schedule                      | Asset                | Cron               |
+|-------------------------------|----------------------|--------------------|
+| `reasoning_compaction_schedule` | reasoning_compaction | `0 * * * *`      |
+| `retention_schedule`          | retention_sweep      | `0 3 * * *`        |
+| `auto_tagging_schedule`       | auto_tagging         | `*/30 * * * *`     |
+| `tag_maintenance_schedule`    | tag_maintenance      | `0 3 * * *`        |
+| `reconciliation_gc_schedule`  | reconciliation_gc    | `*/15 * * * *`     |
+| `proposal_cleanup_schedule`   | proposal_cleanup     | `0 6 * * *`        |
+| `groundskeeper_gc_schedule`   | groundskeeper_nightly (job) | `0 1 * * *`  |
 
 ## Concurrency Model
 
-- **Per-asset concurrency key**: Each asset has a static `dagster/concurrency_key` tag (e.g. `extraction`, `embedding`, `clustering`). These keys bound concurrent runs of each asset type globally. Configure pool sizes in `dagster.yaml` under `concurrency`.
-- **Per-silo isolation at run-request time**: Both schedules and the document-arrival sensor emit `RunRequest` objects with `tags={"dagster/concurrency_key": silo_id}`. This means a single noisy silo cannot starve runs for other silos. Both tags co-exist on each `RunRequest`.
-- **LLM cap**: Bind `dagster/concurrency_key=llm_calls` in `dagster.yaml` to a small pool (e.g. 4). Assets that call LLMs (extraction, custodian_visit, clustering) respect this through the per-asset key.
+- **Per-silo isolation**: Schedules emit `RunRequest` with `tags={"dagster/concurrency_key": silo_id}` so one noisy silo cannot starve others.
+- **LLM cap**: Assets calling LLMs respect a shared concurrency pool configured in `dagster.yaml`.
 
 ## Retry Policy
 
-All assets use `RetryPolicy(max_retries=3, delay=10.0, backoff=Backoff.EXPONENTIAL)`. Transient failures (network, timeouts) retry up to three times with exponential backoff starting at 10 seconds. After retries are exhausted the `poison_queue_sensor` fires on `DagsterRunStatus.FAILURE` and writes the run id, step key, and error message to Redis with a 7-day TTL under `dagster:poison:{asset_key}:{run_id}`.
+All assets use `RetryPolicy(max_retries=3, delay=10.0, backoff=Backoff.EXPONENTIAL)`. After retries exhaust, `poison_queue_sensor` writes failure info to Redis with 7-day TTL.
 
 ## Real-time vs Batch Split
 
-MCP tool writes (`context_remember`, `context_assert`, `context_commit`, `context_reflect`) bypass Dagster entirely — they go through `services/context.py::store()` synchronously. The DAG handles bulk ingest, custodian sweeps, and periodic clustering only.
+| Path | Embedding | Use case |
+|------|-----------|----------|
+| MCP tools | Inline (sync) | Agent writes, needs immediate recall |
+| Dagster | Backfill only | Bulk ingest, catchup |

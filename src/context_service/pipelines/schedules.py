@@ -1,9 +1,15 @@
 """Dagster schedule definitions for context-service.
 
-Both schedules yield one RunRequest per active silo by querying Memgraph at
-evaluation time. Using DynamicPartitionsDefinition means we can't use
-build_schedule_from_partitioned_job; instead we emit per-partition RunRequests
-directly from the schedule body.
+Consolidated into logical DAG chains that respect asset dependencies.
+Schedules yield one RunRequest per active silo by querying Memgraph at
+evaluation time.
+
+Chains:
+- custodian_pipeline: custodian_visit -> custodian_finalize (15min)
+- knowledge_pipeline: claim_to_fact_promotion -> pattern_detection -> llm_pattern_detection (hourly)
+- clustering_pipeline: clustering -> chain_stitch -> proposal_detection (daily 04:00)
+- heat_pipeline: heat -> edge_heat -> weak_link_review (daily 02:00)
+- maintenance: independent cleanup jobs (various schedules)
 """
 
 import asyncio
@@ -33,22 +39,27 @@ def _fetch_silo_ids(memgraph: MemgraphResource) -> list[str]:
     return asyncio.run(_run())
 
 
+# -----------------------------------------------------------------------------
+# Core Pipeline Chains
+# -----------------------------------------------------------------------------
+
+
 @dg.schedule(
-    cron_schedule="0 4 * * *",
-    name="clustering_schedule",
-    target=dg.AssetSelection.assets("clustering"),
-    description="Daily off-peak (04:00 UTC) clustering run per active silo.",
+    cron_schedule="*/15 * * * *",
+    name="custodian_pipeline_schedule",
+    target=dg.AssetSelection.assets("custodian_visit", "custodian_finalize"),
+    description="Every 15 minutes: custodian visit + finalize chain per active silo.",
     execution_timezone="UTC",
 )
-def clustering_schedule(
+def custodian_pipeline_schedule(
     context: ScheduleEvaluationContext,
     memgraph: MemgraphResource,
 ) -> Iterator[dg.RunRequest]:
-    """Yield one clustering RunRequest per active silo."""
+    """Custodian pipeline: visit -> finalize."""
     silo_ids = _fetch_silo_ids(memgraph)
     for silo_id in silo_ids:
         yield dg.RunRequest(
-            run_key=f"clustering:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            run_key=f"custodian_pipeline:{silo_id}:{context.scheduled_execution_time.isoformat()}",
             partition_key=silo_id,
             tags={"dagster/concurrency_key": silo_id},
         )
@@ -56,41 +67,50 @@ def clustering_schedule(
 
 @dg.schedule(
     cron_schedule="0 * * * *",
-    name="fact_promotion_schedule",
-    target=dg.AssetSelection.assets("claim_to_fact_promotion"),
-    description="Hourly fact-promotion sweep per active silo.",
+    name="knowledge_pipeline_schedule",
+    target=dg.AssetSelection.assets(
+        "claim_to_fact_promotion",
+        "causal_transitivity",
+        "pattern_detection",
+        "llm_pattern_detection",
+    ),
+    description="Hourly knowledge promotion chain: fact promotion -> patterns -> LLM patterns.",
     execution_timezone="UTC",
 )
-def fact_promotion_schedule(
+def knowledge_pipeline_schedule(
     context: ScheduleEvaluationContext,
     memgraph: MemgraphResource,
 ) -> Iterator[dg.RunRequest]:
-    """Yield one fact-promotion RunRequest per active silo."""
+    """Knowledge pipeline: promotion -> pattern detection -> LLM patterns."""
     silo_ids = _fetch_silo_ids(memgraph)
     for silo_id in silo_ids:
         yield dg.RunRequest(
-            run_key=f"fact_promotion:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            run_key=f"knowledge_pipeline:{silo_id}:{context.scheduled_execution_time.isoformat()}",
             partition_key=silo_id,
             tags={"dagster/concurrency_key": silo_id},
         )
 
 
 @dg.schedule(
-    cron_schedule="*/15 * * * *",
-    name="custodian_visit_schedule",
-    target=dg.AssetSelection.assets("custodian_visit"),
-    description="Every 15 minutes: custodian visit sweep per active silo.",
+    cron_schedule="0 4 * * *",
+    name="clustering_pipeline_schedule",
+    target=dg.AssetSelection.assets(
+        "clustering",
+        "chain_stitch",
+        "proposal_detection",
+    ),
+    description="Daily (04:00 UTC) clustering chain: clustering -> chain_stitch -> proposal_detection.",
     execution_timezone="UTC",
 )
-def custodian_visit_schedule(
+def clustering_pipeline_schedule(
     context: ScheduleEvaluationContext,
     memgraph: MemgraphResource,
 ) -> Iterator[dg.RunRequest]:
-    """Yield one custodian_visit RunRequest per active silo."""
+    """Clustering pipeline: clustering -> chain_stitch -> proposal_detection."""
     silo_ids = _fetch_silo_ids(memgraph)
     for silo_id in silo_ids:
         yield dg.RunRequest(
-            run_key=f"custodian_visit:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            run_key=f"clustering_pipeline:{silo_id}:{context.scheduled_execution_time.isoformat()}",
             partition_key=silo_id,
             tags={"dagster/concurrency_key": silo_id},
         )
@@ -98,23 +118,28 @@ def custodian_visit_schedule(
 
 @dg.schedule(
     cron_schedule="0 2 * * *",
-    name="heat_schedule",
-    target=dg.AssetSelection.assets("heat"),
-    description="Daily heat scoring (02:00 UTC) per active silo.",
+    name="heat_pipeline_schedule",
+    target=dg.AssetSelection.assets("heat", "edge_heat", "weak_link_review"),
+    description="Daily (02:00 UTC) heat chain: heat -> edge_heat -> weak_link_review.",
     execution_timezone="UTC",
 )
-def heat_schedule(
+def heat_pipeline_schedule(
     context: ScheduleEvaluationContext,
     memgraph: MemgraphResource,
 ) -> Iterator[dg.RunRequest]:
-    """Yield one heat RunRequest per active silo."""
+    """Heat pipeline: heat -> edge_heat -> weak_link_review."""
     silo_ids = _fetch_silo_ids(memgraph)
     for silo_id in silo_ids:
         yield dg.RunRequest(
-            run_key=f"heat:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            run_key=f"heat_pipeline:{silo_id}:{context.scheduled_execution_time.isoformat()}",
             partition_key=silo_id,
             tags={"dagster/concurrency_key": silo_id},
         )
+
+
+# -----------------------------------------------------------------------------
+# Maintenance Schedules (independent)
+# -----------------------------------------------------------------------------
 
 
 @dg.schedule(
@@ -128,7 +153,7 @@ def reasoning_compaction_schedule(
     context: ScheduleEvaluationContext,
     memgraph: MemgraphResource,
 ) -> Iterator[dg.RunRequest]:
-    """Yield one compaction RunRequest per active silo."""
+    """Compaction of reasoning chains."""
     silo_ids = _fetch_silo_ids(memgraph)
     for silo_id in silo_ids:
         yield dg.RunRequest(
@@ -149,53 +174,11 @@ def retention_schedule(
     context: ScheduleEvaluationContext,
     memgraph: MemgraphResource,
 ) -> Iterator[dg.RunRequest]:
-    """Yield one retention RunRequest per active silo."""
+    """Retention sweep for expired nodes."""
     silo_ids = _fetch_silo_ids(memgraph)
     for silo_id in silo_ids:
         yield dg.RunRequest(
             run_key=f"retention:{silo_id}:{context.scheduled_execution_time.isoformat()}",
-            partition_key=silo_id,
-            tags={"dagster/concurrency_key": silo_id},
-        )
-
-
-@dg.schedule(
-    cron_schedule="0 5 * * *",
-    name="pattern_detection_schedule",
-    target=dg.AssetSelection.assets("pattern_detection"),
-    description="Daily pattern detection (05:00 UTC): co_occurrence, causal_chain, and decay.",
-    execution_timezone="UTC",
-)
-def pattern_detection_schedule(
-    context: ScheduleEvaluationContext,
-    memgraph: MemgraphResource,
-) -> Iterator[dg.RunRequest]:
-    """Yield one pattern_detection RunRequest per active silo."""
-    silo_ids = _fetch_silo_ids(memgraph)
-    for silo_id in silo_ids:
-        yield dg.RunRequest(
-            run_key=f"pattern_detection:{silo_id}:{context.scheduled_execution_time.isoformat()}",
-            partition_key=silo_id,
-            tags={"dagster/concurrency_key": silo_id},
-        )
-
-
-@dg.schedule(
-    cron_schedule="30 5 * * *",
-    name="llm_pattern_detection_schedule",
-    target=dg.AssetSelection.assets("llm_pattern_detection"),
-    description="Daily LLM pattern detection (05:30 UTC): runs 30min after pattern_detection per active silo.",
-    execution_timezone="UTC",
-)
-def llm_pattern_detection_schedule(
-    context: ScheduleEvaluationContext,
-    memgraph: MemgraphResource,
-) -> Iterator[dg.RunRequest]:
-    """Yield one llm_pattern_detection RunRequest per active silo."""
-    silo_ids = _fetch_silo_ids(memgraph)
-    for silo_id in silo_ids:
-        yield dg.RunRequest(
-            run_key=f"llm_pattern_detection:{silo_id}:{context.scheduled_execution_time.isoformat()}",
             partition_key=silo_id,
             tags={"dagster/concurrency_key": silo_id},
         )
@@ -212,7 +195,7 @@ def auto_tagging_schedule(
     context: ScheduleEvaluationContext,
     memgraph: MemgraphResource,
 ) -> Iterator[dg.RunRequest]:
-    """Yield one auto_tagging RunRequest per active silo."""
+    """Auto-tagging refinement."""
     silo_ids = _fetch_silo_ids(memgraph)
     for silo_id in silo_ids:
         yield dg.RunRequest(
@@ -233,7 +216,7 @@ def tag_maintenance_schedule(
     context: ScheduleEvaluationContext,
     memgraph: MemgraphResource,
 ) -> Iterator[dg.RunRequest]:
-    """Yield one tag_maintenance RunRequest per active silo."""
+    """Tag vocabulary maintenance."""
     silo_ids = _fetch_silo_ids(memgraph)
     for silo_id in silo_ids:
         yield dg.RunRequest(
@@ -253,31 +236,10 @@ def tag_maintenance_schedule(
 def reconciliation_gc_schedule(
     context: ScheduleEvaluationContext,
 ) -> dg.RunRequest:
-    """Emit a single RunRequest for the global reconciliation GC sweep."""
+    """Global reconciliation GC sweep."""
     return dg.RunRequest(
         run_key=f"reconciliation_gc:{context.scheduled_execution_time.isoformat()}",
     )
-
-
-@dg.schedule(
-    cron_schedule="*/10 * * * *",
-    name="proposal_detection_schedule",
-    target=dg.AssetSelection.assets("proposal_detection"),
-    description="Every 10 minutes: detect weak synthesis candidates and create ProposedBeliefs.",
-    execution_timezone="UTC",
-)
-def proposal_detection_schedule(
-    context: ScheduleEvaluationContext,
-    memgraph: MemgraphResource,
-) -> Iterator[dg.RunRequest]:
-    """Yield one proposal_detection RunRequest per active silo."""
-    silo_ids = _fetch_silo_ids(memgraph)
-    for silo_id in silo_ids:
-        yield dg.RunRequest(
-            run_key=f"proposal_detection:{silo_id}:{context.scheduled_execution_time.isoformat()}",
-            partition_key=silo_id,
-            tags={"dagster/concurrency_key": silo_id},
-        )
 
 
 @dg.schedule(
@@ -291,7 +253,7 @@ def proposal_cleanup_schedule(
     context: ScheduleEvaluationContext,
     memgraph: MemgraphResource,
 ) -> Iterator[dg.RunRequest]:
-    """Yield one proposal_cleanup RunRequest per active silo."""
+    """Cleanup expired ProposedBeliefs."""
     silo_ids = _fetch_silo_ids(memgraph)
     for silo_id in silo_ids:
         yield dg.RunRequest(
@@ -309,43 +271,39 @@ def proposal_cleanup_schedule(
     execution_timezone="UTC",
 )
 def groundskeeper_gc_schedule(context: ScheduleEvaluationContext) -> dg.RunRequest:
-    """Emit a single RunRequest for the nightly Groundskeeper GC sweep."""
+    """Nightly Groundskeeper GC sweep."""
     return dg.RunRequest(
         run_key=f"groundskeeper_gc:{context.scheduled_execution_time.isoformat()}",
     )
 
 
 all_schedules: list[Any] = [
-    clustering_schedule,
-    fact_promotion_schedule,
-    custodian_visit_schedule,
-    heat_schedule,
+    # Core pipelines
+    custodian_pipeline_schedule,
+    knowledge_pipeline_schedule,
+    clustering_pipeline_schedule,
+    heat_pipeline_schedule,
+    # Maintenance
     reasoning_compaction_schedule,
     retention_schedule,
-    pattern_detection_schedule,
-    llm_pattern_detection_schedule,
     auto_tagging_schedule,
     tag_maintenance_schedule,
     reconciliation_gc_schedule,
-    proposal_detection_schedule,
     proposal_cleanup_schedule,
     groundskeeper_gc_schedule,
 ]
 
 __all__ = [
     "all_schedules",
-    "groundskeeper_gc_schedule",
-    "auto_tagging_schedule",
-    "clustering_schedule",
-    "custodian_visit_schedule",
-    "fact_promotion_schedule",
-    "heat_schedule",
-    "llm_pattern_detection_schedule",
-    "pattern_detection_schedule",
-    "proposal_cleanup_schedule",
-    "proposal_detection_schedule",
+    "custodian_pipeline_schedule",
+    "knowledge_pipeline_schedule",
+    "clustering_pipeline_schedule",
+    "heat_pipeline_schedule",
     "reasoning_compaction_schedule",
-    "reconciliation_gc_schedule",
     "retention_schedule",
+    "auto_tagging_schedule",
     "tag_maintenance_schedule",
+    "reconciliation_gc_schedule",
+    "proposal_cleanup_schedule",
+    "groundskeeper_gc_schedule",
 ]

@@ -12,7 +12,9 @@ from context_service.pipelines.resources import MemgraphResource
 
 _PENDING_CLUSTERS_BY_SILO = """
 MATCH (c:Cluster)
-WHERE NOT exists((c)<-[:COVERS]-(:Belief))
+OPTIONAL MATCH (c)<-[:COVERS]-(b:Belief)
+WITH c, b
+WHERE b IS NULL
 WITH c.silo_id AS silo_id, count(c) AS pending
 WHERE pending >= $threshold
 RETURN silo_id, pending

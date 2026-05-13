@@ -243,7 +243,8 @@ MERGE (c)-[:MENTIONS]->(e)
 
 PROMOTE_CLAIM_TO_FACT = """
 MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
-WHERE NOT exists((c)<-[:PROMOTED_FROM]-(:Fact))
+OPTIONAL MATCH (c)<-[:PROMOTED_FROM]-(existing:Fact)
+WITH c WHERE existing IS NULL
 CREATE (f:Fact {
     id: $fact_id,
     silo_id: c.silo_id,
