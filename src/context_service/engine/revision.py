@@ -32,6 +32,7 @@ import structlog
 from context_service.config.settings import get_settings
 from context_service.db.queries import (
     CLEAR_CASCADE_PENDING,
+    CREATE_BELIEF_FACT_EDGES,
     CREATE_BELIEF_FROM_FACTS,
     CREATE_BELIEF_SUPERSEDES,
     FIND_BELIEFS_REFERENCING,
@@ -380,9 +381,14 @@ async def revise_belief(
                 "evidence_count": len(fact_ids),
                 "created_at": now.isoformat(),
                 "valid_from": now.isoformat(),
-                "fact_ids": fact_ids,
             },
         )
+
+        if fact_ids:
+            await store.execute_write(
+                CREATE_BELIEF_FACT_EDGES,
+                {"belief_id": new_belief_id, "silo_id": silo_id, "fact_ids": fact_ids},
+            )
 
         await store.execute_write(
             UPDATE_BELIEF_CENTROID,

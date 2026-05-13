@@ -28,8 +28,10 @@ import structlog
 from context_service.config.settings import get_settings
 from context_service.db.queries import (
     CHECK_BELIEF_COVERAGE,
+    CREATE_BELIEF_FACT_EDGES,
     CREATE_BELIEF_FROM_FACTS,
     CREATE_MERGED_BELIEF,
+    CREATE_MERGED_BELIEF_FACT_EDGES,
     CREATE_MERGED_FROM_EDGES,
     FIND_SIMILAR_BELIEFS,
     GET_FACTS_IN_CLUSTER,
@@ -159,7 +161,7 @@ async def synthesize_belief(
     now = datetime.now(UTC)
     belief_id = _make_belief_id(cluster_id, silo_id)
 
-    rows = await store.execute_write(
+    await store.execute_write(
         CREATE_BELIEF_FROM_FACTS,
         {
             "belief_id": belief_id,
@@ -169,9 +171,16 @@ async def synthesize_belief(
             "evidence_count": len(fact_ids),
             "created_at": now.isoformat(),
             "valid_from": now.isoformat(),
-            "fact_ids": fact_ids,
         },
     )
+
+    edges_created = 0
+    if fact_ids:
+        rows = await store.execute_write(
+            CREATE_BELIEF_FACT_EDGES,
+            {"belief_id": belief_id, "silo_id": silo_id, "fact_ids": fact_ids},
+        )
+        edges_created = rows[0].get("edges_created", 0) if rows else 0
 
     if embedding_client is not None:
         contents = [row.get("content", "") for row in fact_rows if row.get("content")]
@@ -188,7 +197,6 @@ async def synthesize_belief(
             },
         )
 
-    edges_created = rows[0].get("edges_created", 0) if rows else 0
     logger.info(
         "belief_synthesised",
         belief_id=belief_id,
@@ -341,9 +349,18 @@ async def merge_beliefs(
             "evidence_count": len(fact_ids),
             "created_at": now.isoformat(),
             "valid_from": now.isoformat(),
-            "fact_ids": fact_ids,
         },
     )
+
+    if fact_ids:
+        await store.execute_write(
+            CREATE_MERGED_BELIEF_FACT_EDGES,
+            {
+                "belief_id": merged_id,
+                "silo_id": silo_id,
+                "fact_ids": fact_ids,
+            },
+        )
 
     await store.execute_write(
         CREATE_MERGED_FROM_EDGES,

@@ -729,8 +729,7 @@ RETURN f.id AS fact_id, f.content AS content,
 ORDER BY coalesce(f.confidence, 1.0) DESC
 """
 
-# Create a :Belief node and attach SYNTHESIZED_FROM edges to all source facts
-# in a single write.  $fact_ids is a list of fact id strings.
+# Create a :Belief node. Fact edges created separately via CREATE_BELIEF_FACT_EDGES.
 CREATE_BELIEF_FROM_FACTS = """
 MERGE (b:Belief {id: $belief_id, silo_id: $silo_id})
 ON CREATE SET
@@ -740,11 +739,15 @@ ON CREATE SET
     b.created_at = $created_at,
     b.valid_from = $valid_from,
     b.valid_to = null
-WITH b
+RETURN b.id AS belief_id
+"""
+
+CREATE_BELIEF_FACT_EDGES = """
+MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
 UNWIND $fact_ids AS fid
 MATCH (f:Fact {id: fid, silo_id: $silo_id})
 MERGE (b)-[:SYNTHESIZED_FROM]->(f)
-RETURN b.id AS belief_id, count(f) AS edges_created
+RETURN count(f) AS edges_created
 """
 
 # Check whether a :Belief already exists whose content covers the subject
@@ -942,11 +945,15 @@ ON CREATE SET
     b.valid_from = $valid_from,
     b.valid_to = null,
     b.merged = true
-WITH b
+RETURN b.id AS belief_id
+"""
+
+CREATE_MERGED_BELIEF_FACT_EDGES = """
+MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
 UNWIND $fact_ids AS fid
 MATCH (f:Fact {id: fid, silo_id: $silo_id})
 MERGE (b)-[:SYNTHESIZED_FROM]->(f)
-RETURN b.id AS belief_id, count(f) AS edges_created
+RETURN count(f) AS edges_created
 """
 
 # Attach MERGED_FROM edges from the new merged :Belief to each source belief.
