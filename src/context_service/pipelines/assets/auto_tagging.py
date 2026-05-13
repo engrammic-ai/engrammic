@@ -155,20 +155,21 @@ def auto_tagging(
         errors = 0
         async with driver.session() as session:
             for record in records:
-                node_id = str(record["node_id"])
-                tags = tag_map.get(node_id)
+                node_id_int = int(record["node_id"])
+                node_id_str = str(node_id_int)
+                tags = tag_map.get(node_id_str)
                 if not tags:
                     continue
                 try:
                     await session.run(
                         _UPDATE_NODE_TAGS_CYPHER,
-                        node_id=node_id,
+                        node_id=node_id_int,
                         tags=tags,
                         auto_tagged_at=now,
                     )
                     processed += 1
                 except Exception as exc:  # noqa: BLE001
-                    context.log.warning(f"silo={silo_id} node={node_id} tag write failed: {exc}")
+                    context.log.warning(f"silo={silo_id} node={node_id_str} tag write failed: {exc}")
                     errors += 1
 
         skipped = len(records) - processed - errors
