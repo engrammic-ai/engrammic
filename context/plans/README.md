@@ -21,9 +21,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 ## Active plans
 
-| Plan | Status | Description |
-|------|--------|-------------|
-| [2026-05-08-self-hosted-telemetry.md](./2026-05-08-self-hosted-telemetry.md) | Active | Two-tier telemetry for self-hosted deployments |
+None currently active.
 
 Next candidates:
 - Beacon receiving endpoint (Cloud Run)
@@ -57,6 +55,7 @@ Next candidates:
 ## Archive
 
 Completed plans in `archive/`:
+- Self-Hosted Telemetry (2026-05-13) - two-tier beacon, install ID, collector
 - Telemetry Expansion (2026-05-13) - OTEL metrics for storage backends, LLM tokens
 - Reasoning Chain Applicability (2026-05-12) - three-layer matching, DTW, implicit feedback
 - Custodian Identity Split (2026-05-12) - 4 identities with LLM wiring + Dagster jobs
