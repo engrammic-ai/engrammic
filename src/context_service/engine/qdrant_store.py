@@ -87,6 +87,7 @@ class EngineQdrantStore:
             # Double-checked locking: another coroutine may have created it while we waited.
             if name in self._ensured_collections:
                 return name
+            start = time.perf_counter()
             try:
                 client = await self._qdrant._get_client()
                 collections = await client.get_collections()
@@ -142,6 +143,10 @@ class EngineQdrantStore:
             except Exception as e:
                 logger.error("Failed to ensure Qdrant collection", collection=name, error=str(e))
                 raise QdrantOperationError(f"Failed to ensure collection {name}: {e}") from e
+            finally:
+                record_db_query(
+                    "qdrant_store.ensure_collection", (time.perf_counter() - start) * 1000
+                )
         return name
 
     async def upsert(

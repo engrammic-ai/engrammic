@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 import uuid
 import uuid as uuid_mod
 from contextlib import AbstractAsyncContextManager
@@ -24,6 +25,7 @@ from context_service.engine import queries
 from context_service.engine.exceptions import StaleVersionError
 from context_service.engine.models import BinaryEdge, HyperEdge, Node, Participant, Silo, SubGraph
 from context_service.services.models import ScopeContext  # noqa: TC001
+from context_service.telemetry.metrics import record_db_query
 from context_service.utils.json import dumps, loads
 
 if TYPE_CHECKING:
@@ -331,14 +333,18 @@ class MemgraphStore(EAGKnowledgeStore):
         }
 
     async def upsert_node(self, node: Node) -> None:
-        params = self._node_upsert_row(node)
-        result = await self._client.execute_write(queries.UPSERT_NODE_SINGLE_RTT, params)
-        if not result:
-            return
-        action = result[0].get("action")
-        if action == "stale":
-            stored_version = result[0].get("stored_version") or 0
-            raise StaleVersionError(str(node.id), node.version, int(stored_version))
+        start = time.perf_counter()
+        try:
+            params = self._node_upsert_row(node)
+            result = await self._client.execute_write(queries.UPSERT_NODE_SINGLE_RTT, params)
+            if not result:
+                return
+            action = result[0].get("action")
+            if action == "stale":
+                stored_version = result[0].get("stored_version") or 0
+                raise StaleVersionError(str(node.id), node.version, int(stored_version))
+        finally:
+            record_db_query("memgraph.upsert_node", (time.perf_counter() - start) * 1000)
 
     async def update_extraction_status(self, node_id: str, silo_id: str, status: str) -> None:
         """Update the extraction_status field on a node."""
@@ -367,18 +373,22 @@ class MemgraphStore(EAGKnowledgeStore):
     async def get_node_as_of(
         self, node_id: uuid.UUID, silo_id: str, as_of: datetime
     ) -> Node | None:
-        as_of_utc = as_of if as_of.tzinfo else as_of.replace(tzinfo=UTC)
-        records = await self._client.execute_query(
-            queries.GET_NODE_AS_OF,
-            {
-                "id": str(node_id),
-                "silo_id": silo_id,
-                "as_of": int(as_of_utc.timestamp() * 1_000_000),
-            },
-        )
-        if not records:
-            return None
-        return self._node_from_record(records[0])
+        start = time.perf_counter()
+        try:
+            as_of_utc = as_of if as_of.tzinfo else as_of.replace(tzinfo=UTC)
+            records = await self._client.execute_query(
+                queries.GET_NODE_AS_OF,
+                {
+                    "id": str(node_id),
+                    "silo_id": silo_id,
+                    "as_of": int(as_of_utc.timestamp() * 1_000_000),
+                },
+            )
+            if not records:
+                return None
+            return self._node_from_record(records[0])
+        finally:
+            record_db_query("memgraph.temporal_query", (time.perf_counter() - start) * 1000)
 
     async def filter_superseded_at(
         self,
@@ -465,11 +475,15 @@ class MemgraphStore(EAGKnowledgeStore):
         return {uuid.UUID(r["n"]["id"]): self._node_from_record(r) for r in result}
 
     async def delete_node(self, node_id: uuid.UUID, silo_id: str) -> bool:
-        result = await self._client.execute_write(
-            queries.DELETE_NODE,
-            {"id": str(node_id), "silo_id": silo_id},
-        )
-        return bool(result and result[0].get("deleted", 0) > 0)
+        start = time.perf_counter()
+        try:
+            result = await self._client.execute_write(
+                queries.DELETE_NODE,
+                {"id": str(node_id), "silo_id": silo_id},
+            )
+            return bool(result and result[0].get("deleted", 0) > 0)
+        finally:
+            record_db_query("memgraph.delete_node", (time.perf_counter() - start) * 1000)
 
     async def find_nodes(
         self,
@@ -544,17 +558,21 @@ class MemgraphStore(EAGKnowledgeStore):
     # --- Binary Edge CRUD ---
 
     async def upsert_binary_edge(self, edge: BinaryEdge, silo_id: str) -> None:
-        await self._client.execute_write(
-            queries.CREATE_BINARY_EDGE,
-            {
-                "id": str(edge.id),
-                "type": edge.type,
-                "source_id": str(edge.source_id),
-                "target_id": str(edge.target_id),
-                "properties": dumps(edge.properties),
-                "silo_id": silo_id,
-            },
-        )
+        start = time.perf_counter()
+        try:
+            await self._client.execute_write(
+                queries.CREATE_BINARY_EDGE,
+                {
+                    "id": str(edge.id),
+                    "type": edge.type,
+                    "source_id": str(edge.source_id),
+                    "target_id": str(edge.target_id),
+                    "properties": dumps(edge.properties),
+                    "silo_id": silo_id,
+                },
+            )
+        finally:
+            record_db_query("memgraph.create_edge", (time.perf_counter() - start) * 1000)
 
     async def get_binary_edges(
         self,
@@ -620,11 +638,15 @@ class MemgraphStore(EAGKnowledgeStore):
         return neighbors
 
     async def delete_binary_edge(self, edge_id: uuid.UUID, silo_id: str) -> bool:
-        result = await self._client.execute_write(
-            queries.DELETE_BINARY_EDGE,
-            {"id": str(edge_id), "silo_id": silo_id},
-        )
-        return bool(result and result[0].get("deleted", 0) > 0)
+        start = time.perf_counter()
+        try:
+            result = await self._client.execute_write(
+                queries.DELETE_BINARY_EDGE,
+                {"id": str(edge_id), "silo_id": silo_id},
+            )
+            return bool(result and result[0].get("deleted", 0) > 0)
+        finally:
+            record_db_query("memgraph.delete_edge", (time.perf_counter() - start) * 1000)
 
     # --- HyperEdge CRUD ---
 
@@ -757,61 +779,65 @@ class MemgraphStore(EAGKnowledgeStore):
         max_nodes: int = 100,
         silo_scope: list[str] | None = None,
     ) -> SubGraph:
-        if not isinstance(max_depth, int):
-            raise TypeError(f"max_depth must be int, got {type(max_depth).__name__}")
-        if not isinstance(max_nodes, int):
-            raise TypeError(f"max_nodes must be int, got {type(max_nodes).__name__}")
-        capped_depth = min(max_depth, 5)  # hard cap
-        capped_nodes = min(max_nodes, 500)  # hard cap
-        query = queries.NEIGHBORHOOD % (capped_depth * 2)  # *2 for bipartite hops
-        result = await self._client.execute_query(
-            query,
-            {
-                "id": str(node_id),
-                "silo_id": silo_id,
-                "max_nodes": capped_nodes,
-            },
-        )
-        nodes: dict[uuid.UUID, Node] = {}
-        for r in result:
-            node = self._node_from_record({"n": r["other"]})
-            if silo_scope is None or str(node.silo_id) in silo_scope:
-                nodes[node.id] = node
-
-        # Fetch edges between the discovered nodes
-        binary_edges: list[BinaryEdge] = []
-        if nodes:
-            node_ids = [str(nid) for nid in nodes]
-            _a_pred = content_union_predicate("a")
-            _b_pred = content_union_predicate("b")
-            edge_result = await self._client.execute_query(
-                f"""
-                MATCH (a)-[e:EDGE]->(b)
-                WHERE {_a_pred} AND {_b_pred}
-                  AND a.committed = true AND b.committed = true
-                  AND a.id IN $ids AND b.id IN $ids AND a.silo_id = $silo_id
-                RETURN e.id AS id, e.type AS type, e.properties AS properties,
-                       e.silo_id AS silo_id, e.created_at AS created_at,
-                       a.id AS source_id, b.id AS target_id
-""",
-                {"ids": node_ids, "silo_id": silo_id},
+        start = time.perf_counter()
+        try:
+            if not isinstance(max_depth, int):
+                raise TypeError(f"max_depth must be int, got {type(max_depth).__name__}")
+            if not isinstance(max_nodes, int):
+                raise TypeError(f"max_nodes must be int, got {type(max_nodes).__name__}")
+            capped_depth = min(max_depth, 5)  # hard cap
+            capped_nodes = min(max_nodes, 500)  # hard cap
+            query = queries.NEIGHBORHOOD % (capped_depth * 2)  # *2 for bipartite hops
+            result = await self._client.execute_query(
+                query,
+                {
+                    "id": str(node_id),
+                    "silo_id": silo_id,
+                    "max_nodes": capped_nodes,
+                },
             )
-            for r in edge_result:
-                props = r.get("properties", "{}")
-                if isinstance(props, str):
-                    props = loads(props)
-                binary_edges.append(
-                    BinaryEdge(
-                        id=uuid.UUID(r["id"]),
-                        type=r["type"],
-                        source_id=uuid.UUID(r["source_id"]),
-                        target_id=uuid.UUID(r["target_id"]),
-                        properties=props if isinstance(props, dict) else {},
-                        created_at=_parse_dt(r["created_at"]),
-                    )
-                )
+            nodes: dict[uuid.UUID, Node] = {}
+            for r in result:
+                node = self._node_from_record({"n": r["other"]})
+                if silo_scope is None or str(node.silo_id) in silo_scope:
+                    nodes[node.id] = node
 
-        return SubGraph(nodes=nodes, binary_edges=binary_edges, root_id=node_id)
+            # Fetch edges between the discovered nodes
+            binary_edges: list[BinaryEdge] = []
+            if nodes:
+                node_ids = [str(nid) for nid in nodes]
+                _a_pred = content_union_predicate("a")
+                _b_pred = content_union_predicate("b")
+                edge_result = await self._client.execute_query(
+                    f"""
+                    MATCH (a)-[e:EDGE]->(b)
+                    WHERE {_a_pred} AND {_b_pred}
+                      AND a.committed = true AND b.committed = true
+                      AND a.id IN $ids AND b.id IN $ids AND a.silo_id = $silo_id
+                    RETURN e.id AS id, e.type AS type, e.properties AS properties,
+                           e.silo_id AS silo_id, e.created_at AS created_at,
+                           a.id AS source_id, b.id AS target_id
+    """,
+                    {"ids": node_ids, "silo_id": silo_id},
+                )
+                for r in edge_result:
+                    props = r.get("properties", "{}")
+                    if isinstance(props, str):
+                        props = loads(props)
+                    binary_edges.append(
+                        BinaryEdge(
+                            id=uuid.UUID(r["id"]),
+                            type=r["type"],
+                            source_id=uuid.UUID(r["source_id"]),
+                            target_id=uuid.UUID(r["target_id"]),
+                            properties=props if isinstance(props, dict) else {},
+                            created_at=_parse_dt(r["created_at"]),
+                        )
+                    )
+
+            return SubGraph(nodes=nodes, binary_edges=binary_edges, root_id=node_id)
+        finally:
+            record_db_query("memgraph.get_neighbors", (time.perf_counter() - start) * 1000)
 
     async def shared_participation(
         self,
@@ -840,29 +866,33 @@ class MemgraphStore(EAGKnowledgeStore):
         *,
         max_depth: int = 5,
     ) -> list[Node] | None:
-        if not isinstance(max_depth, int):
-            raise TypeError(f"max_depth must be int, got {type(max_depth).__name__}")
-        capped_depth = min(max_depth, 5) * 2  # *2 for bipartite
-        query = queries.SHORTEST_PATH % capped_depth
-        result = await self._client.execute_query(
-            query,
-            {
-                "source_id": str(source_id),
-                "target_id": str(target_id),
-                "silo_id": silo_id,
-            },
-        )
-        if not result:
-            return None
-        path_nodes = result[0].get("path_nodes", [])
-        content_labels = _PATH_LABEL_SET
-        out: list[Node] = []
-        for n in path_nodes:
-            labels = n.get("labels", n.get("_labels", []))
-            if not content_labels.intersection(labels):
-                continue
-            out.append(self._node_from_record({"n": n, "_labels": labels}))
-        return out
+        start = time.perf_counter()
+        try:
+            if not isinstance(max_depth, int):
+                raise TypeError(f"max_depth must be int, got {type(max_depth).__name__}")
+            capped_depth = min(max_depth, 5) * 2  # *2 for bipartite
+            query = queries.SHORTEST_PATH % capped_depth
+            result = await self._client.execute_query(
+                query,
+                {
+                    "source_id": str(source_id),
+                    "target_id": str(target_id),
+                    "silo_id": silo_id,
+                },
+            )
+            if not result:
+                return None
+            path_nodes = result[0].get("path_nodes", [])
+            content_labels = _PATH_LABEL_SET
+            out: list[Node] = []
+            for n in path_nodes:
+                labels = n.get("labels", n.get("_labels", []))
+                if not content_labels.intersection(labels):
+                    continue
+                out.append(self._node_from_record({"n": n, "_labels": labels}))
+            return out
+        finally:
+            record_db_query("memgraph.graph_search", (time.perf_counter() - start) * 1000)
 
     # --- Export (Visualization) ---
 
@@ -1094,7 +1124,11 @@ class MemgraphStore(EAGKnowledgeStore):
         params: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """Delegate a read-only Cypher query to the underlying MemgraphClient."""
-        return await self._client.execute_query(cypher, params)
+        start = time.perf_counter()
+        try:
+            return await self._client.execute_query(cypher, params)
+        finally:
+            record_db_query("memgraph.query", (time.perf_counter() - start) * 1000)
 
     async def execute_write(
         self,

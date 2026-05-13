@@ -1,7 +1,8 @@
 # Telemetry Expansion Implementation Plan
 
-**Status:** Draft  
+**Status:** Complete  
 **Created:** 2026-05-11  
+**Completed:** 2026-05-13  
 **Scope:** Add comprehensive metrics to all storage backends, LLM token tracking, reasoning chain reuse, and context_recall response sizing.
 
 ## Phase 1: New Metrics Infrastructure (metrics.py)

@@ -2,6 +2,8 @@
 
 > EAG-native MCP tools for context-service. Intent-based verbs reflecting agent cognition.
 
+> **Alignment Note (2026-05-13)**: This spec predates v1.4.1 consolidation. The intent-based verbs (`context_remember`, `context_assert`, `context_commit`, `context_reflect`) described in the Tool Signatures section were consolidated into `context_store` with a `layer` parameter. Current tool surface is 10 tools per CLAUDE.md. The Tool Catalogue section (lines 23-52) is accurate; the Tool Signatures section is outdated.
+
 ## Design Principles
 
 1. **Intent-based verbs** — `remember`, `assert`, `commit`, `reflect` (not CRUD)

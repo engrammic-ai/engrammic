@@ -1,7 +1,8 @@
 # Reasoning Chain Applicability Matching
 
-**Status:** Draft  
+**Status:** Shipped (v2.2)  
 **Created:** 2026-05-11  
+**Shipped:** 2026-05-12  
 **Context:** [Discussion log](/home/novusedge/claude-bits/engrammic/2026-05-11-reasoning-chain-equivalence.md)
 
 ## Problem
