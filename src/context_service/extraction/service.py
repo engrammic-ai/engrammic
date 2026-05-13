@@ -122,13 +122,14 @@ class ExtractionService:
 
         entities = [
             ExtractedEntity(
-                name=e["name"],
+                name=e.get("name") or e.get("entity_name") or "",
                 entity_type=e.get("entity_type", e.get("type", "unknown")),
                 description=e.get("description", ""),
                 qualified_name=e.get("qualified_name"),
                 file_path=e.get("file_path"),
             )
             for e in raw.get("entities", [])
+            if e.get("name") or e.get("entity_name")
         ]
 
         relationships: list[ExtractedRelationship] = []
