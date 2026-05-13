@@ -48,10 +48,7 @@ LIMIT 5
 @dg.asset(
     name="custodian_visit",
     partitions_def=silo_partitions,
-    ins={
-        "extraction": dg.AssetIn("extraction"),
-        "embedding": dg.AssetIn("embedding"),
-    },
+    deps=["extraction", "embedding"],  # Soft deps - doesn't require inputs
     description="Run custodian 4-phase visit loop over active clusters per silo.",
     retry_policy=dg.RetryPolicy(max_retries=3, delay=10.0, backoff=dg.Backoff.EXPONENTIAL),
     tags={"dagster/concurrency_key": "custodian_visit"},
@@ -60,8 +57,6 @@ def custodian_visit(
     context: AssetExecutionContext,
     memgraph: MemgraphResource,
     redis: RedisResource,
-    extraction: dg.Nothing,  # type: ignore[valid-type]  # noqa: ARG001 — Dagster dep marker
-    embedding: dg.Nothing,  # type: ignore[valid-type]  # noqa: ARG001 — Dagster dep marker
 ) -> dg.Output[dict[str, Any]]:
     """Visit each active cluster for the partition's silo and write commitment nodes."""
     silo_id: str = context.partition_key

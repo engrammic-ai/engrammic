@@ -56,7 +56,7 @@ RETURN DISTINCT cid, properties(other) AS props
 @dg.asset(
     name="claim_to_fact_promotion",
     partitions_def=silo_partitions,
-    ins={"custodian_visit": dg.AssetIn("custodian_visit")},
+    deps=["custodian_visit"],  # Soft dep - just ordering
     description="Batch-promote :Claim nodes to :Fact per silo using EAG R1/R2 rules.",
     retry_policy=dg.RetryPolicy(max_retries=3, delay=10.0, backoff=dg.Backoff.EXPONENTIAL),
     tags={"dagster/concurrency_key": "claim_to_fact_promotion"},
@@ -64,7 +64,6 @@ RETURN DISTINCT cid, properties(other) AS props
 def claim_to_fact_promotion(
     context: AssetExecutionContext,
     memgraph: MemgraphResource,
-    custodian_visit: dg.Nothing,  # type: ignore[valid-type]  # noqa: ARG001 — Dagster dep marker, runtime sentinel
 ) -> dg.Output[dict[str, Any]]:
     """Scan unpromoted :Claim nodes in the partition's silo and promote eligible ones."""
     silo_id: str = context.partition_key
