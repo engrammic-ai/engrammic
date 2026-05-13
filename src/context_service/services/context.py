@@ -1619,7 +1619,7 @@ class ContextService:
         layer_filter = ""
         if layers:
             quoted = ", ".join(f'"{lyr}"' for lyr in layers)
-            layer_filter = f"AND n.layer IN [{quoted}]"
+            layer_filter = f"AND neighbor.layer IN [{quoted}]"
 
         if not isinstance(max_depth, int):
             raise TypeError(f"max_depth must be an int, got {type(max_depth).__name__!r}")
