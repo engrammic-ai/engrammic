@@ -21,7 +21,9 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 ## Active plans
 
-None currently active.
+| Plan | Status | Description |
+|------|--------|-------------|
+| [2026-05-13-gcp-deployment.md](./2026-05-13-gcp-deployment.md) | Ready | Pulumi GCP infra - scaffold done, ready for first deploy |
 
 Next candidates:
 - Beacon receiving endpoint (Cloud Run)
