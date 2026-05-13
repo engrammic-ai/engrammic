@@ -77,7 +77,6 @@ class ContextServiceRun(pulumi.ComponentResource):
                 containers=[
                     cloudrunv2.ServiceTemplateContainerArgs(
                         image=image,
-                        ports=[cloudrunv2.ServiceTemplateContainerPortArgs(container_port=8000)],
                         resources=cloudrunv2.ServiceTemplateContainerResourcesArgs(
                             limits={"cpu": "2", "memory": "4Gi"},
                         ),
@@ -86,8 +85,10 @@ class ContextServiceRun(pulumi.ComponentResource):
                             http_get=cloudrunv2.ServiceTemplateContainerStartupProbeHttpGetArgs(
                                 path="/health",
                             ),
-                            initial_delay_seconds=5,
-                            period_seconds=10,
+                            initial_delay_seconds=10,
+                            period_seconds=15,
+                            timeout_seconds=10,
+                            failure_threshold=5,
                         ),
                         liveness_probe=cloudrunv2.ServiceTemplateContainerLivenessProbeArgs(
                             http_get=cloudrunv2.ServiceTemplateContainerLivenessProbeHttpGetArgs(
@@ -101,15 +102,7 @@ class ContextServiceRun(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self),
         )
 
-        # Allow unauthenticated access (public API)
-        self.iam = cloudrunv2.ServiceIamMember(
-            f"{name}-invoker",
-            name=self.service.name,
-            location=region,
-            role="roles/run.invoker",
-            member="allUsers",
-            opts=pulumi.ResourceOptions(parent=self),
-        )
+        # Note: Public access (allUsers) blocked by org policy. Access via identity token.
 
         self.register_outputs({
             "service_url": self.service.uri,

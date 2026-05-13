@@ -28,6 +28,7 @@ class IAMStack(pulumi.ComponentResource):
             "roles/secretmanager.secretAccessor",
             "roles/cloudtrace.agent",
             "roles/monitoring.metricWriter",
+            "roles/aiplatform.user",
         ]
         for role in cloud_run_roles:
             role_suffix = role.split("/")[1].replace(".", "-")

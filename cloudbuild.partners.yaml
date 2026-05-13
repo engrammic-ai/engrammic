@@ -1,0 +1,16 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - '${_IMAGE}'
+      - '-f'
+      - 'context-service/Dockerfile.partners'
+      - '.'
+images:
+  - '${_IMAGE}'
+substitutions:
+  _IMAGE: 'europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-partners:latest'
+options:
+  logging: CLOUD_LOGGING_ONLY
+serviceAccount: 'projects/engrammic/serviceAccounts/cloudbuild-dev@engrammic.iam.gserviceaccount.com'
