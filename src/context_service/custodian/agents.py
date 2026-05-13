@@ -206,14 +206,66 @@ def silo_synthesis_limits() -> UsageLimits:
     return UsageLimits(output_tokens_limit=1024, request_limit=1, tool_calls_limit=0)
 
 
-# --- Module-level singletons for tool registration ---
-# These are instantiated once at import time. The build_* factories are
+# --- Lazy singletons for tool registration ---
+# Agents are built on first access, not at import time. This avoids requiring
+# GCP credentials just to import the module. The build_* factories are
 # retained for testability -- tests can still construct isolated agents.
 
-fast_pass_agent = build_fast_pass_agent()
-plan_agent = build_plan_agent()
-deep_pass_agent = build_deep_pass_agent()
-stitch_agent = build_stitch_agent()
+_fast_pass_agent: Agent[VisitDeps, FastPassObservation] | None = None
+_plan_agent: Agent[VisitDeps, VisitPlan] | None = None
+_deep_pass_agent: Agent[VisitDeps, str] | None = None
+_stitch_agent: Agent[VisitDeps, StitchedSummary] | None = None
+
+
+def get_fast_pass_agent() -> Agent[VisitDeps, FastPassObservation]:
+    global _fast_pass_agent
+    if _fast_pass_agent is None:
+        from context_service.custodian.tools import fetch_lower_findings, fetch_members
+
+        _fast_pass_agent = build_fast_pass_agent()
+        _fast_pass_agent.tool(fetch_members)
+        _fast_pass_agent.tool(fetch_lower_findings)
+    return _fast_pass_agent
+
+
+def get_plan_agent() -> Agent[VisitDeps, VisitPlan]:
+    global _plan_agent
+    if _plan_agent is None:
+        _plan_agent = build_plan_agent()
+    return _plan_agent
+
+
+def get_deep_pass_agent() -> Agent[VisitDeps, str]:
+    global _deep_pass_agent
+    if _deep_pass_agent is None:
+        from context_service.custodian.tools import (
+            commit_claim,
+            commit_inferred_relation,
+            fetch_lower_findings,
+            fetch_members,
+            fetch_neighborhood,
+            fetch_node,
+            finalize_visit,
+            list_edges_of_type,
+        )
+
+        _deep_pass_agent = build_deep_pass_agent()
+        _deep_pass_agent.tool(fetch_members)
+        _deep_pass_agent.tool(fetch_node)
+        _deep_pass_agent.tool(fetch_neighborhood)
+        _deep_pass_agent.tool(list_edges_of_type)
+        _deep_pass_agent.tool(fetch_lower_findings)
+        _deep_pass_agent.tool(commit_claim)
+        _deep_pass_agent.tool(commit_inferred_relation)
+        _deep_pass_agent.tool(finalize_visit)
+    return _deep_pass_agent
+
+
+def get_stitch_agent() -> Agent[VisitDeps, StitchedSummary]:
+    global _stitch_agent
+    if _stitch_agent is None:
+        _stitch_agent = build_stitch_agent()
+    return _stitch_agent
 
 
 __all__ = [
@@ -222,13 +274,13 @@ __all__ = [
     "build_fast_pass_agent",
     "build_plan_agent",
     "build_stitch_agent",
-    "deep_pass_agent",
     "deep_pass_limits",
-    "fast_pass_agent",
     "fast_pass_limits",
-    "plan_agent",
+    "get_deep_pass_agent",
+    "get_fast_pass_agent",
+    "get_plan_agent",
+    "get_stitch_agent",
     "plan_limits",
-    "stitch_agent",
     "stitch_limits",
     "proposal_synthesis_limits",
     "silo_synthesis_limits",

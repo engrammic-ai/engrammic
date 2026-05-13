@@ -29,11 +29,7 @@ from pydantic_ai import (
     RunContext,  # noqa: TC002 -- runtime annotation for @agent.tool
 )
 
-from context_service.custodian.agents import (
-    VisitDeps,
-    deep_pass_agent,
-    fast_pass_agent,
-)
+from context_service.custodian.agents import VisitDeps
 from context_service.custodian.fingerprints import fingerprint_drift_ok
 from context_service.custodian.models import (
     BudgetStatus,
@@ -593,23 +589,7 @@ async def finalize_visit(
     )
 
 
-# ---------------------------------------------------------------------------
-# Tool registration on module-level agent singletons
-# ---------------------------------------------------------------------------
-
-# Fast pass: cheap reconnaissance only.
-fast_pass_agent.tool(fetch_members)
-fast_pass_agent.tool(fetch_lower_findings)
-
-# Deep pass: the full surface.
-deep_pass_agent.tool(fetch_members)
-deep_pass_agent.tool(fetch_node)
-deep_pass_agent.tool(fetch_neighborhood)
-deep_pass_agent.tool(list_edges_of_type)
-deep_pass_agent.tool(fetch_lower_findings)
-deep_pass_agent.tool(commit_claim)
-deep_pass_agent.tool(commit_inferred_relation)
-deep_pass_agent.tool(finalize_visit)
+# Tool registration moved to agents.py get_*_agent() functions for lazy init.
 
 
 __all__ = [

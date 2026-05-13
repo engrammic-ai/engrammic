@@ -27,13 +27,13 @@ from context_service.core.trace_context import trace_scope
 from context_service.custodian.agents import (
     VisitDeps,
     build_deep_pass_agent,
-    deep_pass_agent,
     deep_pass_limits,
-    fast_pass_agent,
     fast_pass_limits,
-    plan_agent,
+    get_deep_pass_agent,
+    get_fast_pass_agent,
+    get_plan_agent,
+    get_stitch_agent,
     plan_limits,
-    stitch_agent,
     stitch_limits,
 )
 from context_service.custodian.fingerprints import member_fingerprint
@@ -534,7 +534,7 @@ async def _run_visit_body(
     try:
         t0 = time.monotonic()
         fast_result = await asyncio.wait_for(
-            fast_pass_agent.run(prompt, deps=deps, usage_limits=fast_pass_limits()),
+            get_fast_pass_agent().run(prompt, deps=deps, usage_limits=fast_pass_limits()),
             timeout=30.0,
         )
         elapsed = time.monotonic() - t0
@@ -592,7 +592,7 @@ async def _run_visit_body(
     try:
         t0 = time.monotonic()
         plan_result = await asyncio.wait_for(
-            plan_agent.run(prompt, deps=deps, usage_limits=plan_limits()),
+            get_plan_agent().run(prompt, deps=deps, usage_limits=plan_limits()),
             timeout=20.0,
         )
         elapsed = time.monotonic() - t0
@@ -681,7 +681,7 @@ async def _run_visit_body(
             agent.tool(finalize_visit)
         else:
             model_name = ov.flash_model
-            agent = deep_pass_agent
+            agent = get_deep_pass_agent()
 
         _init_phase_budget(deps, "deep", ov)
         prompt = _deep_pass_prompt(plan, observation)
@@ -766,7 +766,7 @@ async def _run_visit_body(
         try:
             t0 = time.monotonic()
             stitch_result = await asyncio.wait_for(
-                stitch_agent.run(prompt, deps=deps, usage_limits=stitch_limits()),
+                get_stitch_agent().run(prompt, deps=deps, usage_limits=stitch_limits()),
                 timeout=30.0,
             )
             elapsed = time.monotonic() - t0
