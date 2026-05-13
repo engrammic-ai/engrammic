@@ -295,7 +295,7 @@ class VertexConfig(BaseModel):
     project: str | None = None
     region: str = "us-central1"
     location: str = "us-central1"
-    credentials_path: str = "/app/secrets/gcp-sa.json"
+    credentials_path: str = ""
     model: str = ""
     dimensions: int = 0
 
@@ -784,7 +784,7 @@ class Settings(BaseSettings):
     vertex_project_id: str = Field(default="")
     vertex_region: str = Field(default="us-central1")
     vertex_location: str = Field(default="us-central1")
-    vertex_credentials_path: str = Field(default="/app/secrets/gcp-sa.json")
+    vertex_credentials_path: str = Field(default="")
     vertex_model: str = Field(default="")
     vertex_dimensions: int = Field(default=0)
 
