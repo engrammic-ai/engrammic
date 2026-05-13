@@ -52,10 +52,10 @@ def _build_synthesis_agent(model: str) -> Agent[None, SynthesisResult]:
 
 SYNTHESIS_CANDIDATES_QUERY = """
 MATCH (c:Cluster {silo_id: $silo_id})
-WHERE NOT exists((c)<-[:COVERS]-(:Belief))
-  AND NOT exists((c)<-[:COVERS]-(:ProposedBelief {status: 'pending'}))
-WITH c, size((c)-[:CONTAINS]->()) AS fact_count
-WHERE fact_count >= $min_facts
+OPTIONAL MATCH (c)<-[:COVERS]-(b:Belief)
+OPTIONAL MATCH (c)<-[:COVERS]-(pb:ProposedBelief {status: 'pending'})
+WITH c, b, pb, size((c)-[:CONTAINS]->()) AS fact_count
+WHERE b IS NULL AND pb IS NULL AND fact_count >= $min_facts
 RETURN c.id AS cluster_id, fact_count, c.confidence AS confidence
 ORDER BY fact_count DESC
 LIMIT 50

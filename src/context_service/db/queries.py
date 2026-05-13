@@ -1378,8 +1378,10 @@ LIST_DENSE_CLUSTERS_WITHOUT_BELIEF_OR_PROPOSAL = """
 MATCH (f:Fact)-[:MEMBER_OF]->(c:Cluster {silo_id: $silo_id})
 WITH c, count(f) AS fact_count
 WHERE fact_count >= $min_facts
-  AND size([(c)<-[:SYNTHESIZED_FROM]-(b:Belief {silo_id: $silo_id}) | b]) = 0
-  AND size([(c)<-[:SYNTHESIZED_FROM]-(pb:ProposedBelief {silo_id: $silo_id, status: 'pending'}) | pb]) = 0
+OPTIONAL MATCH (c)<-[:SYNTHESIZED_FROM]-(b:Belief {silo_id: $silo_id})
+OPTIONAL MATCH (c)<-[:SYNTHESIZED_FROM]-(pb:ProposedBelief {silo_id: $silo_id, status: 'pending'})
+WITH c, fact_count, b, pb
+WHERE b IS NULL AND pb IS NULL
 RETURN c.id AS cluster_id, fact_count
 ORDER BY fact_count DESC
 """
