@@ -35,7 +35,7 @@ WHERE n.silo_id = $silo_id
   AND n.content IS NOT NULL
   AND n.auto_tagged_at IS NULL
 RETURN
-    elementId(n) AS node_id,
+    id(n) AS node_id,
     labels(n) AS labels,
     n.content AS content
 LIMIT $limit
@@ -43,7 +43,7 @@ LIMIT $limit
 
 _UPDATE_NODE_TAGS_CYPHER = """
 MATCH (n)
-WHERE elementId(n) = $node_id
+WHERE id(n) = $node_id
 SET n.tags = $tags,
     n.auto_tagged_at = $auto_tagged_at
 """
