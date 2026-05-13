@@ -47,7 +47,7 @@ def evaluate_claim_for_fact(
     raw_confidence: float = float(
         claim_props.get("raw_confidence", claim_props.get("confidence", 0.0))
     )
-    source_tier_value: str = str(claim_props.get("source_tier", SourceTier.UNKNOWN))
+    source_tier_value: str = str(claim_props.get("source_tier", "unknown")).lower()
     try:
         source_tier = SourceTier(source_tier_value)
     except ValueError:
@@ -66,7 +66,7 @@ def evaluate_claim_for_fact(
         all_claims: list[ClaimForPromotion] = [primary]
         for c in corroborations:
             c_raw: float = float(c.get("confidence", 0.0))
-            c_tier_value: str = str(c.get("source_tier", SourceTier.UNKNOWN))
+            c_tier_value: str = str(c.get("source_tier", "unknown")).lower()
             try:
                 c_tier = SourceTier(c_tier_value)
             except ValueError:
