@@ -29,7 +29,7 @@ _BATCH_SIZE = 50
 _PENDING_DOCUMENTS = """
 MATCH (d:Document {silo_id: $silo_id})
 WHERE size([(d)<-[:EXTRACTED_FROM]-(c:Claim) | c]) = 0
-RETURN d.id AS id, d.content AS content
+RETURN d.id AS id, d.content AS content, d.source_uri AS source_uri
 LIMIT $batch
 """
 
@@ -118,6 +118,7 @@ def extraction(
             for row in rows:
                 doc_id: str = str(row["id"])
                 content: str = str(row.get("content") or "")
+                source_uri: str | None = row.get("source_uri")
                 if not content:
                     context.log.warning(f"doc {doc_id} has no content; skipping")
                     continue
@@ -227,6 +228,8 @@ def extraction(
                         )
                     if t.ref_doc_id:
                         all_ref_rows.append({"claim_id": cid, "ref_doc_id": t.ref_doc_id})
+                    elif source_uri:
+                        all_ref_rows.append({"claim_id": cid, "ref_doc_id": doc_id})
 
                 claims_created += len(kept_triples)
 
