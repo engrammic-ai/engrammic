@@ -1,5 +1,9 @@
 config:
   gcp:project: engrammic
   engrammic-infra:environment: dev
-  engrammic-infra:instance_type: e2-standard-4
+  engrammic-infra:instance_type: e2-standard-2
   engrammic-infra:min_cloudrun_instances: 0
+  engrammic-infra:use_spot: true
+  engrammic-infra:disk_size_memgraph: 20
+  engrammic-infra:disk_size_qdrant: 20
+  engrammic-infra:disk_size_postgres: 10

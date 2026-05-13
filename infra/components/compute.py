@@ -21,13 +21,17 @@ class StatefulHost(pulumi.ComponentResource):
         gcp_config = pulumi.Config("gcp")
         env = config.require("environment")
         instance_type = config.get("instance_type") or "e2-standard-8"
+        use_spot = config.get_bool("use_spot") or False
+        disk_size_memgraph = int(config.get("disk_size_memgraph") or "100")
+        disk_size_qdrant = int(config.get("disk_size_qdrant") or "100")
+        disk_size_postgres = int(config.get("disk_size_postgres") or "50")
         zone = gcp_config.require("zone")
 
         # Persistent disks
         self.memgraph_disk = compute.Disk(
             f"{name}-memgraph-disk",
             name=f"engrammic-{env}-memgraph",
-            size=100,
+            size=disk_size_memgraph,
             type="pd-ssd",
             zone=zone,
             opts=pulumi.ResourceOptions(parent=self),
@@ -36,7 +40,7 @@ class StatefulHost(pulumi.ComponentResource):
         self.qdrant_disk = compute.Disk(
             f"{name}-qdrant-disk",
             name=f"engrammic-{env}-qdrant",
-            size=100,
+            size=disk_size_qdrant,
             type="pd-ssd",
             zone=zone,
             opts=pulumi.ResourceOptions(parent=self),
@@ -45,7 +49,7 @@ class StatefulHost(pulumi.ComponentResource):
         self.postgres_disk = compute.Disk(
             f"{name}-postgres-disk",
             name=f"engrammic-{env}-postgres",
-            size=50,
+            size=disk_size_postgres,
             type="pd-ssd",
             zone=zone,
             opts=pulumi.ResourceOptions(parent=self),
@@ -105,6 +109,11 @@ echo "Stateful host ready"
                     subnetwork=subnet.id,
                 )
             ],
+            scheduling=compute.InstanceSchedulingArgs(
+                preemptible=use_spot,
+                automatic_restart=not use_spot,
+                provisioning_model="SPOT" if use_spot else "STANDARD",
+            ),
             service_account=compute.InstanceServiceAccountArgs(
                 email=service_account_email,
                 scopes=["cloud-platform"],

@@ -89,13 +89,15 @@ GCE VM (e2-standard-8, 32GB)
 
 ## Cost Estimate
 
-| Component | Monthly |
-|-----------|---------|
-| GCE e2-standard-8 | ~$280 |
-| Persistent disks (270GB SSD) | ~$45 |
-| Cloud Run (min=1) | ~$30-50 |
-| Networking + misc | ~$25 |
-| **Total** | **~$400/mo** |
+| Component | Dev (spot) | Prod |
+|-----------|------------|------|
+| GCE instance | e2-standard-2 spot ~$20 | e2-standard-8 ~$280 |
+| Persistent disks | 50GB SSD ~$9 | 270GB SSD ~$45 |
+| Cloud Run | min=0 ~$5 | min=1 ~$35 |
+| Networking + misc | ~$25 | ~$25 |
+| **Total** | **~$60/mo** | **~$385/mo** |
+
+At these rates: $25k = **41 months prod** or **400+ months dev**
 
 ## Open Decisions
 

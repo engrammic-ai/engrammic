@@ -3,3 +3,7 @@ config:
   engrammic-infra:environment: prod
   engrammic-infra:instance_type: e2-standard-8
   engrammic-infra:min_cloudrun_instances: 1
+  engrammic-infra:use_spot: false
+  engrammic-infra:disk_size_memgraph: 100
+  engrammic-infra:disk_size_qdrant: 100
+  engrammic-infra:disk_size_postgres: 50
