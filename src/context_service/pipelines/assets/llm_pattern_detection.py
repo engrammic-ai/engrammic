@@ -199,10 +199,9 @@ def llm_pattern_detection(
                 "skipped": False,
             }
 
-        # --- LLM provider (Haiku) ---
-        from context_service.engine.llm_patterns import HAIKU_MODEL
-
-        llm = build_llm_provider("anthropic", model=HAIKU_MODEL)
+        # --- LLM provider (from models.yaml) ---
+        model_spec = settings.models.get_model("pattern_detection")
+        llm = build_llm_provider(model_spec.provider, model=model_spec.model)
         try:
             process_result = await process_llm_candidates(
                 store,

@@ -154,8 +154,8 @@ def build_litellm_provider(
     """Factory for LiteLLM provider by provider name.
 
     Args:
-        provider: One of "anthropic", "openai", "vertex_gemini", "gemini", "ollama".
-        model: Optional model name (without provider prefix).
+        provider: One of "anthropic", "openai", "vertex_gemini", "vertex", "gemini", "ollama".
+        model: Optional model name (without provider prefix). Falls back to models.yaml default.
 
     Returns:
         Configured LiteLLMProvider instance.
@@ -164,24 +164,29 @@ def build_litellm_provider(
 
     settings = get_settings()
 
+    def _default_model() -> str:
+        """Get default model from models.yaml."""
+        spec = settings.models.get_model("default")
+        return spec.model
+
     # Map provider to litellm model prefix and get API key
     if provider == "anthropic":
         api_key = (
             settings.anthropic_api_key.get_secret_value() if settings.anthropic_api_key else None
         )
-        model_name = model or "claude-sonnet-4-20250514"
+        model_name = model or _default_model()
         litellm_model = f"anthropic/{model_name}"
         return LiteLLMProvider(model=litellm_model, api_key=api_key)
 
     if provider == "openai":
         api_key = settings.openai_api_key.get_secret_value() if settings.openai_api_key else None
-        model_name = model or "gpt-4o"
+        model_name = model or _default_model()
         litellm_model = f"openai/{model_name}"
         return LiteLLMProvider(model=litellm_model, api_key=api_key)
 
-    if provider == "vertex_gemini":
+    if provider in ("vertex_gemini", "vertex"):
         # Vertex uses ADC, no API key needed
-        model_name = model or "gemini-2.0-flash"
+        model_name = model or _default_model()
         project = settings.vertex_project or settings.vertex_project_id
         location = settings.vertex_location or "us-central1"
         litellm_model = f"vertex_ai/{model_name}"
@@ -199,6 +204,6 @@ def build_litellm_provider(
 
     # Default: gemini via API key
     api_key = settings.gemini_api_key.get_secret_value() if settings.gemini_api_key else None
-    model_name = model or settings.default_llm_model or "gemini-2.0-flash"
+    model_name = model or _default_model()
     litellm_model = f"gemini/{model_name}"
     return LiteLLMProvider(model=litellm_model, api_key=api_key)

@@ -119,9 +119,8 @@ async def compact_reasoning_chain(
             from context_service.llm import build_llm_provider
 
             settings = get_settings()
-            llm_client = build_llm_provider(
-                settings.summarization_provider, settings.summarization_model
-            )
+            model_spec = settings.models.get_model("summarization")
+            llm_client = build_llm_provider(model_spec.provider, model_spec.model)
             content = await summarize_reasoning_steps(steps, llm_client=llm_client)
             summarization_pending = False
         except Exception as exc:

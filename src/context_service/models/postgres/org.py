@@ -31,8 +31,8 @@ class OrgPreferences(Base):
     def __init__(
         self,
         org_id: UUID | str,
-        default_llm: str = "claude-haiku-4-5-20251001",
-        embedding_model: str = "jina-embeddings-v3",
+        default_llm: str = "gemini-2.5-flash",
+        embedding_model: str = "text-embedding-005",
         settings: dict[str, Any] | None = None,
         **kw: Any,
     ) -> None:

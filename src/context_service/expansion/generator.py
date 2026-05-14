@@ -38,11 +38,8 @@ class ExpansionGenerator:
     def _get_provider(self) -> LLMProvider:
         if self._provider is None:
             settings = get_settings()
-            provider_name = getattr(settings, "expansion_llm_provider", None) or (
-                settings.llm_provider or "gemini"
-            )
-            model = getattr(settings, "expansion_llm_model", None) or None
-            self._provider = build_llm_provider(provider_name, model)
+            model_spec = settings.models.get_model("expansion")
+            self._provider = build_llm_provider(model_spec.provider, model_spec.model)
         return self._provider
 
     async def generate(self, content: str) -> str:

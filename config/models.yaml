@@ -1,0 +1,74 @@
+# Model configuration - single source of truth for LLM/embedding model choices
+#
+# Hierarchy (highest priority first):
+#   1. Postgres per-silo overrides (org.default_llm, etc.)
+#   2. Environment variables (MODELS__TIER, MODELS__OVERRIDES__*, etc.)
+#   3. Explicit overrides below
+#   4. Active tier preset
+#
+# Tier presets optimize for different cost/quality tradeoffs:
+#   - economy: minimize spend, use flash everywhere
+#   - balanced: pro for reasoning, flash for fast tasks (default)
+#   - premium: pro everywhere for maximum quality
+
+tier: balanced
+
+tiers:
+  economy:
+    embeddings:
+      provider: vertex_ai
+      model: text-embedding-005
+      dimensions: 768
+    reasoning:
+      provider: vertex
+      model: gemini-2.5-flash
+    fast:
+      provider: vertex
+      model: gemini-2.5-flash
+
+  balanced:
+    embeddings:
+      provider: vertex_ai
+      model: text-embedding-005
+      dimensions: 768
+    reasoning:
+      provider: vertex
+      model: gemini-2.5-pro
+    fast:
+      provider: vertex
+      model: gemini-2.5-flash
+
+  premium:
+    embeddings:
+      provider: vertex_ai
+      model: text-embedding-005
+      dimensions: 768
+    reasoning:
+      provider: vertex
+      model: gemini-2.5-pro
+    fast:
+      provider: vertex
+      model: gemini-2.5-pro
+
+# Task-to-tier mapping (which tier each task uses)
+# Override individual tasks without changing the whole tier
+task_mapping:
+  # Reasoning tier (quality matters)
+  synthesis: reasoning
+  validation: reasoning
+  custodian_deep: reasoning
+
+  # Fast tier (speed/cost matters)
+  summarization: fast
+  pattern_detection: fast
+  custodian_fast: fast
+  expansion: fast
+  default: fast
+
+# Explicit per-task overrides (takes precedence over tier)
+# Example:
+#   overrides:
+#     summarization:
+#       provider: anthropic
+#       model: claude-haiku-4-5
+overrides: {}

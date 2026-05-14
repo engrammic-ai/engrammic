@@ -13,7 +13,6 @@ import pytest
 
 from context_service.engine.llm_patterns import (
     ALLOWED_PATTERN_TYPES,
-    HAIKU_MODEL,
     PatternClassification,
     ProcessResult,
     build_pattern_prompt,
@@ -23,6 +22,9 @@ from context_service.engine.llm_patterns import (
 from context_service.extraction.filter.circuit_breaker import CircuitBreaker
 from context_service.llm.base import Usage
 from tests.fakes.fake_graph_store import FakeGraphStore
+
+# Test model identifier (was HAIKU_MODEL before models.yaml migration)
+_TEST_MODEL = "gemini-2.5-flash"
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -56,7 +58,7 @@ def _make_llm(
                 "confidence": confidence,
                 "observed_content_snippets": ["snippet a", "snippet b"],
             },
-            Usage(model=HAIKU_MODEL, input_tokens=100, output_tokens=30),
+            Usage(model=_TEST_MODEL, input_tokens=100, output_tokens=30),
         )
     )
     llm.close = AsyncMock()
@@ -134,7 +136,7 @@ async def test_classify_cluster_returns_classification() -> None:
 async def test_classify_cluster_returns_none_on_timeout() -> None:
     async def _slow(*args: Any, **kwargs: Any) -> Any:
         await asyncio.sleep(10)
-        return ({}, Usage(model=HAIKU_MODEL))
+        return ({}, Usage(model=_TEST_MODEL))
 
     llm = MagicMock()
     llm.extract_structured = _slow

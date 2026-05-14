@@ -59,8 +59,15 @@ def _bootstrap_custodian_models() -> None:
             if parent is not None:
                 setattr(parent, parts[-1], stub)
 
-    # Load config.settings directly so custodian.models can call get_settings().
-    _load_module_direct("context_service.config.settings")
+    # Load config modules directly so custodian.models can call get_settings().
+    _load_module_direct("context_service.config.paths")
+    _load_module_direct("context_service.config.models")
+    settings_mod = _load_module_direct("context_service.config.settings")
+
+    # Wire up exports on the config stub so `from context_service.config import X` works.
+    config_stub = sys.modules["context_service.config"]
+    config_stub.get_settings = settings_mod.get_settings
+    config_stub.Settings = settings_mod.Settings
 
     # Load extraction.models directly (no config required).
     _load_module_direct("context_service.extraction.models")

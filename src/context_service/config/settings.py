@@ -19,6 +19,8 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from context_service.config.models import ModelsConfig
+
 load_dotenv(override=False)
 
 
@@ -628,6 +630,12 @@ def _load_identities_config() -> IdentitiesConfig:
     return IdentitiesConfig(**data.get("identities", {}))
 
 
+def _load_models_config() -> ModelsConfig:
+    from context_service.config.models import load_models_config
+
+    return load_models_config()
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -664,6 +672,7 @@ class Settings(BaseSettings):
     weak_links: WeakLinksSettings = Field(default_factory=WeakLinksSettings)
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
     identities: IdentitiesConfig = Field(default_factory=_load_identities_config)
+    models: ModelsConfig = Field(default_factory=_load_models_config)
     reasoning_chain_matching: ReasoningChainMatchingConfig = Field(
         default_factory=ReasoningChainMatchingConfig
     )
@@ -800,7 +809,7 @@ class Settings(BaseSettings):
     # =========================================================================
 
     llm_provider: str = Field(default="")
-    default_llm_model: str = Field(default="gemini-2.0-flash")
+    default_llm_model: str = Field(default="gemini-2.5-flash")
 
     # Per-provider API keys (used by llm/ providers)
     anthropic_api_key: SecretStr | None = Field(default=None)
@@ -982,8 +991,8 @@ class Settings(BaseSettings):
     # Summarization Settings
     # =========================================================================
 
-    summarization_provider: str = Field(default="anthropic")
-    summarization_model: str = Field(default="claude-haiku-4-5-20250929")
+    summarization_provider: str = Field(default="vertex")
+    summarization_model: str = Field(default="gemini-2.5-flash")
     summarization_max_tokens: int = Field(default=500)
 
     # =========================================================================

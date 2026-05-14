@@ -168,9 +168,8 @@ async def close_reasoning_chain(
                 try:
                     from context_service.llm import build_llm_provider
 
-                    _llm_client = build_llm_provider(
-                        settings.summarization_provider, settings.summarization_model
-                    )
+                    model_spec = settings.models.get_model("summarization")
+                    _llm_client = build_llm_provider(model_spec.provider, model_spec.model)
                 except Exception:
                     _llm_client = None
                 try:
@@ -345,12 +344,8 @@ async def _context_admin(
         try:
             from context_service.llm import build_llm_provider
 
-            # No dedicated revision_provider/revision_model settings exist yet;
-            # reuse summarization_provider/summarization_model as a reasonable default
-            # until a separate revision LLM config is added to settings.
-            llm_client = build_llm_provider(
-                settings.summarization_provider, settings.summarization_model
-            )
+            model_spec = settings.models.get_model("summarization")
+            llm_client = build_llm_provider(model_spec.provider, model_spec.model)
         except Exception as exc:
             return {"error": "llm_unavailable", "message": str(exc)}
         embedding_svc = ctx_svc.embedding_client
