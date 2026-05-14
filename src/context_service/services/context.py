@@ -614,7 +614,8 @@ class ContextService:
                        n.silo_id AS silo_id, n.source_uri AS source_uri,
                        n.content_hash AS content_hash, n.created_at AS created_at,
                        n.tags AS tags, n.layer AS layer, n.confidence AS confidence,
-                       n.summary AS summary, n.heat_score AS heat_score, n.tier AS tier
+                       n.summary AS summary, n.heat_score AS heat_score, n.tier AS tier,
+                       n.effective_heat AS effective_heat
                 """,
                 {"ids": miss_ids, "silo_id": str(silo_id)},
             )
@@ -633,6 +634,7 @@ class ContextService:
                     "confidence": row.get("confidence", 1.0),
                     "summary": row.get("summary"),
                     "heat_score": row.get("heat_score"),
+                    "effective_heat": row.get("effective_heat"),
                     "tier": row.get("tier"),
                 }
                 node = Node(
