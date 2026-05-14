@@ -159,6 +159,7 @@ services:
       - POSTGRES_PASSWORD=context
       - POSTGRES_DATABASE=context_service
       - HOME=/home/dagster
+      - GOOGLE_APPLICATION_CREDENTIALS=/home/dagster/.config/gcloud/application_default_credentials.json
     volumes:
       - ./src:/app/src
       - ./dagster.yaml:/app/dagster.yaml:ro
@@ -197,6 +198,7 @@ services:
       - POSTGRES_PASSWORD=context
       - POSTGRES_DATABASE=context_service
       - HOME=/home/dagster
+      - GOOGLE_APPLICATION_CREDENTIALS=/home/dagster/.config/gcloud/application_default_credentials.json
     volumes:
       - ./src:/app/src
       - ./workspace.yaml:/app/workspace.yaml:ro
@@ -230,6 +232,7 @@ services:
       - POSTGRES_PASSWORD=context
       - POSTGRES_DATABASE=context_service
       - HOME=/home/dagster
+      - GOOGLE_APPLICATION_CREDENTIALS=/home/dagster/.config/gcloud/application_default_credentials.json
     volumes:
       - ./src:/app/src
       - ./workspace.yaml:/app/workspace.yaml:ro
