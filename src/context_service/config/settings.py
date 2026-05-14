@@ -400,6 +400,7 @@ class FeaturesConfig(BaseModel):
     otel_enabled: bool = False
     walker_entity_graph_mode: bool = True
     docs_enabled: bool = False
+    enable_test_endpoints: bool = False  # Admin endpoints for testing (disabled in prod)
 
 
 class TelemetryConfig(BaseModel):

@@ -95,9 +95,34 @@ class TombstoneResponse(BaseModel):
     derived_tombstoned: int
 
 
+class SeedProposalRequest(BaseModel):
+    """Request to seed a ProposedBelief for testing.
+
+    WARNING: This endpoint is for testing only. Do not use in production.
+    """
+
+    silo_id: str = Field(..., description="Target silo ID")
+    content: str = Field(..., description="Proposal content")
+    confidence: float = Field(default=0.6, ge=0.0, le=1.0, description="Confidence score")
+    source_fact_ids: list[str] = Field(default_factory=list, description="Source fact node IDs")
+    status: Literal["pending", "accepted", "rejected"] = Field(default="pending")
+
+
+class SeedProposalResponse(BaseModel):
+    proposal_id: str
+    status: str
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+
+def _require_test_endpoints_enabled() -> None:
+    """Guard for test-only endpoints. Raises 404 if disabled."""
+    settings = get_settings()
+    if not settings.features.enable_test_endpoints:
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 @router.post(
@@ -150,3 +175,74 @@ async def admin_tombstone(body: TombstoneRequest, request: Request) -> Tombstone
         direct_tombstoned=counts["direct"],
         derived_tombstoned=counts["derived"],
     )
+
+
+# ---------------------------------------------------------------------------
+# Test-only endpoints (disabled by default)
+# ---------------------------------------------------------------------------
+
+
+@router.post(
+    "/test/seed-proposal",
+    response_model=SeedProposalResponse,
+    operation_id="admin_seed_proposal",
+    summary="Seed a ProposedBelief for testing",
+    dependencies=[Depends(_require_admin_key), Depends(_require_test_endpoints_enabled)],
+)
+async def admin_seed_proposal(body: SeedProposalRequest, request: Request) -> SeedProposalResponse:
+    """Seed a ProposedBelief node for testing purposes.
+
+    WARNING: This endpoint is strictly for testing. Do not use in production.
+    It bypasses the normal Custodian synthesis pipeline and directly creates
+    proposal nodes in the wisdom layer.
+
+    Enable with FEATURES__ENABLE_TEST_ENDPOINTS=true in environment.
+    """
+    import uuid
+    from datetime import datetime, timezone
+
+    if not hasattr(request.app.state, "memgraph"):
+        raise HTTPException(status_code=503, detail="Memgraph not available")
+
+    client: Any = request.app.state.memgraph
+
+    proposal_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Create ProposedBelief node in Memgraph
+    query = """
+    CREATE (p:Document:ProposedBelief {
+        node_id: $node_id,
+        silo_id: $silo_id,
+        layer: 'wisdom',
+        node_type: 'ProposedBelief',
+        content: $content,
+        confidence: $confidence,
+        status: $status,
+        source_fact_ids: $source_fact_ids,
+        created_at: $created_at
+    })
+    RETURN p.node_id AS node_id
+    """
+
+    logger.warning(
+        "admin_seed_proposal",
+        silo_id=body.silo_id,
+        proposal_id=proposal_id,
+        content_preview=body.content[:50] if len(body.content) > 50 else body.content,
+    )
+
+    await client.execute_query(
+        query,
+        {
+            "node_id": proposal_id,
+            "silo_id": body.silo_id,
+            "content": body.content,
+            "confidence": body.confidence,
+            "status": body.status,
+            "source_fact_ids": body.source_fact_ids,
+            "created_at": now,
+        },
+    )
+
+    return SeedProposalResponse(proposal_id=proposal_id, status="created")
