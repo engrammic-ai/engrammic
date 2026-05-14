@@ -1,63 +1,74 @@
-# context_service/mcp/tools/__init__.py
-"""MCP tool implementations -- EAG intent-based surface."""
+# src/context_service/mcp/tools/__init__.py
+"""MCP tool implementations -- intent-based surface."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import structlog
-
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
-from context_service.mcp.tools import context_skills
+# Intent-based tools (external-facing)
+from context_service.mcp.tools import (
+    believe,
+    commit,
+    hypothesize,
+    learn,
+    link,
+    patterns,
+    reason,
+    recall,
+    reflect,
+    remember,
+    revise,
+    trace,
+)
+
+# Internal-only tools (not registered via registry)
 from context_service.mcp.tools.context_accept_belief import register as register_accept_belief
 from context_service.mcp.tools.context_admin import register as register_admin
 from context_service.mcp.tools.context_belief_state import register as register_belief_state
-from context_service.mcp.tools.context_crystallize import register as register_crystallize
-from context_service.mcp.tools.context_link import register as register_link
-from context_service.mcp.tools.context_recall import register as register_recall
 from context_service.mcp.tools.context_reject_belief import register as register_reject_belief
-from context_service.mcp.tools.context_skills import register as register_skills
-from context_service.mcp.tools.context_store import register as register_store
-from context_service.mcp.tools.context_update_belief import register as register_update_belief
+
+# Registry for profile-based registration
+from context_service.mcp.tools.registry import register_profile_tools
 
 
-def register_all(mcp: FastMCP) -> None:
-    """Register all EAG MCP tools."""
-    register_store(mcp)
-    register_recall(mcp)
+def register_all(mcp: FastMCP, profile: str = "standard") -> None:
+    """Register all MCP tools for the given profile.
+
+    This is the main entry point. Use this instead of individual registers.
+    """
+    register_profile_tools(mcp, profile)
+
+
+def register_internal_tools(mcp: FastMCP) -> None:
+    """Register internal-only tools (for SAGE and admin use).
+
+    These are NOT included in the standard/reasoning profiles.
+    Call separately if needed.
+    """
     register_admin(mcp)
-    register_link(mcp)
-    register_belief_state(mcp)
-    register_update_belief(mcp)
-    register_crystallize(mcp)
     register_accept_belief(mcp)
     register_reject_belief(mcp)
-
-    from context_service.mcp.server import get_skill_service
-
-    try:
-        skill_svc = get_skill_service()
-        register_skills(mcp, skill_svc)
-    except RuntimeError:
-        structlog.get_logger(__name__).warning(
-            "context_skills_not_registered",
-            reason="SkillService not configured (no db_session)",
-        )
+    register_belief_state(mcp)
 
 
 __all__ = [
     "register_all",
-    "context_skills",
-    "register_skills",
-    "register_accept_belief",
-    "register_admin",
-    "register_belief_state",
-    "register_crystallize",
-    "register_link",
-    "register_recall",
-    "register_reject_belief",
-    "register_store",
-    "register_update_belief",
+    "register_internal_tools",
+    "register_profile_tools",
+    # Individual tool modules
+    "remember",
+    "learn",
+    "believe",
+    "recall",
+    "trace",
+    "link",
+    "reason",
+    "reflect",
+    "hypothesize",
+    "revise",
+    "commit",
+    "patterns",
 ]

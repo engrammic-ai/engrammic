@@ -687,7 +687,7 @@ class Settings(BaseSettings):
     # =========================================================================
 
     app_name: str = Field(default="ContextService")
-    version: str = Field(default="1.3.0")
+    version: str = Field(default="1.3.1")
     debug: bool = Field(default=False)
     environment: str = Field(default="development")
 
@@ -719,6 +719,9 @@ class Settings(BaseSettings):
     dev_org_id: str = Field(default="dev-org")
     dev_user_id: str = Field(default="dev-user")
     dev_agent_id: str = Field(default="dev-agent")
+
+    # MCP settings
+    mcp_tool_profile: str = Field(default="standard")
 
     # =========================================================================
     # Memgraph Settings
