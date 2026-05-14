@@ -34,6 +34,7 @@ from context_service.pipelines.assets.tag_maintenance import tag_maintenance
 from context_service.pipelines.assets.weak_link_creation import (
     create_weak_links_for_node as create_weak_links_for_node,
 )
+from context_service.pipelines.assets.prewarm_sweep import prewarm_sweep_asset
 from context_service.pipelines.assets.weak_link_review import weak_link_review_asset
 
 all_assets: list[Any] = [
@@ -65,4 +66,5 @@ all_assets: list[Any] = [
     chain_usefulness_signals,
     step_embedding_backfill,
     session_step_embedding,
+    prewarm_sweep_asset,
 ]
