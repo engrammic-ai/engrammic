@@ -300,32 +300,302 @@ Guidelines:
 - Use recall before storing to avoid duplicates
 ```
 
-## Profile Configuration
+## YAML-Based Tool Configuration
 
-Profiles are configurable at:
-1. **Silo level** - default profile for all connections to a silo
-2. **Connection level** - override via MCP connection params
+Tool names, descriptions, and profiles are defined in YAML for easy iteration without code changes.
+
+### Configuration File
 
 ```yaml
-# silo config
-default_tool_profile: standard
+# config/mcp_tools.yaml
 
-# or per-connection
-mcp_connect(profile="reasoning")
+mcp_instructions: |
+  Engrammic: Epistemic memory for AI agents.
+  
+  Quick start:
+  - remember: store observations
+  - learn: record claims WITH evidence
+  - believe: declare conclusions
+  - recall: search your knowledge
+  - trace: understand why you believe something
+  - link: connect related knowledge
+
+profiles:
+  standard:
+    - remember
+    - learn
+    - believe
+    - recall
+    - trace
+    - link
+  
+  reasoning:
+    - remember
+    - learn
+    - believe
+    - reason
+    - reflect
+    - recall
+    - trace
+    - link
+    - hypothesize
+    - revise
+    - commit
+
+tools:
+  remember:
+    description: "Store an observation. Use for raw information you may need later."
+    maps_to: memory
+    params:
+      content:
+        type: str
+        required: true
+        description: "What to remember"
+      tags:
+        type: list[str]
+        description: "Optional categorization"
+      decay:
+        type: str
+        default: "standard"
+        description: "ephemeral|standard|durable|permanent"
+
+  learn:
+    description: "Record something you learned with evidence. Evidence is required."
+    maps_to: knowledge
+    params:
+      claim:
+        type: str
+        required: true
+        description: "What you learned"
+      evidence:
+        type: list[str]
+        required: true
+        description: "node:<id> or URI - REQUIRED"
+      source:
+        type: str
+        required: true
+        description: "document|user|external|agent"
+      confidence:
+        type: float
+        default: 0.8
+        description: "0.0-1.0"
+
+  believe:
+    description: "Declare a belief as a commitment. Use when you've synthesized knowledge into a conclusion."
+    maps_to: wisdom
+    params:
+      belief:
+        type: str
+        required: true
+      about:
+        type: list[str]
+        required: true
+        description: "Node IDs this belief concerns"
+      confidence:
+        type: float
+        default: 0.8
+      reasoning:
+        type: str
+        description: "Why you believe this"
+
+  recall:
+    description: "Retrieve knowledge. Search by query or fetch by node_id."
+    maps_to: recall
+    params:
+      query:
+        type: str
+        description: "Natural language search"
+      node_ids:
+        type: list[str]
+        description: "Specific nodes to fetch"
+      depth:
+        type: int
+        default: 0
+        description: "0=flat, 1-3=graph traversal"
+      layers:
+        type: list[str]
+        description: "memory|knowledge|wisdom|intelligence"
+      top_k:
+        type: int
+        default: 10
+
+  trace:
+    description: "Trace the provenance of a belief back to its sources."
+    maps_to: provenance
+    params:
+      node_id:
+        type: str
+        required: true
+        description: "Node to trace"
+
+  link:
+    description: "Create a typed relationship between nodes."
+    maps_to: link
+    params:
+      from_node:
+        type: str
+        required: true
+      to_node:
+        type: str
+        required: true
+      relationship:
+        type: str
+        required: true
+        description: "supports|contradicts|derives|references|causes|supersedes"
+      weight:
+        type: float
+        default: 1.0
+      note:
+        type: str
+
+  # Reasoning profile tools
+  reason:
+    description: "Record explicit reasoning steps for complex problems."
+    maps_to: intelligence
+    params:
+      steps:
+        type: list[dict]
+        required: true
+        description: "List of {step, reasoning, confidence?}"
+      conclusion:
+        type: str
+      evidence_used:
+        type: list[str]
+
+  reflect:
+    description: "Record a meta-observation about your knowledge."
+    maps_to: meta
+    params:
+      observation:
+        type: str
+        required: true
+      type:
+        type: str
+        required: true
+        description: "pattern|contradiction|uncertainty|drift"
+      about:
+        type: list[str]
+        required: true
+      confidence:
+        type: float
+        default: 0.8
+
+  hypothesize:
+    description: "Form a tentative belief during reasoning. Use commit to finalize."
+    maps_to: belief
+    params:
+      hypothesis:
+        type: str
+        required: true
+      about:
+        type: list[str]
+        required: true
+      session_id:
+        type: str
+        required: true
+      confidence:
+        type: float
+        default: 0.8
+
+  revise:
+    description: "Update a tentative hypothesis when new information arrives."
+    maps_to: update_belief
+    params:
+      belief_id:
+        type: str
+        required: true
+      confidence:
+        type: float
+        required: true
+      content:
+        type: str
+      reason:
+        type: str
+        required: true
+
+  commit:
+    description: "Promote tentative hypotheses to permanent commitments."
+    maps_to: crystallize
+    params:
+      belief_ids:
+        type: list[str]
+        required: true
+      reason:
+        type: str
 ```
 
-Implementation registers tools dynamically based on profile:
+### Registry Implementation
 
 ```python
+# mcp/tools/registry.py
+from pathlib import Path
+import yaml
+
+def load_tool_config() -> dict:
+    config_path = Path(__file__).parent.parent.parent / "config" / "mcp_tools.yaml"
+    with open(config_path) as f:
+        return yaml.safe_load(f)
+
+TOOL_CONFIG = load_tool_config()
+
+# Implementation functions (Python logic stays in code)
+IMPLEMENTATIONS = {
+    "remember": _remember_impl,
+    "learn": _learn_impl,
+    "believe": _believe_impl,
+    "recall": _recall_impl,
+    "trace": _trace_impl,
+    "link": _link_impl,
+    "reason": _reason_impl,
+    "reflect": _reflect_impl,
+    "hypothesize": _hypothesize_impl,
+    "revise": _revise_impl,
+    "commit": _commit_impl,
+}
+
 def register_tools(mcp: FastMCP, profile: str = "standard"):
-    tools = PROFILES[profile]
+    config = TOOL_CONFIG
+    tool_names = config["profiles"][profile]
     
-    if "remember" in tools:
-        register_remember(mcp)
-    if "learn" in tools:
-        register_learn(mcp)
-    # ...
+    # Set MCP instructions
+    mcp.instructions = config["mcp_instructions"]
+    
+    for name in tool_names:
+        tool_def = config["tools"][name]
+        impl_fn = IMPLEMENTATIONS[name]
+        
+        # Register with description from YAML
+        mcp.tool(
+            name=name,
+            description=tool_def["description"],
+        )(impl_fn)
 ```
+
+### Profile Selection
+
+Profiles configurable at:
+1. **Silo level** - default profile for all connections to a silo
+2. **Connection level** - override via MCP connection params
+3. **Environment** - `MCP_TOOL_PROFILE=reasoning`
+
+```python
+def get_profile() -> str:
+    # Connection param > silo config > env > default
+    return (
+        get_connection_param("profile")
+        or get_silo_config().tool_profile
+        or os.environ.get("MCP_TOOL_PROFILE")
+        or "standard"
+    )
+```
+
+### Benefits
+
+- **Iterate without code changes** - edit YAML, restart server
+- **Non-developers can tune descriptions** - no Python knowledge needed
+- **A/B test descriptions** - swap YAML files
+- **Single source of truth** - profiles and tools in one place
+- **Hot reload (dev mode)** - watch YAML for changes
 
 ## Migration
 
@@ -362,12 +632,15 @@ No deprecation period needed - still in dev. Clean cut replacement.
 - [ ] Internal tools (admin, accept/reject belief) not exposed to external agents
 - [ ] MCP instructions match actual tool names
 - [ ] Existing tests updated for new tool names
+- [ ] Tool names and descriptions loaded from YAML config
+- [ ] Profile can be changed without code deployment
 
 ## Open Questions
 
 1. **context_skills** - keep as-is or rename to just `skills`?
 2. **Error responses** - standardize error format across all tools?
 3. **Metrics** - update telemetry for new tool names?
+4. **Hot reload** - worth implementing YAML watch in dev mode?
 
 ## References
 
