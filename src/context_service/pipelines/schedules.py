@@ -7,7 +7,7 @@ evaluation time.
 Chains:
 - sage_custodian: extraction -> embedding -> custodian_visit -> claim_to_fact_promotion -> custodian_finalize -> clustering -> proposal_detection (10min, pending silos only)
 - sage_synthesizer: causal_transitivity -> pattern_detection -> llm_pattern_detection -> belief_synthesis -> belief_merge -> chain_stitch (30min, pending silos only)
-- heat_pipeline: heat -> edge_heat -> weak_link_review (daily 02:00)
+- sage_groundskeeper: heat -> edge_heat -> heat_diffusion -> prewarm_sweep (15min, stale-heat silos only)
 - maintenance: independent cleanup jobs (various schedules)
 """
 
@@ -153,23 +153,29 @@ def sage_synthesizer_schedule(
 
 
 @dg.schedule(
-    cron_schedule="0 2 * * *",
-    name="heat_pipeline_schedule",
-    target=dg.AssetSelection.assets("heat", "edge_heat", "weak_link_review"),
-    description="Daily (02:00 UTC) heat chain: heat -> edge_heat -> weak_link_review.",
+    cron_schedule="*/15 * * * *",
+    name="sage_groundskeeper_schedule",
+    target=dg.AssetSelection.assets(
+        "heat",
+        "edge_heat",
+        "heat_diffusion",
+        "prewarm_sweep",
+    ),
+    description="SAGE Groundskeeper (15 min): heat and maintenance.",
     execution_timezone="UTC",
 )
-def heat_pipeline_schedule(
+def sage_groundskeeper_schedule(
     context: ScheduleEvaluationContext,
     memgraph: MemgraphResource,
 ) -> Iterator[dg.RunRequest]:
-    """Heat pipeline: heat -> edge_heat -> weak_link_review."""
-    silo_ids = _fetch_silo_ids(memgraph)
+    """SAGE Groundskeeper: heat and maintenance for silos with stale scores."""
+    silo_ids = _fetch_silos_with_pending_work(memgraph, _SILOS_WITH_PENDING_GROUNDSKEEPER_WORK)
+
     for silo_id in silo_ids:
         yield dg.RunRequest(
-            run_key=f"heat_pipeline:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            run_key=f"sage_groundskeeper:{silo_id}:{context.scheduled_execution_time.isoformat()}",
             partition_key=silo_id,
-            tags={"dagster/concurrency_key": silo_id},
+            tags={"sage_job": "groundskeeper", "dagster/concurrency_key": silo_id},
         )
 
 
@@ -317,7 +323,7 @@ all_schedules: list[Any] = [
     # Core pipelines
     sage_custodian_schedule,
     sage_synthesizer_schedule,
-    heat_pipeline_schedule,
+    sage_groundskeeper_schedule,
     # Maintenance
     reasoning_compaction_schedule,
     retention_schedule,
@@ -332,7 +338,7 @@ __all__ = [
     "all_schedules",
     "sage_custodian_schedule",
     "sage_synthesizer_schedule",
-    "heat_pipeline_schedule",
+    "sage_groundskeeper_schedule",
     "reasoning_compaction_schedule",
     "retention_schedule",
     "auto_tagging_schedule",
