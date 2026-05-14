@@ -187,8 +187,8 @@ def build_litellm_provider(
     if provider in ("vertex_gemini", "vertex"):
         # Vertex uses ADC, no API key needed
         model_name = model or _default_model()
-        project = settings.vertex_project or settings.vertex_project_id
-        location = settings.vertex_location or "us-central1"
+        project = settings.models.vertex_project or settings.vertex_project or settings.vertex_project_id
+        location = settings.models.vertex_location
         litellm_model = f"vertex_ai/{model_name}"
         return LiteLLMProvider(
             model=litellm_model,

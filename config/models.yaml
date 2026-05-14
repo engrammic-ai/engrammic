@@ -21,6 +21,8 @@
 #     - Apache 2.0 license, no restrictions
 
 tier: balanced
+vertex_location: europe-north1
+vertex_project: engrammic
 
 tiers:
   economy:

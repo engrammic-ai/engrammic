@@ -45,7 +45,9 @@ class ModelsConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="ignore")
 
-    tier: Literal["economy", "balanced", "premium"] = "balanced"
+    tier: Literal["economy", "balanced", "premium", "hybrid", "self_hosted", "self_hosted_budget"] = "balanced"
+    vertex_location: str = "us-central1"
+    vertex_project: str = ""
     tiers: dict[str, TierConfig]
     task_mapping: dict[str, str] = Field(default_factory=dict)
     overrides: dict[str, ModelSpec] = Field(default_factory=dict)
