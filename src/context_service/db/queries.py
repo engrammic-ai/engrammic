@@ -750,9 +750,13 @@ WHERE chain.status = 'published' AND chain.silo_id = $silo_id
 RETURN c.id AS commitment_id, chain.id AS id,
        chain.produced_by_agent_id AS produced_by_agent_id,
        COALESCE(chain.confidence, 0.5) AS confidence
+ORDER BY c.id, chain.id
 """
 
 # Batch tag update for N+1 fix (P-03).
+# NOTE: Uses Memgraph internal id(n) rather than n.id + silo_id. This is
+# pre-existing behavior from the original per-node query. Tech debt: should
+# refactor auto_tagging asset to use application-level IDs for silo isolation.
 BATCH_UPDATE_NODE_TAGS = """
 UNWIND $updates AS u
 MATCH (n)
