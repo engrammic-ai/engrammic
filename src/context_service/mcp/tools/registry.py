@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 import yaml
+
+if TYPE_CHECKING:
+    from fastmcp import FastMCP
 
 logger = structlog.get_logger(__name__)
 
@@ -65,3 +68,59 @@ def get_mcp_instructions() -> str:
     """Get MCP server instructions from config."""
     config = load_tool_config()
     return str(config.get("mcp_instructions", ""))
+
+
+def register_profile_tools(mcp: FastMCP, profile: str = "standard") -> None:
+    """Register all tools for a profile.
+
+    Args:
+        mcp: FastMCP server instance.
+        profile: Tool profile (standard or reasoning).
+
+    Note: Imports are inside function to avoid circular imports,
+    since tool modules import from registry.
+    """
+    from context_service.mcp.tools import (
+        believe,
+        commit,
+        hypothesize,
+        learn,
+        link,
+        patterns,
+        reason,
+        recall,
+        reflect,
+        remember,
+        revise,
+        trace,
+    )
+
+    tool_registers = {
+        "remember": remember.register,
+        "learn": learn.register,
+        "believe": believe.register,
+        "recall": recall.register,
+        "trace": trace.register,
+        "link": link.register,
+        "reason": reason.register,
+        "reflect": reflect.register,
+        "hypothesize": hypothesize.register,
+        "revise": revise.register,
+        "commit": commit.register,
+        "patterns": patterns.register,
+    }
+
+    tool_names = get_profile_tools(profile)
+
+    for name in tool_names:
+        if name in tool_registers:
+            tool_registers[name](mcp)
+            logger.debug("mcp_tool_registered", tool=name, profile=profile)
+        else:
+            logger.warning("mcp_tool_not_found", tool=name)
+
+    logger.info(
+        "mcp_profile_tools_registered",
+        profile=profile,
+        tool_count=len(tool_names),
+    )

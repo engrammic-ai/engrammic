@@ -720,6 +720,9 @@ class Settings(BaseSettings):
     dev_user_id: str = Field(default="dev-user")
     dev_agent_id: str = Field(default="dev-agent")
 
+    # MCP settings
+    mcp_tool_profile: str = Field(default="standard")
+
     # =========================================================================
     # Memgraph Settings
     # =========================================================================
