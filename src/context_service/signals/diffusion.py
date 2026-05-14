@@ -290,6 +290,12 @@ async def fetch_subgraph(
     if not hot_node_ids:
         return []
 
+    # Guard against injection: Cypher does not support parameterised path
+    # lengths, so max_depth is interpolated as a literal. Reject anything
+    # that is not a plain integer in a safe range before it reaches the query.
+    if not isinstance(max_depth, int) or not (1 <= max_depth <= 10):
+        raise ValueError(f"max_depth must be an integer in [1, 10], got {max_depth!r}")
+
     log = logger.bind(silo_id=silo_id, hot_node_count=len(hot_node_ids), max_depth=max_depth)
     query = FETCH_SUBGRAPH_QUERY.format(max_depth=max_depth)
     rows = await store.execute_query(
