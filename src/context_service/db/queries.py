@@ -924,12 +924,12 @@ MATCH (b:Belief {silo_id: $silo_id})
 WHERE toLower(b.content) CONTAINS toLower($subject)
   AND (b.valid_to IS NULL OR b.valid_to > $as_of)
   AND b.tombstoned_at IS NULL
-WITH b
 OPTIONAL MATCH (b)-[:SYNTHESIZED_FROM]->(f:Fact {silo_id: $silo_id})
+WITH b, collect(f.id) AS fact_ids
 RETURN b.id AS belief_id, b.content AS content,
        coalesce(b.confidence, 1.0) AS confidence,
-       collect(f.id) AS fact_ids
-ORDER BY b.confidence DESC
+       fact_ids
+ORDER BY confidence DESC
 LIMIT $limit
 """
 
