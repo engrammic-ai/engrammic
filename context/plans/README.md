@@ -25,6 +25,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Status | Description |
 |------|--------|-------------|
+| [2026-05-15-mcp-tool-surface-redesign.md](./2026-05-15-mcp-tool-surface-redesign.md) | Ready | Intent-based MCP tools with YAML config and profiles |
 | [2026-05-13-gcp-deployment.md](./2026-05-13-gcp-deployment.md) | Ready | Pulumi GCP infra - scaffold done, ready for first deploy |
 
 Next candidates:
