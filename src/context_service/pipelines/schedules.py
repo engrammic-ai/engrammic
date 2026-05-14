@@ -38,7 +38,7 @@ WHERE NOT EXISTS { MATCH (c)<-[:SYNTHESIZED_FROM]-(:Belief) }
 RETURN DISTINCT c.silo_id AS silo_id
 UNION
 MATCH (b:Belief)
-WHERE b.status IS NULL OR b.status <> 'stale'
+WHERE b.wisdom_status IS NULL OR b.wisdom_status <> 'stale'
 WITH b, [word IN split(toLower(b.content), ' ') WHERE size(word) > 4] AS words
 UNWIND words AS subject
 WITH b.silo_id AS silo_id, subject, count(b) AS cnt
@@ -47,7 +47,7 @@ RETURN DISTINCT silo_id
 """
 
 _SILOS_WITH_PENDING_GROUNDSKEEPER_WORK = """
-MATCH (n)
+MATCH (n:Fact|Belief|Claim)
 WHERE n.silo_id IS NOT NULL
   AND (n.heat_updated_at IS NULL
        OR n.heat_updated_at < datetime() - duration('PT1H'))
