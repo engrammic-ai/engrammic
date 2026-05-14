@@ -430,7 +430,9 @@ ORDER BY depth
 # Leaf sources: nodes in the provenance chain with no further outbound edges
 PROVENANCE_ROOT_SOURCES = """
 MATCH path = (start {id: $node_id, silo_id: $silo_id})-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM|REFERENCES*1..10]->(source)
-WHERE NOT (source)-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM|REFERENCES]->()
+OPTIONAL MATCH (source)-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM|REFERENCES]->(downstream)
+WITH source, downstream
+WHERE downstream IS NULL
 RETURN DISTINCT
     source.id AS node_id,
     coalesce(source.type, labels(source)[0]) AS layer,
@@ -1048,9 +1050,9 @@ RETURN s.id AS session_id, s.silo_id AS silo_id, s.updated_at AS updated_at
 # beliefs that must be flagged for review when the referenced belief changes.
 # Parameters: belief_id (str), silo_id (str).
 FIND_BELIEFS_REFERENCING = """
-MATCH (b:Belief {silo_id: $silo_id})
-WHERE (b)-[:SYNTHESIZED_FROM|REVISED_FROM|MERGED_FROM|REFERENCES]->(:Belief {id: $belief_id, silo_id: $silo_id})
-  AND b.tombstoned_at IS NULL
+MATCH (target:Belief {id: $belief_id, silo_id: $silo_id})
+MATCH (b:Belief {silo_id: $silo_id})-[:SYNTHESIZED_FROM|REVISED_FROM|MERGED_FROM|REFERENCES]->(target)
+WHERE b.tombstoned_at IS NULL
 RETURN b.id AS belief_id, b.content AS content,
        coalesce(b.confidence, 1.0) AS confidence,
        coalesce(b.wisdom_status, 'active') AS wisdom_status
@@ -1275,20 +1277,21 @@ CREATE (cm:Node:Commitment {
     crystallized_from: wb.id
 })
 WITH wb, cm
-OPTIONAL MATCH (wb)-[:ABOUT]->(n)<-[:ABOUT]-(existing:Commitment)
-WHERE existing.silo_id = $silo_id
-OPTIONAL MATCH (superseding:Commitment)-[:SUPERSEDES]->(existing)
-WITH wb, cm, existing, superseding
-WHERE superseding IS NULL
-WITH wb, cm, collect(DISTINCT existing) AS to_supersede
 MATCH (wb)-[:ABOUT]->(n)
 CREATE (cm)-[:ABOUT]->(n)
-WITH DISTINCT cm, to_supersede, wb
-FOREACH (old IN to_supersede |
-    CREATE (cm)-[:SUPERSEDES {reason: $reason, created_at: $created_at}]->(old)
-    SET old.valid_to = $valid_from
-)
+WITH DISTINCT wb, cm
+OPTIONAL MATCH (cm)-[:ABOUT]->(shared_node)<-[:ABOUT]-(existing:Commitment {silo_id: $silo_id})
+WHERE existing.id <> cm.id
+WITH wb, cm, collect(DISTINCT existing.id) AS candidate_ids
 DETACH DELETE wb
+WITH cm, candidate_ids
+UNWIND (CASE WHEN size(candidate_ids) = 0 THEN [null] ELSE candidate_ids END) AS cid
+WITH cm, cid WHERE cid IS NOT NULL
+MATCH (existing:Commitment {id: cid, silo_id: $silo_id})
+OPTIONAL MATCH (superseding:Commitment)-[:SUPERSEDES]->(existing)
+WITH cm, existing, superseding WHERE superseding IS NULL
+CREATE (cm)-[:SUPERSEDES {reason: $reason, created_at: $created_at}]->(existing)
+SET existing.valid_to = $valid_from
 RETURN cm.id AS commitment_id
 """
 
@@ -1382,9 +1385,11 @@ MATCH (f:Fact)-[:MEMBER_OF]->(c:Cluster {silo_id: $silo_id})
 WITH c, count(f) AS fact_count
 WHERE fact_count >= $min_facts
 OPTIONAL MATCH (c)<-[:SYNTHESIZED_FROM]-(b:Belief {silo_id: $silo_id})
+WITH c, fact_count, b
+WHERE b IS NULL
 OPTIONAL MATCH (c)<-[:SYNTHESIZED_FROM]-(pb:ProposedBelief {silo_id: $silo_id, status: 'pending'})
-WITH c, fact_count, b, pb
-WHERE b IS NULL AND pb IS NULL
+WITH c, fact_count, pb
+WHERE pb IS NULL
 RETURN c.id AS cluster_id, fact_count
 ORDER BY fact_count DESC
 """

@@ -13,7 +13,9 @@ from context_service.utils.json import JSONDecodeError, dumps, loads
 
 _PENDING_DOC_COUNT = """
 MATCH (d:Document {silo_id: $silo_id})
-WHERE NOT exists((d)<-[:EXTRACTED_FROM]-(:Claim))
+OPTIONAL MATCH (d)<-[:EXTRACTED_FROM]-(cl:Claim)
+WITH d, cl
+WHERE cl IS NULL
 RETURN count(d) AS pending
 """
 
