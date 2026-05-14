@@ -6,7 +6,7 @@ import time
 from typing import Any
 
 import dagster as dg
-from dagster import AssetExecutionContext
+from dagster import AssetExecutionContext  # noqa: F401
 from opentelemetry import trace
 
 from context_service.pipelines.partitions import silo_partitions
@@ -54,7 +54,11 @@ def heat_diffusion_asset(
             context.log.info(f"silo={silo_id} heat_diffusion disabled, skipping")
             return {"skipped": True}
 
-        store = await memgraph.store()
+        from context_service.engine.protocols import HyperGraphStore
+        from context_service.stores import MemgraphClient
+
+        driver = await memgraph.driver()
+        store: HyperGraphStore = MemgraphClient(driver)  # type: ignore[assignment]
 
         with tracer.start_as_current_span("heat_diffusion") as span:
             span.set_attribute("silo_id", silo_id)
@@ -64,7 +68,7 @@ def heat_diffusion_asset(
             span.set_attribute("hot_nodes", result.hot_nodes)
             span.set_attribute("nodes_updated", result.nodes_updated)
 
-        distribution = await get_materialization_distribution(store, silo_id)
+            distribution = await get_materialization_distribution(store, silo_id)
 
         return {
             "silo_id": silo_id,
