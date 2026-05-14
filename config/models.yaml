@@ -57,8 +57,8 @@ tiers:
   self_hosted:
     embeddings:
       provider: tei  # Hugging Face Text Embeddings Inference
-      model: Qwen/Qwen3-Embedding-8B  # MTEB #1, 70.6 score
-      dimensions: 1024
+      model: BAAI/bge-m3  # Matryoshka dims, 768 for efficiency
+      dimensions: 768
     reasoning:
       provider: vllm
       model: google/gemma-4-31B  # Apache 2.0, 85.2% MMLU Pro
@@ -69,8 +69,8 @@ tiers:
   self_hosted_budget:
     embeddings:
       provider: tei
-      model: BAAI/bge-m3  # Best quality/cost ratio
-      dimensions: 1024
+      model: nomic-ai/nomic-embed-text-v1.5  # 768 native, 137M params
+      dimensions: 768
     reasoning:
       provider: vllm
       model: Qwen/Qwen3.6-27B  # 72.4% SWE-bench, great for agents
