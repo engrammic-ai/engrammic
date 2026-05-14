@@ -145,6 +145,7 @@ class ContextService:
         idempotency_key: str | None = None,
         source_uri: str | None = None,
         expansion: str | None = None,
+        content_hash: str | None = None,
     ) -> Node:
         """Store context node to Memgraph + Qdrant.
 
@@ -157,6 +158,7 @@ class ContextService:
             source_uri: Origin URI.
             expansion: Optional predicted-query expansion text stored as a
                 Qdrant payload field for SPLADE encoding.
+            content_hash: Pre-computed SHA256 hash. If None, computed from content.
 
         Returns:
             Created or existing node.
@@ -193,7 +195,7 @@ class ContextService:
             properties=properties or {},
             silo_id=silo_id,
             source_uri=source_uri,
-            content_hash=hashlib.sha256(content.encode()).hexdigest()[:16],
+            content_hash=content_hash or hashlib.sha256(content.encode()).hexdigest(),
         )
 
         # Try to claim the idempotency key atomically BEFORE writing to DB.
@@ -1015,11 +1017,55 @@ class ContextService:
         else:
             content = claim
 
+        # Content-hash deduplication: return existing claim if identical content exists
+        claim_hash = hashlib.sha256(content.encode()).hexdigest()
+        existing_rows = await self._memgraph.execute_query(
+            """
+            MATCH (c:Claim {silo_id: $silo_id, content_hash: $content_hash})
+            WHERE c.tombstoned_at IS NULL
+            RETURN c.id AS id, c.type AS type, c.content AS content,
+                   c.silo_id AS silo_id, c.source_uri AS source_uri,
+                   c.content_hash AS content_hash, c.created_at AS created_at
+            LIMIT 1
+            """,
+            {"silo_id": str(scope.silo_id), "content_hash": claim_hash},
+        )
+
+        if existing_rows:
+            row = existing_rows[0]
+            logger.debug("assert_claim_content_hash_hit", content_hash=claim_hash[:16])
+            existing_node = Node(
+                id=uuid.UUID(row["id"]),
+                type=row["type"],
+                content=row["content"],
+                properties={},
+                silo_id=uuid.UUID(row["silo_id"]) if row.get("silo_id") else None,
+                source_uri=row.get("source_uri"),
+                content_hash=row.get("content_hash"),
+            )
+
+            # Still create evidence edges to accumulate corroboration
+            ev_node_ids = [ev_ref[5:] for ev_ref in evidence if ev_ref.startswith("node:")]
+            if ev_node_ids:
+                from context_service.db.queries import BATCH_CREATE_DERIVED_FROM_EDGES
+
+                await self._memgraph.execute_write(
+                    BATCH_CREATE_DERIVED_FROM_EDGES,
+                    {
+                        "claim_id": str(existing_node.id),
+                        "silo_id": str(scope.silo_id),
+                        "ev_ids": ev_node_ids,
+                    },
+                )
+
+            return existing_node
+
         node = await self.store(
             scope=scope,
             content=content,
             node_type="Claim",
             properties=props,
+            content_hash=claim_hash,
         )
 
         ev_node_ids = [ev_ref[5:] for ev_ref in evidence if ev_ref.startswith("node:")]
