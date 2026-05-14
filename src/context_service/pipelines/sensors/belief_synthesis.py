@@ -17,7 +17,9 @@ _LIST_DENSE_CLUSTERS_WITHOUT_BELIEF = """
 MATCH (f:Fact)-[:MEMBER_OF]->(c:Cluster {silo_id: $silo_id})
 WITH c, count(f) AS fact_count
 WHERE fact_count >= $min_facts
-  AND NOT exists((c)<-[:SYNTHESIZED_FROM]-(:Belief {silo_id: $silo_id}))
+OPTIONAL MATCH (c)<-[:SYNTHESIZED_FROM]-(b:Belief {silo_id: $silo_id})
+WITH c, fact_count, b
+WHERE b IS NULL
 RETURN c.id AS cluster_id, fact_count
 ORDER BY fact_count DESC
 """
