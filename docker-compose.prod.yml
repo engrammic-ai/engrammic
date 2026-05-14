@@ -3,7 +3,7 @@ services:
     build:
       context: ..
       dockerfile: context-service/Dockerfile
-    container_name: context-service-app
+    container_name: engrammic-app
     ports:
       - "8000:8000"
     env_file:
@@ -17,11 +17,11 @@ services:
       - POSTGRES_USER=context
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DATABASE=context_service
-      - HOME=/home/context-service
+      - HOME=/home/engrammic
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz-otel-collector:4317
-      - OTEL_SERVICE_NAME=context-service
+      - OTEL_SERVICE_NAME=engrammic
     volumes:
-      - ~/.config/gcloud:/home/context-service/.config/gcloud:ro
+      - ~/.config/gcloud:/home/engrammic/.config/gcloud:ro
       - ./config:/app/config:ro
       - ./skills:/app/skills:ro
     depends_on:
@@ -49,7 +49,7 @@ services:
 
   memgraph:
     image: memgraph/memgraph-mage:3.10.0
-    container_name: context-service-memgraph
+    container_name: engrammic-memgraph
     ports:
       - "7687:7687"
     volumes:
@@ -72,7 +72,7 @@ services:
 
   qdrant:
     image: qdrant/qdrant:v1.9.0
-    container_name: context-service-qdrant
+    container_name: engrammic-qdrant
     ports:
       - "6333:6333"
       - "6334:6334"
@@ -93,7 +93,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: context-service-redis
+    container_name: engrammic-redis
     ports:
       - "6379:6379"
     volumes:
@@ -112,7 +112,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: context-service-postgres
+    container_name: engrammic-postgres
     ports:
       - "5432:5432"
     volumes:
@@ -136,7 +136,7 @@ services:
     build:
       context: ..
       dockerfile: context-service/Dockerfile.dagster
-    container_name: context-service-dagster-code
+    container_name: engrammic-dagster-code
     command: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-m", "context_service.pipelines.definitions"]
     env_file:
       - .env
@@ -173,7 +173,7 @@ services:
     build:
       context: ..
       dockerfile: context-service/Dockerfile.dagster
-    container_name: context-service-dagster-web
+    container_name: engrammic-dagster-web
     command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "workspace.yaml"]
     ports:
       - "3002:3000"
@@ -209,7 +209,7 @@ services:
     build:
       context: ..
       dockerfile: context-service/Dockerfile.dagster
-    container_name: context-service-dagster-daemon
+    container_name: engrammic-dagster-daemon
     command: ["dagster-daemon", "run"]
     env_file:
       - .env
@@ -245,7 +245,7 @@ services:
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.100.0
-    container_name: context-service-otel
+    container_name: engrammic-otel
     ports:
       - "4317:4317"
       - "4318:4318"

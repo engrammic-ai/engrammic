@@ -117,5 +117,5 @@ volumes:
 
 networks:
   default:
-    name: context-service_default
+    name: engrammic_default
     external: true
