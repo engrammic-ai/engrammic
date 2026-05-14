@@ -23,6 +23,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Status | Description |
 |------|--------|-------------|
+| [2026-05-14-sage-job-consolidation.md](./2026-05-14-sage-job-consolidation.md) | In Progress | SAGE job consolidation - replace 8 sensors with 3 scheduled jobs |
 | [2026-05-13-gcp-deployment.md](./2026-05-13-gcp-deployment.md) | Ready | Pulumi GCP infra - scaffold done, ready for first deploy |
 
 Next candidates:
