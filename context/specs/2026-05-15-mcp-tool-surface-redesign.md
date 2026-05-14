@@ -131,12 +131,13 @@ recall(
     depth: int = 0,            # 0=flat, 1-3=graph traversal
     layers: list[str] = None,  # memory|knowledge|wisdom|intelligence
     top_k: int = 10,           # Max results for search
-) -> {results|nodes, ...}
+    include_hypotheses: bool = False,  # Include tentative beliefs from current session
+) -> {results|nodes, hypotheses?, ...}
 ```
 
-**Description:** "Retrieve knowledge. Search by query or fetch by node_id. Set depth > 0 for graph traversal from seed nodes."
+**Description:** "Retrieve knowledge. Search by query or fetch by node_id. Set depth > 0 for graph traversal from seed nodes. Use include_hypotheses to see your tentative beliefs."
 
-**Maps to:** context_recall (unchanged behavior)
+**Maps to:** context_recall (with hypotheses extension)
 
 ---
 
@@ -223,14 +224,16 @@ Form a tentative belief.
 hypothesize(
     hypothesis: str,           # Tentative belief
     about: list[str],          # REQUIRED: nodes this concerns
-    session_id: str,           # Reasoning session
     confidence: float = 0.8,
-) -> {belief_id, potential_conflicts, created_at}
+    session_id: str = None,    # Optional: defaults to MCP session from auth context
+) -> {belief_id, session_id, potential_conflicts, created_at}
 ```
 
-**Description:** "Form a tentative belief during reasoning. Unlike believe, hypotheses can be revised as you learn more. Use commit to finalize when confident."
+**Description:** "Form a tentative belief during reasoning. Unlike believe, hypotheses can be revised as you learn more. Use commit to finalize when confident. Session is auto-derived from MCP connection."
 
 **Maps to:** context_store(layer="belief")
+
+**Note:** `session_id` is auto-derived from `auth.session_id` (set during MCP connection). Agents don't need to manage sessions explicitly - the MCP connection IS the session.
 
 ---
 
@@ -270,6 +273,43 @@ commit(
 
 ---
 
+## Design Decisions
+
+### believe vs hypothesize
+
+Both create belief-like nodes, but serve different purposes:
+
+| Tool | Creates | Lifespan | Can revise? | Use when |
+|------|---------|----------|-------------|----------|
+| `believe` | Commitment | Permanent | No (supersede only) | You're confident in your conclusion |
+| `hypothesize` | WorkingHypothesis | Session-scoped | Yes (via `revise`) | You're still reasoning, may change mind |
+
+**Enforcement:** `believe` creates a Commitment directly - it cannot be revised, only superseded by a new belief. `hypothesize` creates a WorkingHypothesis that can be updated via `revise` and promoted via `commit`. The system enforces this - you can't call `revise` on a Commitment.
+
+### link weight range
+
+`link.weight` uses 0.0-10.0 range (not 0.0-1.0 like confidence). This is intentional:
+- **Confidence** (0.0-1.0): probability/certainty of a belief
+- **Weight** (0.0-10.0): strength/importance of a relationship
+
+Default weight is 1.0. Higher weights (e.g., 5.0, 10.0) indicate stronger relationships for graph algorithms.
+
+### Session lifecycle
+
+Sessions are implicit - derived from the MCP connection's auth context. No explicit session creation needed:
+- `auth.session_id` is set during MCP connection (from WorkOS token or generated)
+- `hypothesize` uses this automatically
+- Session ends when MCP connection closes
+- Uncommitted hypotheses remain as WorkingHypotheses (can be committed in future session)
+
+### context_skills
+
+`context_skills` is **not included in profiles** - it's a separate utility tool that remains available regardless of profile. It serves a different purpose: discovering available skills (prompt patterns) vs. interacting with memory.
+
+If agents need skill discovery, `context_skills` is always available. For most use cases, the intent-based tool names and MCP instructions provide sufficient guidance.
+
+---
+
 ## Internal-Only Tools
 
 These are NOT exposed to external agents. Used by SAGE and internal systems via direct service calls:
@@ -279,7 +319,7 @@ These are NOT exposed to external agents. Used by SAGE and internal systems via 
 | context_admin | Silo management, session lifecycle |
 | context_accept_belief | SAGE Custodian accepting ProposedBeliefs |
 | context_reject_belief | SAGE Custodian rejecting ProposedBeliefs |
-| context_belief_state | Internal session inspection |
+| context_belief_state | Internal session inspection (replaced by `recall(include_hypotheses=True)` for agents) |
 
 ## MCP Instructions
 
@@ -379,6 +419,9 @@ tools:
         type: float
         default: 0.8
         description: "0.0-1.0"
+      tags:
+        type: list[str]
+        description: "Optional categorization"
 
   believe:
     description: "Declare a belief as a commitment. Use when you've synthesized knowledge into a conclusion."
@@ -399,7 +442,7 @@ tools:
         description: "Why you believe this"
 
   recall:
-    description: "Retrieve knowledge. Search by query or fetch by node_id."
+    description: "Retrieve knowledge. Search by query or fetch by node_id. Use include_hypotheses to see tentative beliefs."
     maps_to: recall
     params:
       query:
@@ -418,6 +461,10 @@ tools:
       top_k:
         type: int
         default: 10
+      include_hypotheses:
+        type: bool
+        default: false
+        description: "Include tentative beliefs from current session"
 
   trace:
     description: "Trace the provenance of a belief back to its sources."
@@ -481,7 +528,7 @@ tools:
         default: 0.8
 
   hypothesize:
-    description: "Form a tentative belief during reasoning. Use commit to finalize."
+    description: "Form a tentative belief during reasoning. Use commit to finalize. Session auto-derived from MCP connection."
     maps_to: belief
     params:
       hypothesis:
@@ -490,12 +537,12 @@ tools:
       about:
         type: list[str]
         required: true
-      session_id:
-        type: str
-        required: true
       confidence:
         type: float
         default: 0.8
+      session_id:
+        type: str
+        description: "Optional override. Defaults to MCP session from auth context."
 
   revise:
     description: "Update a tentative hypothesis when new information arrives."
@@ -609,7 +656,7 @@ def get_profile() -> str:
 | context_store(layer=intelligence) | reason | reasoning profile |
 | context_store(layer=meta) | reflect | reasoning profile |
 | context_store(layer=belief) | hypothesize | reasoning profile |
-| context_recall | recall | |
+| context_recall | recall | + include_hypotheses param |
 | context_link | link | |
 | context_admin(action=provenance) | trace | |
 | context_update_belief | revise | reasoning profile |
@@ -617,8 +664,8 @@ def get_profile() -> str:
 | context_admin | (internal only) | |
 | context_accept_belief | (internal only) | |
 | context_reject_belief | (internal only) | |
-| context_belief_state | (internal only) | |
-| context_skills | context_skills | unchanged, separate concern |
+| context_belief_state | recall(include_hypotheses=true) | Merged into recall |
+| context_skills | context_skills | unchanged, always available |
 
 ### Deprecation
 
@@ -637,10 +684,11 @@ No deprecation period needed - still in dev. Clean cut replacement.
 
 ## Open Questions
 
-1. **context_skills** - keep as-is or rename to just `skills`?
+1. ~~**context_skills** - keep as-is or rename to just `skills`?~~ **Resolved:** Keep as `context_skills`, always available outside profiles
 2. **Error responses** - standardize error format across all tools?
 3. **Metrics** - update telemetry for new tool names?
 4. **Hot reload** - worth implementing YAML watch in dev mode?
+5. **Primitives spec** - update `05-mcp-contract.md` to reflect new tool surface?
 
 ## References
 
