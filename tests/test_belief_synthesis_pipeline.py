@@ -1,4 +1,4 @@
-"""Unit tests for belief synthesis Dagster sensor and asset — no live services required."""
+"""Unit tests for belief synthesis Dagster asset — no live services required."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import importlib.util
 import sys
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import dagster as dg
 import pytest
@@ -49,13 +49,20 @@ _belief_synthesis_fn = belief_synthesis_asset.op.compute_fn.decorated_fn
 
 def _make_asset_context(
     silo_id: str = "silo-1",
-    cluster_id: str = "cluster-abc",
 ) -> dg.AssetExecutionContext:
     ctx = MagicMock(spec=dg.AssetExecutionContext)
     ctx.partition_key = silo_id
-    ctx.run_tags = {"cluster_id": cluster_id}
     ctx.log = MagicMock()
     return ctx
+
+
+def _make_run_result(succeeded: int = 1, failed: int = 0) -> dict[str, Any]:
+    return {
+        "succeeded": succeeded,
+        "failed": failed,
+        "total": succeeded + failed,
+        "belief_ids": [f"b-{i}" for i in range(succeeded)],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -68,13 +75,13 @@ def test_belief_synthesis_asset_output_keys() -> None:
     memgraph_res = MagicMock()
     llm_res = MagicMock()
 
-    with patch.object(_asset_mod.asyncio, "run", return_value="belief-id-xyz"):
+    with patch.object(_asset_mod, "_run_async", return_value=_make_run_result(succeeded=2)):
         result = _belief_synthesis_fn(ctx, memgraph=memgraph_res, llm=llm_res)
 
     assert isinstance(result, dg.Output)
-    assert result.value["belief_id"] == "belief-id-xyz"
-    assert result.value["cluster_id"] == "cluster-abc"
     assert result.value["silo_id"] == "silo-1"
+    assert result.value["succeeded"] == 2
+    assert result.value["failed"] == 0
     assert "duration_s" in result.value
 
 
@@ -83,25 +90,27 @@ def test_belief_synthesis_asset_metadata_keys() -> None:
     memgraph_res = MagicMock()
     llm_res = MagicMock()
 
-    with patch.object(_asset_mod.asyncio, "run", return_value="belief-id-xyz"):
+    with patch.object(_asset_mod, "_run_async", return_value=_make_run_result()):
         result = _belief_synthesis_fn(ctx, memgraph=memgraph_res, llm=llm_res)
 
     meta = result.metadata
-    for key in ("silo_id", "cluster_id", "belief_id", "duration_s"):
+    for key in ("silo_id", "succeeded", "failed", "total", "duration_s"):
         assert key in meta, f"metadata key {key!r} missing"
 
 
-def test_belief_synthesis_asset_raises_without_cluster_id() -> None:
-    ctx = MagicMock(spec=dg.AssetExecutionContext)
-    ctx.partition_key = "silo-1"
-    ctx.run_tags = {}  # no cluster_id
-    ctx.log = MagicMock()
-
+def test_belief_synthesis_asset_no_clusters_returns_zero_counts() -> None:
+    ctx = _make_asset_context()
     memgraph_res = MagicMock()
     llm_res = MagicMock()
 
-    with pytest.raises(ValueError, match="cluster_id"):
-        _belief_synthesis_fn(ctx, memgraph=memgraph_res, llm=llm_res)
+    empty_result = {"succeeded": 0, "failed": 0, "total": 0, "belief_ids": []}
+
+    with patch.object(_asset_mod, "_run_async", return_value=empty_result):
+        result = _belief_synthesis_fn(ctx, memgraph=memgraph_res, llm=llm_res)
+
+    assert result.value["succeeded"] == 0
+    assert result.value["failed"] == 0
+    assert result.value["total"] == 0
 
 
 def test_belief_synthesis_asset_uses_silo_partition_key() -> None:
@@ -109,10 +118,10 @@ def test_belief_synthesis_asset_uses_silo_partition_key() -> None:
     memgraph_res = MagicMock()
     llm_res = MagicMock()
 
-    with patch.object(_asset_mod.asyncio, "run", return_value="b-1"):
-        _belief_synthesis_fn(ctx, memgraph=memgraph_res, llm=llm_res)
+    with patch.object(_asset_mod, "_run_async", return_value=_make_run_result()):
+        result = _belief_synthesis_fn(ctx, memgraph=memgraph_res, llm=llm_res)
 
-    assert ctx.partition_key == "silo-custom"
+    assert result.value["silo_id"] == "silo-custom"
 
 
 def test_belief_synthesis_asset_has_concurrency_tag() -> None:
@@ -125,7 +134,7 @@ def test_belief_synthesis_asset_has_concurrency_tag() -> None:
 def test_belief_synthesis_asset_has_retry_policy() -> None:
     retry = belief_synthesis_asset.op.retry_policy
     assert retry is not None
-    assert retry.max_retries == 2
+    assert retry.max_retries == 1
 
 
 # Sensor tests removed: belief_synthesis_sensor was deleted as part of the

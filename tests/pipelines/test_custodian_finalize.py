@@ -12,7 +12,8 @@ def test_batch_size():
 def test_scan_promotable_commitments_cypher():
     assert "MATCH (c:Claim:Commitment" in _SCAN_PROMOTABLE_COMMITMENTS
     assert "silo_id: $silo_id" in _SCAN_PROMOTABLE_COMMITMENTS
-    assert "size([(c)-[:PROMOTED_TO]->(f:Finding) | f]) = 0" in _SCAN_PROMOTABLE_COMMITMENTS
+    assert "OPTIONAL MATCH (c)-[:PROMOTED_TO]->(f:Finding)" in _SCAN_PROMOTABLE_COMMITMENTS
+    assert "f IS NULL" in _SCAN_PROMOTABLE_COMMITMENTS
     assert "LIMIT $batch_size" in _SCAN_PROMOTABLE_COMMITMENTS
 
 
