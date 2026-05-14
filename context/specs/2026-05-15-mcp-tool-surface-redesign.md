@@ -302,11 +302,32 @@ Sessions are implicit - derived from the MCP connection's auth context. No expli
 - Session ends when MCP connection closes
 - Uncommitted hypotheses remain as WorkingHypotheses (can be committed in future session)
 
-### context_skills
+### patterns (renamed from context_skills)
 
-`context_skills` is **not included in profiles** - it's a separate utility tool that remains available regardless of profile. It serves a different purpose: discovering available skills (prompt patterns) vs. interacting with memory.
+`patterns` is a utility tool available regardless of profile. It exposes workflow templates that teach agents how to use tools together for common tasks.
 
-If agents need skill discovery, `context_skills` is always available. For most use cases, the intent-based tool names and MCP instructions provide sufficient guidance.
+**Example patterns:**
+
+| Pattern | Profile | Workflow |
+|---------|---------|----------|
+| `observe-and-learn` | standard | remember → learn (with evidence) → believe |
+| `research` | standard | recall → trace → learn (cite what you found) |
+| `build-knowledge` | standard | remember observations → learn claims → link related → believe conclusions |
+| `deliberate` | reasoning | hypothesize → reason through steps → revise as needed → commit when confident |
+| `reflect-on-knowledge` | reasoning | recall existing → reflect on patterns → believe synthesis |
+
+**Tool signature:**
+
+```python
+patterns(
+    action: str,           # list | get | search
+    name: str = None,      # for get
+    query: str = None,     # for search
+    profile: str = None,   # filter by profile (standard, reasoning)
+) -> {patterns: [...]}
+```
+
+Patterns are workflow recipes - they show the intended sequence of tool calls for common agent tasks. This guides agents toward correct EAG usage without requiring them to discover it themselves.
 
 ---
 
@@ -569,6 +590,26 @@ tools:
         required: true
       reason:
         type: str
+
+  # Utility tool (always available)
+  patterns:
+    description: "Discover workflow templates for common tasks. Shows intended tool sequences."
+    maps_to: skills
+    always_available: true
+    params:
+      action:
+        type: str
+        required: true
+        description: "list|get|search"
+      name:
+        type: str
+        description: "Pattern name (for get)"
+      query:
+        type: str
+        description: "Search query"
+      profile:
+        type: str
+        description: "Filter by profile: standard|reasoning"
 ```
 
 ### Registry Implementation
@@ -598,6 +639,7 @@ IMPLEMENTATIONS = {
     "hypothesize": _hypothesize_impl,
     "revise": _revise_impl,
     "commit": _commit_impl,
+    "patterns": _patterns_impl,  # always registered
 }
 
 def register_tools(mcp: FastMCP, profile: str = "standard"):
@@ -607,15 +649,21 @@ def register_tools(mcp: FastMCP, profile: str = "standard"):
     # Set MCP instructions
     mcp.instructions = config["mcp_instructions"]
     
+    # Register profile tools
     for name in tool_names:
-        tool_def = config["tools"][name]
-        impl_fn = IMPLEMENTATIONS[name]
-        
-        # Register with description from YAML
-        mcp.tool(
-            name=name,
-            description=tool_def["description"],
-        )(impl_fn)
+        _register_tool(mcp, name, config["tools"][name])
+    
+    # Register always-available tools (like patterns)
+    for name, tool_def in config["tools"].items():
+        if tool_def.get("always_available") and name not in tool_names:
+            _register_tool(mcp, name, tool_def)
+
+def _register_tool(mcp: FastMCP, name: str, tool_def: dict):
+    impl_fn = IMPLEMENTATIONS[name]
+    mcp.tool(
+        name=name,
+        description=tool_def["description"],
+    )(impl_fn)
 ```
 
 ### Profile Selection
@@ -665,7 +713,7 @@ def get_profile() -> str:
 | context_accept_belief | (internal only) | |
 | context_reject_belief | (internal only) | |
 | context_belief_state | recall(include_hypotheses=true) | Merged into recall |
-| context_skills | context_skills | unchanged, always available |
+| context_skills | patterns | renamed, always available, workflow templates |
 
 ### Deprecation
 
@@ -684,7 +732,7 @@ No deprecation period needed - still in dev. Clean cut replacement.
 
 ## Open Questions
 
-1. ~~**context_skills** - keep as-is or rename to just `skills`?~~ **Resolved:** Keep as `context_skills`, always available outside profiles
+1. ~~**context_skills** - keep as-is or rename to just `skills`?~~ **Resolved:** Rename to `patterns`, workflow templates for tool usage
 2. **Error responses** - standardize error format across all tools?
 3. **Metrics** - update telemetry for new tool names?
 4. **Hot reload** - worth implementing YAML watch in dev mode?
