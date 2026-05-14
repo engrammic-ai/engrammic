@@ -35,7 +35,7 @@ MATCH path = (a)-[:CAUSES*2..{depth}]->(c)
 WHERE a.silo_id = $silo_id
   AND a <> c
   AND ALL(n IN nodes(path) WHERE n.silo_id = $silo_id)
-  AND size([(a)-[r:CAUSES {{inferred: true}}]->(c) | r]) = 0
+  AND NOT exists((a)-[:CAUSES {inferred: true}]->(c))
 RETURN a.id AS source_id, c.id AS target_id, relationships(path) AS edges
 SKIP $skip
 LIMIT $batch_size

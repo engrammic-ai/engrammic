@@ -56,10 +56,16 @@ class EvidenceValidator:
                 confidence=0.9,
                 reason="File URI accepted (local validation skipped)",
             )
+        elif ref.startswith("urn:"):
+            return EvidenceResult(
+                status="valid",
+                confidence=0.85,
+                reason="URN accepted (external validation skipped)",
+            )
         else:
             return EvidenceResult(
                 status="invalid",
-                reason="Invalid evidence format. Must be node:<uuid> or URI.",
+                reason="Invalid evidence format. Must be node:<uuid>, URI, or URN.",
             )
 
     async def _validate_node_ref(self, node_id: str, silo_id: str) -> EvidenceResult:
