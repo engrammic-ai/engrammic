@@ -12,7 +12,6 @@ Chains:
 - maintenance: independent cleanup jobs (various schedules)
 """
 
-import asyncio
 from collections.abc import Iterator
 from typing import Any
 
@@ -26,8 +25,41 @@ MATCH (d:Document)
 RETURN DISTINCT d.silo_id AS silo_id
 """
 
+_SILOS_WITH_PENDING_CUSTODIAN_WORK = """
+MATCH (d:Document)
+WHERE d.processed_at IS NULL
+   OR d.embedded_at IS NULL
+RETURN DISTINCT d.silo_id AS silo_id
+"""
+
+_SILOS_WITH_PENDING_SYNTHESIZER_WORK = """
+MATCH (c:Cluster)
+WHERE NOT EXISTS { MATCH (c)<-[:SYNTHESIZED_FROM]-(:Belief) }
+RETURN DISTINCT c.silo_id AS silo_id
+UNION
+MATCH (b:Belief)
+WHERE b.status IS NULL OR b.status <> 'stale'
+WITH b, [word IN split(toLower(b.content), ' ') WHERE size(word) > 4] AS words
+UNWIND words AS subject
+WITH b.silo_id AS silo_id, subject, count(b) AS cnt
+WHERE cnt >= 2
+RETURN DISTINCT silo_id
+"""
+
+_SILOS_WITH_PENDING_GROUNDSKEEPER_WORK = """
+MATCH (n)
+WHERE n.silo_id IS NOT NULL
+  AND (n.heat_updated_at IS NULL
+       OR n.heat_updated_at < datetime() - duration('PT1H'))
+RETURN DISTINCT n.silo_id AS silo_id
+LIMIT 50
+"""
+
 
 def _fetch_silo_ids(memgraph: MemgraphResource) -> list[str]:
+    """Fetch all silo IDs with documents."""
+    from context_service.pipelines.utils import run_async
+
     async def _run() -> list[str]:
         from context_service.stores import MemgraphClient
 
@@ -36,7 +68,25 @@ def _fetch_silo_ids(memgraph: MemgraphResource) -> list[str]:
         rows = await client.execute_query(_LIST_ACTIVE_SILOS, {})
         return [str(r["silo_id"]) for r in rows if r.get("silo_id")]
 
-    return asyncio.run(_run())
+    return run_async(_run())
+
+
+def _fetch_silos_with_pending_work(
+    memgraph: MemgraphResource,
+    query: str,
+) -> list[str]:
+    """Fetch silo IDs that have pending work based on query."""
+    from context_service.pipelines.utils import run_async
+
+    async def _run() -> list[str]:
+        from context_service.stores import MemgraphClient
+
+        driver = await memgraph.driver()
+        client = MemgraphClient(driver)
+        rows = await client.execute_query(query, {})
+        return [str(r["silo_id"]) for r in rows if r.get("silo_id")]
+
+    return run_async(_run())
 
 
 # -----------------------------------------------------------------------------
