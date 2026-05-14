@@ -17,11 +17,10 @@ services:
       - POSTGRES_USER=context
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DATABASE=context_service
-      - HOME=/home/engrammic
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz-otel-collector:4317
       - OTEL_SERVICE_NAME=engrammic
     volumes:
-      - ~/.config/gcloud:/home/engrammic/.config/gcloud:ro
+      - ~/.config/gcloud:/mnt/gcloud:ro
       - ./config:/app/config:ro
       - ./skills:/app/skills:ro
     depends_on:

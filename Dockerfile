@@ -20,10 +20,10 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-# Create non-root user
-RUN groupadd -r context-service && useradd -r -g context-service context-service \
+# Create non-root user with predictable UID for volume mounts
+RUN groupadd -g 1000 engrammic && useradd -u 1000 -g engrammic -m engrammic \
     && mkdir -p /var/lib/engrammic \
-    && chown context-service:context-service /var/lib/engrammic
+    && chown engrammic:engrammic /var/lib/engrammic
 
 # Copy virtual environment and primitives from builder
 COPY --from=builder /app/.venv /app/.venv
@@ -35,6 +35,8 @@ COPY context-service/config/ /app/config/
 COPY context-service/src/ /app/src/
 COPY context-service/alembic.ini /app/alembic.ini
 COPY context-service/alembic/ /app/alembic/
+COPY context-service/scripts/entrypoint.sh /entrypoint.sh
+
 # Set environment
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app/src"
@@ -42,7 +44,7 @@ ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
 # Switch to non-root user
-USER context-service
+USER engrammic
 
 EXPOSE 8000
 
@@ -50,4 +52,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
     CMD python -c "import os, urllib.request; urllib.request.urlopen(f'http://localhost:{os.environ.get(\"PORT\", \"8000\")}/health')"
 
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["sh", "-c", "exec python -m uvicorn context_service.api.app:create_app --factory --host 0.0.0.0 --port ${PORT:-8000}"]
