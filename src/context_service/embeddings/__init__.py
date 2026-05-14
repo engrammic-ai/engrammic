@@ -12,6 +12,7 @@ from context_service.embeddings.splade import SpladeEncoder, SpladeEncoderError
 if TYPE_CHECKING:
     from context_service.cache.embedding_cache import EmbeddingCache
 
+
 def build_embedding_service(
     embedding_cache: "EmbeddingCache | None" = None,
 ) -> EmbeddingService:

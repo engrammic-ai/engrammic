@@ -361,8 +361,7 @@ async def batch_update_propagated_heat(
 
     now = datetime.datetime.now(datetime.UTC).isoformat()
     updates = [
-        {"node_id": node_id, "propagated_heat": heat}
-        for node_id, heat in propagation_map.items()
+        {"node_id": node_id, "propagated_heat": heat} for node_id, heat in propagation_map.items()
     ]
     log = logger.bind(silo_id=silo_id, update_count=len(updates))
     await store.execute_write(
@@ -434,9 +433,7 @@ async def diffuse_heat(
 
     await decay_propagated_heat(store, silo_id, config.propagated_heat_decay)
 
-    hot_nodes = await fetch_hot_nodes(
-        store, silo_id, config.hot_threshold, config.max_hot_nodes
-    )
+    hot_nodes = await fetch_hot_nodes(store, silo_id, config.hot_threshold, config.max_hot_nodes)
     if not hot_nodes:
         log.info("diffuse_heat.no_hot_nodes")
         return DiffusionResult(hot_nodes=0, nodes_updated=0, edge_traversals={})

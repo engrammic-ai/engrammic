@@ -169,7 +169,9 @@ def auto_tagging(
                     )
                     processed += 1
                 except Exception as exc:  # noqa: BLE001
-                    context.log.warning(f"silo={silo_id} node={node_id_str} tag write failed: {exc}")
+                    context.log.warning(
+                        f"silo={silo_id} node={node_id_str} tag write failed: {exc}"
+                    )
                     errors += 1
 
         skipped = len(records) - processed - errors

@@ -75,8 +75,7 @@ def belief_synthesis_asset(
         )
 
         clusters = [
-            {"cluster_id": str(r["cluster_id"]), "fact_count": int(r["fact_count"])}
-            for r in rows
+            {"cluster_id": str(r["cluster_id"]), "fact_count": int(r["fact_count"])} for r in rows
         ]
 
         if not clusters:
@@ -94,19 +93,13 @@ def belief_synthesis_asset(
         for cluster in clusters:
             cluster_id = str(cluster["cluster_id"])
             try:
-                belief_id = await synthesize_belief(
-                    store, cluster_id, silo_id, llm_client
-                )
+                belief_id = await synthesize_belief(store, cluster_id, silo_id, llm_client)
                 belief_ids.append(belief_id)
                 succeeded += 1
-                context.log.info(
-                    f"belief_synthesised cluster={cluster_id} belief={belief_id}"
-                )
+                context.log.info(f"belief_synthesised cluster={cluster_id} belief={belief_id}")
             except Exception as e:
                 failed += 1
-                context.log.error(
-                    f"belief_synthesis failed cluster={cluster_id} error={e}"
-                )
+                context.log.error(f"belief_synthesis failed cluster={cluster_id} error={e}")
 
         return {
             "succeeded": succeeded,

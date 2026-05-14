@@ -138,7 +138,9 @@ def extraction(
                     result, usage = await svc.extract(content)
                     tokens_used += usage.total_tokens
                     docs_processed += 1
-                    context.log.info(f"Extracted {len(result.entities)} entities, {len(result.relationships)} relationships from {doc_id}")
+                    context.log.info(
+                        f"Extracted {len(result.entities)} entities, {len(result.relationships)} relationships from {doc_id}"
+                    )
                     # Mark doc as extracted regardless of claim count
                     await client.execute_write(
                         _MARK_DOC_EXTRACTED,
