@@ -13,6 +13,12 @@
 #   - hybrid: self-hosted embeddings (TEI) + Vertex LLMs
 #   - self_hosted: fully self-hosted with vLLM/TEI
 #   - self_hosted_budget: self-hosted with smaller efficient models
+#
+# Embedding model notes:
+#   - Vertex tiers use text-embedding-005 (768 dims, burns GC credits)
+#   - Self-hosted tiers use Nomic Embed v1.5 (recommended for on-prem)
+#     - 137M params, 4x faster than BGE-M3, Matryoshka support
+#     - Apache 2.0 license, no restrictions
 
 tier: balanced
 
