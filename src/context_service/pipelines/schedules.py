@@ -1,14 +1,18 @@
 """Dagster schedule definitions for context-service.
 
-Consolidated into logical DAG chains that respect asset dependencies.
-Schedules yield one RunRequest per active silo by querying Memgraph at
-evaluation time.
+SAGE (Synthesis, Aggregation, and Graph Evolution) schedules:
+- sage_custodian_schedule: ingestion pipeline (10 min)
+- sage_synthesizer_schedule: belief formation (30 min)
+- sage_groundskeeper_schedule: heat and maintenance (15 min)
 
-Chains:
-- sage_custodian: extraction -> embedding -> custodian_visit -> claim_to_fact_promotion -> custodian_finalize -> clustering -> proposal_detection (10min, pending silos only)
-- sage_synthesizer: causal_transitivity -> pattern_detection -> llm_pattern_detection -> belief_synthesis -> belief_merge -> chain_stitch (30min, pending silos only)
-- sage_groundskeeper: heat -> edge_heat -> heat_diffusion -> prewarm_sweep (15min, stale-heat silos only)
-- maintenance: independent cleanup jobs (various schedules)
+Maintenance schedules (independent):
+- reasoning_compaction_schedule: hourly
+- retention_schedule: daily 03:00
+- auto_tagging_schedule: every 30 min
+- tag_maintenance_schedule: daily 03:00
+- reconciliation_gc_schedule: every 15 min
+- proposal_cleanup_schedule: daily 06:00
+- groundskeeper_gc_schedule: nightly 01:00
 """
 
 from collections.abc import Iterator
@@ -67,7 +71,7 @@ def _fetch_silo_ids(memgraph: MemgraphResource) -> list[str]:
         rows = await client.execute_query(_LIST_ACTIVE_SILOS, {})
         return [str(r["silo_id"]) for r in rows if r.get("silo_id")]
 
-    return run_async(_run())
+    return list(run_async(_run()))
 
 
 def _fetch_silos_with_pending_work(
@@ -85,7 +89,7 @@ def _fetch_silos_with_pending_work(
         rows = await client.execute_query(query, {})
         return [str(r["silo_id"]) for r in rows if r.get("silo_id")]
 
-    return run_async(_run())
+    return list(run_async(_run()))
 
 
 # -----------------------------------------------------------------------------
@@ -320,11 +324,11 @@ def groundskeeper_gc_schedule(context: ScheduleEvaluationContext) -> dg.RunReque
 
 
 all_schedules: list[Any] = [
-    # Core pipelines
+    # SAGE pipelines
     sage_custodian_schedule,
     sage_synthesizer_schedule,
     sage_groundskeeper_schedule,
-    # Maintenance
+    # Maintenance (kept separate)
     reasoning_compaction_schedule,
     retention_schedule,
     auto_tagging_schedule,
