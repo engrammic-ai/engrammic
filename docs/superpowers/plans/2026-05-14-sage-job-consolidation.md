@@ -78,9 +78,29 @@ LIMIT 50
 """
 ```
 
-- [ ] **Step 2: Add query helper functions**
+- [ ] **Step 2: Update existing _fetch_silo_ids to use run_async**
 
-Add after the query constants:
+Replace the existing `_fetch_silo_ids` function (around line 30-39) with:
+
+```python
+def _fetch_silo_ids(memgraph: MemgraphResource) -> list[str]:
+    """Fetch all silo IDs with documents."""
+    from context_service.pipelines.utils import run_async
+
+    async def _run() -> list[str]:
+        from context_service.stores import MemgraphClient
+
+        driver = await memgraph.driver()
+        client = MemgraphClient(driver)
+        rows = await client.execute_query(_LIST_ACTIVE_SILOS, {})
+        return [str(r["silo_id"]) for r in rows if r.get("silo_id")]
+
+    return run_async(_run())
+```
+
+- [ ] **Step 3: Add new pending work helper function**
+
+Add after `_fetch_silo_ids`:
 
 ```python
 def _fetch_silos_with_pending_work(
@@ -88,6 +108,8 @@ def _fetch_silos_with_pending_work(
     query: str,
 ) -> list[str]:
     """Fetch silo IDs that have pending work based on query."""
+    from context_service.pipelines.utils import run_async
+
     async def _run() -> list[str]:
         from context_service.stores import MemgraphClient
 
@@ -96,15 +118,15 @@ def _fetch_silos_with_pending_work(
         rows = await client.execute_query(query, {})
         return [str(r["silo_id"]) for r in rows if r.get("silo_id")]
 
-    return asyncio.run(_run())
+    return run_async(_run())
 ```
 
-- [ ] **Step 3: Verify file is syntactically correct**
+- [ ] **Step 4: Verify file is syntactically correct**
 
 Run: `python -m py_compile src/context_service/pipelines/schedules.py`
 Expected: No output (success)
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add src/context_service/pipelines/schedules.py
@@ -144,8 +166,6 @@ def sage_custodian_schedule(
 ) -> Iterator[dg.RunRequest]:
     """SAGE Custodian: ingestion pipeline for silos with pending documents."""
     silo_ids = _fetch_silos_with_pending_work(memgraph, _SILOS_WITH_PENDING_CUSTODIAN_WORK)
-    if not silo_ids:
-        silo_ids = _fetch_silo_ids(memgraph)
     
     for silo_id in silo_ids:
         yield dg.RunRequest(
@@ -199,8 +219,6 @@ def sage_synthesizer_schedule(
 ) -> Iterator[dg.RunRequest]:
     """SAGE Synthesizer: belief formation for silos with pending synthesis work."""
     silo_ids = _fetch_silos_with_pending_work(memgraph, _SILOS_WITH_PENDING_SYNTHESIZER_WORK)
-    if not silo_ids:
-        silo_ids = _fetch_silo_ids(memgraph)
     
     for silo_id in silo_ids:
         yield dg.RunRequest(
@@ -256,8 +274,6 @@ def sage_groundskeeper_schedule(
 ) -> Iterator[dg.RunRequest]:
     """SAGE Groundskeeper: heat and maintenance for silos with stale scores."""
     silo_ids = _fetch_silos_with_pending_work(memgraph, _SILOS_WITH_PENDING_GROUNDSKEEPER_WORK)
-    if not silo_ids:
-        silo_ids = _fetch_silo_ids(memgraph)
     
     for silo_id in silo_ids:
         yield dg.RunRequest(
