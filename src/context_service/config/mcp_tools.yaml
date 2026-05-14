@@ -1,0 +1,91 @@
+# src/context_service/config/mcp_tools.yaml
+# MCP Tool Surface Configuration
+# Edit this file to change tool names, descriptions, and profiles without code changes.
+
+mcp_instructions: |
+  Engrammic: Epistemic memory for AI agents.
+
+  Quick start:
+  - remember: store observations
+  - learn: record claims WITH evidence
+  - believe: declare conclusions
+  - recall: search your knowledge
+  - trace: understand why you believe something
+  - link: connect related knowledge
+
+  Guidelines:
+  - Always provide evidence when using learn
+  - Reference existing nodes when forming beliefs
+  - Use recall before storing to avoid duplicates
+
+profiles:
+  standard:
+    - remember
+    - learn
+    - believe
+    - recall
+    - trace
+    - link
+
+  reasoning:
+    - remember
+    - learn
+    - believe
+    - reason
+    - reflect
+    - recall
+    - trace
+    - link
+    - hypothesize
+    - revise
+    - commit
+
+tools:
+  remember:
+    description: "Store an observation. No evidence required - use for raw information you may need later."
+    maps_to: memory
+
+  learn:
+    description: "Record something you learned with evidence. Evidence is required."
+    maps_to: knowledge
+
+  believe:
+    description: "Declare a belief as a commitment. Requires 'about' nodes that led to this belief."
+    maps_to: wisdom
+
+  recall:
+    description: "Retrieve knowledge. Search by query or fetch by node_id."
+    maps_to: recall
+
+  trace:
+    description: "Trace the provenance of a belief back to its sources."
+    maps_to: provenance
+
+  link:
+    description: "Create a typed relationship between nodes."
+    maps_to: link
+
+  reason:
+    description: "Record explicit reasoning steps for complex problems."
+    maps_to: intelligence
+
+  reflect:
+    description: "Record a meta-observation about your knowledge."
+    maps_to: meta
+
+  hypothesize:
+    description: "Form a tentative belief during reasoning. Use commit to finalize."
+    maps_to: belief
+
+  revise:
+    description: "Update a tentative hypothesis when new information arrives."
+    maps_to: update_belief
+
+  commit:
+    description: "Promote tentative hypotheses to permanent commitments."
+    maps_to: crystallize
+
+  patterns:
+    description: "Discover workflow templates for common tasks."
+    maps_to: skills
+    always_available: true
