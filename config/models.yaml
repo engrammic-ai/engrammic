@@ -10,8 +10,9 @@
 #   - economy: minimize spend, use flash everywhere
 #   - balanced: pro for reasoning, flash for fast tasks (default)
 #   - premium: pro everywhere for maximum quality
-#   - self_hosted: vLLM/TEI with top open-source models
-#   - self_hosted_budget: vLLM/TEI with smaller efficient models
+#   - hybrid: self-hosted embeddings (TEI) + Vertex LLMs
+#   - self_hosted: fully self-hosted with vLLM/TEI
+#   - self_hosted_budget: self-hosted with smaller efficient models
 
 tier: balanced
 
@@ -52,12 +53,26 @@ tiers:
       provider: vertex
       model: gemini-2.5-pro
 
-  # Self-hosted tiers (vLLM + Hugging Face TEI)
+  # Hybrid: self-hosted embeddings + Vertex LLMs
+  # Best of both: fast local embeddings, GC credits for LLMs
+  hybrid:
+    embeddings:
+      provider: tei  # Hugging Face Text Embeddings Inference
+      model: nomic-ai/nomic-embed-text-v1.5  # 137M params, 4x faster, Matryoshka
+      dimensions: 768
+    reasoning:
+      provider: vertex
+      model: gemini-2.5-pro
+    fast:
+      provider: vertex
+      model: gemini-2.5-flash
+
+  # Fully self-hosted (vLLM + TEI)
   # Requires: vLLM server, TEI server, GPU infrastructure
   self_hosted:
     embeddings:
-      provider: tei  # Hugging Face Text Embeddings Inference
-      model: BAAI/bge-m3  # Matryoshka dims, 768 for efficiency
+      provider: tei
+      model: nomic-ai/nomic-embed-text-v1.5  # 137M params, fast
       dimensions: 768
     reasoning:
       provider: vllm
@@ -69,7 +84,7 @@ tiers:
   self_hosted_budget:
     embeddings:
       provider: tei
-      model: nomic-ai/nomic-embed-text-v1.5  # 768 native, 137M params
+      model: nomic-ai/nomic-embed-text-v1.5
       dimensions: 768
     reasoning:
       provider: vllm
