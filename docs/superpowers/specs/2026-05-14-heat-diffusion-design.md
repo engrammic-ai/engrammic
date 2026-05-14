@@ -36,12 +36,14 @@ This builds on the existing `heat_asset` which tracks direct access, adding a di
 
 ### Materialization Thresholds
 
+Aligned with existing tier thresholds in `heat.py` (HOT >= 0.66, WARM >= 0.33):
+
 | Level | effective_heat | Meaning |
 |-------|----------------|---------|
-| FULL | > 0.6 | Hot path, pre-warm everything |
-| WARM | 0.25 - 0.6 | Likely accessed, prioritize background jobs |
-| STRUCTURE | 0.05 - 0.25 | Occasionally accessed |
-| MINIMAL | < 0.05 | Cold, defer expensive work |
+| FULL | >= 0.66 | Hot path, pre-warm everything |
+| WARM | 0.33 - 0.66 | Likely accessed, prioritize background jobs |
+| STRUCTURE | 0.1 - 0.33 | Occasionally accessed |
+| MINIMAL | < 0.1 | Cold, defer expensive work |
 
 ### Edge Type Propagation Weights
 
@@ -75,11 +77,20 @@ async def diffuse_heat(store, silo_id, config) -> DiffusionResult:
     # 1. Decay existing propagated heat
     await decay_propagated_heat(store, silo_id, config.propagated_heat_decay)
     
-    # 2. Fetch all hot nodes
-    hot_nodes = await fetch_hot_nodes(store, silo_id, config.hot_threshold)
+    # 2. Fetch all hot nodes (capped to prevent runaway processing)
+    hot_nodes = await fetch_hot_nodes(
+        store, silo_id, config.hot_threshold, limit=config.max_hot_nodes
+    )
     
-    # 3. BFS from each hot node
-    propagation_map: dict[str, float] = {}
+    # 3. Batch fetch subgraph: all edges within max_depth of hot nodes
+    #    Single Cypher query for performance
+    subgraph = await fetch_subgraph_from_hot_nodes(
+        store, silo_id, [n.id for n in hot_nodes], config.max_depth
+    )
+    adjacency = build_adjacency_list(subgraph)  # In-memory graph
+    
+    # 4. BFS from each hot node using in-memory adjacency
+    propagation_map: dict[str, float] = {}  # Uses max() for multi-source
     edge_traversals: Counter[str] = Counter()
     
     for hot_node in hot_nodes:
@@ -91,19 +102,18 @@ async def diffuse_heat(store, silo_id, config) -> DiffusionResult:
             if depth >= config.max_depth:
                 continue
             
-            neighbors = await fetch_neighbors(store, current_id, silo_id)
-            
-            for edge in neighbors:
+            for edge in adjacency.get(current_id, []):
                 if edge.target_id in visited:
                     continue
                 
                 edge_weight = config.edge_weights.get(edge.type, 0.4)
-                edge_heat = edge.heat or 0.5
+                edge_heat = edge.heat or 0.5  # From edge_heat asset
                 propagated = current_heat * config.hop_decay * edge_weight * edge_heat
                 
                 if propagated < config.min_threshold:
                     continue
                 
+                # max() handles multiple sources reaching same node
                 propagation_map[edge.target_id] = max(
                     propagation_map.get(edge.target_id, 0),
                     propagated
@@ -113,7 +123,7 @@ async def diffuse_heat(store, silo_id, config) -> DiffusionResult:
                 visited.add(edge.target_id)
                 frontier.append((edge.target_id, propagated, depth + 1))
     
-    # 4. Batch write
+    # 5. Batch write
     await batch_update_propagated_heat(store, silo_id, propagation_map)
     
     return DiffusionResult(
@@ -121,6 +131,19 @@ async def diffuse_heat(store, silo_id, config) -> DiffusionResult:
         nodes_updated=len(propagation_map),
         edge_traversals=dict(edge_traversals),
     )
+```
+
+**Subgraph fetch query (single round-trip):**
+
+```cypher
+MATCH (hot {silo_id: $silo_id})
+WHERE hot.id IN $hot_node_ids
+MATCH path = (hot)-[r*1..3]-(neighbor)
+WHERE neighbor.silo_id = $silo_id
+UNWIND relationships(path) AS rel
+WITH DISTINCT startNode(rel) AS src, endNode(rel) AS dst, rel
+RETURN src.id AS source_id, dst.id AS target_id, 
+       type(rel) AS edge_type, rel.edge_heat AS edge_heat
 ```
 
 ### Key Parameters
@@ -131,8 +154,10 @@ async def diffuse_heat(store, silo_id, config) -> DiffusionResult:
 | `hop_decay` | 0.7 | Heat multiplier per hop |
 | `max_depth` | 3 | Maximum BFS depth |
 | `min_threshold` | 0.01 | Stop propagating below this |
-| `max_propagation_per_source` | 500 | Cap nodes visited per hot source |
+| `max_hot_nodes` | 200 | Cap hot nodes processed per run (prevents runaway) |
 | `propagated_heat_decay` | 0.8 | Per-run decay of existing propagated_heat |
+
+**Note on edge_heat:** The algorithm uses `edge.heat` values computed by the existing `edge_heat` Dagster asset (`pipelines/assets/edge_heat.py`), which tracks edge traversal frequency with the same decay model as node heat.
 
 ### Validation Criteria
 
@@ -232,13 +257,14 @@ diffusion:
   hop_decay: 0.7
   max_depth: 3
   min_threshold: 0.01
-  max_propagation_per_source: 500
+  max_hot_nodes: 200
   propagated_heat_decay: 0.8
 
+  # Aligned with existing heat.py thresholds
   thresholds:
-    full: 0.6
-    warm: 0.25
-    structure: 0.05
+    full: 0.66
+    warm: 0.33
+    structure: 0.1
 
   edge_weights:
     CONTRADICTS: 0.95
