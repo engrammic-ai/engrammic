@@ -21,7 +21,7 @@ class SubgraphEdge:
         target_id: ID of the destination node.
         edge_type: Relationship type label (e.g. "RELATED_TO").
         edge_heat: Optional heat weight carried by the edge itself.
-            Treated as 1.0 when None.
+            Treated as 0.5 when None (spec: ``edge.heat or 0.5``).
     """
 
     source_id: str
@@ -98,7 +98,14 @@ def propagate_heat_bfs(
         propagated = current_heat * hop_decay * edge_weight * edge_heat
 
     where ``edge_weight`` is looked up from ``config.edge_weights`` (defaulting
-    to 0.4 for unknown types) and ``edge_heat`` defaults to 1.0 when None.
+    to 0.4 for unknown types) and ``edge_heat`` defaults to 0.5 when None
+    (spec: ``edge.heat or 0.5``).
+
+    Note: ``propagated_heat_decay`` (a separate attenuation applied to seed
+    node scores before BFS) is handled upstream in the Dagster asset layer.
+    By the time ``hot_nodes`` reaches this function their heat scores already
+    reflect that decay; this function only applies per-hop and per-edge
+    factors.
 
     When multiple sources reach the same node, the maximum propagated value is
     retained. BFS is pruned when the propagated heat falls below
@@ -115,6 +122,8 @@ def propagate_heat_bfs(
     if not hot_nodes:
         return DiffusionResult(hot_nodes=0, nodes_updated=0, edge_traversals={})
 
+    # Fallback weight for unrecognised edge types; intentionally mirrors the
+    # RELATED_TO weight from the default DiffusionConfig.edge_weights.
     default_edge_weight = 0.4
 
     # propagation_map accumulates the best (max) heat for each non-seed node
@@ -139,7 +148,7 @@ def propagate_heat_bfs(
 
         for edge in adjacency.get(node_id, []):
             edge_weight = config.edge_weights.get(edge.edge_type, default_edge_weight)
-            effective_edge_heat = edge.edge_heat if edge.edge_heat is not None else 1.0
+            effective_edge_heat = edge.edge_heat if edge.edge_heat is not None else 0.5
             propagated = current_heat * config.hop_decay * edge_weight * effective_edge_heat
 
             if propagated < config.min_threshold:

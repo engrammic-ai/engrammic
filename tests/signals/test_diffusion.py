@@ -110,8 +110,8 @@ def test_propagate_heat_bfs_decay() -> None:
     assert abs(result.propagation_map["b"] - 0.28) < 1e-9
 
 
-def test_propagate_heat_bfs_edge_heat_none_defaults_to_one() -> None:
-    """When edge_heat is None it should be treated as 1.0."""
+def test_propagate_heat_bfs_edge_heat_none_defaults_to_half() -> None:
+    """When edge_heat is None it should be treated as 0.5 (spec: edge.heat or 0.5)."""
     config = DiffusionConfig(
         hop_decay=0.7,
         min_threshold=0.01,
@@ -125,8 +125,8 @@ def test_propagate_heat_bfs_edge_heat_none_defaults_to_one() -> None:
     adj = build_adjacency_list(edges)
     result = propagate_heat_bfs(hot_nodes, adj, config)
 
-    # edge_heat defaults to 1.0 -> same as above
-    assert abs(result.propagation_map["b"] - 0.28) < 1e-9
+    # propagated = 1.0 * 0.7 (hop_decay) * 0.4 (edge_weight) * 0.5 (edge_heat default) = 0.14
+    assert abs(result.propagation_map["b"] - 0.14) < 1e-9
 
 
 def test_propagate_heat_bfs_uses_max_for_multiple_sources() -> None:
