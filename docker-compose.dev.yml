@@ -20,6 +20,7 @@ services:
       - POSTGRES_DATABASE=context_service
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz-otel-collector:4317
       - OTEL_SERVICE_NAME=engrammic
+      - GOOGLE_APPLICATION_CREDENTIALS=/home/engrammic/.config/gcloud/application_default_credentials.json
     volumes:
       - ~/.config/gcloud:/home/engrammic/.config/gcloud:ro
       - ./src:/app/src
