@@ -6,8 +6,7 @@ evaluation time.
 
 Chains:
 - sage_custodian: extraction -> embedding -> custodian_visit -> claim_to_fact_promotion -> custodian_finalize -> clustering -> proposal_detection (10min, pending silos only)
-- knowledge_pipeline: claim_to_fact_promotion -> pattern_detection -> llm_pattern_detection (hourly)
-- clustering_pipeline: clustering -> chain_stitch -> proposal_detection (daily 04:00)
+- sage_synthesizer: causal_transitivity -> pattern_detection -> llm_pattern_detection -> belief_synthesis -> belief_merge -> chain_stitch (30min, pending silos only)
 - heat_pipeline: heat -> edge_heat -> weak_link_review (daily 02:00)
 - maintenance: independent cleanup jobs (various schedules)
 """
@@ -125,53 +124,31 @@ def sage_custodian_schedule(
 
 
 @dg.schedule(
-    cron_schedule="0 * * * *",
-    name="knowledge_pipeline_schedule",
+    cron_schedule="*/30 * * * *",
+    name="sage_synthesizer_schedule",
     target=dg.AssetSelection.assets(
-        "claim_to_fact_promotion",
         "causal_transitivity",
         "pattern_detection",
         "llm_pattern_detection",
-    ),
-    description="Hourly knowledge promotion chain: fact promotion -> patterns -> LLM patterns.",
-    execution_timezone="UTC",
-)
-def knowledge_pipeline_schedule(
-    context: ScheduleEvaluationContext,
-    memgraph: MemgraphResource,
-) -> Iterator[dg.RunRequest]:
-    """Knowledge pipeline: promotion -> pattern detection -> LLM patterns."""
-    silo_ids = _fetch_silo_ids(memgraph)
-    for silo_id in silo_ids:
-        yield dg.RunRequest(
-            run_key=f"knowledge_pipeline:{silo_id}:{context.scheduled_execution_time.isoformat()}",
-            partition_key=silo_id,
-            tags={"dagster/concurrency_key": silo_id},
-        )
-
-
-@dg.schedule(
-    cron_schedule="0 4 * * *",
-    name="clustering_pipeline_schedule",
-    target=dg.AssetSelection.assets(
-        "clustering",
+        "belief_synthesis",
+        "belief_merge",
         "chain_stitch",
-        "proposal_detection",
     ),
-    description="Daily (04:00 UTC) clustering chain: clustering -> chain_stitch -> proposal_detection.",
+    description="SAGE Synthesizer (30 min): belief formation - facts to wisdom.",
     execution_timezone="UTC",
 )
-def clustering_pipeline_schedule(
+def sage_synthesizer_schedule(
     context: ScheduleEvaluationContext,
     memgraph: MemgraphResource,
 ) -> Iterator[dg.RunRequest]:
-    """Clustering pipeline: clustering -> chain_stitch -> proposal_detection."""
-    silo_ids = _fetch_silo_ids(memgraph)
+    """SAGE Synthesizer: belief formation for silos with pending synthesis work."""
+    silo_ids = _fetch_silos_with_pending_work(memgraph, _SILOS_WITH_PENDING_SYNTHESIZER_WORK)
+
     for silo_id in silo_ids:
         yield dg.RunRequest(
-            run_key=f"clustering_pipeline:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            run_key=f"sage_synthesizer:{silo_id}:{context.scheduled_execution_time.isoformat()}",
             partition_key=silo_id,
-            tags={"dagster/concurrency_key": silo_id},
+            tags={"sage_job": "synthesizer", "dagster/concurrency_key": silo_id},
         )
 
 
@@ -339,8 +316,7 @@ def groundskeeper_gc_schedule(context: ScheduleEvaluationContext) -> dg.RunReque
 all_schedules: list[Any] = [
     # Core pipelines
     sage_custodian_schedule,
-    knowledge_pipeline_schedule,
-    clustering_pipeline_schedule,
+    sage_synthesizer_schedule,
     heat_pipeline_schedule,
     # Maintenance
     reasoning_compaction_schedule,
@@ -355,8 +331,7 @@ all_schedules: list[Any] = [
 __all__ = [
     "all_schedules",
     "sage_custodian_schedule",
-    "knowledge_pipeline_schedule",
-    "clustering_pipeline_schedule",
+    "sage_synthesizer_schedule",
     "heat_pipeline_schedule",
     "reasoning_compaction_schedule",
     "retention_schedule",
