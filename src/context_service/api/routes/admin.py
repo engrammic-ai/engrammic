@@ -6,7 +6,7 @@ exposed in production without authentication.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 import structlog
@@ -199,7 +199,7 @@ async def admin_seed_proposal(body: SeedProposalRequest, request: Request) -> Se
     Enable with FEATURES__ENABLE_TEST_ENDPOINTS=true in environment.
     """
     import uuid
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     if not hasattr(request.app.state, "memgraph"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
@@ -207,7 +207,7 @@ async def admin_seed_proposal(body: SeedProposalRequest, request: Request) -> Se
     client: Any = request.app.state.memgraph
 
     proposal_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     # Create ProposedBelief node in Memgraph
     query = """

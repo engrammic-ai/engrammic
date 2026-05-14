@@ -1,0 +1,29 @@
+diffusion:
+  enabled: true
+  hot_threshold: 0.5
+  hop_decay: 0.7
+  max_depth: 3
+  min_threshold: 0.01
+  max_hot_nodes: 200
+  propagated_heat_decay: 0.8
+
+  thresholds:
+    full: 0.66
+    warm: 0.33
+    structure: 0.1
+
+  edge_weights:
+    CONTRADICTS: 0.95
+    SUPPORTS: 0.90
+    DEPENDS_ON: 0.85
+    CITES: 0.80
+    CAUSES: 0.80
+    DERIVES_FROM: 0.75
+    CORROBORATES: 0.70
+    PREVENTS: 0.70
+    RELATED_TO: 0.40
+
+prewarm:
+  enabled: true
+  weak_links_priority_boost: 1.5
+  skip_minimal_pattern_detection: true

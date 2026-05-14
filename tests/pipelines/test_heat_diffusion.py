@@ -2,14 +2,13 @@
 
 import pytest
 
+from context_service.config.diffusion import DiffusionConfig
 from context_service.signals.diffusion import (
-    DiffusionResult,
     HotNode,
     SubgraphEdge,
     build_adjacency_list,
     propagate_heat_bfs,
 )
-from context_service.config.diffusion import DiffusionConfig
 
 
 class TestHeatDiffusionIntegration:
