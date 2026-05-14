@@ -5,7 +5,7 @@ Schedules yield one RunRequest per active silo by querying Memgraph at
 evaluation time.
 
 Chains:
-- custodian_pipeline: custodian_visit -> custodian_finalize (15min)
+- sage_custodian: extraction -> embedding -> custodian_visit -> claim_to_fact_promotion -> custodian_finalize -> clustering -> proposal_detection (10min, pending silos only)
 - knowledge_pipeline: claim_to_fact_promotion -> pattern_detection -> llm_pattern_detection (hourly)
 - clustering_pipeline: clustering -> chain_stitch -> proposal_detection (daily 04:00)
 - heat_pipeline: heat -> edge_heat -> weak_link_review (daily 02:00)
@@ -95,23 +95,32 @@ def _fetch_silos_with_pending_work(
 
 
 @dg.schedule(
-    cron_schedule="*/15 * * * *",
-    name="custodian_pipeline_schedule",
-    target=dg.AssetSelection.assets("custodian_visit", "custodian_finalize"),
-    description="Every 15 minutes: custodian visit + finalize chain per active silo.",
+    cron_schedule="*/10 * * * *",
+    name="sage_custodian_schedule",
+    target=dg.AssetSelection.assets(
+        "extraction",
+        "embedding",
+        "custodian_visit",
+        "claim_to_fact_promotion",
+        "custodian_finalize",
+        "clustering",
+        "proposal_detection",
+    ),
+    description="SAGE Custodian (10 min): ingestion pipeline - extraction through proposal detection.",
     execution_timezone="UTC",
 )
-def custodian_pipeline_schedule(
+def sage_custodian_schedule(
     context: ScheduleEvaluationContext,
     memgraph: MemgraphResource,
 ) -> Iterator[dg.RunRequest]:
-    """Custodian pipeline: visit -> finalize."""
-    silo_ids = _fetch_silo_ids(memgraph)
+    """SAGE Custodian: ingestion pipeline for silos with pending documents."""
+    silo_ids = _fetch_silos_with_pending_work(memgraph, _SILOS_WITH_PENDING_CUSTODIAN_WORK)
+
     for silo_id in silo_ids:
         yield dg.RunRequest(
-            run_key=f"custodian_pipeline:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            run_key=f"sage_custodian:{silo_id}:{context.scheduled_execution_time.isoformat()}",
             partition_key=silo_id,
-            tags={"dagster/concurrency_key": silo_id},
+            tags={"sage_job": "custodian", "dagster/concurrency_key": silo_id},
         )
 
 
@@ -329,7 +338,7 @@ def groundskeeper_gc_schedule(context: ScheduleEvaluationContext) -> dg.RunReque
 
 all_schedules: list[Any] = [
     # Core pipelines
-    custodian_pipeline_schedule,
+    sage_custodian_schedule,
     knowledge_pipeline_schedule,
     clustering_pipeline_schedule,
     heat_pipeline_schedule,
@@ -345,7 +354,7 @@ all_schedules: list[Any] = [
 
 __all__ = [
     "all_schedules",
-    "custodian_pipeline_schedule",
+    "sage_custodian_schedule",
     "knowledge_pipeline_schedule",
     "clustering_pipeline_schedule",
     "heat_pipeline_schedule",
