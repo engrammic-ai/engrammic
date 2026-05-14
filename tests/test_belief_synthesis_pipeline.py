@@ -40,17 +40,11 @@ def _load_direct(dotted: str) -> Any:
 _asset_mod = _load_direct("context_service.pipelines.assets.belief_synthesis")
 belief_synthesis_asset: dg.AssetsDefinition = _asset_mod.belief_synthesis_asset
 
-from context_service.pipelines.sensors.belief_synthesis import (  # noqa: E402
-    _LIST_DENSE_CLUSTERS_WITHOUT_BELIEF,
-    belief_synthesis_sensor,
-)
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 _belief_synthesis_fn = belief_synthesis_asset.op.compute_fn.decorated_fn
-_sensor_raw_fn = belief_synthesis_sensor._raw_fn  # type: ignore[attr-defined]
 
 
 def _make_asset_context(
@@ -60,13 +54,6 @@ def _make_asset_context(
     ctx = MagicMock(spec=dg.AssetExecutionContext)
     ctx.partition_key = silo_id
     ctx.run_tags = {"cluster_id": cluster_id}
-    ctx.log = MagicMock()
-    return ctx
-
-
-def _make_sensor_context(cursor: str | None = None) -> dg.SensorEvaluationContext:
-    ctx = MagicMock(spec=dg.SensorEvaluationContext)
-    ctx.cursor = cursor
     ctx.log = MagicMock()
     return ctx
 
@@ -141,109 +128,6 @@ def test_belief_synthesis_asset_has_retry_policy() -> None:
     assert retry.max_retries == 2
 
 
-# ---------------------------------------------------------------------------
-# Sensor tests
-# ---------------------------------------------------------------------------
-
-
-def test_belief_synthesis_sensor_no_triggers_returns_empty() -> None:
-    ctx = _make_sensor_context()
-    memgraph_res = MagicMock()
-
-    with patch(
-        "context_service.pipelines.sensors.belief_synthesis.asyncio.run",
-        side_effect=lambda _coro: [],
-    ):
-        result = _sensor_raw_fn(ctx, memgraph=memgraph_res)
-
-    assert isinstance(result, dg.SensorResult)
-    assert result.run_requests == []
-
-
-def test_belief_synthesis_sensor_emits_run_request_per_cluster() -> None:
-    ctx = _make_sensor_context()
-    memgraph_res = MagicMock()
-
-    triggers = [
-        {"silo_id": "silo-1", "cluster_id": "c-1", "fact_count": 5},
-        {"silo_id": "silo-1", "cluster_id": "c-2", "fact_count": 4},
-    ]
-
-    with patch(
-        "context_service.pipelines.sensors.belief_synthesis.asyncio.run",
-        return_value=triggers,
-    ):
-        result = _sensor_raw_fn(ctx, memgraph=memgraph_res)
-
-    assert len(result.run_requests) == 2
-    run_keys = {r.run_key for r in result.run_requests}
-    assert "belief_synthesis:silo-1:c-1" in run_keys
-    assert "belief_synthesis:silo-1:c-2" in run_keys
-
-
-def test_belief_synthesis_sensor_tags_cluster_id_on_run_request() -> None:
-    ctx = _make_sensor_context()
-    memgraph_res = MagicMock()
-
-    triggers = [{"silo_id": "silo-1", "cluster_id": "c-99", "fact_count": 7}]
-
-    with patch(
-        "context_service.pipelines.sensors.belief_synthesis.asyncio.run",
-        return_value=triggers,
-    ):
-        result = _sensor_raw_fn(ctx, memgraph=memgraph_res)
-
-    req = result.run_requests[0]
-    assert req.tags.get("cluster_id") == "c-99"
-    assert req.partition_key == "silo-1"
-
-
-def test_belief_synthesis_sensor_cursor_records_seen_clusters() -> None:
-    ctx = _make_sensor_context()
-    memgraph_res = MagicMock()
-
-    triggers = [{"silo_id": "silo-x", "cluster_id": "c-seen", "fact_count": 3}]
-
-    with patch(
-        "context_service.pipelines.sensors.belief_synthesis.asyncio.run",
-        return_value=triggers,
-    ):
-        result = _sensor_raw_fn(ctx, memgraph=memgraph_res)
-
-    import json
-
-    cursor_data = json.loads(result.cursor)
-    assert "c-seen" in cursor_data.get("silo-x", [])
-
-
-def test_belief_synthesis_sensor_skips_already_seen_clusters() -> None:
-    """Clusters already recorded in the cursor must not generate new run requests."""
-    import json
-
-    existing_cursor = json.dumps({"silo-1": ["c-old"]})
-    ctx = _make_sensor_context(cursor=existing_cursor)
-    memgraph_res = MagicMock()
-
-    with patch(
-        "context_service.pipelines.sensors.belief_synthesis.asyncio.run",
-        return_value=[],
-    ):
-        result = _sensor_raw_fn(ctx, memgraph=memgraph_res)
-
-    assert result.run_requests == []
-
-
-def test_belief_synthesis_sensor_query_threshold() -> None:
-    """The density query references $min_facts and excludes covered clusters."""
-    from context_service.engine.synthesis import MIN_FACTS_FOR_BELIEF
-
-    assert ">= $min_facts" in _LIST_DENSE_CLUSTERS_WITHOUT_BELIEF
-    assert "SYNTHESIZED_FROM" in _LIST_DENSE_CLUSTERS_WITHOUT_BELIEF
-    assert MIN_FACTS_FOR_BELIEF == 3
-
-
-def test_belief_synthesis_sensor_registered_in_all_sensors() -> None:
-    from context_service.pipelines.sensors import all_sensors
-
-    names = [s.name for s in all_sensors]
-    assert "belief_synthesis_sensor" in names
+# Sensor tests removed: belief_synthesis_sensor was deleted as part of the
+# SAGE schedule consolidation. Belief synthesis is now triggered by
+# sage_synthesizer_schedule rather than a dedicated sensor.
