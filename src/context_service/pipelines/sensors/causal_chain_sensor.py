@@ -12,63 +12,89 @@ from __future__ import annotations
 import dagster as dg
 
 
-@dg.asset_sensor(
-    asset_key=dg.AssetKey("claim_to_fact_promotion"),
+@dg.sensor(
     name="causal_transitivity_sensor",
+    asset_selection=dg.AssetSelection.assets("causal_transitivity"),
     minimum_interval_seconds=60,
     description=(
         "Triggers causal_transitivity for the same silo partition whenever "
         "claim_to_fact_promotion materializes."
     ),
 )
-def causal_transitivity_sensor(
-    context,
-    asset_event: dg.EventLogEntry,
-) -> dg.RunRequest | None:
-    """Yield a RunRequest for causal_transitivity on each claim_to_fact_promotion materialization."""
-    partition_key = asset_event.dagster_event.partition if asset_event.dagster_event else None
-    if not partition_key:
-        context.log.warning(
-            "causal_transitivity_sensor: no partition key on materialization event, skipping"
+def causal_transitivity_sensor(context) -> dg.SensorResult:
+    """Yield RunRequests for causal_transitivity on new claim_to_fact_promotion materializations."""
+    from dagster import AssetKey, DagsterEventType
+
+    asset_key = AssetKey("claim_to_fact_promotion")
+    cursor = context.cursor or "0"
+    events = context.instance.get_event_records(
+        dg.EventRecordsFilter(
+            event_type=DagsterEventType.ASSET_MATERIALIZATION,
+            asset_key=asset_key,
+            after_cursor=int(cursor) if cursor.isdigit() else 0,
+        ),
+        limit=100,
+    )
+
+    run_requests: list[dg.RunRequest] = []
+    max_cursor = cursor
+
+    for event in events:
+        partition_key = event.partition_key
+        if not partition_key:
+            continue
+
+        run_requests.append(
+            dg.RunRequest(
+                run_key=f"causal_transitivity:{partition_key}:{event.storage_id}",
+                partition_key=partition_key,
+                tags={"dagster/concurrency_key": partition_key},
+            )
         )
-        return None
+        max_cursor = str(max(int(max_cursor) if max_cursor.isdigit() else 0, event.storage_id))
 
-    context.log.info(
-        f"causal_transitivity_sensor: triggering causal_transitivity for partition={partition_key}"
-    )
-    return dg.RunRequest(
-        run_key=f"causal_transitivity:{partition_key}:{asset_event.run_id}",
-        partition_key=partition_key,
-        asset_selection=[dg.AssetKey("causal_transitivity")],
-        tags={"dagster/concurrency_key": partition_key},
-    )
+    return dg.SensorResult(run_requests=run_requests, cursor=max_cursor)
 
 
-@dg.asset_sensor(
-    asset_key=dg.AssetKey("custodian_finalize"),
+@dg.sensor(
     name="chain_stitch_sensor",
+    asset_selection=dg.AssetSelection.assets("chain_stitch"),
     minimum_interval_seconds=60,
     description=(
         "Triggers chain_stitch for the same silo partition whenever "
         "custodian_finalize materializes."
     ),
 )
-def chain_stitch_sensor(
-    context,
-    asset_event: dg.EventLogEntry,
-) -> dg.RunRequest | None:
-    """Yield a RunRequest for chain_stitch on each custodian_finalize materialization."""
-    partition_key = asset_event.dagster_event.partition if asset_event.dagster_event else None
-    if not partition_key:
-        context.log.warning(
-            "chain_stitch_sensor: no partition key on materialization event, skipping"
-        )
-        return None
+def chain_stitch_sensor(context) -> dg.SensorResult:
+    """Yield RunRequests for chain_stitch on new custodian_finalize materializations."""
+    from dagster import AssetKey, DagsterEventType
 
-    context.log.info(f"chain_stitch_sensor: triggering chain_stitch for partition={partition_key}")
-    return dg.RunRequest(
-        run_key=f"chain_stitch:{partition_key}:{asset_event.run_id}",
-        partition_key=partition_key,
-        asset_selection=[dg.AssetKey("chain_stitch")],
-        tags={"dagster/concurrency_key": partition_key},
+    asset_key = AssetKey("custodian_finalize")
+    cursor = context.cursor or "0"
+    events = context.instance.get_event_records(
+        dg.EventRecordsFilter(
+            event_type=DagsterEventType.ASSET_MATERIALIZATION,
+            asset_key=asset_key,
+            after_cursor=int(cursor) if cursor.isdigit() else 0,
+        ),
+        limit=100,
     )
+
+    run_requests: list[dg.RunRequest] = []
+    max_cursor = cursor
+
+    for event in events:
+        partition_key = event.partition_key
+        if not partition_key:
+            continue
+
+        run_requests.append(
+            dg.RunRequest(
+                run_key=f"chain_stitch:{partition_key}:{event.storage_id}",
+                partition_key=partition_key,
+                tags={"dagster/concurrency_key": partition_key},
+            )
+        )
+        max_cursor = str(max(int(max_cursor) if max_cursor.isdigit() else 0, event.storage_id))
+
+    return dg.SensorResult(run_requests=run_requests, cursor=max_cursor)
