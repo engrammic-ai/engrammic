@@ -1,10 +1,10 @@
 # tests/pipelines/test_auto_tagging_asset.py
 import json
 
+from context_service.db.queries import BATCH_UPDATE_NODE_TAGS
 from context_service.pipelines.assets.auto_tagging import (
     _BATCH_SIZE,
     _FETCH_UNTAGGED_CYPHER,
-    _UPDATE_NODE_TAGS_CYPHER,
     _build_prompt,
     _parse_tag_response,
 )
@@ -20,9 +20,9 @@ def test_fetch_cypher_filters_untagged():
     assert "LIMIT" in _FETCH_UNTAGGED_CYPHER
 
 
-def test_update_cypher_sets_tags_and_timestamp():
-    assert "n.tags = $tags" in _UPDATE_NODE_TAGS_CYPHER
-    assert "n.auto_tagged_at = $auto_tagged_at" in _UPDATE_NODE_TAGS_CYPHER
+def test_batch_update_cypher_sets_tags_and_timestamp():
+    assert "n.tags = u.tags" in BATCH_UPDATE_NODE_TAGS
+    assert "n.auto_tagged_at = u.now" in BATCH_UPDATE_NODE_TAGS
 
 
 def test_build_prompt_includes_node_ids():

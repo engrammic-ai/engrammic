@@ -30,6 +30,8 @@ def _require_admin_key(
     settings = get_settings()
     configured_key = settings.security.admin_api_key
     if configured_key is None:
+        if settings.is_production:
+            raise HTTPException(status_code=503, detail="admin_api_key required in production")
         return
     if credentials is None or credentials.credentials != configured_key.get_secret_value():
         raise HTTPException(status_code=401, detail="Invalid or missing admin API key")

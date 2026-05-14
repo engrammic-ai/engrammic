@@ -733,6 +733,40 @@ RETURN f.id AS fact_id, f.content AS content,
 ORDER BY coalesce(f.confidence, 1.0) DESC
 """
 
+# Batch version of GET_FACTS_IN_CLUSTER for N+1 fix (P-01).
+BATCH_GET_FACTS_BY_CLUSTERS = """
+UNWIND $cluster_ids AS cid
+MATCH (f:Fact)-[:MEMBER_OF]->(c:Cluster {id: cid, silo_id: $silo_id})
+RETURN c.id AS cluster_id, f.id AS fact_id, f.content AS content,
+       coalesce(f.confidence, 1.0) AS confidence, f.valid_from AS valid_from
+ORDER BY c.id, coalesce(f.confidence, 1.0) DESC
+"""
+
+# Batch version of GET_CHAINS_FOR_COMMITMENT for N+1 fix (P-02).
+BATCH_GET_CHAINS_BY_COMMITMENTS = """
+UNWIND $commitment_ids AS cid
+MATCH (chain:ReasoningChain)-[:CRYSTALLIZED_INTO]->(c {id: cid, silo_id: $silo_id})
+WHERE chain.status = 'published' AND chain.silo_id = $silo_id
+RETURN c.id AS commitment_id, chain.id AS id,
+       chain.produced_by_agent_id AS produced_by_agent_id,
+       COALESCE(chain.confidence, 0.5) AS confidence
+"""
+
+# Batch tag update for N+1 fix (P-03).
+BATCH_UPDATE_NODE_TAGS = """
+UNWIND $updates AS u
+MATCH (n)
+WHERE id(n) = u.node_id
+SET n.tags = u.tags, n.auto_tagged_at = u.now
+"""
+
+# Batch mark documents as extracted for N+1 fix (P-04).
+BATCH_MARK_DOCS_EXTRACTED = """
+UNWIND $doc_ids AS did
+MATCH (d:Document {id: did, silo_id: $silo_id})
+SET d.extracted_at = $extracted_at
+"""
+
 # Create a :Belief node. Fact edges created separately via CREATE_BELIEF_FACT_EDGES.
 CREATE_BELIEF_FROM_FACTS = """
 MERGE (b:Belief {id: $belief_id, silo_id: $silo_id})

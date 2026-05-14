@@ -330,6 +330,10 @@ class LLMConfig(BaseModel):
     model: str = ""
     api_url: str | None = None
     api_key: SecretStr | None = None
+    default_timeout_seconds: float = Field(
+        default=60.0,
+        description="Default timeout for LLM API calls when caller passes None.",
+    )
     providers: dict[str, ProviderConfig] = Field(
         default_factory=lambda: {
             "anthropic": ProviderConfig(api_url="https://api.anthropic.com/v1/messages"),

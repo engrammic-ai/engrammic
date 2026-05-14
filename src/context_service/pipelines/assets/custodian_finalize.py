@@ -51,10 +51,10 @@ def custodian_finalize(
     t0 = time.monotonic()
 
     async def _run() -> tuple[int, int]:
+        from collections import defaultdict
+
         from context_service.custodian.consensus_promotion import promote_consensus_to_finding
-        from context_service.custodian.handlers.consensus import (
-            GET_CHAINS_FOR_COMMITMENT,
-        )
+        from context_service.db.queries import BATCH_GET_CHAINS_BY_COMMITMENTS
         from context_service.stores import MemgraphClient
 
         driver = await memgraph.driver()
@@ -68,24 +68,33 @@ def custodian_finalize(
         if not rows:
             return 0, 0
 
+        commitment_ids = [str(row["commitment_id"]) for row in rows]
+
+        # Batch fetch all chains for all commitments (N+1 fix)
+        chain_rows = await mg_raw.execute_query(
+            BATCH_GET_CHAINS_BY_COMMITMENTS,
+            {"commitment_ids": commitment_ids, "silo_id": silo_id},
+        )
+
+        # Group chains by commitment_id client-side
+        chains_by_commitment: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for c in chain_rows:
+            cid = str(c.get("commitment_id", ""))
+            chains_by_commitment[cid].append(c)
+
         clusters_processed = 0
         findings_created = 0
 
-        for row in rows:
-            commitment_id = str(row["commitment_id"])
-
-            chain_rows = await mg_raw.execute_query(
-                GET_CHAINS_FOR_COMMITMENT,
-                {"commitment_id": commitment_id, "silo_id": silo_id},
-            )
-            if not chain_rows:
+        for commitment_id in commitment_ids:
+            commitment_chains = chains_by_commitment.get(commitment_id, [])
+            if not commitment_chains:
                 continue
 
-            distinct_agents = len({c["produced_by_agent_id"] for c in chain_rows})
+            distinct_agents = len({c["produced_by_agent_id"] for c in commitment_chains})
             if distinct_agents < 2:
                 continue
 
-            chain_ids = [str(c["id"]) for c in chain_rows]
+            chain_ids = [str(c["id"]) for c in commitment_chains]
             try:
                 await promote_consensus_to_finding(
                     memgraph=mg_store,

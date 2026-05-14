@@ -5,6 +5,12 @@ from __future__ import annotations
 from typing import Any
 
 import litellm
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from context_service.config.logging import get_logger
 from context_service.llm.base import LLMProvider, Usage, robust_json_loads
@@ -13,6 +19,19 @@ logger = get_logger(__name__)
 
 # Suppress litellm's verbose logging
 litellm.suppress_debug_info = True
+
+# Retry decorator for transient LLM API errors (429/503)
+_llm_retry = retry(
+    retry=retry_if_exception_type(
+        (
+            litellm.RateLimitError,  # type: ignore[attr-defined]
+            litellm.ServiceUnavailableError,  # type: ignore[attr-defined]
+        )
+    ),
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=1, max=10),
+    reraise=True,
+)
 
 
 class LiteLLMError(Exception):
@@ -44,13 +63,18 @@ class LiteLLMProvider(LLMProvider):
         timeout: float | None = None,
     ) -> dict[str, Any]:
         """Build kwargs for litellm calls."""
+        from context_service.config.settings import get_settings
+
         kwargs: dict[str, Any] = {}
         if self._api_key:
             kwargs["api_key"] = self._api_key
         if self._api_base:
             kwargs["api_base"] = self._api_base
-        if timeout:
+        # Apply default timeout from settings when caller passes None
+        if timeout is not None:
             kwargs["timeout"] = timeout
+        else:
+            kwargs["timeout"] = get_settings().llm.default_timeout_seconds
         kwargs.update(self._extra_kwargs)
         return kwargs
 
@@ -78,13 +102,17 @@ class LiteLLMProvider(LLMProvider):
         if temperature is not None:
             kwargs["temperature"] = temperature
 
-        try:
-            response = await litellm.acompletion(
+        @_llm_retry
+        async def _call() -> Any:
+            return await litellm.acompletion(
                 model=self._model,
                 messages=messages,
                 max_tokens=max_tokens,
                 **kwargs,
             )
+
+        try:
+            response = await _call()
         except Exception as e:
             logger.error("litellm_completion_failed", model=self._model, error=str(e))
             raise LiteLLMError(f"LiteLLM completion failed: {e}") from e
@@ -120,13 +148,17 @@ class LiteLLMProvider(LLMProvider):
         else:
             kwargs["response_format"] = {"type": "json_object"}
 
-        try:
-            response = await litellm.acompletion(
+        @_llm_retry
+        async def _call() -> Any:
+            return await litellm.acompletion(
                 model=self._model,
                 messages=messages,
                 max_tokens=max_tokens,
                 **kwargs,
             )
+
+        try:
+            response = await _call()
         except Exception as e:
             logger.error("litellm_extract_failed", model=self._model, error=str(e))
             raise LiteLLMError(f"LiteLLM extraction failed: {e}") from e
