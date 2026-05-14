@@ -1,24 +1,20 @@
 <?xml version="1.0"?>
 <clickhouse>
-    <remote_servers>
-        <cluster>
-            <shard>
-                <replica>
-                    <host>clickhouse</host>
-                    <port>9000</port>
-                </replica>
-            </shard>
-        </cluster>
-    </remote_servers>
-
     <zookeeper>
-        <node>
+        <node index="1">
             <host>signoz-zookeeper</host>
             <port>2181</port>
         </node>
     </zookeeper>
 
-    <distributed_ddl>
-        <path>/clickhouse/task_queue/ddl</path>
-    </distributed_ddl>
+    <remote_servers>
+        <cluster>
+            <shard>
+                <replica>
+                    <host>signoz-clickhouse</host>
+                    <port>9000</port>
+                </replica>
+            </shard>
+        </cluster>
+    </remote_servers>
 </clickhouse>
