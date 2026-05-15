@@ -78,7 +78,7 @@ class TestClaimDedup:
         ev_node = await service.store(
             scope=scope,
             content="Evidence node for dedup test",
-            node_type="Observation",
+            node_type="Passage",
         )
         ev_ref = f"node:{ev_node.id}"
 
