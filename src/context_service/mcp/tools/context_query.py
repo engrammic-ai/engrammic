@@ -19,7 +19,7 @@ from context_service.mcp.server import (
     get_silo_service,
 )
 from context_service.models.mcp import Layer, QueryFilters
-from context_service.reranking import LiteLLMReranker
+from context_service.reranking import LiteLLMReranker, QueryExpander, is_hard_query
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 from context_service.signals import emit_access_event
@@ -57,6 +57,40 @@ async def _apply_reranking(
 
     id_to_result = {str(r.node_id): r for r in results}
     return [id_to_result[rr.node_id] for rr in reranked if rr.node_id in id_to_result]
+
+
+async def _maybe_expand_query(
+    query: str,
+    settings: Any,
+    redis: Any,
+) -> tuple[str, bool]:
+    """Expand query if it's a hard query and expansion is enabled.
+
+    Returns:
+        Tuple of (effective_query, was_expanded)
+    """
+    if not settings.reranking.expand_hard_queries:
+        return query, False
+
+    if not is_hard_query(query):
+        return query, False
+
+    if redis is None:
+        logger.warning("query_expansion_skipped", reason="redis_unavailable")
+        return query, False
+
+    models_config = load_models_config()
+    expander_model = models_config.litellm_expander_model
+    if expander_model is None:
+        return query, False
+
+    expander = QueryExpander(
+        llm_model=expander_model,
+        redis=redis,
+        cache_ttl_seconds=settings.reranking.expansion_cache_ttl_days * 86400,
+    )
+    expanded = await expander.expand(query)
+    return expanded, expanded != query
 
 
 async def _context_query(
@@ -108,6 +142,9 @@ async def _context_query(
     scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
     silo_service = get_silo_service()
 
+    settings = get_settings()
+    redis = get_redis()
+
     start = time.perf_counter()
 
     if as_of_dt is not None:
@@ -132,9 +169,14 @@ async def _context_query(
             response["warning"] = "as_of is in the future; returning current state"
         return response
 
+    # Query expansion for hard queries
+    effective_query, was_expanded = await _maybe_expand_query(query, settings, redis)
+    if was_expanded:
+        logger.info("query_expanded", original=query, expanded=effective_query)
+
     results = await ctx_svc.query(
         scope=scope,
-        query=query,
+        query=effective_query,
         layers=valid_layers,
         filters=parsed_filters,
         top_k=top_k,
@@ -146,10 +188,8 @@ async def _context_query(
     record_mcp_tool("context_query", elapsed_s * 1000)
     elapsed_ms = int(elapsed_s * 1000)
 
-    settings = get_settings()
-    results = await _apply_reranking(query, results, settings)
+    results = await _apply_reranking(effective_query, results, settings)
 
-    redis = get_redis()
     if redis is not None and results:
         try:
             await asyncio.wait_for(

@@ -121,6 +121,15 @@ class TestContextQueryReranking:
         assert output == [mock_result]
 
     @pytest.mark.asyncio
+    async def test_hard_query_triggers_expansion(self) -> None:
+        """Test that hard queries trigger LLM expansion."""
+        from context_service.reranking import is_hard_query
+
+        # Verify the query is detected as hard
+        assert is_hard_query("what was rejected?") is True
+        assert is_hard_query("meeting notes") is False
+
+    @pytest.mark.asyncio
     async def test_apply_reranking_skips_when_no_model(self) -> None:
         """Test that _apply_reranking returns original order when no reranker model configured."""
         mock_results = [
