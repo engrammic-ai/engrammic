@@ -106,9 +106,6 @@ class RerankingSettings(BaseModel):
     expand_hard_queries: bool = Field(
         default=True, description="Enable LLM query expansion for hard queries"
     )
-    rerank_pool_size: int = Field(
-        default=50, description="Number of candidates to retrieve before reranking"
-    )
     expansion_cache_ttl_days: int = Field(
         default=7, description="TTL for cached query expansions in Redis"
     )

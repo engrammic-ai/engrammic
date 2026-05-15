@@ -22,8 +22,13 @@ class RerankResult:
 class LiteLLMReranker:
     """Cross-encoder reranking via LiteLLM."""
 
-    def __init__(self, model: str = "vertex_ai/semantic-ranker-default@latest") -> None:
+    def __init__(
+        self,
+        model: str = "vertex_ai/semantic-ranker-default@latest",
+        timeout_seconds: float = 2.0,
+    ) -> None:
         self._model = model
+        self._timeout = timeout_seconds
 
     async def rerank(
         self,
@@ -57,6 +62,7 @@ class LiteLLMReranker:
                 query=query,
                 documents=documents,
                 top_n=top_k,
+                timeout=self._timeout,
             )
             return [
                 RerankResult(

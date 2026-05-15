@@ -51,7 +51,10 @@ async def _apply_reranking(
     if reranker_model is None:
         return results
 
-    reranker = LiteLLMReranker(model=reranker_model)
+    reranker = LiteLLMReranker(
+        model=reranker_model,
+        timeout_seconds=settings.reranking.reranker_timeout_seconds,
+    )
     documents = [r.content or "" for r in results]
     node_ids = [str(r.node_id) for r in results]
 

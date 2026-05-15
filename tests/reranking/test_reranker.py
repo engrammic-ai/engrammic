@@ -53,6 +53,7 @@ class TestLiteLLMReranker:
                 query="what was rejected?",
                 documents=["doc zero", "doc one", "doc two"],
                 top_n=3,
+                timeout=2.0,
             )
 
     @pytest.mark.asyncio
