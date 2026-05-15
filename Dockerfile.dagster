@@ -24,6 +24,7 @@ COPY --from=builder --chown=dagster:dagster /primitives /primitives
 
 COPY --chown=dagster:dagster context-service/pyproject.toml context-service/uv.lock context-service/README.md context-service/dagster.yaml ./
 COPY --chown=dagster:dagster context-service/src/ /app/src/
+COPY context-service/scripts/entrypoint.sh /entrypoint.sh
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app/src"
@@ -31,3 +32,5 @@ ENV PYTHONUNBUFFERED=1
 ENV DAGSTER_HOME=/app
 
 USER dagster
+
+ENTRYPOINT ["/entrypoint.sh"]

@@ -17,12 +17,11 @@ services:
       - POSTGRES_HOST=postgres
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz-otel-collector:4317
       - OTEL_SERVICE_NAME=engrammic
-      - GOOGLE_APPLICATION_CREDENTIALS=/home/engrammic/.config/gcloud/application_default_credentials.json
       # LiteLLM Vertex AI (reranker, embeddings)
       - VERTEX_PROJECT=${VERTEX_PROJECT:-}
       - VERTEX_LOCATION=${VERTEX_LOCATION:-europe-north1}
     volumes:
-      - ~/.config/gcloud:/home/engrammic/.config/gcloud:ro
+      - ~/.config/gcloud:/mnt/gcloud:ro
       - ./src:/app/src
       - ./pyproject.toml:/app/pyproject.toml:ro
       - ./config:/app/config:ro
@@ -156,12 +155,11 @@ services:
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
       - HOME=/home/dagster
-      - GOOGLE_APPLICATION_CREDENTIALS=/home/dagster/.config/gcloud/application_default_credentials.json
     volumes:
       - ./src:/app/src
       - ./dagster.yaml:/app/dagster.yaml:ro
       - ./config:/app/config:ro
-      - ~/.config/gcloud:/home/dagster/.config/gcloud:ro
+      - ~/.config/gcloud:/mnt/gcloud:ro
     depends_on:
       - postgres
       - memgraph
@@ -192,13 +190,12 @@ services:
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
       - HOME=/home/dagster
-      - GOOGLE_APPLICATION_CREDENTIALS=/home/dagster/.config/gcloud/application_default_credentials.json
     volumes:
       - ./src:/app/src
       - ./workspace.yaml:/app/workspace.yaml:ro
       - ./dagster.yaml:/app/dagster.yaml:ro
       - ./config:/app/config:ro
-      - ~/.config/gcloud:/home/dagster/.config/gcloud:ro
+      - ~/.config/gcloud:/mnt/gcloud:ro
     depends_on:
       dagster-code-server:
         condition: service_healthy
@@ -223,13 +220,12 @@ services:
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
       - HOME=/home/dagster
-      - GOOGLE_APPLICATION_CREDENTIALS=/home/dagster/.config/gcloud/application_default_credentials.json
     volumes:
       - ./src:/app/src
       - ./workspace.yaml:/app/workspace.yaml:ro
       - ./dagster.yaml:/app/dagster.yaml:ro
       - ./config:/app/config:ro
-      - ~/.config/gcloud:/home/dagster/.config/gcloud:ro
+      - ~/.config/gcloud:/mnt/gcloud:ro
     depends_on:
       postgres:
         condition: service_healthy
