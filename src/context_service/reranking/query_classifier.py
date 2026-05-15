@@ -5,25 +5,27 @@ from __future__ import annotations
 import re
 import string
 
-ABSTRACT_VERBS = frozenset({
-    "rejected",
-    "approved",
-    "denied",
-    "accepted",
-    "failed",
-    "succeeded",
-    "postponed",
-    "cancelled",
-    "confirmed",
-    "dismissed",
-    "granted",
-    "abandoned",
-    "dropped",
-    "removed",
-    "added",
-    "changed",
-    "decided",
-})
+ABSTRACT_VERBS = frozenset(
+    {
+        "rejected",
+        "approved",
+        "denied",
+        "accepted",
+        "failed",
+        "succeeded",
+        "postponed",
+        "cancelled",
+        "confirmed",
+        "dismissed",
+        "granted",
+        "abandoned",
+        "dropped",
+        "removed",
+        "added",
+        "changed",
+        "decided",
+    }
+)
 
 QUESTION_PATTERNS = [
     re.compile(r"^what (was|were|got|is|are) \w+\??$", re.IGNORECASE),

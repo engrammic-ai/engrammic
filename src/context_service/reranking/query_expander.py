@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
-EXPANSION_PROMPT = '''Expand this search query with semantically equivalent phrases.
+EXPANSION_PROMPT = """Expand this search query with semantically equivalent phrases.
 The goal is to find documents that ANSWER the query, even if they use different words.
 
 Query: {query}
@@ -25,7 +25,7 @@ Examples:
 - "rejected" -> "rejected OR denied OR dismissed OR 'no longer viable' OR 'not accepted'"
 - "approved" -> "approved OR accepted OR 'green light' OR granted OR confirmed"
 - "failed" -> "failed OR 'did not succeed' OR 'did not complete' OR unsuccessful"
-'''
+"""
 
 
 class QueryExpander:
