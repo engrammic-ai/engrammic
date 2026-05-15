@@ -48,6 +48,12 @@ class TestLiteLLMReranker:
             assert results[0].original_rank == 1
             assert results[1].node_id == "node-0"
             assert results[2].node_id == "node-2"
+            mock_litellm.arerank.assert_called_once_with(
+                model="vertex_ai/semantic-ranker-default@latest",
+                query="what was rejected?",
+                documents=["doc zero", "doc one", "doc two"],
+                top_n=3,
+            )
 
     @pytest.mark.asyncio
     async def test_rerank_empty_documents_returns_empty(self) -> None:
@@ -77,3 +83,6 @@ class TestLiteLLMReranker:
             assert len(results) == 2
             assert results[0].node_id == "node-0"
             assert results[1].node_id == "node-1"
+            assert results[0].score > results[1].score  # Verify decaying scores
+            assert results[0].score == 1.0
+            assert results[1].score == 0.99

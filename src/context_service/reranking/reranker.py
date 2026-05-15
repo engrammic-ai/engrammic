@@ -20,7 +20,7 @@ class RerankResult:
 
 
 class LiteLLMReranker:
-    """Cross-encoder reranking via Vertex AI."""
+    """Cross-encoder reranking via LiteLLM."""
 
     def __init__(self, model: str = "vertex_ai/semantic-ranker-default@latest") -> None:
         self._model = model
@@ -45,6 +45,9 @@ class LiteLLMReranker:
         """
         if not documents:
             return []
+
+        if len(documents) != len(node_ids):
+            raise ValueError(f"documents ({len(documents)}) and node_ids ({len(node_ids)}) must have same length")
 
         try:
             response = await litellm.arerank(
