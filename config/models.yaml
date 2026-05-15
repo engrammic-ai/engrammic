@@ -36,6 +36,12 @@ tiers:
     fast:
       provider: vertex
       model: gemini-2.5-flash
+    reranker:
+      provider: vertex_ai
+      model: semantic-ranker-default@latest
+    query_expander:
+      provider: vertex
+      model: gemini-2.5-flash
 
   balanced:
     embeddings:
@@ -46,6 +52,12 @@ tiers:
       provider: vertex
       model: gemini-2.5-pro
     fast:
+      provider: vertex
+      model: gemini-2.5-flash
+    reranker:
+      provider: vertex_ai
+      model: semantic-ranker-default@latest
+    query_expander:
       provider: vertex
       model: gemini-2.5-flash
 
@@ -60,6 +72,12 @@ tiers:
     fast:
       provider: vertex
       model: gemini-2.5-pro
+    reranker:
+      provider: vertex_ai
+      model: semantic-ranker-default@latest
+    query_expander:
+      provider: vertex
+      model: gemini-2.5-pro
 
   # Hybrid: self-hosted embeddings + Vertex LLMs
   # Best of both: fast local embeddings, GC credits for LLMs
@@ -72,6 +90,12 @@ tiers:
       provider: vertex
       model: gemini-2.5-pro
     fast:
+      provider: vertex
+      model: gemini-2.5-flash
+    reranker:
+      provider: vertex_ai
+      model: semantic-ranker-default@latest
+    query_expander:
       provider: vertex
       model: gemini-2.5-flash
 
