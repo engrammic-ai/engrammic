@@ -42,18 +42,24 @@ def truncate(text: str, max_len: int = 200) -> str:
     return text[:max_len] if len(text) > max_len else text
 
 
-def robust_json_loads(text: str) -> Any:
+def robust_json_loads(text: str) -> dict[str, Any]:
     """Parse JSON with automatic repair for malformed LLM output.
 
     Tries standard json.loads first, falls back to json_repair on failure.
+    Returns empty dict if parsing fails or result is not a dict.
     """
     try:
-        return loads(text)
+        result = loads(text)
     except (JSONDecodeError, ValueError):
         import json_repair  # type: ignore[import-not-found]
 
         logger.debug("Standard JSON parse failed, attempting repair")
-        return json_repair.loads(text)
+        result = json_repair.loads(text)
+
+    if not isinstance(result, dict):
+        logger.warning("llm_output_not_dict", result_type=type(result).__name__)
+        return {}
+    return result
 
 
 class LLMProvider(abc.ABC):
