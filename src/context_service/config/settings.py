@@ -97,6 +97,29 @@ class SynthesizerIdentityConfig(BaseModel):
     min_facts_for_synthesis: int = 3
 
 
+class RerankingSettings(BaseModel):
+    """Settings for semantic reranking and query expansion."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    enabled: bool = Field(default=True, description="Enable cross-encoder reranking")
+    expand_hard_queries: bool = Field(
+        default=True, description="Enable LLM query expansion for hard queries"
+    )
+    rerank_pool_size: int = Field(
+        default=50, description="Number of candidates to retrieve before reranking"
+    )
+    expansion_cache_ttl_days: int = Field(
+        default=7, description="TTL for cached query expansions in Redis"
+    )
+    reranker_timeout_seconds: float = Field(
+        default=2.0, description="Timeout for reranker API calls"
+    )
+    expander_timeout_seconds: float = Field(
+        default=5.0, description="Timeout for query expansion LLM calls"
+    )
+
+
 class DecayClassConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -699,6 +722,7 @@ class Settings(BaseSettings):
         default_factory=ReasoningChainMatchingConfig
     )
     chain_feedback: ChainFeedbackConfig = Field(default_factory=ChainFeedbackConfig)
+    reranking: RerankingSettings = Field(default_factory=RerankingSettings)
 
     # =========================================================================
     # Application Meta
