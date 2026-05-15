@@ -110,6 +110,28 @@ docker-clean:
 docker-ps:
     {{dc}} ps
 
+# --- Database Migrations ---
+
+# Run alembic migrations
+db-migrate:
+    uv run alembic upgrade head
+
+# Show migration history
+db-history:
+    uv run alembic history
+
+# Current database revision
+db-current:
+    uv run alembic current
+
+# Repair orphan revision (stamps to head without running migrations)
+db-repair:
+    uv run alembic stamp head
+
+# Generate new migration
+db-revision message:
+    uv run alembic revision --autogenerate -m "{{message}}"
+
 # --- Production Docker ---
 
 # Start production services
