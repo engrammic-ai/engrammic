@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 import structlog
+from opentelemetry import trace
 
 from context_service.config.models import load_models_config
 from context_service.config.settings import get_settings
@@ -23,9 +24,15 @@ from context_service.reranking import LiteLLMReranker, QueryExpander, is_hard_qu
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 from context_service.signals import emit_access_event
-from context_service.telemetry.metrics import record_mcp_tool
+from context_service.telemetry.metrics import (
+    record_hard_query_detection,
+    record_mcp_tool,
+    record_query_expansion,
+    record_reranking,
+)
 
 logger = structlog.get_logger(__name__)
+tracer = trace.get_tracer(__name__)
 
 _VALID_SEARCH_MODES = frozenset({"hybrid", "dense", "sparse"})
 
@@ -48,12 +55,25 @@ async def _apply_reranking(
     documents = [r.content or "" for r in results]
     node_ids = [str(r.node_id) for r in results]
 
-    reranked = await reranker.rerank(
-        query=query,
-        documents=documents,
-        node_ids=node_ids,
-        top_k=len(results),
-    )
+    with tracer.start_as_current_span("recall.rerank") as span:
+        span.set_attribute("query_length", len(query))
+        span.set_attribute("candidates", len(results))
+        rerank_start = time.perf_counter()
+        try:
+            reranked = await reranker.rerank(
+                query=query,
+                documents=documents,
+                node_ids=node_ids,
+                top_k=len(results),
+            )
+            latency_ms = (time.perf_counter() - rerank_start) * 1000
+            span.set_attribute("latency_ms", latency_ms)
+            record_reranking(latency_ms=latency_ms, success=True)
+        except Exception:
+            latency_ms = (time.perf_counter() - rerank_start) * 1000
+            span.set_attribute("latency_ms", latency_ms)
+            record_reranking(latency_ms=latency_ms, success=False)
+            raise
 
     id_to_result = {str(r.node_id): r for r in results}
     return [id_to_result[rr.node_id] for rr in reranked if rr.node_id in id_to_result]
@@ -72,7 +92,9 @@ async def _maybe_expand_query(
     if not settings.reranking.expand_hard_queries:
         return query, False
 
-    if not is_hard_query(query):
+    hard = is_hard_query(query)
+    record_hard_query_detection(hard)
+    if not hard:
         return query, False
 
     if redis is None:
@@ -90,7 +112,23 @@ async def _maybe_expand_query(
         cache_ttl_seconds=settings.reranking.expansion_cache_ttl_days * 86400,
         timeout_seconds=settings.reranking.expander_timeout_seconds,
     )
-    expanded = await expander.expand(query)
+
+    with tracer.start_as_current_span("recall.expand_query") as span:
+        span.set_attribute("query_length", len(query))
+        span.set_attribute("is_hard_query", True)
+        expand_start = time.perf_counter()
+        try:
+            expanded = await expander.expand(query)
+            latency_ms = (time.perf_counter() - expand_start) * 1000
+            span.set_attribute("latency_ms", latency_ms)
+            span.set_attribute("was_expanded", expanded != query)
+            record_query_expansion(latency_ms=latency_ms, success=True)
+        except Exception:
+            latency_ms = (time.perf_counter() - expand_start) * 1000
+            span.set_attribute("latency_ms", latency_ms)
+            record_query_expansion(latency_ms=latency_ms, success=False)
+            raise
+
     return expanded, expanded != query
 
 
