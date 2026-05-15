@@ -88,6 +88,7 @@ async def _maybe_expand_query(
         llm_model=expander_model,
         redis=redis,
         cache_ttl_seconds=settings.reranking.expansion_cache_ttl_days * 86400,
+        timeout_seconds=settings.reranking.expander_timeout_seconds,
     )
     expanded = await expander.expand(query)
     return expanded, expanded != query

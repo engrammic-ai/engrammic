@@ -38,10 +38,12 @@ class QueryExpander:
         llm_model: str,
         redis: Redis,
         cache_ttl_seconds: int = 86400 * 7,
+        timeout_seconds: float = 5.0,
     ) -> None:
         self._model = llm_model
         self._redis = redis
         self._cache_ttl = cache_ttl_seconds
+        self._timeout = timeout_seconds
 
     async def expand(self, query: str) -> str:
         """Expand query with semantic equivalents."""
@@ -76,7 +78,7 @@ class QueryExpander:
             model=self._model,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
-            timeout=30.0,
+            timeout=self._timeout,
         )
         content = response.choices[0].message.content or ""
         try:
