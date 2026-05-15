@@ -25,6 +25,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Status | Description |
 |------|--------|-------------|
+| [2026-05-15-semantic-reranking.md](./2026-05-15-semantic-reranking.md) | Ready | Vertex AI reranking + LLM query expansion for entailment cases |
 | [2026-05-15-mcp-tool-surface-redesign.md](./2026-05-15-mcp-tool-surface-redesign.md) | Ready | Intent-based MCP tools with YAML config and profiles |
 | [2026-05-13-gcp-deployment.md](./2026-05-13-gcp-deployment.md) | Ready | Pulumi GCP infra - scaffold done, ready for first deploy |
 
@@ -54,6 +55,7 @@ Next candidates:
 | [2026-05-09-architecture-review.md](./2026-05-09-architecture-review.md) | Architecture decisions: hypergraph, consistency, custodian split, observability |
 | [eag-integration-audit.md](./eag-integration-audit.md) | Deferred items from EAG port |
 | [../specs/reasoning-chain-applicability.md](../specs/reasoning-chain-applicability.md) | Spec: reasoning chain applicability matching design |
+| [../specs/semantic-reranking.md](../specs/semantic-reranking.md) | Spec: semantic reranking with query expansion for entailment |
 
 ## Archive
 
