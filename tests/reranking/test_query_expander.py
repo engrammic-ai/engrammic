@@ -90,3 +90,25 @@ class TestQueryExpander:
 
             # Fallback: returns original query
             assert result == "test query"
+
+    @pytest.mark.asyncio
+    async def test_expand_fallback_on_malformed_json(self) -> None:
+        mock_redis = AsyncMock()
+        mock_redis.get.return_value = None
+
+        mock_response = MagicMock()
+        mock_response.choices = [
+            MagicMock(message=MagicMock(content="not valid json"))
+        ]
+
+        with patch("context_service.reranking.query_expander.litellm") as mock_litellm:
+            mock_litellm.acompletion = AsyncMock(return_value=mock_response)
+
+            expander = QueryExpander(
+                llm_model="vertex/gemini-2.5-flash",
+                redis=mock_redis,
+            )
+            result = await expander.expand("test query")
+
+            # Fallback: returns original query
+            assert result == "test query"

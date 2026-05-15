@@ -76,10 +76,15 @@ class QueryExpander:
             model=self._model,
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
+            timeout=30.0,
         )
-        content = response.choices[0].message.content
-        data = json.loads(content)
-        return str(data["expanded"])
+        content = response.choices[0].message.content or ""
+        try:
+            data = json.loads(content)
+            return str(data.get("expanded", query))
+        except (json.JSONDecodeError, TypeError) as e:
+            logger.warning("query_expansion_json_parse_failed", error=str(e), content=content[:100])
+            raise  # Let outer handler catch and fallback
 
     def _normalize(self, query: str) -> str:
         """Normalize query for cache key."""
