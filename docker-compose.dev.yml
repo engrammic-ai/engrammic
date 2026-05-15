@@ -143,7 +143,7 @@ services:
       context: ..
       dockerfile: context-service/Dockerfile.dagster
     container_name: engrammic-dagster-code
-    command: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-m", "engrammic.pipelines.definitions"]
+    command: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-m", "context_service.pipelines.definitions"]
     env_file:
       - .env
     environment:
