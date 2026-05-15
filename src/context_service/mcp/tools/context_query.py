@@ -9,6 +9,7 @@ from typing import Any, Literal
 
 import structlog
 
+from context_service.config.models import load_models_config
 from context_service.config.settings import get_settings
 from context_service.engine.reflection_triggers import compute_reflection_suggested
 from context_service.mcp.server import (
@@ -18,6 +19,7 @@ from context_service.mcp.server import (
     get_silo_service,
 )
 from context_service.models.mcp import Layer, QueryFilters
+from context_service.reranking import LiteLLMReranker
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 from context_service.signals import emit_access_event
@@ -26,6 +28,35 @@ from context_service.telemetry.metrics import record_mcp_tool
 logger = structlog.get_logger(__name__)
 
 _VALID_SEARCH_MODES = frozenset({"hybrid", "dense", "sparse"})
+
+
+async def _apply_reranking(
+    query: str,
+    results: list[Any],
+    settings: Any,
+) -> list[Any]:
+    """Apply reranking to search results if enabled."""
+    if not settings.reranking.enabled or len(results) <= 1:
+        return results
+
+    models_config = load_models_config()
+    reranker_model = models_config.litellm_reranker_model
+    if reranker_model is None:
+        return results
+
+    reranker = LiteLLMReranker(model=reranker_model)
+    documents = [r.content or "" for r in results]
+    node_ids = [str(r.node_id) for r in results]
+
+    reranked = await reranker.rerank(
+        query=query,
+        documents=documents,
+        node_ids=node_ids,
+        top_k=len(results),
+    )
+
+    id_to_result = {str(r.node_id): r for r in results}
+    return [id_to_result[rr.node_id] for rr in reranked if rr.node_id in id_to_result]
 
 
 async def _context_query(
@@ -115,6 +146,9 @@ async def _context_query(
     record_mcp_tool("context_query", elapsed_s * 1000)
     elapsed_ms = int(elapsed_s * 1000)
 
+    settings = get_settings()
+    results = await _apply_reranking(query, results, settings)
+
     redis = get_redis()
     if redis is not None and results:
         try:
@@ -129,7 +163,6 @@ async def _context_query(
         except Exception as exc:
             logger.warning("access_event_emit_failed", silo_id=silo_id, error=str(exc))
 
-    settings = get_settings()
     metadata: dict[str, Any] = {
         "causal_edges_enabled": settings.causal.query_enabled,
     }
