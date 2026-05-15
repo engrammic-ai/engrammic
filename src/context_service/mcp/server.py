@@ -226,10 +226,7 @@ def create_mcp_server(profile: str | None = None) -> FastMCP:
 
     # Determine profile: param > env > settings > default
     resolved_profile = (
-        profile
-        or os.environ.get("MCP_TOOL_PROFILE")
-        or settings.mcp_tool_profile
-        or "standard"
+        profile or os.environ.get("MCP_TOOL_PROFILE") or settings.mcp_tool_profile or "standard"
     )
 
     mcp = FastMCP(

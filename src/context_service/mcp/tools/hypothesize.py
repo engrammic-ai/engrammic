@@ -28,7 +28,10 @@ async def _hypothesize_impl(
 
     resolved_session_id = session_id or auth.session_id
     if not resolved_session_id:
-        return {"error": "no_session", "message": "No session available. Connect with a session-enabled auth."}
+        return {
+            "error": "no_session",
+            "message": "No session available. Connect with a session-enabled auth.",
+        }
 
     result = await _context_store_belief(
         silo_id=silo_id,

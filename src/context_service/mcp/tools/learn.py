@@ -23,7 +23,10 @@ async def _learn_impl(
 ) -> dict[str, Any]:
     """Implementation for learn tool."""
     if not evidence:
-        return {"error": "missing_evidence", "message": "evidence must reference at least one node or URI"}
+        return {
+            "error": "missing_evidence",
+            "message": "evidence must reference at least one node or URI",
+        }
 
     return await _context_assert(
         silo_id=None,  # auto-derived from auth

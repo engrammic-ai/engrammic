@@ -20,7 +20,9 @@ async def test_learn_requires_evidence(mock_mcp_context):
 
 
 @pytest.mark.asyncio
-async def test_learn_returns_node_id(mock_mcp_context, mock_context_service, mock_evidence_validator):
+async def test_learn_returns_node_id(
+    mock_mcp_context, mock_context_service, mock_evidence_validator
+):
     """learn should return node_id with valid evidence."""
     result = await _learn_impl(
         claim="Test claim",

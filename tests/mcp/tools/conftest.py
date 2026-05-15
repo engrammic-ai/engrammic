@@ -40,7 +40,9 @@ def mock_context_service():
     node.id = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
     svc = MagicMock()
-    svc.store = AsyncMock(return_value={"node_id": "test-node-id", "created_at": "2026-01-01T00:00:00Z"})
+    svc.store = AsyncMock(
+        return_value={"node_id": "test-node-id", "created_at": "2026-01-01T00:00:00Z"}
+    )
     svc.remember = AsyncMock(return_value=node)
     svc.assert_claim = AsyncMock(return_value=node)
     svc.commit = AsyncMock(return_value=node)
@@ -67,5 +69,7 @@ def mock_evidence_validator():
     validator = MagicMock()
     validator.validate = AsyncMock(return_value=validation_result)
 
-    with patch("context_service.mcp.tools.context_store.get_evidence_validator", return_value=validator):
+    with patch(
+        "context_service.mcp.tools.context_store.get_evidence_validator", return_value=validator
+    ):
         yield validator

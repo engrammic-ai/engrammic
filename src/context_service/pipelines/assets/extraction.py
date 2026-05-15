@@ -33,6 +33,7 @@ RETURN d.id AS id, d.content AS content, d.source_uri AS source_uri
 LIMIT $batch
 """
 
+
 @dg.asset(
     name="extraction",
     partitions_def=silo_partitions,

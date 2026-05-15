@@ -59,17 +59,14 @@ def belief_merge_asset(
         )
 
         subjects = [
-            {"subject": str(r["subject"]), "belief_count": int(r["belief_count"])}
-            for r in rows
+            {"subject": str(r["subject"]), "belief_count": int(r["belief_count"])} for r in rows
         ]
 
         if not subjects:
             context.log.info(f"belief_merge: no overlapping subjects for silo={silo_id}")
             return {"merged_count": 0, "skipped_count": 0, "total": 0, "merged_ids": []}
 
-        context.log.info(
-            f"belief_merge: processing {len(subjects)} subjects for silo={silo_id}"
-        )
+        context.log.info(f"belief_merge: processing {len(subjects)} subjects for silo={silo_id}")
 
         merged_count = 0
         skipped_count = 0
