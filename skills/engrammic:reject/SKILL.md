@@ -5,7 +5,19 @@ allowed-tools:
   - mcp__engrammic__context_reject_belief
 ---
 
-Reject a ProposedBelief from custodian synthesis.
+# Reject
+
+**Internal tool, SAGE-only. Not for agent use.**
+
+Reject a ProposedBelief from custodian synthesis. The rejection reason is stored for provenance so the custodian can improve future proposals.
+
+## When to use
+
+- The custodian has surfaced a ProposedBelief that is incorrect, unsupported, or premature
+- Triggered by SAGE review workflows, not by agent reasoning flows
+- Use `accept` instead if the proposal is sound
+
+## Tool call
 
 ```
 context_reject_belief(
@@ -14,4 +26,10 @@ context_reject_belief(
 )
 ```
 
-The ProposedBelief status changes to `rejected`. Reason is stored for provenance.
+The ProposedBelief status changes to `rejected`. The reason is stored for provenance.
+
+## What comes next
+
+After rejecting a belief, you might:
+- `reflect` - record why this synthesis failed, to inform future custodian runs
+- `learn` - if the rejection reveals a gap in the knowledge base that should be filled explicitly
