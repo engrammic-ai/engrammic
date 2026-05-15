@@ -30,6 +30,11 @@ _chain_lookup_counter: metrics.Counter | None = None
 _chain_lookup_latency: metrics.Histogram | None = None
 _chain_feedback_counter: metrics.Counter | None = None
 _chain_evidence_modified_counter: metrics.Counter | None = None
+_reranking_duration: metrics.Histogram | None = None
+_reranking_counter: metrics.Counter | None = None
+_query_expansion_duration: metrics.Histogram | None = None
+_query_expansion_counter: metrics.Counter | None = None
+_hard_query_counter: metrics.Counter | None = None
 
 
 def setup_metrics(service_name: str = "context-service") -> None:
@@ -42,6 +47,12 @@ def setup_metrics(service_name: str = "context-service") -> None:
         _chain_lookup_latency, \
         _chain_feedback_counter, \
         _chain_evidence_modified_counter
+    global \
+        _reranking_duration, \
+        _reranking_counter, \
+        _query_expansion_duration, \
+        _query_expansion_counter, \
+        _hard_query_counter
 
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     if not endpoint:
@@ -137,6 +148,36 @@ def setup_metrics(service_name: str = "context-service") -> None:
     _chain_evidence_modified_counter = _meter.create_counter(
         name="reasoning.chain.evidence_modified_post_creation",
         description="Chains returned where evidence was modified after chain creation",
+        unit="1",
+    )
+
+    _reranking_duration = _meter.create_histogram(
+        name="recall.reranking.duration",
+        description="Reranking operation latency",
+        unit="ms",
+    )
+
+    _reranking_counter = _meter.create_counter(
+        name="recall.reranking.count",
+        description="Reranking operation count",
+        unit="1",
+    )
+
+    _query_expansion_duration = _meter.create_histogram(
+        name="recall.query_expansion.duration",
+        description="Query expansion latency",
+        unit="ms",
+    )
+
+    _query_expansion_counter = _meter.create_counter(
+        name="recall.query_expansion.count",
+        description="Query expansion operation count",
+        unit="1",
+    )
+
+    _hard_query_counter = _meter.create_counter(
+        name="recall.hard_query.count",
+        description="Hard query detection count",
         unit="1",
     )
 
@@ -257,3 +298,31 @@ def record_chain_evidence_modified() -> None:
     if _chain_evidence_modified_counter is None:
         return
     _chain_evidence_modified_counter.add(1)
+
+
+def record_reranking(latency_ms: float, success: bool) -> None:
+    """Record reranking operation metrics."""
+    attrs = {"success": str(success).lower()}
+    if _reranking_duration is not None:
+        _reranking_duration.record(latency_ms, attrs)
+    if _reranking_counter is not None:
+        _reranking_counter.add(1, attrs)
+
+
+def record_query_expansion(latency_ms: float, success: bool) -> None:
+    """Record query expansion metrics.
+
+    Note: cache_hit information is not currently exposed by QueryExpander.expand().
+    A TODO exists to plumb that through when the expander is extended.
+    """
+    attrs = {"success": str(success).lower()}
+    if _query_expansion_duration is not None:
+        _query_expansion_duration.record(latency_ms, attrs)
+    if _query_expansion_counter is not None:
+        _query_expansion_counter.add(1, attrs)
+
+
+def record_hard_query_detection(is_hard: bool) -> None:
+    """Record hard query detection for monitoring."""
+    if _hard_query_counter is not None:
+        _hard_query_counter.add(1, {"is_hard": str(is_hard).lower()})

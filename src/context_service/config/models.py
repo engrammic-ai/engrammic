@@ -38,6 +38,8 @@ class TierConfig(BaseModel):
     embeddings: ModelSpec
     reasoning: ModelSpec
     fast: ModelSpec
+    reranker: ModelSpec | None = None
+    query_expander: ModelSpec | None = None
 
 
 class ModelsConfig(BaseModel):
@@ -88,6 +90,30 @@ class ModelsConfig(BaseModel):
         """Embedding dimensions for the active tier."""
         spec = self.get_embedding_model()
         return spec.dimensions or 768
+
+    def get_reranker_model(self) -> ModelSpec | None:
+        """Get the reranker model for the active tier, if configured."""
+        return self.tiers[self.tier].reranker
+
+    def get_query_expander_model(self) -> ModelSpec | None:
+        """Get the query expander model for the active tier, if configured."""
+        return self.tiers[self.tier].query_expander
+
+    @property
+    def litellm_reranker_model(self) -> str | None:
+        """Convenience for litellm format: provider/model."""
+        spec = self.get_reranker_model()
+        if spec is None:
+            return None
+        return f"{spec.provider}/{spec.model}"
+
+    @property
+    def litellm_expander_model(self) -> str | None:
+        """Convenience for litellm format: provider/model."""
+        spec = self.get_query_expander_model()
+        if spec is None:
+            return None
+        return f"{spec.provider}/{spec.model}"
 
 
 def _load_models_yaml(path: Path) -> dict[str, Any]:
