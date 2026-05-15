@@ -188,7 +188,25 @@ class PostgresConfig(BaseModel):
     port: int = 5432
     user: str = "context"
     password: SecretStr = SecretStr("context")
-    database: str = "context_service"
+    database: str = "engrammic"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_env(cls, data: dict[str, Any]) -> dict[str, Any]:
+        """Read from POSTGRES_* env vars for docker-compose compatibility."""
+        import os
+
+        env_map = {
+            "POSTGRES_HOST": "host",
+            "POSTGRES_PORT": "port",
+            "POSTGRES_USER": "user",
+            "POSTGRES_PASSWORD": "password",
+            "POSTGRES_DATABASE": "database",
+        }
+        for env_key, field in env_map.items():
+            if env_key in os.environ and field not in data:
+                data[field] = os.environ[env_key]
+        return data
 
     @property
     def dsn(self) -> str:
