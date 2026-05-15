@@ -18,6 +18,9 @@ services:
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz-otel-collector:4317
       - OTEL_SERVICE_NAME=engrammic
       - GOOGLE_APPLICATION_CREDENTIALS=/home/engrammic/.config/gcloud/application_default_credentials.json
+      # LiteLLM Vertex AI (reranker, embeddings)
+      - VERTEX_PROJECT=${VERTEX_PROJECT:-}
+      - VERTEX_LOCATION=${VERTEX_LOCATION:-europe-north1}
     volumes:
       - ~/.config/gcloud:/home/engrammic/.config/gcloud:ro
       - ./src:/app/src
