@@ -15,8 +15,10 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-# Dagster user with writable dirs for sqlite storage and telemetry
-RUN groupadd -r dagster && useradd -r -g dagster -m dagster \
+# Dagster user with configurable UID/GID to match host for credential access
+ARG UID=1000
+ARG GID=1000
+RUN groupadd -g ${GID} dagster && useradd -u ${UID} -g ${GID} -m dagster \
     && chown dagster:dagster /app
 
 COPY --from=builder --chown=dagster:dagster /app/.venv /app/.venv

@@ -144,6 +144,9 @@ services:
     build:
       context: ..
       dockerfile: context-service/Dockerfile.dagster
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
     container_name: engrammic-dagster-code
     command: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-m", "context_service.pipelines.definitions"]
     env_file:
@@ -177,6 +180,9 @@ services:
     build:
       context: ..
       dockerfile: context-service/Dockerfile.dagster
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
     container_name: engrammic-dagster-web
     command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "workspace.yaml"]
     ports:
@@ -209,6 +215,9 @@ services:
     build:
       context: ..
       dockerfile: context-service/Dockerfile.dagster
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
     container_name: engrammic-dagster-daemon
     command: ["dagster-daemon", "run"]
     env_file:
