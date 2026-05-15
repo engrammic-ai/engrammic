@@ -19,6 +19,7 @@ class TestIsHardQuery:
             ("what was postponed", True),
             ("which approach was abandoned?", True),
             ("is the proposal approved?", True),
+            ("what was rejected!", True),
             # Normal queries - should return False
             ("meeting notes from last week", False),
             ("how to configure the database", False),

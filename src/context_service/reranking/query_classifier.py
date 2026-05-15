@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import string
 
 ABSTRACT_VERBS = frozenset({
     "rejected",
@@ -48,7 +49,7 @@ def is_hard_query(query: str) -> bool:
     words = query_lower.split()
 
     # Short queries with abstract verbs
-    if len(words) <= 5 and any(w.rstrip("?") in ABSTRACT_VERBS for w in words):
+    if len(words) <= 5 and any(w.rstrip(string.punctuation) in ABSTRACT_VERBS for w in words):
         return True
 
     # Question patterns that need inference
