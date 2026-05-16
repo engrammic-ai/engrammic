@@ -38,6 +38,7 @@ async def _patterns_impl(
             preset = await get_preset_resolver().resolve(silo_id)
             preset_ns = preset.namespace
         except RuntimeError:
+            # Resolver not configured (startup) -> degrade gracefully to base, non-preset behavior.
             preset_ns = None
 
     def _rank(skills: list[Any]) -> list[Any]:
@@ -61,7 +62,9 @@ async def _patterns_impl(
     elif action == "get":
         if not name:
             return {"error": "missing_name", "message": "name required for get action"}
-        # Auto-qualify bare names (no ':') to the preset namespace.
+        # Auto-qualify bare names (no ':') ONLY against the preset namespace; a bare name that
+        # exists under a different namespace (e.g. engrammic:) returns not_found unless passed
+        # fully qualified.
         resolved_name = name
         if ":" not in name and preset_ns is not None:
             resolved_name = f"{preset_ns}:{name}"

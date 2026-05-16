@@ -104,3 +104,26 @@ async def test_get_qualified_name_passed_through(
 ) -> None:
     out = await patterns_mod._patterns_impl("get", name="engrammic:recall")
     assert out["error"] == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_resolver_not_configured_degrades_to_base_behavior(
+    _patch: _FakeSkillSvc,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Resolver RuntimeError -> base behavior: no ranking, no auto-qualify, no exception."""
+
+    def _unconfigured() -> object:
+        raise RuntimeError("not configured")
+
+    monkeypatch.setattr(patterns_mod, "get_preset_resolver", _unconfigured)
+
+    out = await patterns_mod._patterns_impl("list")
+    names = [p["name"] for p in out["patterns"]]
+    # Base behavior: original order preserved, no preset ranking.
+    assert names == ["engrammic:recall", "coding:onboarding"]
+    assert out["count"] == 2
+
+    # Bare name is NOT auto-qualified (preset_ns stayed None) -> not found.
+    got = await patterns_mod._patterns_impl("get", name="onboarding")
+    assert got["error"] == "not_found"
