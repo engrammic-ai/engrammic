@@ -1,0 +1,15 @@
+# ICP skill preset definitions. Git-versioned. Binding (which silo uses which
+# preset) lives in the Postgres silo_config.preset column, not here.
+
+presets:
+  coding:
+    namespace: coding
+    onboarding_skill: "coding:onboarding"
+    param_overrides:
+      default_recall_top_k: 15
+
+  b2b-ops:
+    namespace: b2b-ops
+    onboarding_skill: "b2b-ops:onboarding"
+    param_overrides:
+      default_recall_top_k: 8
