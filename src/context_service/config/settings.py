@@ -773,6 +773,7 @@ class Settings(BaseSettings):
 
     # MCP settings
     mcp_tool_profile: str = Field(default="reasoning")
+    default_icp_preset: str = Field(default="coding")
 
     # =========================================================================
     # Memgraph Settings
