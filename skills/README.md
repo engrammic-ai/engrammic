@@ -79,4 +79,4 @@ Always include `tags` when storing context (2-5 tags per node).
 ## Prerequisites
 
 1. Context-service MCP server running
-2. MCP tools connected (`context_store`, `context_recall`, `context_link`, `context_admin`)
+2. The agent-facing MCP verbs connected (`remember`, `learn`, `recall`, `link`, `trace`)

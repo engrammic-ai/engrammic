@@ -20,6 +20,8 @@ defaults for code work.
   rests on.
 - `recall`: before solving, query what is already known about the area.
 - `trace`: when a belief drives a risky change, check its provenance first.
+- `reflect`: record when a debugging session or test result changes your
+  understanding of how the code behaves.
 
 ## Heuristics for code
 

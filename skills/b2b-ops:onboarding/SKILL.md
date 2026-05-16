@@ -15,9 +15,13 @@ defaults for vertical B2B and operations work.
 - `learn`: a durable domain fact with a source - a policy, an SLA, a
   contractual term. Cite where it came from.
 - `believe`: a standing operational position synthesized from facts. Use
-  sparingly and cite the facts.
+  sparingly, and cite the specific facts or nodes it rests on.
 - `recall`: open every task by recalling prior context for this account or
   process before acting.
+- `trace`: when a policy, SLA, or contract term drives a decision, check its
+  provenance before relying on it.
+- `reflect`: record when a process outcome changes your understanding of how
+  the account or workflow behaves.
 
 ## Heuristics for ops
 
