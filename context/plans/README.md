@@ -2,9 +2,11 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-15)
+## Current state (2026-05-16)
 
 **Shipped:**
+- v2.7 MCP Tool Surface Redesign (intent-based tools with YAML config and profiles)
+- v2.6 Semantic Reranking (Vertex AI reranking + LLM query expansion for entailment)
 - v2.5 SAGE Job Consolidation (replaced 8 sensors with 3 scheduled jobs, pending work queries)
 - v2.4 Heat Diffusion (Dagster asset, edge heat propagation, prewarm sweep)
 - Self-Hosted Telemetry (two-tier beacon system, install ID, collector, docs)
@@ -25,8 +27,8 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Status | Description |
 |------|--------|-------------|
-| [2026-05-15-semantic-reranking.md](./2026-05-15-semantic-reranking.md) | Ready | Vertex AI reranking + LLM query expansion for entailment cases |
-| [2026-05-15-mcp-tool-surface-redesign.md](./2026-05-15-mcp-tool-surface-redesign.md) | Ready | Intent-based MCP tools with YAML config and profiles |
+| [2026-05-15-review-followup.md](./2026-05-15-review-followup.md) | Ready | Address P0/P1 findings from codebase review |
+| [2026-05-15-content-hash-dedup.md](./2026-05-15-content-hash-dedup.md) | Ready | SHA256 dedup for knowledge layer claims |
 | [2026-05-13-gcp-deployment.md](./2026-05-13-gcp-deployment.md) | Ready | Pulumi GCP infra - scaffold done, ready for first deploy |
 
 Next candidates:
@@ -60,6 +62,8 @@ Next candidates:
 ## Archive
 
 Completed plans in `archive/`:
+- MCP Tool Surface Redesign (2026-05-16) - intent-based tools with YAML config and profiles
+- Semantic Reranking (2026-05-16) - Vertex AI reranking + LLM query expansion
 - SAGE Job Consolidation (2026-05-15) - 3 scheduled jobs replacing 8 sensors, pending work queries
 - Heat Diffusion (2026-05-15) - Dagster asset, edge heat propagation, prewarm sweep
 - Self-Hosted Telemetry (2026-05-13) - two-tier beacon, install ID, collector
