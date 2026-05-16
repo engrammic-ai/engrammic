@@ -51,44 +51,76 @@ A preset is a named ICP profile resolved per request from the caller's silo.
 Three layers:
 
 - **Definition** - `src/context_service/config/mcp_presets.yaml`, git
-  versioned. Each preset declares `skill_namespace`, an `onboarding_skill`
-  name, and `param_overrides`.
-- **Binding** - a nullable `preset` column on the existing Postgres
-  `silo_config` table. Selects which preset a silo uses. Null falls back to a
-  global default preset from settings.
-- **Resolution** - extends the existing `SiloConfig.resolve(settings)`
-  pattern. Preset `param_overrides` slot in as a layer between global settings
-  and per-silo explicit overrides. Precedence:
-  `global settings < preset overrides < per-silo explicit override`.
+  versioned. Each preset declares `namespace`, an `onboarding_skill` name, and
+  `param_overrides`.
+- **Binding** - a new nullable `preset` column on the **Postgres**
+  `silo_config` ORM table (`src/context_service/models/postgres/org.py`,
+  table `silo_config`). This is the durable write target and selects which
+  preset a silo uses. Null falls back to `settings.default_icp_preset`. Adding
+  this column requires a new Alembic migration (see Scope and Testing).
+- **Resolution** - the binding is a pointer; it is not stored in the Memgraph
+  Pydantic `SiloConfig` (`src/context_service/models/silo.py`). The
+  request-time flow is: read `silo_config.preset` (Postgres) ->
+  `PresetRegistry.get_preset(name)` -> obtain that preset's `param_overrides`
+  -> apply them as a settings layer using the same override-merge shape as the
+  existing `SiloConfig.resolve(settings)` pattern. `resolve()` is the merge
+  pattern we mirror, not a store we extend. Precedence:
+  `global settings < preset param_overrides < per-silo explicit override`.
 
-No new server instance, no boot-time coupling for the per-silo parts, no
-hard dependency on a client-side skills directory for ICP specialization.
+Store split is explicit and deliberate: Postgres `silo_config` is the durable
+write for the binding; the Memgraph Pydantic `SiloConfig` is untouched; the
+`resolve()` merge shape is reused conceptually for param layering. No new
+server instance, no boot-time coupling for the per-silo parts, no hard
+dependency on a client-side skills directory for ICP specialization.
 
 ## Components and data flow
 
 1. **`PresetRegistry`** - loads and validates `mcp_presets.yaml`, mirroring how
    `registry.py` loads `mcp_tools.yaml`. Exposes `get_preset(name) -> Preset`.
    Malformed yaml fails fast at boot, same as `mcp_tools.yaml`.
-2. **Silo to preset lookup** - reads `silo_config.preset` (cached), falling
-   back to `settings.default_mcp_preset`.
-3. **`patterns` tool change** - when the caller passes no explicit `profile`
-   arg, resolve the silo's preset and use its `skill_namespace`. Merge order:
-   ICP-namespace skills first, then `engrammic:*` base guides, then any
-   per-silo user skills. Explicit `profile=` still overrides as today (escape
-   hatch).
+2. **Silo to preset lookup** - new infra. `patterns` today has no path to the
+   Postgres binding: `_patterns_impl` only resolves `org_id` via
+   `get_mcp_auth_context()` and calls `get_skill_service()`. This design adds a
+   silo-to-preset resolver that reads `silo_config.preset` from the Postgres
+   store, with an in-process TTL cache keyed by `silo_id` (default 60s). The
+   cache is required: an uncached Postgres round trip on every `patterns` call
+   risks the recall-class latency targets. Resolver injection follows the same
+   service-accessor pattern as `get_skill_service()`.
+3. **`patterns` tool change** - the existing `profile` arg already acts as a
+   direct namespace filter (`namespace=profile` in `list`/`search`). Layering:
+   if the caller passes an explicit `profile`, it is used verbatim as today
+   (escape hatch, no preset lookup). If `profile` is absent, resolve the
+   silo's preset and use its `namespace`. Merge order: preset-namespace skills
+   first, then `engrammic:*` base guides, then any per-silo user skills. The
+   `profile` docstring is updated to document this layering.
 4. **Onboarding pointer** - the global `mcp_instructions` in `mcp_tools.yaml`
    gains one line: "At session start, call
-   `patterns(action='get', name='onboarding')` for your workflow guide." The
-   preset's `onboarding_skill` is what `name='onboarding'` resolves to within
-   that namespace, so per-ICP onboarding text is delivered without touching
-   boot-time instructions.
-5. **Param resolution** - tools with hardcoded defaults (`recall` `top_k`,
-   `depth`) refactored to read resolved settings. Ship one param wired end to
-   end (`default_recall_top_k`) to prove the path. Full param taxonomy is
-   deferred.
+   `patterns(action='get', name='onboarding')` for your workflow guide." This
+   instructions string is boot-global and identical for every tenant by
+   design; ICP differentiation happens entirely inside the `patterns`
+   response, never in the instructions text. `_patterns_impl` is changed so a
+   `get` action with a bare, unqualified `name` (no `namespace:` prefix)
+   auto-qualifies against the resolved preset namespace: bare `onboarding`
+   plus preset `coding` resolves to the skill named `coding:onboarding`. A
+   name that already contains a `:` is treated as fully qualified and passed
+   through unchanged.
+5. **Param resolution** - `recall` `top_k` and `depth` defaults are hardcoded
+   in the function signatures and do not read settings today; one is refactored
+   to read a resolved value. Ship one param wired end to end
+   (`default_recall_top_k`) to prove the path. The binding default setting is a
+   new top-level `Settings.default_icp_preset` field. Note: a
+   `PromptsConfig.mcp_preset` field already exists for LLM prompt presets and
+   is unrelated; do not reuse or rename it. Full param taxonomy is deferred.
 6. **Skill bundles** - two new builtin namespaces shipped in `skills/`:
    `coding:*` and `b2b-ops:*`, each with at minimum an `onboarding` skill.
-   Loaded exactly like today's `engrammic:*` builtins (in memory, silo `*`).
+   Loaded exactly like today's `engrammic:*` builtins: `_load_builtin` keys by
+   the SKILL.md frontmatter `name`, not the directory name, so directory names
+   are free-form. The name pattern `^[a-z0-9-]+:[a-z0-9-]+$` already accepts
+   `b2b-ops:onboarding`. `coding:` and `b2b-ops:` are reserved namespaces:
+   they are added to the `SkillCreate` import/create guard alongside the
+   existing `engrammic:` reservation, so a tenant cannot create user skills
+   that shadow or collide with ICP builtins. Builtins are merged first by
+   `list()`, so reservation also keeps ordering unambiguous.
 
 Flow: agent connects, reads the pointer in instructions, calls
 `patterns(get, onboarding)`, server resolves silo to preset to namespace,
@@ -157,13 +189,26 @@ feature by nature.
   behavior when set via preset.
 - Shipped ICP skill bundles parse as valid SKILL.md (portable core
   frontmatter present, body within size budget).
+- Alembic migration applies cleanly and is reversible
+  (`alembic upgrade head` then `downgrade`).
+- Bare-name auto-qualification: `patterns(get, name='onboarding')` with a
+  `coding`-bound silo returns `coding:onboarding`; a fully qualified name
+  passes through unchanged.
+- Silo-to-preset resolver cache: repeated `patterns` calls do not issue a
+  Postgres query per call within the TTL window.
+- Namespace reservation: a tenant create/import of a `coding:*` or
+  `b2b-ops:*` skill is rejected.
 
 ## Scope boundaries
 
-In scope: preset definition file, per-silo binding column and lookup,
-`patterns` namespace resolution and merge change, onboarding pointer line, one
-param wired end to end, two ICP skill bundles (`coding:*`, `b2b-ops:*`), README
-install path update.
+In scope: preset definition file (`mcp_presets.yaml`) and `PresetRegistry`;
+new Alembic migration adding the nullable `preset` column to the Postgres
+`silo_config` table; silo-to-preset resolver with TTL cache; `patterns`
+namespace resolution, bare-name auto-qualification, and merge change;
+onboarding pointer line; new `Settings.default_icp_preset` field; one param
+wired end to end; reservation of `coding:` and `b2b-ops:` namespaces in the
+skill create/import guard; two ICP skill bundles (`coding:*`, `b2b-ops:*`);
+README install path update.
 
 Out of scope: changing the MCP verb surface or tool profiles; full param
 taxonomy beyond the one proof param; an admin UI for editing presets;
@@ -177,3 +222,22 @@ filesystem delivery of ICP overlay bundles.
 - Skill bundles ship in SKILL.md open-standard format.
 - Dual-channel delivery; `patterns` is the per-silo vehicle, filesystem is
   base-tier bootstrap.
+- Binding store: Postgres `silo_config.preset` (durable write). The Memgraph
+  Pydantic `SiloConfig` is not used for binding; `resolve()` is mirrored as a
+  merge shape only.
+- `coding:` and `b2b-ops:` are reserved namespaces (builtin-only).
+- Bare unqualified `name` in `patterns(get)` auto-qualifies against the
+  resolved preset namespace; qualified names pass through.
+- New top-level `Settings.default_icp_preset`; the existing
+  `PromptsConfig.mcp_preset` is unrelated and untouched.
+
+## Review applied
+
+A codebase-grounded review (2026-05-16) raised two blockers and several
+should-fixes against the first draft. All ten findings were verified against
+file:line evidence and resolved in this revision: the two-`SiloConfig` store
+ambiguity (now Postgres-only binding with `resolve()` as a borrowed merge
+shape), the missing Alembic migration (now in scope and testing), the absent
+preset-lookup path in `patterns` (now a cached resolver), the `profile`
+naming/layering collision, the `onboarding` name-rewriting gap, namespace
+reservation, and the `mcp_preset` settings-field collision.
