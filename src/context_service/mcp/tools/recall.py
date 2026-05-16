@@ -6,7 +6,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
-from context_service.mcp.server import get_mcp_auth_context
+from context_service.mcp.server import get_mcp_auth_context, get_preset_resolver
 from context_service.mcp.tools.context_recall import _context_recall
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.services.models import derive_silo_id
@@ -21,12 +21,23 @@ async def _recall_impl(
     node_ids: list[str] | None = None,
     depth: int = 0,
     layers: list[str] | None = None,
-    top_k: int = 10,
+    top_k: int | None = None,
     include_hypotheses: bool = False,
 ) -> dict[str, Any]:
     """Implementation for recall tool."""
     auth = await get_mcp_auth_context()
     silo_id = str(derive_silo_id(auth.org_id))
+
+    effective_top_k = top_k
+    if effective_top_k is None:
+        effective_top_k = 10
+        try:
+            preset = await get_preset_resolver().resolve(silo_id)
+            override = preset.param_overrides.get("default_recall_top_k")
+            if isinstance(override, int) and override > 0:
+                effective_top_k = override
+        except RuntimeError:
+            pass
 
     result = await _context_recall(
         silo_id=silo_id,
@@ -34,7 +45,7 @@ async def _recall_impl(
         node_ids=node_ids,
         depth=depth,
         layers=layers,
-        top_k=top_k,
+        top_k=effective_top_k,
     )
 
     if include_hypotheses:
@@ -78,7 +89,7 @@ def register(mcp: FastMCP) -> None:
         node_ids: list[str] | None = None,
         depth: int = 0,
         layers: list[str] | None = None,
-        top_k: int = 10,
+        top_k: int | None = None,
         include_hypotheses: bool = False,
     ) -> dict[str, Any]:
         """Retrieve knowledge.
@@ -88,7 +99,7 @@ def register(mcp: FastMCP) -> None:
             node_ids: Specific nodes to fetch.
             depth: 0=flat, 1-3=graph traversal.
             layers: Filter: memory|knowledge|wisdom|intelligence.
-            top_k: Max results for search (default 10).
+            top_k: Max results for search (default 10, or preset value).
             include_hypotheses: Include tentative beliefs from current session.
 
         Returns:
