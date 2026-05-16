@@ -1,16 +1,16 @@
 """Dagster schedule definitions for context-service.
 
 SAGE (Synthesis, Aggregation, and Graph Evolution) schedules:
-- sage_custodian_schedule: ingestion pipeline (10 min)
-- sage_synthesizer_schedule: belief formation (30 min)
-- sage_groundskeeper_schedule: heat and maintenance (15 min)
+- sage_custodian_schedule: ingestion pipeline (every 2h)
+- sage_synthesizer_schedule: belief formation (hourly)
+- sage_groundskeeper_schedule: heat and maintenance (hourly)
 
 Maintenance schedules (independent):
-- reasoning_compaction_schedule: hourly
+- reasoning_compaction_schedule: every 2h
 - retention_schedule: daily 03:00
-- auto_tagging_schedule: every 30 min
+- auto_tagging_schedule: every 4h
 - tag_maintenance_schedule: daily 03:00
-- reconciliation_gc_schedule: every 15 min
+- reconciliation_gc_schedule: hourly
 - proposal_cleanup_schedule: daily 06:00
 - groundskeeper_gc_schedule: nightly 01:00
 """
@@ -130,7 +130,7 @@ def _run_request_with_partition(
 
 
 @dg.schedule(
-    cron_schedule="*/10 * * * *",
+    cron_schedule="0 */2 * * *",
     name="sage_custodian_schedule",
     target=dg.AssetSelection.assets(
         "extraction",
@@ -141,7 +141,7 @@ def _run_request_with_partition(
         "clustering",
         "proposal_detection",
     ),
-    description="SAGE Custodian (10 min): ingestion pipeline - extraction through proposal detection.",
+    description="SAGE Custodian (every 2h): ingestion pipeline - extraction through proposal detection.",
     execution_timezone="UTC",
 )
 def sage_custodian_schedule(
@@ -161,7 +161,7 @@ def sage_custodian_schedule(
 
 
 @dg.schedule(
-    cron_schedule="*/30 * * * *",
+    cron_schedule="0 * * * *",
     name="sage_synthesizer_schedule",
     target=dg.AssetSelection.assets(
         "causal_transitivity",
@@ -171,7 +171,7 @@ def sage_custodian_schedule(
         "belief_merge",
         "chain_stitch",
     ),
-    description="SAGE Synthesizer (30 min): belief formation - facts to wisdom.",
+    description="SAGE Synthesizer (hourly): belief formation - facts to wisdom.",
     execution_timezone="UTC",
 )
 def sage_synthesizer_schedule(
@@ -191,7 +191,7 @@ def sage_synthesizer_schedule(
 
 
 @dg.schedule(
-    cron_schedule="*/15 * * * *",
+    cron_schedule="0 * * * *",
     name="sage_groundskeeper_schedule",
     target=dg.AssetSelection.assets(
         "heat",
@@ -199,7 +199,7 @@ def sage_synthesizer_schedule(
         "heat_diffusion",
         "prewarm_sweep",
     ),
-    description="SAGE Groundskeeper (15 min): heat and maintenance.",
+    description="SAGE Groundskeeper (hourly): heat and maintenance.",
     execution_timezone="UTC",
 )
 def sage_groundskeeper_schedule(
@@ -224,10 +224,10 @@ def sage_groundskeeper_schedule(
 
 
 @dg.schedule(
-    cron_schedule="0 * * * *",
+    cron_schedule="0 */2 * * *",
     name="reasoning_compaction_schedule",
     target=dg.AssetSelection.assets("reasoning_compaction"),
-    description="Hourly reasoning-chain compaction per active silo.",
+    description="Reasoning-chain compaction every 2h per active silo.",
     execution_timezone="UTC",
 )
 def reasoning_compaction_schedule(
@@ -268,10 +268,10 @@ def retention_schedule(
 
 
 @dg.schedule(
-    cron_schedule="*/30 * * * *",
+    cron_schedule="0 */4 * * *",
     name="auto_tagging_schedule",
     target=dg.AssetSelection.assets("auto_tagging"),
-    description="Tag refinement every 30 minutes per active silo.",
+    description="Tag refinement every 4h per active silo.",
     execution_timezone="UTC",
 )
 def auto_tagging_schedule(
@@ -312,10 +312,10 @@ def tag_maintenance_schedule(
 
 
 @dg.schedule(
-    cron_schedule="*/15 * * * *",
+    cron_schedule="0 * * * *",
     name="reconciliation_gc_schedule",
     target=dg.AssetSelection.assets("reconciliation_gc"),
-    description="Every 15 minutes: re-reconcile orphaned chains and clean dangling Postgres rows.",
+    description="Hourly: re-reconcile orphaned chains and clean dangling Postgres rows.",
     execution_timezone="UTC",
 )
 def reconciliation_gc_schedule(
