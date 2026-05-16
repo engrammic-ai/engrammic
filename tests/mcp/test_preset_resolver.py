@@ -51,3 +51,12 @@ async def test_cache_avoids_repeat_db_calls_within_ttl():
     await r.resolve("silo-1")
     await r.resolve("silo-1")
     assert src.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_stale_cache_entry_triggers_refetch():
+    src = _FakeBindingSource("coding")
+    r = PresetResolver(binding_source=src, default_preset="coding", ttl_seconds=0)
+    await r.resolve("silo-1")
+    await r.resolve("silo-1")
+    assert src.calls == 2

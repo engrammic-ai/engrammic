@@ -35,7 +35,11 @@ class PresetResolver:
         self._src = binding_source
         self._default = default_preset
         self._ttl = ttl_seconds
+        # One entry per active silo; bounded in practice (no LRU needed at this scale).
         self._cache: dict[str, tuple[float, Preset]] = {}
+        # Validate the default at construction so a misconfigured default crashes
+        # at startup, not on the first silo request.
+        get_preset(default_preset)
 
     async def resolve(self, silo_id: str) -> Preset:
         now = time.monotonic()
