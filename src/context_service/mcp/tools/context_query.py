@@ -20,7 +20,13 @@ from context_service.mcp.server import (
     get_silo_service,
 )
 from context_service.models.mcp import Layer, QueryFilters
-from context_service.reranking import LiteLLMReranker, QueryExpander, is_hard_query
+from context_service.reranking import (
+    LiteLLMReranker,
+    QueryExpander,
+    apply_threshold_filter,
+    compute_retrieval_quality,
+    is_hard_query,
+)
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 from context_service.signals import emit_access_event
@@ -41,15 +47,20 @@ async def _apply_reranking(
     query: str,
     results: list[Any],
     settings: Any,
-) -> list[Any]:
-    """Apply reranking to search results if enabled."""
+) -> tuple[list[Any], bool]:
+    """Apply reranking to search results if enabled.
+
+    Returns:
+        (reranked_results, fallback_used) where ``fallback_used`` is True when
+        the reranker service failed and passthrough scores were substituted.
+    """
     if not settings.reranking.enabled or len(results) <= 1:
-        return results
+        return results, False
 
     models_config = load_models_config()
     reranker_model = models_config.litellm_reranker_model
     if reranker_model is None:
-        return results
+        return results, False
 
     reranker = LiteLLMReranker(
         model=reranker_model,
@@ -63,6 +74,7 @@ async def _apply_reranking(
         span.set_attribute("query_length", len(query))
         span.set_attribute("candidates", len(results))
         rerank_start = time.perf_counter()
+        fallback_used = False
         try:
             reranked = await reranker.rerank(
                 query=query,
@@ -77,10 +89,13 @@ async def _apply_reranking(
             latency_ms = (time.perf_counter() - rerank_start) * 1000
             span.set_attribute("latency_ms", latency_ms)
             record_reranking(latency_ms=latency_ms, success=False)
-            raise
+            # Return in original order with fallback flag; do not propagate.
+            fallback_used = True
+            return results, fallback_used
 
     id_to_result = {str(r.node_id): r for r in results}
-    return [id_to_result[rr.node_id] for rr in reranked if rr.node_id in id_to_result]
+    reranked_results = [id_to_result[rr.node_id] for rr in reranked if rr.node_id in id_to_result]
+    return reranked_results, fallback_used
 
 
 async def _maybe_expand_query(
@@ -231,7 +246,7 @@ async def _context_query(
     record_mcp_tool("context_query", elapsed_s * 1000)
     elapsed_ms = int(elapsed_s * 1000)
 
-    results = await _apply_reranking(effective_query, results, settings)
+    results, rerank_fallback = await _apply_reranking(effective_query, results, settings)
 
     if redis is not None and results:
         try:
@@ -256,7 +271,7 @@ async def _context_query(
             if coverage_from is not None:
                 metadata["causal_coverage_from"] = coverage_from
 
-    result_dicts = [
+    raw_result_dicts = [
         {
             "node_id": str(r.node_id),
             "layer": r.layer,
@@ -270,11 +285,29 @@ async def _context_query(
         for r in results
     ]
 
+    # Per-silo threshold overrides stored in silo metadata under
+    # "retrieval_thresholds": {"memory": 0.2, "knowledge": 0.6, ...}
+    threshold_overrides: dict[str, float] | None = None
+    if settings.causal.query_enabled:
+        # Silo may have already been fetched above for causal metadata.
+        pass  # We fetch below only when needed.
+    silo_for_thresholds = await silo_service.get_by_id(scope)
+    if silo_for_thresholds is not None:
+        threshold_overrides = silo_for_thresholds.metadata.get("retrieval_thresholds") or None
+
+    result_dicts, below_threshold = apply_threshold_filter(raw_result_dicts, threshold_overrides)
+    retrieval_quality, suggestion = compute_retrieval_quality(
+        result_dicts, below_threshold, fallback_used=rerank_fallback
+    )
+
     return {
         "results": result_dicts,
-        "total_candidates": len(results),
+        "total_candidates": len(raw_result_dicts),
         "search_time_ms": elapsed_ms,
         "search_mode": search_mode,
         "reflection_suggested": compute_reflection_suggested(result_dicts),
+        "retrieval_quality": retrieval_quality,
+        "below_threshold": below_threshold,
+        "suggestion": suggestion,
         "metadata": metadata,
     }
