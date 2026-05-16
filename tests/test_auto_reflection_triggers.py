@@ -106,7 +106,7 @@ async def test_check_rate_limit_no_expire_on_subsequent_increments() -> None:
 
 
 @pytest.mark.asyncio
-async def test_check_rate_limit_redis_failure_fails_open() -> None:
+async def test_check_rate_limit_redis_failure_fails_closed() -> None:
     redis = MagicMock()
     redis.incr = AsyncMock(side_effect=RuntimeError("redis down"))
     settings = _make_settings()
@@ -115,8 +115,8 @@ async def test_check_rate_limit_redis_failure_fails_open() -> None:
         return_value=settings,
     ):
         result = await check_rate_limit(redis, "silo-1")
-    # Fail-open: returns True so the reflection is not suppressed.
-    assert result is True
+    # Fail-closed: returns False so the reflection is suppressed (cost > availability).
+    assert result is False
 
 
 # ---------------------------------------------------------------------------

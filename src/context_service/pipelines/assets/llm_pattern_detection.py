@@ -101,7 +101,7 @@ def llm_pattern_detection(
         )
 
     async def _run() -> dict[str, Any]:
-        from context_service.db.queries import GET_FACTS_IN_CLUSTER, LIST_CLUSTERS
+        from context_service.db.queries import BATCH_GET_FACTS_BY_CLUSTERS, LIST_CLUSTERS
         from context_service.engine.llm_patterns import process_llm_candidates
         from context_service.extraction.filter.circuit_breaker import get_or_create
         from context_service.llm import build_llm_provider
@@ -134,8 +134,8 @@ def llm_pattern_detection(
                 "skipped": False,
             }
 
-        # --- Fetch facts per cluster ---
-        clusters: list[dict[str, Any]] = []
+        # --- Fetch facts per cluster (batched to avoid N+1) ---
+        cluster_ids = []
         for row in cluster_rows:
             cluster_node = row.get("c", row)
             cluster_id = str(
@@ -143,11 +143,25 @@ def llm_pattern_detection(
                 if isinstance(cluster_node, dict)
                 else cluster_node
             )
-            fact_rows = await store.execute_query(
-                GET_FACTS_IN_CLUSTER,
-                {"cluster_id": cluster_id, "silo_id": silo_id},
-            )
-            if not fact_rows:
+            cluster_ids.append(cluster_id)
+
+        fact_rows = await store.execute_query(
+            BATCH_GET_FACTS_BY_CLUSTERS,
+            {"cluster_ids": cluster_ids, "silo_id": silo_id},
+        )
+
+        # Group facts by cluster_id client-side
+        from collections import defaultdict
+
+        facts_by_cluster: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for r in fact_rows:
+            cid = str(r.get("cluster_id", ""))
+            facts_by_cluster[cid].append(r)
+
+        clusters: list[dict[str, Any]] = []
+        for cluster_id in cluster_ids:
+            cluster_facts = facts_by_cluster.get(cluster_id, [])
+            if not cluster_facts:
                 continue
             clusters.append(
                 {
@@ -158,9 +172,9 @@ def llm_pattern_detection(
                             "confidence": float(r.get("confidence", 1.0)),
                             "valid_from": r.get("valid_from"),
                         }
-                        for r in fact_rows
+                        for r in cluster_facts
                     ],
-                    "fact_ids": [str(r.get("fact_id", "")) for r in fact_rows],
+                    "fact_ids": [str(r.get("fact_id", "")) for r in cluster_facts],
                 }
             )
 
@@ -199,10 +213,9 @@ def llm_pattern_detection(
                 "skipped": False,
             }
 
-        # --- LLM provider (Haiku) ---
-        from context_service.engine.llm_patterns import HAIKU_MODEL
-
-        llm = build_llm_provider("anthropic", model=HAIKU_MODEL)
+        # --- LLM provider (from models.yaml) ---
+        model_spec = settings.models.get_model("pattern_detection")
+        llm = build_llm_provider(model_spec.provider, model=model_spec.model)
         try:
             process_result = await process_llm_candidates(
                 store,

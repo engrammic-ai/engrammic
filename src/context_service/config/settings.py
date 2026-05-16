@@ -19,6 +19,8 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from context_service.config.models import ModelsConfig
+
 load_dotenv(override=False)
 
 
@@ -93,6 +95,26 @@ class SynthesizerIdentityConfig(BaseModel):
     proposal_confidence_threshold: float = 0.6
     max_facts_per_synthesis: int = 10
     min_facts_for_synthesis: int = 3
+
+
+class RerankingSettings(BaseModel):
+    """Settings for semantic reranking and query expansion."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    enabled: bool = Field(default=True, description="Enable cross-encoder reranking")
+    expand_hard_queries: bool = Field(
+        default=True, description="Enable LLM query expansion for hard queries"
+    )
+    expansion_cache_ttl_days: int = Field(
+        default=7, description="TTL for cached query expansions in Redis"
+    )
+    reranker_timeout_seconds: float = Field(
+        default=2.0, description="Timeout for reranker API calls"
+    )
+    expander_timeout_seconds: float = Field(
+        default=5.0, description="Timeout for query expansion LLM calls"
+    )
 
 
 class DecayClassConfig(BaseModel):
@@ -186,7 +208,25 @@ class PostgresConfig(BaseModel):
     port: int = 5432
     user: str = "context"
     password: SecretStr = SecretStr("context")
-    database: str = "context_service"
+    database: str = "engrammic"
+
+    @model_validator(mode="before")
+    @classmethod
+    def _from_env(cls, data: dict[str, Any]) -> dict[str, Any]:
+        """Read from POSTGRES_* env vars for docker-compose compatibility."""
+        import os
+
+        env_map = {
+            "POSTGRES_HOST": "host",
+            "POSTGRES_PORT": "port",
+            "POSTGRES_USER": "user",
+            "POSTGRES_PASSWORD": "password",
+            "POSTGRES_DATABASE": "database",
+        }
+        for env_key, field in env_map.items():
+            if env_key in os.environ and field not in data:
+                data[field] = os.environ[env_key]
+        return data
 
     @property
     def dsn(self) -> str:
@@ -328,6 +368,10 @@ class LLMConfig(BaseModel):
     model: str = ""
     api_url: str | None = None
     api_key: SecretStr | None = None
+    default_timeout_seconds: float = Field(
+        default=60.0,
+        description="Default timeout for LLM API calls when caller passes None.",
+    )
     providers: dict[str, ProviderConfig] = Field(
         default_factory=lambda: {
             "anthropic": ProviderConfig(api_url="https://api.anthropic.com/v1/messages"),
@@ -400,6 +444,7 @@ class FeaturesConfig(BaseModel):
     otel_enabled: bool = False
     walker_entity_graph_mode: bool = True
     docs_enabled: bool = False
+    enable_test_endpoints: bool = False  # Admin endpoints for testing (disabled in prod)
 
 
 class TelemetryConfig(BaseModel):
@@ -627,6 +672,12 @@ def _load_identities_config() -> IdentitiesConfig:
     return IdentitiesConfig(**data.get("identities", {}))
 
 
+def _load_models_config() -> ModelsConfig:
+    from context_service.config.models import load_models_config
+
+    return load_models_config()
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -663,17 +714,19 @@ class Settings(BaseSettings):
     weak_links: WeakLinksSettings = Field(default_factory=WeakLinksSettings)
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
     identities: IdentitiesConfig = Field(default_factory=_load_identities_config)
+    models: ModelsConfig = Field(default_factory=_load_models_config)
     reasoning_chain_matching: ReasoningChainMatchingConfig = Field(
         default_factory=ReasoningChainMatchingConfig
     )
     chain_feedback: ChainFeedbackConfig = Field(default_factory=ChainFeedbackConfig)
+    reranking: RerankingSettings = Field(default_factory=RerankingSettings)
 
     # =========================================================================
     # Application Meta
     # =========================================================================
 
     app_name: str = Field(default="ContextService")
-    version: str = Field(default="1.3.0")
+    version: str = Field(default="1.3.1")
     debug: bool = Field(default=False)
     environment: str = Field(default="development")
 
@@ -705,6 +758,9 @@ class Settings(BaseSettings):
     dev_org_id: str = Field(default="dev-org")
     dev_user_id: str = Field(default="dev-user")
     dev_agent_id: str = Field(default="dev-agent")
+
+    # MCP settings
+    mcp_tool_profile: str = Field(default="standard")
 
     # =========================================================================
     # Memgraph Settings
@@ -799,7 +855,7 @@ class Settings(BaseSettings):
     # =========================================================================
 
     llm_provider: str = Field(default="")
-    default_llm_model: str = Field(default="gemini-2.0-flash")
+    default_llm_model: str = Field(default="gemini-2.5-flash")
 
     # Per-provider API keys (used by llm/ providers)
     anthropic_api_key: SecretStr | None = Field(default=None)
@@ -981,8 +1037,8 @@ class Settings(BaseSettings):
     # Summarization Settings
     # =========================================================================
 
-    summarization_provider: str = Field(default="anthropic")
-    summarization_model: str = Field(default="claude-haiku-4-5-20250929")
+    summarization_provider: str = Field(default="vertex")
+    summarization_model: str = Field(default="gemini-2.5-flash")
     summarization_max_tokens: int = Field(default=500)
 
     # =========================================================================

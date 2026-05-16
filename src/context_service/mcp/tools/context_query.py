@@ -8,7 +8,9 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 import structlog
+from opentelemetry import trace
 
+from context_service.config.models import load_models_config
 from context_service.config.settings import get_settings
 from context_service.engine.reflection_triggers import compute_reflection_suggested
 from context_service.mcp.server import (
@@ -18,14 +20,120 @@ from context_service.mcp.server import (
     get_silo_service,
 )
 from context_service.models.mcp import Layer, QueryFilters
+from context_service.reranking import LiteLLMReranker, QueryExpander, is_hard_query
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 from context_service.signals import emit_access_event
-from context_service.telemetry.metrics import record_mcp_tool
+from context_service.telemetry.metrics import (
+    record_hard_query_detection,
+    record_mcp_tool,
+    record_query_expansion,
+    record_reranking,
+)
 
 logger = structlog.get_logger(__name__)
+tracer = trace.get_tracer(__name__)
 
 _VALID_SEARCH_MODES = frozenset({"hybrid", "dense", "sparse"})
+
+
+async def _apply_reranking(
+    query: str,
+    results: list[Any],
+    settings: Any,
+) -> list[Any]:
+    """Apply reranking to search results if enabled."""
+    if not settings.reranking.enabled or len(results) <= 1:
+        return results
+
+    models_config = load_models_config()
+    reranker_model = models_config.litellm_reranker_model
+    if reranker_model is None:
+        return results
+
+    reranker = LiteLLMReranker(
+        model=reranker_model,
+        timeout_seconds=settings.reranking.reranker_timeout_seconds,
+        vertex_project=settings.vertex_project,
+    )
+    documents = [r.content or "" for r in results]
+    node_ids = [str(r.node_id) for r in results]
+
+    with tracer.start_as_current_span("recall.rerank") as span:
+        span.set_attribute("query_length", len(query))
+        span.set_attribute("candidates", len(results))
+        rerank_start = time.perf_counter()
+        try:
+            reranked = await reranker.rerank(
+                query=query,
+                documents=documents,
+                node_ids=node_ids,
+                top_k=len(results),
+            )
+            latency_ms = (time.perf_counter() - rerank_start) * 1000
+            span.set_attribute("latency_ms", latency_ms)
+            record_reranking(latency_ms=latency_ms, success=True)
+        except Exception:
+            latency_ms = (time.perf_counter() - rerank_start) * 1000
+            span.set_attribute("latency_ms", latency_ms)
+            record_reranking(latency_ms=latency_ms, success=False)
+            raise
+
+    id_to_result = {str(r.node_id): r for r in results}
+    return [id_to_result[rr.node_id] for rr in reranked if rr.node_id in id_to_result]
+
+
+async def _maybe_expand_query(
+    query: str,
+    settings: Any,
+    redis: Any,
+) -> tuple[str, bool]:
+    """Expand query if it's a hard query and expansion is enabled.
+
+    Returns:
+        Tuple of (effective_query, was_expanded)
+    """
+    if not settings.reranking.expand_hard_queries:
+        return query, False
+
+    hard = is_hard_query(query)
+    record_hard_query_detection(hard)
+    if not hard:
+        return query, False
+
+    if redis is None:
+        logger.warning("query_expansion_skipped", reason="redis_unavailable")
+        return query, False
+
+    models_config = load_models_config()
+    expander_model = models_config.litellm_expander_model
+    if expander_model is None:
+        return query, False
+
+    expander = QueryExpander(
+        llm_model=expander_model,
+        redis=redis,
+        cache_ttl_seconds=settings.reranking.expansion_cache_ttl_days * 86400,
+        timeout_seconds=settings.reranking.expander_timeout_seconds,
+    )
+
+    with tracer.start_as_current_span("recall.expand_query") as span:
+        span.set_attribute("query_length", len(query))
+        span.set_attribute("is_hard_query", True)
+        expand_start = time.perf_counter()
+        try:
+            expanded = await expander.expand(query)
+            latency_ms = (time.perf_counter() - expand_start) * 1000
+            span.set_attribute("latency_ms", latency_ms)
+            span.set_attribute("was_expanded", expanded != query)
+            record_query_expansion(latency_ms=latency_ms, success=True)
+        except Exception:
+            latency_ms = (time.perf_counter() - expand_start) * 1000
+            span.set_attribute("latency_ms", latency_ms)
+            record_query_expansion(latency_ms=latency_ms, success=False)
+            raise
+
+    return expanded, expanded != query
 
 
 async def _context_query(
@@ -77,6 +185,9 @@ async def _context_query(
     scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
     silo_service = get_silo_service()
 
+    settings = get_settings()
+    redis = get_redis()
+
     start = time.perf_counter()
 
     if as_of_dt is not None:
@@ -101,9 +212,14 @@ async def _context_query(
             response["warning"] = "as_of is in the future; returning current state"
         return response
 
+    # Query expansion for hard queries
+    effective_query, was_expanded = await _maybe_expand_query(query, settings, redis)
+    if was_expanded:
+        logger.info("query_expanded", original=query, expanded=effective_query)
+
     results = await ctx_svc.query(
         scope=scope,
-        query=query,
+        query=effective_query,
         layers=valid_layers,
         filters=parsed_filters,
         top_k=top_k,
@@ -115,7 +231,8 @@ async def _context_query(
     record_mcp_tool("context_query", elapsed_s * 1000)
     elapsed_ms = int(elapsed_s * 1000)
 
-    redis = get_redis()
+    results = await _apply_reranking(effective_query, results, settings)
+
     if redis is not None and results:
         try:
             await asyncio.wait_for(
@@ -129,7 +246,6 @@ async def _context_query(
         except Exception as exc:
             logger.warning("access_event_emit_failed", silo_id=silo_id, error=str(exc))
 
-    settings = get_settings()
     metadata: dict[str, Any] = {
         "causal_edges_enabled": settings.causal.query_enabled,
     }

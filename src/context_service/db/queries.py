@@ -430,7 +430,9 @@ ORDER BY depth
 # Leaf sources: nodes in the provenance chain with no further outbound edges
 PROVENANCE_ROOT_SOURCES = """
 MATCH path = (start {id: $node_id, silo_id: $silo_id})-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM|REFERENCES*1..10]->(source)
-WHERE NOT (source)-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM|REFERENCES]->()
+OPTIONAL MATCH (source)-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM|REFERENCES]->(downstream)
+WITH source, downstream
+WHERE downstream IS NULL
 RETURN DISTINCT
     source.id AS node_id,
     coalesce(source.type, labels(source)[0]) AS layer,
@@ -731,6 +733,44 @@ RETURN f.id AS fact_id, f.content AS content,
 ORDER BY coalesce(f.confidence, 1.0) DESC
 """
 
+# Batch version of GET_FACTS_IN_CLUSTER for N+1 fix (P-01).
+BATCH_GET_FACTS_BY_CLUSTERS = """
+UNWIND $cluster_ids AS cid
+MATCH (f:Fact)-[:MEMBER_OF]->(c:Cluster {id: cid, silo_id: $silo_id})
+RETURN c.id AS cluster_id, f.id AS fact_id, f.content AS content,
+       coalesce(f.confidence, 1.0) AS confidence, f.valid_from AS valid_from
+ORDER BY c.id, coalesce(f.confidence, 1.0) DESC
+"""
+
+# Batch version of GET_CHAINS_FOR_COMMITMENT for N+1 fix (P-02).
+BATCH_GET_CHAINS_BY_COMMITMENTS = """
+UNWIND $commitment_ids AS cid
+MATCH (chain:ReasoningChain)-[:CRYSTALLIZED_INTO]->(c {id: cid, silo_id: $silo_id})
+WHERE chain.status = 'published' AND chain.silo_id = $silo_id
+RETURN c.id AS commitment_id, chain.id AS id,
+       chain.produced_by_agent_id AS produced_by_agent_id,
+       COALESCE(chain.confidence, 0.5) AS confidence
+ORDER BY c.id, chain.id
+"""
+
+# Batch tag update for N+1 fix (P-03).
+# NOTE: Uses Memgraph internal id(n) rather than n.id + silo_id. This is
+# pre-existing behavior from the original per-node query. Tech debt: should
+# refactor auto_tagging asset to use application-level IDs for silo isolation.
+BATCH_UPDATE_NODE_TAGS = """
+UNWIND $updates AS u
+MATCH (n)
+WHERE id(n) = u.node_id
+SET n.tags = u.tags, n.auto_tagged_at = u.now
+"""
+
+# Batch mark documents as extracted for N+1 fix (P-04).
+BATCH_MARK_DOCS_EXTRACTED = """
+UNWIND $doc_ids AS did
+MATCH (d:Document {id: did, silo_id: $silo_id})
+SET d.extracted_at = $extracted_at
+"""
+
 # Create a :Belief node. Fact edges created separately via CREATE_BELIEF_FACT_EDGES.
 CREATE_BELIEF_FROM_FACTS = """
 MERGE (b:Belief {id: $belief_id, silo_id: $silo_id})
@@ -924,12 +964,12 @@ MATCH (b:Belief {silo_id: $silo_id})
 WHERE toLower(b.content) CONTAINS toLower($subject)
   AND (b.valid_to IS NULL OR b.valid_to > $as_of)
   AND b.tombstoned_at IS NULL
-WITH b
 OPTIONAL MATCH (b)-[:SYNTHESIZED_FROM]->(f:Fact {silo_id: $silo_id})
+WITH b, collect(f.id) AS fact_ids
 RETURN b.id AS belief_id, b.content AS content,
        coalesce(b.confidence, 1.0) AS confidence,
-       collect(f.id) AS fact_ids
-ORDER BY b.confidence DESC
+       fact_ids
+ORDER BY confidence DESC
 LIMIT $limit
 """
 
@@ -1048,9 +1088,9 @@ RETURN s.id AS session_id, s.silo_id AS silo_id, s.updated_at AS updated_at
 # beliefs that must be flagged for review when the referenced belief changes.
 # Parameters: belief_id (str), silo_id (str).
 FIND_BELIEFS_REFERENCING = """
-MATCH (b:Belief {silo_id: $silo_id})
-WHERE (b)-[:SYNTHESIZED_FROM|REVISED_FROM|MERGED_FROM|REFERENCES]->(:Belief {id: $belief_id, silo_id: $silo_id})
-  AND b.tombstoned_at IS NULL
+MATCH (target:Belief {id: $belief_id, silo_id: $silo_id})
+MATCH (b:Belief {silo_id: $silo_id})-[:SYNTHESIZED_FROM|REVISED_FROM|MERGED_FROM|REFERENCES]->(target)
+WHERE b.tombstoned_at IS NULL
 RETURN b.id AS belief_id, b.content AS content,
        coalesce(b.confidence, 1.0) AS confidence,
        coalesce(b.wisdom_status, 'active') AS wisdom_status
@@ -1275,20 +1315,21 @@ CREATE (cm:Node:Commitment {
     crystallized_from: wb.id
 })
 WITH wb, cm
-OPTIONAL MATCH (wb)-[:ABOUT]->(n)<-[:ABOUT]-(existing:Commitment)
-WHERE existing.silo_id = $silo_id
-OPTIONAL MATCH (superseding:Commitment)-[:SUPERSEDES]->(existing)
-WITH wb, cm, existing, superseding
-WHERE superseding IS NULL
-WITH wb, cm, collect(DISTINCT existing) AS to_supersede
 MATCH (wb)-[:ABOUT]->(n)
 CREATE (cm)-[:ABOUT]->(n)
-WITH DISTINCT cm, to_supersede, wb
-FOREACH (old IN to_supersede |
-    CREATE (cm)-[:SUPERSEDES {reason: $reason, created_at: $created_at}]->(old)
-    SET old.valid_to = $valid_from
-)
+WITH DISTINCT wb, cm
+OPTIONAL MATCH (cm)-[:ABOUT]->(shared_node)<-[:ABOUT]-(existing:Commitment {silo_id: $silo_id})
+WHERE existing.id <> cm.id
+WITH wb, cm, collect(DISTINCT existing.id) AS candidate_ids
 DETACH DELETE wb
+WITH cm, candidate_ids
+UNWIND (CASE WHEN size(candidate_ids) = 0 THEN [null] ELSE candidate_ids END) AS cid
+WITH cm, cid WHERE cid IS NOT NULL
+MATCH (existing:Commitment {id: cid, silo_id: $silo_id})
+OPTIONAL MATCH (superseding:Commitment)-[:SUPERSEDES]->(existing)
+WITH cm, existing, superseding WHERE superseding IS NULL
+CREATE (cm)-[:SUPERSEDES {reason: $reason, created_at: $created_at}]->(existing)
+SET existing.valid_to = $valid_from
 RETURN cm.id AS commitment_id
 """
 
@@ -1382,9 +1423,11 @@ MATCH (f:Fact)-[:MEMBER_OF]->(c:Cluster {silo_id: $silo_id})
 WITH c, count(f) AS fact_count
 WHERE fact_count >= $min_facts
 OPTIONAL MATCH (c)<-[:SYNTHESIZED_FROM]-(b:Belief {silo_id: $silo_id})
+WITH c, fact_count, b
+WHERE b IS NULL
 OPTIONAL MATCH (c)<-[:SYNTHESIZED_FROM]-(pb:ProposedBelief {silo_id: $silo_id, status: 'pending'})
-WITH c, fact_count, b, pb
-WHERE b IS NULL AND pb IS NULL
+WITH c, fact_count, pb
+WHERE pb IS NULL
 RETURN c.id AS cluster_id, fact_count
 ORDER BY fact_count DESC
 """

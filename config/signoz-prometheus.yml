@@ -1,4 +1,0 @@
-# Prometheus config for SigNoz query-service
-global:
-  scrape_interval: 60s
-  evaluation_interval: 60s

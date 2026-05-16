@@ -804,15 +804,14 @@ RETURN d.id AS doc_id,
 TOMBSTONE_DOCUMENT = f"""
 MATCH (d:{LABEL_DOCUMENT} {{id: $doc_id, silo_id: $silo_id}})
 OPTIONAL MATCH (d)<-[:{EDGE_DERIVED_FROM}]-(ps:{LABEL_PASSAGE})
-OPTIONAL MATCH (ps)<-[:HAS_CLAIM|SUPPORTS]-(f:Finding)
-// Right-to-erasure: intentionally matches all Findings regardless of
-// source or status. Overrides the rule-7 Finding read filter by design.
-WITH d, collect(DISTINCT ps) AS passages, collect(DISTINCT f) AS findings
-WITH d, passages, findings,
-     size(passages) AS deleted_passages,
-     size([x IN findings WHERE x IS NOT NULL]) AS deleted_findings
+WITH d, [p IN collect(DISTINCT ps) WHERE p IS NOT NULL] AS passages
+WITH d, passages, size(passages) AS deleted_passages
+OPTIONAL MATCH (ps_item:{LABEL_PASSAGE})<-[:HAS_CLAIM|SUPPORTS]-(f:Finding)
+WHERE ps_item IN passages
+WITH d, passages, deleted_passages, [x IN collect(DISTINCT f) WHERE x IS NOT NULL] AS findings
+WITH d, passages, deleted_passages, findings, size(findings) AS deleted_findings
 FOREACH (p IN passages | DETACH DELETE p)
-FOREACH (fn IN [x IN findings WHERE x IS NOT NULL] | DETACH DELETE fn)
+FOREACH (fn IN findings | DETACH DELETE fn)
 DETACH DELETE d
 RETURN 1 AS deleted_docs, deleted_passages, deleted_findings
 """
@@ -1005,7 +1004,7 @@ MATCH (e:IngestEvent {silo_id: $silo_id})
 WHERE e.created_at > $since
 WITH DISTINCT e.session_id AS session_id
 MATCH (ie:IngestEvent {session_id: session_id})
-WHERE size(ie.claim_ids) > 0  // claim_ids references :Claim node ids
+WHERE ie.claim_ids IS NOT NULL AND size(ie.claim_ids) > 0
 RETURN DISTINCT session_id
 LIMIT $limit
 """

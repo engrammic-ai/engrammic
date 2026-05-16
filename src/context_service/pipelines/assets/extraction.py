@@ -33,11 +33,6 @@ RETURN d.id AS id, d.content AS content, d.source_uri AS source_uri
 LIMIT $batch
 """
 
-_MARK_DOC_EXTRACTED = """
-MATCH (d:Document {id: $doc_id, silo_id: $silo_id})
-SET d.extracted_at = $extracted_at
-"""
-
 
 @dg.asset(
     name="extraction",
@@ -118,11 +113,12 @@ def extraction(
             now = datetime.now(UTC).isoformat()
 
             # Accumulate writes across all docs in this batch, then issue
-            # exactly 4 RTTs after the loop. R-003/F-016 from 2026-04-28 review.
+            # batch writes after the loop. R-003/F-016 from 2026-04-28 review.
             all_claim_rows: list[dict[str, Any]] = []
             all_attach_rows: list[dict[str, Any]] = []
             all_mention_rows: list[dict[str, Any]] = []
             all_ref_rows: list[dict[str, Any]] = []
+            extracted_doc_ids: list[str] = []
 
             for row in rows:
                 doc_id: str = str(row["id"])
@@ -138,12 +134,10 @@ def extraction(
                     result, usage = await svc.extract(content)
                     tokens_used += usage.total_tokens
                     docs_processed += 1
-                    context.log.info(f"Extracted {len(result.entities)} entities, {len(result.relationships)} relationships from {doc_id}")
-                    # Mark doc as extracted regardless of claim count
-                    await client.execute_write(
-                        _MARK_DOC_EXTRACTED,
-                        {"doc_id": doc_id, "silo_id": silo_id, "extracted_at": now},
+                    context.log.info(
+                        f"Extracted {len(result.entities)} entities, {len(result.relationships)} relationships from {doc_id}"
                     )
+                    extracted_doc_ids.append(doc_id)
                 except Exception as exc:
                     context.log.warning(f"extraction failed for doc {doc_id}: {exc}")
                     continue
@@ -275,6 +269,11 @@ def extraction(
                 await client.execute_write(
                     queries.BATCH_ATTACH_CLAIM_REFERENCES,
                     {"rows": all_ref_rows, "silo_id": silo_id},
+                )
+            if extracted_doc_ids:
+                await client.execute_write(
+                    queries.BATCH_MARK_DOCS_EXTRACTED,
+                    {"doc_ids": extracted_doc_ids, "silo_id": silo_id, "extracted_at": now},
                 )
 
             if len(rows) < _BATCH_SIZE:

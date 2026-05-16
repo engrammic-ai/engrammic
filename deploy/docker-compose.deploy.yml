@@ -4,7 +4,7 @@
 services:
   caddy:
     image: caddy:2-alpine
-    container_name: context-service-caddy
+    container_name: engrammic-caddy
     ports:
       - "80:80"
       - "443:443"

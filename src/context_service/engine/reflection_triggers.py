@@ -76,14 +76,14 @@ async def check_rate_limit(redis: Redis[bytes], silo_id: str) -> bool:  # type: 
             )
         return within_limit
     except Exception as exc:
-        # Redis failure → allow the reflection to proceed (fail-open).
+        # Redis failure → block the reflection (fail-closed).
         logger.warning(
             "auto_reflect_rate_limit_check_failed",
             silo_id=silo_id,
             error_type=type(exc).__name__,
             error=str(exc),
         )
-        return True
+        return False
 
 
 def compute_reflection_suggested(results: list[dict[str, Any]]) -> bool:

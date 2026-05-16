@@ -140,9 +140,12 @@ class LiteLLMEmbeddingService:
             attributes={"model": self._model, "batch_size": len(texts)},
         ) as span:
             try:
+                from context_service.config.settings import get_settings
+
                 start = time.perf_counter()
+                timeout = get_settings().llm.default_timeout_seconds
                 response = await litellm.aembedding(
-                    model=self._model, input=texts, dimensions=self._dimensions
+                    model=self._model, input=texts, dimensions=self._dimensions, timeout=timeout
                 )
                 duration_ms = (time.perf_counter() - start) * 1000
                 span.set_attribute("duration_ms", duration_ms)

@@ -133,7 +133,7 @@ class ClusteringJob:
             "id": self.id,
             "silo_id": self.silo_id,
             "status": self.status.value,
-            "level_counts": self.level_counts,
+            "level_counts": {str(k): v for k, v in self.level_counts.items()},
             "total_clusters": self.total_clusters,
             "error": self.error,
             "created_at": self.created_at.isoformat(),

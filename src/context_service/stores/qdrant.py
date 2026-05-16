@@ -53,17 +53,18 @@ class QdrantClient:
 
     def __init__(
         self,
+        vector_size: int,
         url: str = "http://localhost:6333",
         api_key: str | None = None,
-        vector_size: int = 1024,
         collection_name: str = "context_vectors",
     ) -> None:
         """Initialize the Qdrant client.
 
         Args:
+            vector_size: Dimension of embedding vectors. Must be provided
+                explicitly; use ``from_settings`` to derive from config.
             url: Qdrant server URL.
             api_key: Optional API key for authentication.
-            vector_size: Dimension of embedding vectors.
             collection_name: Qdrant collection name.
         """
         self._url = url

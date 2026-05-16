@@ -285,6 +285,7 @@ async def _context_assert(
     )
 
     promoted = False
+    promoted_error: str | None = None
     if len(evidence_list) >= _R1_THRESHOLD:
         try:
             promotion_result = await ctx_svc.promote_claim_to_fact(
@@ -294,14 +295,15 @@ async def _context_assert(
             )
             if promotion_result is not None:
                 promoted = True
-        except Exception:
+        except Exception as exc:
+            promoted_error = str(exc)
             logger.warning(
                 "claim_assert_promotion_failed",
                 exc_info=True,
                 claim_id=str(node.id),
             )
 
-    return {
+    response: dict[str, Any] = {
         "node_id": str(node.id),
         "layer": "knowledge",
         "claim_type": claim_type,
@@ -310,6 +312,9 @@ async def _context_assert(
         "promoted_to_fact": promoted,
         "created_at": datetime.now(UTC).isoformat(),
     }
+    if promoted_error is not None:
+        response["promoted_error"] = promoted_error
+    return response
 
 
 async def _context_commit(

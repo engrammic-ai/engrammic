@@ -19,8 +19,10 @@ from context_service.pipelines.assets.embedding import embedding_asset as embedd
 from context_service.pipelines.assets.extraction import extraction
 from context_service.pipelines.assets.fact_promotion import claim_to_fact_promotion
 from context_service.pipelines.assets.heat import heat_asset
+from context_service.pipelines.assets.heat_diffusion import heat_diffusion_asset
 from context_service.pipelines.assets.llm_pattern_detection import llm_pattern_detection
 from context_service.pipelines.assets.pattern_detection import pattern_detection
+from context_service.pipelines.assets.prewarm_sweep import prewarm_sweep_asset
 from context_service.pipelines.assets.proposal_cleanup import proposal_cleanup
 from context_service.pipelines.assets.proposal_detection import proposal_detection
 from context_service.pipelines.assets.reconciliation_gc import reconciliation_gc
@@ -45,6 +47,7 @@ all_assets: list[Any] = [
     causal_tombstone,
     clustering,
     heat_asset,
+    heat_diffusion_asset,
     edge_heat_asset,
     reasoning_compaction,
     belief_synthesis_asset,
@@ -63,4 +66,5 @@ all_assets: list[Any] = [
     chain_usefulness_signals,
     step_embedding_backfill,
     session_step_embedding,
+    prewarm_sweep_asset,
 ]

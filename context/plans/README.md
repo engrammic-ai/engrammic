@@ -2,9 +2,11 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-13)
+## Current state (2026-05-15)
 
 **Shipped:**
+- v2.5 SAGE Job Consolidation (replaced 8 sensors with 3 scheduled jobs, pending work queries)
+- v2.4 Heat Diffusion (Dagster asset, edge heat propagation, prewarm sweep)
 - Self-Hosted Telemetry (two-tier beacon system, install ID, collector, docs)
 - v2.3 Telemetry Expansion (OTEL metrics for all storage backends, LLM tokens, chain reuse)
 - v2.2 Reasoning Chain Applicability (three-layer matching, DTW, implicit feedback)
@@ -23,6 +25,8 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Status | Description |
 |------|--------|-------------|
+| [2026-05-15-semantic-reranking.md](./2026-05-15-semantic-reranking.md) | Ready | Vertex AI reranking + LLM query expansion for entailment cases |
+| [2026-05-15-mcp-tool-surface-redesign.md](./2026-05-15-mcp-tool-surface-redesign.md) | Ready | Intent-based MCP tools with YAML config and profiles |
 | [2026-05-13-gcp-deployment.md](./2026-05-13-gcp-deployment.md) | Ready | Pulumi GCP infra - scaffold done, ready for first deploy |
 
 Next candidates:
@@ -51,10 +55,13 @@ Next candidates:
 | [2026-05-09-architecture-review.md](./2026-05-09-architecture-review.md) | Architecture decisions: hypergraph, consistency, custodian split, observability |
 | [eag-integration-audit.md](./eag-integration-audit.md) | Deferred items from EAG port |
 | [../specs/reasoning-chain-applicability.md](../specs/reasoning-chain-applicability.md) | Spec: reasoning chain applicability matching design |
+| [../specs/semantic-reranking.md](../specs/semantic-reranking.md) | Spec: semantic reranking with query expansion for entailment |
 
 ## Archive
 
 Completed plans in `archive/`:
+- SAGE Job Consolidation (2026-05-15) - 3 scheduled jobs replacing 8 sensors, pending work queries
+- Heat Diffusion (2026-05-15) - Dagster asset, edge heat propagation, prewarm sweep
 - Self-Hosted Telemetry (2026-05-13) - two-tier beacon, install ID, collector
 - Telemetry Expansion (2026-05-13) - OTEL metrics for storage backends, LLM tokens
 - Reasoning Chain Applicability (2026-05-12) - three-layer matching, DTW, implicit feedback

@@ -173,7 +173,7 @@ async def get_mcp_auth_context() -> AuthContext:
     )
     from context_service.config.settings import get_settings
 
-    headers = get_http_headers(include={"authorization", "x-agent-id", "x-session-id"})
+    headers = get_http_headers(include={"authorization", "x-agent-id", "x-session-id", "x-org-id"})
     auth_header = headers.get("authorization")
 
     if auth_header:
@@ -196,10 +196,12 @@ async def get_mcp_auth_context() -> AuthContext:
     settings = get_settings()
     if settings.auth_enabled:
         raise MCPAuthError("Missing Authorization header on authenticated MCP transport")
+    # In dev mode, allow X-Org-Id header to override dev_org_id for test isolation
+    org_id = headers.get("x-org-id") or settings.dev_org_id
     agent_id = headers.get("x-agent-id") or f"user:{settings.dev_user_id}"
     session_id = headers.get("x-session-id")  # str | None, already typed above
     return AuthContext(
-        org_id=settings.dev_org_id,
+        org_id=org_id,
         user_id=settings.dev_user_id,
         email=None,
         is_dev=True,
@@ -208,22 +210,34 @@ async def get_mcp_auth_context() -> AuthContext:
     )
 
 
-def create_mcp_server() -> FastMCP:
-    """Create and configure the FastMCP server with all EAG tools registered."""
-    mcp = FastMCP(
-        name="context-service",
-        instructions=(
-            "EAG context management for AI agents. "
-            "Use remember/assert/commit/reflect for writes, "
-            "query/get/graph for reads, "
-            "provenance/history for meta-memory."
-        ),
+def create_mcp_server(profile: str | None = None) -> FastMCP:
+    """Create and configure the FastMCP server with intent-based tools.
+
+    Args:
+        profile: Tool profile override. If None, uses settings or env var.
+    """
+    import os
+
+    from context_service.config.settings import get_settings
+    from context_service.mcp.tools.registry import (
+        get_mcp_instructions,
+        register_profile_tools,
     )
 
-    # Register all EAG tools
-    from context_service.mcp.tools import register_all
+    settings = get_settings()
 
-    register_all(mcp)
+    # Determine profile: param > env > settings > default
+    resolved_profile = (
+        profile or os.environ.get("MCP_TOOL_PROFILE") or settings.mcp_tool_profile or "standard"
+    )
 
-    logger.info("MCP server created", tools=7)
+    mcp = FastMCP(
+        name="engrammic",
+        instructions=get_mcp_instructions(),
+    )
+
+    # Register tools based on profile
+    register_profile_tools(mcp, resolved_profile)
+
+    logger.info("mcp_server_created", profile=resolved_profile)
     return mcp

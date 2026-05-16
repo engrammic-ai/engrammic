@@ -62,6 +62,18 @@ async def test_validate_uri_unreachable():
 
 
 @pytest.mark.asyncio
+async def test_validate_urn_accepted(validator):
+    result = await validator.validate(
+        "urn:legal:case:california:supreme_court:edwards_v_arthur_andersen_llp:2008",
+        silo_id="silo-1",
+    )
+
+    assert result.status == "valid"
+    assert result.confidence == 0.85
+    assert "URN" in result.reason
+
+
+@pytest.mark.asyncio
 async def test_validate_invalid_format(validator):
     result = await validator.validate("invalid-ref", silo_id="silo-1")
 

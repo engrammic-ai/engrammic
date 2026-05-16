@@ -1,0 +1,149 @@
+# Model configuration - single source of truth for LLM/embedding model choices
+#
+# Hierarchy (highest priority first):
+#   1. Postgres per-silo overrides (org.default_llm, etc.)
+#   2. Environment variables (MODELS__TIER, MODELS__OVERRIDES__*, etc.)
+#   3. Explicit overrides below
+#   4. Active tier preset
+#
+# Tier presets optimize for different cost/quality tradeoffs:
+#   - economy: minimize spend, use flash everywhere
+#   - balanced: pro for reasoning, flash for fast tasks (default)
+#   - premium: pro everywhere for maximum quality
+#   - hybrid: self-hosted embeddings (TEI) + Vertex LLMs
+#   - self_hosted: fully self-hosted with vLLM/TEI
+#   - self_hosted_budget: self-hosted with smaller efficient models
+#
+# Embedding model notes:
+#   - Vertex tiers use text-embedding-005 (768 dims, burns GC credits)
+#   - Self-hosted tiers use Nomic Embed v1.5 (recommended for on-prem)
+#     - 137M params, 4x faster than BGE-M3, Matryoshka support
+#     - Apache 2.0 license, no restrictions
+
+tier: balanced
+vertex_location: europe-north1
+vertex_project: engrammic
+
+tiers:
+  economy:
+    embeddings:
+      provider: vertex_ai
+      model: text-embedding-005
+      dimensions: 768
+    reasoning:
+      provider: vertex
+      model: gemini-2.5-flash
+    fast:
+      provider: vertex
+      model: gemini-2.5-flash
+    reranker:
+      provider: vertex_ai
+      model: semantic-ranker-default@latest
+    query_expander:
+      provider: vertex
+      model: gemini-2.5-flash
+
+  balanced:
+    embeddings:
+      provider: vertex_ai
+      model: text-embedding-005
+      dimensions: 768
+    reasoning:
+      provider: vertex
+      model: gemini-2.5-pro
+    fast:
+      provider: vertex
+      model: gemini-2.5-flash
+    reranker:
+      provider: vertex_ai
+      model: semantic-ranker-default@latest
+    query_expander:
+      provider: vertex
+      model: gemini-2.5-flash
+
+  premium:
+    embeddings:
+      provider: vertex_ai
+      model: text-embedding-005
+      dimensions: 768
+    reasoning:
+      provider: vertex
+      model: gemini-2.5-pro
+    fast:
+      provider: vertex
+      model: gemini-2.5-pro
+    reranker:
+      provider: vertex_ai
+      model: semantic-ranker-default@latest
+    query_expander:
+      provider: vertex
+      model: gemini-2.5-pro
+
+  # Hybrid: self-hosted embeddings + Vertex LLMs
+  # Best of both: fast local embeddings, GC credits for LLMs
+  hybrid:
+    embeddings:
+      provider: tei  # Hugging Face Text Embeddings Inference
+      model: nomic-ai/nomic-embed-text-v1.5  # 137M params, 4x faster, Matryoshka
+      dimensions: 768
+    reasoning:
+      provider: vertex
+      model: gemini-2.5-pro
+    fast:
+      provider: vertex
+      model: gemini-2.5-flash
+    reranker:
+      provider: vertex_ai
+      model: semantic-ranker-default@latest
+    query_expander:
+      provider: vertex
+      model: gemini-2.5-flash
+
+  # Fully self-hosted (vLLM + TEI)
+  # Requires: vLLM server, TEI server, GPU infrastructure
+  self_hosted:
+    embeddings:
+      provider: tei
+      model: nomic-ai/nomic-embed-text-v1.5  # 137M params, fast
+      dimensions: 768
+    reasoning:
+      provider: vllm
+      model: google/gemma-4-31B  # Apache 2.0, 85.2% MMLU Pro
+    fast:
+      provider: vllm
+      model: google/gemma-4-26B-A4B  # MoE, 8x less compute
+
+  self_hosted_budget:
+    embeddings:
+      provider: tei
+      model: nomic-ai/nomic-embed-text-v1.5
+      dimensions: 768
+    reasoning:
+      provider: vllm
+      model: Qwen/Qwen3.6-27B  # 72.4% SWE-bench, great for agents
+    fast:
+      provider: vllm
+      model: Qwen/Qwen3-7B  # HumanEval leader in 7B class
+
+# Task-to-tier mapping (which tier each task uses)
+# Override individual tasks without changing the whole tier
+task_mapping:
+  # Reasoning tier (quality matters)
+  synthesis: reasoning
+  validation: reasoning
+  custodian_deep: reasoning
+
+  # Fast tier (speed/cost matters)
+  summarization: fast
+  pattern_detection: fast
+  custodian_fast: fast
+  expansion: fast
+  default: fast
+
+# Explicit per-task overrides (takes precedence over tier)
+# Example:
+#   overrides:
+#     summarization:
+#       provider: anthropic
+#       model: claude-haiku-4-5
+overrides: {}

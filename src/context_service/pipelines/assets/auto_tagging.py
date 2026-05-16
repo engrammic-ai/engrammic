@@ -42,13 +42,6 @@ RETURN
 LIMIT $limit
 """
 
-_UPDATE_NODE_TAGS_CYPHER = """
-MATCH (n)
-WHERE id(n) = $node_id
-SET n.tags = $tags,
-    n.auto_tagged_at = $auto_tagged_at
-"""
-
 _TAG_PROMPT_TEMPLATE = """\
 You are a precise tagging assistant. Given the following content snippets from a \
 knowledge graph, produce a JSON object mapping each node_id to a list of concise, \
@@ -149,28 +142,28 @@ def auto_tagging(
             context.log.warning(f"silo={silo_id} LLM returned unparseable tag response")
             return {"silo_id": silo_id, "processed": 0, "skipped": len(records), "errors": 1}
 
-        # Write tags back.
+        # Write tags back (batched to avoid N+1).
+        from context_service.db.queries import BATCH_UPDATE_NODE_TAGS
+
         now = datetime.datetime.now(datetime.UTC).isoformat()
+        updates = []
+        for record in records:
+            node_id_int = int(record["node_id"])
+            node_id_str = str(node_id_int)
+            tags = tag_map.get(node_id_str)
+            if tags:
+                updates.append({"node_id": node_id_int, "tags": tags, "now": now})
+
         processed = 0
         errors = 0
-        async with driver.session() as session:
-            for record in records:
-                node_id_int = int(record["node_id"])
-                node_id_str = str(node_id_int)
-                tags = tag_map.get(node_id_str)
-                if not tags:
-                    continue
-                try:
-                    await session.run(
-                        _UPDATE_NODE_TAGS_CYPHER,
-                        node_id=node_id_int,
-                        tags=tags,
-                        auto_tagged_at=now,
-                    )
-                    processed += 1
-                except Exception as exc:  # noqa: BLE001
-                    context.log.warning(f"silo={silo_id} node={node_id_str} tag write failed: {exc}")
-                    errors += 1
+        if updates:
+            try:
+                async with driver.session() as session:
+                    await session.run(BATCH_UPDATE_NODE_TAGS, updates=updates)
+                processed = len(updates)
+            except Exception as exc:  # noqa: BLE001
+                context.log.warning(f"silo={silo_id} batch tag write failed: {exc}")
+                errors = len(updates)
 
         skipped = len(records) - processed - errors
         return {

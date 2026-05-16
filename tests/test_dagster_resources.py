@@ -11,30 +11,11 @@ from context_service.pipelines.resources import (
     MemgraphResource,
     QdrantResource,
     RedisResource,
-    _infer_llm_provider,
     build_default_resources,
 )
 
-# ---------------------------------------------------------------------------
-# _infer_llm_provider
-# ---------------------------------------------------------------------------
-
-
-def test_infer_llm_provider_anthropic() -> None:
-    assert _infer_llm_provider("claude-3-haiku") == "anthropic"
-
-
-def test_infer_llm_provider_openai() -> None:
-    assert _infer_llm_provider("gpt-4o-mini") == "openai"
-
-
-def test_infer_llm_provider_vertex() -> None:
-    assert _infer_llm_provider("vertex-gemini-pro") == "vertex_gemini"
-
-
-def test_infer_llm_provider_gemini_default() -> None:
-    assert _infer_llm_provider("gemini-2.0-flash") == "gemini"
-
+# _infer_llm_provider was removed from resources.py; provider inference is now
+# handled inside build_default_resources via LLMResource directly.
 
 # ---------------------------------------------------------------------------
 # LLMResource

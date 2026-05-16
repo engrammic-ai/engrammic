@@ -65,6 +65,10 @@ _BATCH_SIZE = 100
 # Minimum content length to be worth embedding — matches the MCP service path constant.
 _MIN_CONTENT_LEN = 10
 
+# Maximum characters to embed per node. Embedding models typically accept ~8K tokens;
+# 8K chars is conservative. Truncation is logged at info level.
+MAX_EMBED_CHARS = 8000
+
 _SCAN_UNEMBEDDED_NODES = """
 MATCH (n)
 WHERE n.silo_id = $silo_id
@@ -140,7 +144,13 @@ def embedding_asset(
 
                 for batch_start in range(0, len(eligible), _BATCH_SIZE):
                     batch = eligible[batch_start : batch_start + _BATCH_SIZE]
-                    texts = [str(r["content"]) for r in batch]
+                    raw_texts = [str(r["content"]) for r in batch]
+                    truncated_count = sum(1 for t in raw_texts if len(t) > MAX_EMBED_CHARS)
+                    if truncated_count > 0:
+                        context.log.info(
+                            f"truncating {truncated_count} texts to {MAX_EMBED_CHARS} chars"
+                        )
+                    texts = [t[:MAX_EMBED_CHARS] for t in raw_texts]
 
                     try:
                         vectors = await embed_svc.embed(texts)

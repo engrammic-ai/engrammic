@@ -5,10 +5,9 @@ import pytest
 
 from context_service.pipelines.schedules import (
     all_schedules,
-    clustering_pipeline_schedule,
-    custodian_pipeline_schedule,
-    heat_pipeline_schedule,
-    knowledge_pipeline_schedule,
+    sage_custodian_schedule,
+    sage_groundskeeper_schedule,
+    sage_synthesizer_schedule,
 )
 
 
@@ -19,51 +18,41 @@ def defs() -> dg.Definitions:
     return _defs
 
 
-def test_custodian_pipeline_schedule_registered(defs: dg.Definitions) -> None:
-    sched = defs.get_schedule_def("custodian_pipeline_schedule")
+def test_sage_custodian_schedule_registered(defs: dg.Definitions) -> None:
+    sched = defs.get_schedule_def("sage_custodian_schedule")
     assert sched is not None
 
 
-def test_knowledge_pipeline_schedule_registered(defs: dg.Definitions) -> None:
-    sched = defs.get_schedule_def("knowledge_pipeline_schedule")
+def test_sage_synthesizer_schedule_registered(defs: dg.Definitions) -> None:
+    sched = defs.get_schedule_def("sage_synthesizer_schedule")
     assert sched is not None
 
 
-def test_clustering_pipeline_schedule_registered(defs: dg.Definitions) -> None:
-    sched = defs.get_schedule_def("clustering_pipeline_schedule")
+def test_sage_groundskeeper_schedule_registered(defs: dg.Definitions) -> None:
+    sched = defs.get_schedule_def("sage_groundskeeper_schedule")
     assert sched is not None
 
 
-def test_heat_pipeline_schedule_registered(defs: dg.Definitions) -> None:
-    sched = defs.get_schedule_def("heat_pipeline_schedule")
-    assert sched is not None
+def test_sage_custodian_schedule_cron() -> None:
+    assert sage_custodian_schedule.cron_schedule == "*/10 * * * *"
 
 
-def test_custodian_pipeline_schedule_cron() -> None:
-    assert custodian_pipeline_schedule.cron_schedule == "*/15 * * * *"
+def test_sage_synthesizer_schedule_cron() -> None:
+    assert sage_synthesizer_schedule.cron_schedule == "*/30 * * * *"
 
 
-def test_knowledge_pipeline_schedule_cron() -> None:
-    assert knowledge_pipeline_schedule.cron_schedule == "0 * * * *"
-
-
-def test_clustering_pipeline_schedule_cron() -> None:
-    assert clustering_pipeline_schedule.cron_schedule == "0 4 * * *"
-
-
-def test_heat_pipeline_schedule_cron() -> None:
-    assert heat_pipeline_schedule.cron_schedule == "0 2 * * *"
+def test_sage_groundskeeper_schedule_cron() -> None:
+    assert sage_groundskeeper_schedule.cron_schedule == "*/15 * * * *"
 
 
 def test_all_schedules_count() -> None:
-    assert len(all_schedules) == 11
+    assert len(all_schedules) == 10
 
 
 def test_schedule_names_in_all_schedules() -> None:
     names = {s.name for s in all_schedules}
-    assert "custodian_pipeline_schedule" in names
-    assert "knowledge_pipeline_schedule" in names
-    assert "clustering_pipeline_schedule" in names
-    assert "heat_pipeline_schedule" in names
+    assert "sage_custodian_schedule" in names
+    assert "sage_synthesizer_schedule" in names
+    assert "sage_groundskeeper_schedule" in names
     assert "auto_tagging_schedule" in names
     assert "tag_maintenance_schedule" in names

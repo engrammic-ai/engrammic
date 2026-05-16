@@ -1,24 +1,27 @@
 """Dagster schedule definitions for context-service.
 
-Consolidated into logical DAG chains that respect asset dependencies.
-Schedules yield one RunRequest per active silo by querying Memgraph at
-evaluation time.
+SAGE (Synthesis, Aggregation, and Graph Evolution) schedules:
+- sage_custodian_schedule: ingestion pipeline (every 2h)
+- sage_synthesizer_schedule: belief formation (hourly)
+- sage_groundskeeper_schedule: heat and maintenance (hourly)
 
-Chains:
-- custodian_pipeline: custodian_visit -> custodian_finalize (15min)
-- knowledge_pipeline: claim_to_fact_promotion -> pattern_detection -> llm_pattern_detection (hourly)
-- clustering_pipeline: clustering -> chain_stitch -> proposal_detection (daily 04:00)
-- heat_pipeline: heat -> edge_heat -> weak_link_review (daily 02:00)
-- maintenance: independent cleanup jobs (various schedules)
+Maintenance schedules (independent):
+- reasoning_compaction_schedule: every 2h
+- retention_schedule: daily 03:00
+- auto_tagging_schedule: every 4h
+- tag_maintenance_schedule: daily 03:00
+- reconciliation_gc_schedule: hourly
+- proposal_cleanup_schedule: daily 06:00
+- groundskeeper_gc_schedule: nightly 01:00
 """
 
-import asyncio
 from collections.abc import Iterator
 from typing import Any
 
 import dagster as dg
 from dagster import ScheduleEvaluationContext
 
+from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import MemgraphResource
 
 _LIST_ACTIVE_SILOS = """
@@ -26,8 +29,41 @@ MATCH (d:Document)
 RETURN DISTINCT d.silo_id AS silo_id
 """
 
+_SILOS_WITH_PENDING_CUSTODIAN_WORK = """
+MATCH (d:Document)
+WHERE d.processed_at IS NULL
+   OR d.embedded_at IS NULL
+RETURN DISTINCT d.silo_id AS silo_id
+"""
+
+_SILOS_WITH_PENDING_SYNTHESIZER_WORK = """
+MATCH (c:Cluster)
+WHERE NOT EXISTS { MATCH (c)<-[:SYNTHESIZED_FROM]-(:Belief) }
+RETURN DISTINCT c.silo_id AS silo_id
+UNION
+MATCH (b:Belief)
+WHERE b.wisdom_status IS NULL OR b.wisdom_status <> 'stale'
+WITH b, [word IN split(toLower(b.content), ' ') WHERE size(word) > 4] AS words
+UNWIND words AS subject
+WITH b.silo_id AS silo_id, subject, count(b) AS cnt
+WHERE cnt >= 2
+RETURN DISTINCT silo_id
+"""
+
+_SILOS_WITH_PENDING_GROUNDSKEEPER_WORK = """
+MATCH (n:Fact|Belief|Claim)
+WHERE n.silo_id IS NOT NULL
+  AND (n.heat_updated_at IS NULL
+       OR n.heat_updated_at < datetime() - duration('PT1H'))
+RETURN DISTINCT n.silo_id AS silo_id
+LIMIT 50
+"""
+
 
 def _fetch_silo_ids(memgraph: MemgraphResource) -> list[str]:
+    """Fetch all silo IDs with documents."""
+    from context_service.pipelines.utils import run_async
+
     async def _run() -> list[str]:
         from context_service.stores import MemgraphClient
 
@@ -36,7 +72,56 @@ def _fetch_silo_ids(memgraph: MemgraphResource) -> list[str]:
         rows = await client.execute_query(_LIST_ACTIVE_SILOS, {})
         return [str(r["silo_id"]) for r in rows if r.get("silo_id")]
 
-    return asyncio.run(_run())
+    return list(run_async(_run()))
+
+
+def _fetch_silos_with_pending_work(
+    memgraph: MemgraphResource,
+    query: str,
+) -> list[str]:
+    """Fetch silo IDs that have pending work based on query."""
+    from context_service.pipelines.utils import run_async
+
+    async def _run() -> list[str]:
+        from context_service.stores import MemgraphClient
+
+        driver = await memgraph.driver()
+        client = MemgraphClient(driver)
+        rows = await client.execute_query(query, {})
+        return [str(r["silo_id"]) for r in rows if r.get("silo_id")]
+
+    return list(run_async(_run()))
+
+
+def _ensure_partition_exists(
+    context: ScheduleEvaluationContext,
+    silo_id: str,
+) -> None:
+    """Register silo_id as a dynamic partition if not already present.
+
+    Must be called BEFORE yielding RunRequest, as Dagster validates partition
+    keys synchronously before processing dynamic_partitions_requests.
+    """
+    partitions_def_name = silo_partitions.name or "silo_id"
+    existing = context.instance.get_dynamic_partitions(partitions_def_name)
+    if silo_id not in existing:
+        context.instance.add_dynamic_partitions(partitions_def_name, [silo_id])
+
+
+def _run_request_with_partition(
+    silo_id: str,
+    run_key: str,
+    tags: dict[str, str] | None = None,
+) -> dg.RunRequest:
+    """Create RunRequest for a silo partition.
+
+    Note: Call _ensure_partition_exists() before this to register the partition.
+    """
+    return dg.RunRequest(
+        run_key=run_key,
+        partition_key=silo_id,
+        tags=tags or {},
+    )
 
 
 # -----------------------------------------------------------------------------
@@ -45,95 +130,91 @@ def _fetch_silo_ids(memgraph: MemgraphResource) -> list[str]:
 
 
 @dg.schedule(
-    cron_schedule="*/15 * * * *",
-    name="custodian_pipeline_schedule",
-    target=dg.AssetSelection.assets("custodian_visit", "custodian_finalize"),
-    description="Every 15 minutes: custodian visit + finalize chain per active silo.",
+    cron_schedule="0 */2 * * *",
+    name="sage_custodian_schedule",
+    target=dg.AssetSelection.assets(
+        "extraction",
+        "embedding",
+        "custodian_visit",
+        "claim_to_fact_promotion",
+        "custodian_finalize",
+        "clustering",
+        "proposal_detection",
+    ),
+    description="SAGE Custodian (every 2h): ingestion pipeline - extraction through proposal detection.",
     execution_timezone="UTC",
 )
-def custodian_pipeline_schedule(
+def sage_custodian_schedule(
     context: ScheduleEvaluationContext,
     memgraph: MemgraphResource,
 ) -> Iterator[dg.RunRequest]:
-    """Custodian pipeline: visit -> finalize."""
-    silo_ids = _fetch_silo_ids(memgraph)
+    """SAGE Custodian: ingestion pipeline for silos with pending documents."""
+    silo_ids = _fetch_silos_with_pending_work(memgraph, _SILOS_WITH_PENDING_CUSTODIAN_WORK)
+
     for silo_id in silo_ids:
-        yield dg.RunRequest(
-            run_key=f"custodian_pipeline:{silo_id}:{context.scheduled_execution_time.isoformat()}",
-            partition_key=silo_id,
-            tags={"dagster/concurrency_key": silo_id},
+        _ensure_partition_exists(context, silo_id)
+        yield _run_request_with_partition(
+            silo_id=silo_id,
+            run_key=f"sage_custodian:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            tags={"sage_job": "custodian", "dagster/concurrency_key": silo_id},
         )
 
 
 @dg.schedule(
     cron_schedule="0 * * * *",
-    name="knowledge_pipeline_schedule",
+    name="sage_synthesizer_schedule",
     target=dg.AssetSelection.assets(
-        "claim_to_fact_promotion",
         "causal_transitivity",
         "pattern_detection",
         "llm_pattern_detection",
-    ),
-    description="Hourly knowledge promotion chain: fact promotion -> patterns -> LLM patterns.",
-    execution_timezone="UTC",
-)
-def knowledge_pipeline_schedule(
-    context: ScheduleEvaluationContext,
-    memgraph: MemgraphResource,
-) -> Iterator[dg.RunRequest]:
-    """Knowledge pipeline: promotion -> pattern detection -> LLM patterns."""
-    silo_ids = _fetch_silo_ids(memgraph)
-    for silo_id in silo_ids:
-        yield dg.RunRequest(
-            run_key=f"knowledge_pipeline:{silo_id}:{context.scheduled_execution_time.isoformat()}",
-            partition_key=silo_id,
-            tags={"dagster/concurrency_key": silo_id},
-        )
-
-
-@dg.schedule(
-    cron_schedule="0 4 * * *",
-    name="clustering_pipeline_schedule",
-    target=dg.AssetSelection.assets(
-        "clustering",
+        "belief_synthesis",
+        "belief_merge",
         "chain_stitch",
-        "proposal_detection",
     ),
-    description="Daily (04:00 UTC) clustering chain: clustering -> chain_stitch -> proposal_detection.",
+    description="SAGE Synthesizer (hourly): belief formation - facts to wisdom.",
     execution_timezone="UTC",
 )
-def clustering_pipeline_schedule(
+def sage_synthesizer_schedule(
     context: ScheduleEvaluationContext,
     memgraph: MemgraphResource,
 ) -> Iterator[dg.RunRequest]:
-    """Clustering pipeline: clustering -> chain_stitch -> proposal_detection."""
-    silo_ids = _fetch_silo_ids(memgraph)
+    """SAGE Synthesizer: belief formation for silos with pending synthesis work."""
+    silo_ids = _fetch_silos_with_pending_work(memgraph, _SILOS_WITH_PENDING_SYNTHESIZER_WORK)
+
     for silo_id in silo_ids:
-        yield dg.RunRequest(
-            run_key=f"clustering_pipeline:{silo_id}:{context.scheduled_execution_time.isoformat()}",
-            partition_key=silo_id,
-            tags={"dagster/concurrency_key": silo_id},
+        _ensure_partition_exists(context, silo_id)
+        yield _run_request_with_partition(
+            silo_id=silo_id,
+            run_key=f"sage_synthesizer:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            tags={"sage_job": "synthesizer", "dagster/concurrency_key": silo_id},
         )
 
 
 @dg.schedule(
-    cron_schedule="0 2 * * *",
-    name="heat_pipeline_schedule",
-    target=dg.AssetSelection.assets("heat", "edge_heat", "weak_link_review"),
-    description="Daily (02:00 UTC) heat chain: heat -> edge_heat -> weak_link_review.",
+    cron_schedule="0 * * * *",
+    name="sage_groundskeeper_schedule",
+    target=dg.AssetSelection.assets(
+        "heat",
+        "edge_heat",
+        "heat_diffusion",
+        "prewarm_sweep",
+    ),
+    description="SAGE Groundskeeper (hourly): heat and maintenance.",
     execution_timezone="UTC",
 )
-def heat_pipeline_schedule(
+def sage_groundskeeper_schedule(
     context: ScheduleEvaluationContext,
     memgraph: MemgraphResource,
 ) -> Iterator[dg.RunRequest]:
-    """Heat pipeline: heat -> edge_heat -> weak_link_review."""
-    silo_ids = _fetch_silo_ids(memgraph)
+    """SAGE Groundskeeper: heat and maintenance for silos with stale scores."""
+    silo_ids = _fetch_silos_with_pending_work(memgraph, _SILOS_WITH_PENDING_GROUNDSKEEPER_WORK)
+
     for silo_id in silo_ids:
-        yield dg.RunRequest(
-            run_key=f"heat_pipeline:{silo_id}:{context.scheduled_execution_time.isoformat()}",
-            partition_key=silo_id,
-            tags={"dagster/concurrency_key": silo_id},
+        _ensure_partition_exists(context, silo_id)
+        yield _run_request_with_partition(
+            silo_id=silo_id,
+            run_key=f"sage_groundskeeper:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            tags={"sage_job": "groundskeeper", "dagster/concurrency_key": silo_id},
         )
 
 
@@ -143,10 +224,10 @@ def heat_pipeline_schedule(
 
 
 @dg.schedule(
-    cron_schedule="0 * * * *",
+    cron_schedule="0 */2 * * *",
     name="reasoning_compaction_schedule",
     target=dg.AssetSelection.assets("reasoning_compaction"),
-    description="Hourly reasoning-chain compaction per active silo.",
+    description="Reasoning-chain compaction every 2h per active silo.",
     execution_timezone="UTC",
 )
 def reasoning_compaction_schedule(
@@ -156,9 +237,10 @@ def reasoning_compaction_schedule(
     """Compaction of reasoning chains."""
     silo_ids = _fetch_silo_ids(memgraph)
     for silo_id in silo_ids:
-        yield dg.RunRequest(
+        _ensure_partition_exists(context, silo_id)
+        yield _run_request_with_partition(
+            silo_id=silo_id,
             run_key=f"reasoning_compaction:{silo_id}:{context.scheduled_execution_time.isoformat()}",
-            partition_key=silo_id,
             tags={"dagster/concurrency_key": silo_id},
         )
 
@@ -177,18 +259,19 @@ def retention_schedule(
     """Retention sweep for expired nodes."""
     silo_ids = _fetch_silo_ids(memgraph)
     for silo_id in silo_ids:
-        yield dg.RunRequest(
+        _ensure_partition_exists(context, silo_id)
+        yield _run_request_with_partition(
+            silo_id=silo_id,
             run_key=f"retention:{silo_id}:{context.scheduled_execution_time.isoformat()}",
-            partition_key=silo_id,
             tags={"dagster/concurrency_key": silo_id},
         )
 
 
 @dg.schedule(
-    cron_schedule="*/30 * * * *",
+    cron_schedule="0 */4 * * *",
     name="auto_tagging_schedule",
     target=dg.AssetSelection.assets("auto_tagging"),
-    description="Tag refinement every 30 minutes per active silo.",
+    description="Tag refinement every 4h per active silo.",
     execution_timezone="UTC",
 )
 def auto_tagging_schedule(
@@ -198,9 +281,10 @@ def auto_tagging_schedule(
     """Auto-tagging refinement."""
     silo_ids = _fetch_silo_ids(memgraph)
     for silo_id in silo_ids:
-        yield dg.RunRequest(
+        _ensure_partition_exists(context, silo_id)
+        yield _run_request_with_partition(
+            silo_id=silo_id,
             run_key=f"auto_tagging:{silo_id}:{context.scheduled_execution_time.isoformat()}",
-            partition_key=silo_id,
             tags={"dagster/concurrency_key": silo_id},
         )
 
@@ -219,18 +303,19 @@ def tag_maintenance_schedule(
     """Tag vocabulary maintenance."""
     silo_ids = _fetch_silo_ids(memgraph)
     for silo_id in silo_ids:
-        yield dg.RunRequest(
+        _ensure_partition_exists(context, silo_id)
+        yield _run_request_with_partition(
+            silo_id=silo_id,
             run_key=f"tag_maintenance:{silo_id}:{context.scheduled_execution_time.isoformat()}",
-            partition_key=silo_id,
             tags={"dagster/concurrency_key": silo_id},
         )
 
 
 @dg.schedule(
-    cron_schedule="*/15 * * * *",
+    cron_schedule="0 * * * *",
     name="reconciliation_gc_schedule",
     target=dg.AssetSelection.assets("reconciliation_gc"),
-    description="Every 15 minutes: re-reconcile orphaned chains and clean dangling Postgres rows.",
+    description="Hourly: re-reconcile orphaned chains and clean dangling Postgres rows.",
     execution_timezone="UTC",
 )
 def reconciliation_gc_schedule(
@@ -256,9 +341,10 @@ def proposal_cleanup_schedule(
     """Cleanup expired ProposedBeliefs."""
     silo_ids = _fetch_silo_ids(memgraph)
     for silo_id in silo_ids:
-        yield dg.RunRequest(
+        _ensure_partition_exists(context, silo_id)
+        yield _run_request_with_partition(
+            silo_id=silo_id,
             run_key=f"proposal_cleanup:{silo_id}:{context.scheduled_execution_time.isoformat()}",
-            partition_key=silo_id,
             tags={"dagster/concurrency_key": silo_id},
         )
 
@@ -278,12 +364,11 @@ def groundskeeper_gc_schedule(context: ScheduleEvaluationContext) -> dg.RunReque
 
 
 all_schedules: list[Any] = [
-    # Core pipelines
-    custodian_pipeline_schedule,
-    knowledge_pipeline_schedule,
-    clustering_pipeline_schedule,
-    heat_pipeline_schedule,
-    # Maintenance
+    # SAGE pipelines
+    sage_custodian_schedule,
+    sage_synthesizer_schedule,
+    sage_groundskeeper_schedule,
+    # Maintenance (kept separate)
     reasoning_compaction_schedule,
     retention_schedule,
     auto_tagging_schedule,
@@ -295,10 +380,9 @@ all_schedules: list[Any] = [
 
 __all__ = [
     "all_schedules",
-    "custodian_pipeline_schedule",
-    "knowledge_pipeline_schedule",
-    "clustering_pipeline_schedule",
-    "heat_pipeline_schedule",
+    "sage_custodian_schedule",
+    "sage_synthesizer_schedule",
+    "sage_groundskeeper_schedule",
     "reasoning_compaction_schedule",
     "retention_schedule",
     "auto_tagging_schedule",

@@ -289,61 +289,8 @@ class TestConfidenceBuckets:
             assert expected in buckets, f"expected bucket {expected} not found in {buckets}"
 
 
-# ---------------------------------------------------------------------------
-# Confidence drift sensor — logic tests
-# ---------------------------------------------------------------------------
-
-
-class TestConfidenceDriftSensor:
-    """Unit tests for drift detection logic without importing the sensor asset."""
-
-    def _load_source(self) -> str:
-        p = (
-            Path(__file__).parent.parent
-            / "src"
-            / "context_service"
-            / "pipelines"
-            / "sensors"
-            / "confidence_drift.py"
-        )
-        return p.read_text()
-
-    def test_drift_threshold_defined(self) -> None:
-        source = self._load_source()
-        assert "DRIFT_THRESHOLD = 0.1" in source
-
-    def test_parse_cursor_function_exists(self) -> None:
-        source = self._load_source()
-        assert "def _parse_cursor" in source
-
-    def test_sensor_name_in_source(self) -> None:
-        source = self._load_source()
-        assert 'name="confidence_drift_sensor"' in source
-
-    def test_drift_logic_uses_threshold(self) -> None:
-        source = self._load_source()
-        assert "DRIFT_THRESHOLD" in source
-        assert "drop > DRIFT_THRESHOLD" in source
-
-    def test_sensor_does_not_block_runs(self) -> None:
-        """Sensor must only log warnings and return empty run_requests."""
-        source = self._load_source()
-        # Must return SensorResult with run_requests=[]
-        assert "run_requests=[]" in source
-
-    def test_baseline_ema_update(self) -> None:
-        """Sensor uses exponential moving average to update baseline."""
-        source = self._load_source()
-        # EMA formula appears in source
-        assert "0.9 * baseline" in source
-        assert "0.1 * " in source
-
-    def test_sensor_registered_in_all_sensors(self) -> None:
-        from context_service.pipelines.sensors import all_sensors
-
-        names = [s.name for s in all_sensors]
-        assert "confidence_drift_sensor" in names
-
+# confidence_drift_sensor was deleted as part of the SAGE schedule
+# consolidation. TestConfidenceDriftSensor has been removed.
 
 # ---------------------------------------------------------------------------
 # Admin route — tombstone endpoint

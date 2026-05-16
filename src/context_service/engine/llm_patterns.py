@@ -33,9 +33,6 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
-# Haiku model id — cost-efficient for classification batch jobs.
-HAIKU_MODEL = "claude-haiku-4-5"
-
 # Per-cluster LLM call timeout (seconds).
 LLM_CALL_TIMEOUT_S: float = 15.0
 
