@@ -24,8 +24,9 @@ class SkillCreate(BaseModel):
     def validate_name_format(cls, v: str) -> str:
         if not _NAME_PATTERN.match(v):
             raise ValueError("Name must be lowercase namespace:name format (e.g., 'myorg:mytool')")
-        if v.startswith("engrammic:"):
-            raise ValueError("The 'engrammic:' namespace is reserved")
+        for reserved in ("engrammic:", "coding:", "b2b-ops:"):
+            if v.startswith(reserved):
+                raise ValueError(f"The '{reserved}' namespace is reserved")
         return v
 
 

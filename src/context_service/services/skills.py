@@ -211,8 +211,11 @@ class SkillService:
         """
         _validate_import_url(source_url)
 
-        if name.startswith("engrammic:"):
-            raise ValueError(f"Skill name '{name}' uses reserved namespace 'engrammic'")
+        for reserved in ("engrammic:", "coding:", "b2b-ops:"):
+            if name.startswith(reserved):
+                raise ValueError(
+                    f"Skill name '{name}' uses reserved namespace '{reserved.rstrip(':')}'"
+                )
 
         existing = await self.get(silo_id, name)
         if existing is not None:
