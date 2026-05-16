@@ -2,17 +2,20 @@
 
 Skills for working with engrammic context-service MCP tools.
 
-## Installation
+## Installing skills locally
 
-### Claude Code
-
-Copy skills to your Claude Code skills directory:
+Engrammic skills follow the SKILL.md open standard. Copy the base skill
+directories into the portable agent-skills location so any compatible harness
+(Claude Code, Codex, Cursor, Windsurf, Gemini CLI) can discover them:
 
 ```bash
-cp -r skills/engrammic:* ~/.claude/skills/
+cp -r skills/engrammic:* ~/.agents/skills/
 ```
 
-Skills appear in your session as `engrammic:observe`, `engrammic:learn`, etc. Invoke via `/engrammic:observe` or the `Skill` tool.
+Claude Code also reads `~/.claude/skills/`; either location works for that
+harness. ICP overlay skills (`coding:*`, `b2b-ops:*`) are delivered per
+tenant through the `patterns` MCP tool and are not installed from the
+filesystem.
 
 ### Other Agents
 
