@@ -97,9 +97,7 @@ class TestQueryExpander:
         mock_redis.get.return_value = None
 
         mock_response = MagicMock()
-        mock_response.choices = [
-            MagicMock(message=MagicMock(content="not valid json"))
-        ]
+        mock_response.choices = [MagicMock(message=MagicMock(content="not valid json"))]
 
         with patch("context_service.reranking.query_expander.litellm") as mock_litellm:
             mock_litellm.acompletion = AsyncMock(return_value=mock_response)

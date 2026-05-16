@@ -43,11 +43,18 @@ class TestContextQueryReranking:
         mock_settings.causal.query_enabled = False
 
         with (
-            patch("context_service.mcp.tools.context_query.get_mcp_auth_context", return_value=mock_auth),
+            patch(
+                "context_service.mcp.tools.context_query.get_mcp_auth_context",
+                return_value=mock_auth,
+            ),
             patch("context_service.mcp.tools.context_query.get_context_service") as mock_svc,
             patch("context_service.mcp.tools.context_query.get_silo_service"),
-            patch("context_service.mcp.tools.context_query.validate_silo_ownership", return_value=None),
-            patch("context_service.mcp.tools.context_query.get_settings", return_value=mock_settings),
+            patch(
+                "context_service.mcp.tools.context_query.validate_silo_ownership", return_value=None
+            ),
+            patch(
+                "context_service.mcp.tools.context_query.get_settings", return_value=mock_settings
+            ),
             patch("context_service.mcp.tools.context_query.get_redis", return_value=None),
         ):
             mock_svc.return_value.query = AsyncMock(return_value=mock_results)
@@ -88,11 +95,18 @@ class TestContextQueryReranking:
         mock_settings.causal.query_enabled = False
 
         with (
-            patch("context_service.mcp.tools.context_query.get_mcp_auth_context", return_value=mock_auth),
+            patch(
+                "context_service.mcp.tools.context_query.get_mcp_auth_context",
+                return_value=mock_auth,
+            ),
             patch("context_service.mcp.tools.context_query.get_context_service") as mock_svc,
             patch("context_service.mcp.tools.context_query.get_silo_service"),
-            patch("context_service.mcp.tools.context_query.validate_silo_ownership", return_value=None),
-            patch("context_service.mcp.tools.context_query.get_settings", return_value=mock_settings),
+            patch(
+                "context_service.mcp.tools.context_query.validate_silo_ownership", return_value=None
+            ),
+            patch(
+                "context_service.mcp.tools.context_query.get_settings", return_value=mock_settings
+            ),
             patch("context_service.mcp.tools.context_query.get_redis", return_value=None),
         ):
             mock_svc.return_value.query = AsyncMock(return_value=mock_results)
@@ -142,7 +156,10 @@ class TestContextQueryReranking:
         mock_models_config = MagicMock()
         mock_models_config.litellm_reranker_model = None
 
-        with patch("context_service.mcp.tools.context_query.load_models_config", return_value=mock_models_config):
+        with patch(
+            "context_service.mcp.tools.context_query.load_models_config",
+            return_value=mock_models_config,
+        ):
             from context_service.mcp.tools.context_query import _apply_reranking
 
             output = await _apply_reranking("query", mock_results, mock_settings)
