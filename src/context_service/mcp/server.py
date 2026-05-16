@@ -182,7 +182,7 @@ async def get_mcp_auth_context() -> AuthContext:
         # Derive a stable session identifier from the token so the same
         # sealed session always maps to the same session_id.
         session_id: str | None = (
-            headers.get("x-session-id") or hashlib.sha256(auth_header.encode()).hexdigest()[:32]
+            headers.get("x-session-id") or hashlib.sha256(auth_header.encode()).hexdigest()
         )
         return AuthContext(
             org_id=base.org_id,

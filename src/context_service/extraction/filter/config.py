@@ -27,7 +27,7 @@ def _lower_triple(t: list[str]) -> tuple[str, str, str]:
 
 def _silo_hash(override: dict[str, Any]) -> str:
     canonical = dumps(override, sort_keys=True).encode()
-    return hashlib.sha256(canonical).hexdigest()[:16]
+    return hashlib.sha256(canonical).hexdigest()
 
 
 def merge_silo_override(

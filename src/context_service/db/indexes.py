@@ -73,6 +73,7 @@ KNOWLEDGE_INDEX_QUERIES: tuple[str, ...] = (
     f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(silo_id);",
     f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(fingerprint);",
     f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(silo_id, committed);",
+    f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(silo_id, content_hash);",
     f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(embedded_at);",
     # :Commitment is multi-label (:Claim:Commitment); Claim indexes already apply.
     f"CREATE INDEX ON :{KnowledgeLabel.COMMITMENT}(predicate);",

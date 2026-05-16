@@ -321,4 +321,4 @@ def extraction(
 def _stable_entity_id(silo_id: str, name: str) -> str:
     """Deterministic entity id from silo + lowercased name."""
     key = f"{silo_id}:{name.lower()}"
-    return hashlib.sha256(key.encode()).hexdigest()[:32]
+    return hashlib.sha256(key.encode()).hexdigest()

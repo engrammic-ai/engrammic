@@ -22,7 +22,7 @@ log = logging.getLogger(__name__)
 
 def _cache_key(claim: ClaimTriple) -> str:
     canonical = f"{claim.predicate}|{str(claim.subject).lower()}|{str(claim.object).lower()}"
-    h = hashlib.sha256(canonical.encode()).hexdigest()[:16]
+    h = hashlib.sha256(canonical.encode()).hexdigest()
     return f"wikidata:hit:{h}"
 
 

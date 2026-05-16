@@ -26,7 +26,7 @@ class EmbeddingCache:
 
     @staticmethod
     def _hash_text(text: str) -> str:
-        return hashlib.sha256(text.encode()).hexdigest()[:16]
+        return hashlib.sha256(text.encode()).hexdigest()
 
     def _key(self, text: str, task: str) -> str:
         return f"{self.KEY_PREFIX}:{task}:{self._hash_text(text)}"

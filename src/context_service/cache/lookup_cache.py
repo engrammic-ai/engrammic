@@ -30,7 +30,7 @@ class LookupCache:
     @staticmethod
     def _hash_query(query: str, filters: dict[str, Any]) -> str:
         raw = dumps({"q": query, "f": filters}, sort_keys=True)
-        return hashlib.sha256(raw.encode()).hexdigest()[:16]
+        return hashlib.sha256(raw.encode()).hexdigest()
 
     def _key(self, silo_id: str, query: str, filters: dict[str, Any]) -> str:
         return f"{self.KEY_PREFIX}:{silo_id}:{self._hash_query(query, filters)}"

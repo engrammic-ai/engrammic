@@ -1033,7 +1033,7 @@ class ContextService:
 
         if existing_rows:
             row = existing_rows[0]
-            logger.debug("assert_claim_content_hash_hit", content_hash=claim_hash[:16])
+            logger.debug("assert_claim_content_hash_hit", content_hash=claim_hash)
             existing_node = Node(
                 id=uuid.UUID(row["id"]),
                 type=row["type"],
