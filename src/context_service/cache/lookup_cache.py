@@ -6,6 +6,7 @@ import hashlib
 from typing import TYPE_CHECKING, Any
 
 from context_service.config.logging import get_logger
+from context_service.telemetry.metrics import record_store_error
 from context_service.utils.json import dumps, loads
 
 if TYPE_CHECKING:
@@ -47,6 +48,7 @@ class LookupCache:
             return result
         except Exception as e:
             logger.debug("lookup_cache_get_error", error=str(e))
+            record_store_error("redis", "get")
             return None
 
     async def set(
@@ -62,6 +64,7 @@ class LookupCache:
             await self._redis.set(self._key(silo_id, query, filters), data, ttl_seconds=self._ttl)
         except Exception as e:
             logger.debug("lookup_cache_set_error", error=str(e))
+            record_store_error("redis", "set")
 
     async def invalidate_silo(self, silo_id: str) -> None:
         """Invalidate all lookup cache entries for a silo via SCAN."""
@@ -78,3 +81,4 @@ class LookupCache:
                     break
         except Exception as e:
             logger.debug("lookup_cache_invalidate_silo_error", error=str(e))
+            record_store_error("redis", "invalidate")

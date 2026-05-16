@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import (
 from sqlalchemy.orm import DeclarativeBase
 
 from context_service.config.settings import get_settings
+from context_service.telemetry.metrics import record_store_error
 
 
 class Base(DeclarativeBase):
@@ -93,4 +94,5 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
             await session.commit()
         except Exception:
             await session.rollback()
+            record_store_error("postgres", "session")
             raise

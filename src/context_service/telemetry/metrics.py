@@ -25,6 +25,7 @@ _embedding_duration: metrics.Histogram | None = None
 _mcp_tool_duration: metrics.Histogram | None = None
 _mcp_tool_counter: metrics.Counter | None = None
 _llm_token_counter: metrics.Counter | None = None
+_llm_call_duration: metrics.Histogram | None = None
 _context_recall_size: metrics.Histogram | None = None
 _chain_lookup_counter: metrics.Counter | None = None
 _chain_lookup_latency: metrics.Histogram | None = None
@@ -35,13 +36,14 @@ _reranking_counter: metrics.Counter | None = None
 _query_expansion_duration: metrics.Histogram | None = None
 _query_expansion_counter: metrics.Counter | None = None
 _hard_query_counter: metrics.Counter | None = None
+_store_error_counter: metrics.Counter | None = None
 
 
 def setup_metrics(service_name: str = "context-service") -> None:
     """Initialize OpenTelemetry metrics if OTEL_EXPORTER_OTLP_ENDPOINT is set."""
     global _meter, _request_duration, _request_counter, _active_requests
     global _db_query_duration, _embedding_duration, _mcp_tool_duration, _mcp_tool_counter
-    global _llm_token_counter, _context_recall_size
+    global _llm_token_counter, _llm_call_duration, _context_recall_size
     global \
         _chain_lookup_counter, \
         _chain_lookup_latency, \
@@ -52,7 +54,8 @@ def setup_metrics(service_name: str = "context-service") -> None:
         _reranking_counter, \
         _query_expansion_duration, \
         _query_expansion_counter, \
-        _hard_query_counter
+        _hard_query_counter, \
+        _store_error_counter
 
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     if not endpoint:
@@ -121,6 +124,12 @@ def setup_metrics(service_name: str = "context-service") -> None:
         unit="1",
     )
 
+    _llm_call_duration = _meter.create_histogram(
+        name="llm.call.duration",
+        description="LLM API call duration",
+        unit="ms",
+    )
+
     _context_recall_size = _meter.create_histogram(
         name="context.recall.size",
         description="Context recall response size",
@@ -181,6 +190,12 @@ def setup_metrics(service_name: str = "context-service") -> None:
         unit="1",
     )
 
+    _store_error_counter = _meter.create_counter(
+        name="store.errors",
+        description="Store operation errors",
+        unit="1",
+    )
+
 
 def record_request(method: str, path: str, status: int, duration_ms: float) -> None:
     """Record HTTP request metrics."""
@@ -238,6 +253,13 @@ def record_llm_tokens(model: str, input_tokens: int, output_tokens: int) -> None
         return
     _llm_token_counter.add(input_tokens, {"model": model, "type": "input"})
     _llm_token_counter.add(output_tokens, {"model": model, "type": "output"})
+
+
+def record_llm_call(model: str, duration_ms: float, success: bool = True) -> None:
+    """Record LLM call duration."""
+    if _llm_call_duration is None:
+        return
+    _llm_call_duration.record(duration_ms, {"model": model, "success": str(success).lower()})
 
 
 def record_context_recall_size(layer: str, bytes_size: int) -> None:
@@ -326,3 +348,10 @@ def record_hard_query_detection(is_hard: bool) -> None:
     """Record hard query detection for monitoring."""
     if _hard_query_counter is not None:
         _hard_query_counter.add(1, {"is_hard": str(is_hard).lower()})
+
+
+def record_store_error(store: str, operation: str) -> None:
+    """Record a store operation error."""
+    if _store_error_counter is None:
+        return
+    _store_error_counter.add(1, {"store": store, "operation": operation})

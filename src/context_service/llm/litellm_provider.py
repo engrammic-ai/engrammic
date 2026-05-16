@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import litellm
@@ -14,6 +15,7 @@ from tenacity import (
 
 from context_service.config.logging import get_logger
 from context_service.llm.base import LLMProvider, Usage, robust_json_loads
+from context_service.telemetry.metrics import record_llm_call
 
 logger = get_logger(__name__)
 
@@ -111,9 +113,12 @@ class LiteLLMProvider(LLMProvider):
                 **kwargs,
             )
 
+        _start = time.perf_counter()
         try:
             response = await _call()
+            record_llm_call(self._model, (time.perf_counter() - _start) * 1000, success=True)
         except Exception as e:
+            record_llm_call(self._model, (time.perf_counter() - _start) * 1000, success=False)
             logger.error("litellm_completion_failed", model=self._model, error=str(e))
             raise LiteLLMError(f"LiteLLM completion failed: {e}") from e
 
@@ -157,9 +162,12 @@ class LiteLLMProvider(LLMProvider):
                 **kwargs,
             )
 
+        _start = time.perf_counter()
         try:
             response = await _call()
+            record_llm_call(self._model, (time.perf_counter() - _start) * 1000, success=True)
         except Exception as e:
+            record_llm_call(self._model, (time.perf_counter() - _start) * 1000, success=False)
             logger.error("litellm_extract_failed", model=self._model, error=str(e))
             raise LiteLLMError(f"LiteLLM extraction failed: {e}") from e
 

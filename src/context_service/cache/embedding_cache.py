@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from context_service.config import get_settings
 from context_service.config.logging import get_logger
+from context_service.telemetry.metrics import record_store_error
 from context_service.utils.json import dumps, loads
 
 if TYPE_CHECKING:
@@ -41,6 +42,7 @@ class EmbeddingCache:
             return result
         except Exception as e:
             logger.debug("embedding_cache_get_error", error=str(e))
+            record_store_error("redis", "get")
             return None
 
     async def set(self, text: str, task: str, vector: list[float]) -> None:
@@ -50,3 +52,4 @@ class EmbeddingCache:
             await self._redis.set(self._key(text, task), data, ttl_seconds=self._ttl)
         except Exception as e:
             logger.debug("embedding_cache_set_error", error=str(e))
+            record_store_error("redis", "set")

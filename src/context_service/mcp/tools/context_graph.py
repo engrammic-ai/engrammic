@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from context_service.config.settings import get_settings
@@ -16,6 +17,7 @@ from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 from context_service.signals.access_events import emit_access_event
 from context_service.signals.edge_access_events import emit_edge_access_event
+from context_service.telemetry.metrics import record_mcp_tool
 
 
 async def _context_graph(
@@ -27,93 +29,104 @@ async def _context_graph(
     relationship_types: list[str] | None = None,
     layers: list[str] | None = None,
 ) -> dict[str, Any]:
-    auth = await get_mcp_auth_context()
-    ctx_svc = get_context_service()
+    start = time.perf_counter()
+    success = False
+    try:
+        auth = await get_mcp_auth_context()
+        ctx_svc = get_context_service()
 
-    silo_service = get_silo_service()
-    err = await validate_silo_ownership(silo_service, silo_id, auth.org_id)
-    if err is not None:
-        return err
+        silo_service = get_silo_service()
+        err = await validate_silo_ownership(silo_service, silo_id, auth.org_id)
+        if err is not None:
+            success = True
+            return err
 
-    expected_silo_id = derive_silo_id(auth.org_id)
+        expected_silo_id = derive_silo_id(auth.org_id)
 
-    if not query and not seed_nodes:
-        return {"error": "missing_seed", "message": "Provide query or seed_nodes"}
+        if not query and not seed_nodes:
+            success = True
+            return {"error": "missing_seed", "message": "Provide query or seed_nodes"}
 
-    if max_depth < 1 or max_depth > 5:
-        return {"error": "invalid_max_depth", "message": "max_depth must be between 1 and 5"}
+        if max_depth < 1 or max_depth > 5:
+            success = True
+            return {"error": "invalid_max_depth", "message": "max_depth must be between 1 and 5"}
 
-    if max_nodes < 1 or max_nodes > 200:
-        return {"error": "invalid_max_nodes", "message": "max_nodes must be between 1 and 200"}
+        if max_nodes < 1 or max_nodes > 200:
+            success = True
+            return {"error": "invalid_max_nodes", "message": "max_nodes must be between 1 and 200"}
 
-    if layers:
-        try:
-            [Layer(layer) for layer in layers]
-        except ValueError:
-            return {"error": "invalid_layer", "valid": [e.value for e in Layer]}
+        if layers:
+            try:
+                [Layer(layer) for layer in layers]
+            except ValueError:
+                success = True
+                return {"error": "invalid_layer", "valid": [e.value for e in Layer]}
 
-    settings = get_settings()
-    effective_rel_types = list(relationship_types) if relationship_types else None
-    if settings.causal.query_enabled:
-        causal_types = ["CAUSES", "CORROBORATES", "PREVENTS"]
-        if effective_rel_types is None:
-            effective_rel_types = causal_types
-        else:
-            for ct in causal_types:
-                if ct not in effective_rel_types:
-                    effective_rel_types.append(ct)
-    if settings.session_compaction_enabled:
-        if effective_rel_types is None:
-            effective_rel_types = ["REFERENCES"]
-        elif "REFERENCES" not in effective_rel_types:
-            effective_rel_types.append("REFERENCES")
+        settings = get_settings()
+        effective_rel_types = list(relationship_types) if relationship_types else None
+        if settings.causal.query_enabled:
+            causal_types = ["CAUSES", "CORROBORATES", "PREVENTS"]
+            if effective_rel_types is None:
+                effective_rel_types = causal_types
+            else:
+                for ct in causal_types:
+                    if ct not in effective_rel_types:
+                        effective_rel_types.append(ct)
+        if settings.session_compaction_enabled:
+            if effective_rel_types is None:
+                effective_rel_types = ["REFERENCES"]
+            elif "REFERENCES" not in effective_rel_types:
+                effective_rel_types.append("REFERENCES")
 
-    result = await ctx_svc.graph_traversal(
-        silo_id=str(expected_silo_id),
-        query=query,
-        seed_nodes=seed_nodes,
-        max_depth=max_depth,
-        max_nodes=max_nodes,
-        relationship_types=effective_rel_types,
-        layers=layers,
-    )
+        result = await ctx_svc.graph_traversal(
+            silo_id=str(expected_silo_id),
+            query=query,
+            seed_nodes=seed_nodes,
+            max_depth=max_depth,
+            max_nodes=max_nodes,
+            relationship_types=effective_rel_types,
+            layers=layers,
+        )
 
-    redis = get_redis()
-    if redis is not None:
-        for node in result.nodes:
-            node_id = node.get("node_id") or node.get("id")
-            if node_id:
-                await emit_access_event(redis, silo_id, node_id)
-        for edge in result.edges:
-            await emit_edge_access_event(
-                redis=redis,
-                silo_id=silo_id,
-                from_node=edge["from_node"],
-                to_node=edge["to_node"],
-                edge_type=edge["relationship"],
-                traversal_context="recall",
-            )
+        redis = get_redis()
+        if redis is not None:
+            for node in result.nodes:
+                node_id = node.get("node_id") or node.get("id")
+                if node_id:
+                    await emit_access_event(redis, silo_id, node_id)
+            for edge in result.edges:
+                await emit_edge_access_event(
+                    redis=redis,
+                    silo_id=silo_id,
+                    from_node=edge["from_node"],
+                    to_node=edge["to_node"],
+                    edge_type=edge["relationship"],
+                    traversal_context="recall",
+                )
 
-    metadata: dict[str, Any] = {
-        "causal_edges_enabled": settings.causal.query_enabled,
-        "references_edges_enabled": settings.session_compaction_enabled,
-    }
+        metadata: dict[str, Any] = {
+            "causal_edges_enabled": settings.causal.query_enabled,
+            "references_edges_enabled": settings.session_compaction_enabled,
+        }
 
-    if settings.causal.query_enabled:
-        scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
-        silo = await silo_service.get_by_id(scope)
-        if silo is not None:
-            coverage_from = silo.metadata.get("causal_coverage_from")
-            if coverage_from is not None:
-                metadata["causal_coverage_from"] = coverage_from
+        if settings.causal.query_enabled:
+            scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
+            silo = await silo_service.get_by_id(scope)
+            if silo is not None:
+                coverage_from = silo.metadata.get("causal_coverage_from")
+                if coverage_from is not None:
+                    metadata["causal_coverage_from"] = coverage_from
 
-    return {
-        "nodes": result.nodes,
-        "edges": result.edges,
-        "traversal_stats": {
-            "depth_reached": result.depth_reached,
-            "nodes_visited": result.nodes_visited,
-            "edges_traversed": result.edges_traversed,
-        },
-        "metadata": metadata,
-    }
+        success = True
+        return {
+            "nodes": result.nodes,
+            "edges": result.edges,
+            "traversal_stats": {
+                "depth_reached": result.depth_reached,
+                "nodes_visited": result.nodes_visited,
+                "edges_traversed": result.edges_traversed,
+            },
+            "metadata": metadata,
+        }
+    finally:
+        record_mcp_tool("context_graph", (time.perf_counter() - start) * 1000, success=success)

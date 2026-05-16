@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from context_service.services.models import derive_silo_id
+from context_service.telemetry.metrics import record_mcp_tool
 
 
 async def _context_history(
@@ -20,38 +22,46 @@ async def _context_history(
     )
     from context_service.services.silo import validate_silo_ownership
 
-    auth = await get_mcp_auth_context()
+    start = time.perf_counter()
+    success = False
+    try:
+        auth = await get_mcp_auth_context()
 
-    err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
-    if err is not None:
-        return err
+        err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
+        if err is not None:
+            success = True
+            return err
 
-    expected_silo_id = derive_silo_id(auth.org_id)
+        expected_silo_id = derive_silo_id(auth.org_id)
 
-    if not subject and not node_id:
-        return {"error": "missing_input", "message": "Provide subject or node_id"}
+        if not subject and not node_id:
+            success = True
+            return {"error": "missing_input", "message": "Provide subject or node_id"}
 
-    ctx_svc = get_context_service()
-    result = await ctx_svc.history(
-        silo_id=str(expected_silo_id),
-        subject=subject,
-        node_id=node_id,
-    )
+        ctx_svc = get_context_service()
+        result = await ctx_svc.history(
+            silo_id=str(expected_silo_id),
+            subject=subject,
+            node_id=node_id,
+        )
 
-    timeline = [
-        {
-            "node_id": entry.node_id,
-            "content": entry.content,
-            "valid_from": entry.valid_from,
-            "valid_to": entry.valid_to,
-            "confidence": entry.confidence,
-            "supersession_reason": entry.supersession_reason,
+        timeline = [
+            {
+                "node_id": entry.node_id,
+                "content": entry.content,
+                "valid_from": entry.valid_from,
+                "valid_to": entry.valid_to,
+                "confidence": entry.confidence,
+                "supersession_reason": entry.supersession_reason,
+            }
+            for entry in result.timeline
+        ]
+
+        success = True
+        return {
+            "timeline": timeline,
+            "current": result.current,
+            "entries_count": len(timeline),
         }
-        for entry in result.timeline
-    ]
-
-    return {
-        "timeline": timeline,
-        "current": result.current,
-        "entries_count": len(timeline),
-    }
+    finally:
+        record_mcp_tool("context_history", (time.perf_counter() - start) * 1000, success=success)
