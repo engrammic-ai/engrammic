@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from context_service.embeddings import EmbeddingService
     from context_service.embeddings.splade import SpladeEncoder
     from context_service.engine.protocols import HyperGraphStore
+    from context_service.mcp.preset_resolver import PresetResolver
     from context_service.services.auto_tagging import AutoTaggingService
     from context_service.services.context import ContextService
     from context_service.services.evidence import EvidenceValidator
@@ -68,6 +69,15 @@ def configure_services(
             skills_dir=skills_dir or Path("skills"),
         )
 
+    from context_service.config.settings import get_settings
+    from context_service.mcp.postgres_binding_source import PostgresBindingSource
+    from context_service.mcp.preset_resolver import PresetResolver
+
+    _services["preset_resolver"] = PresetResolver(
+        binding_source=PostgresBindingSource(),
+        default_preset=get_settings().default_icp_preset,
+    )
+
     logger.info("MCP services configured")
 
 
@@ -109,6 +119,17 @@ def get_skill_service() -> SkillService:
     from context_service.services.skills import SkillService as _SKS
 
     return cast(_SKS, _services["skills"])
+
+
+def get_preset_resolver() -> PresetResolver:
+    """Get the configured PresetResolver instance."""
+    if "preset_resolver" not in _services:
+        raise RuntimeError(
+            "PresetResolver not configured - call configure_services() at startup"
+        )
+    from context_service.mcp.preset_resolver import PresetResolver as _PR
+
+    return cast(_PR, _services["preset_resolver"])
 
 
 def get_redis() -> RedisClient | None:
