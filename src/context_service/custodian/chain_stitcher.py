@@ -60,7 +60,7 @@ async def stitch_cross_cluster_chains(
 
     try:
         # Find cross-cluster edges
-        cross_cluster_result = await store.run_query(
+        cross_cluster_result = await store.execute_query(
             FIND_CROSS_CLUSTER_SUPERSESSION_GAPS,
             {"silo_id": silo_id},
         )
@@ -77,7 +77,7 @@ async def stitch_cross_cluster_chains(
                 )
 
         # Find terminal nodes
-        terminal_result = await store.run_query(
+        terminal_result = await store.execute_query(
             FIND_CHAIN_TERMINALS,
             {"silo_id": silo_id},
         )
@@ -125,7 +125,7 @@ async def get_chain_terminal(
     RETURN terminal.id AS terminal_id
     LIMIT 1
     """
-    result = await store.run_query(query, {"node_id": node_id, "silo_id": silo_id})
+    result = await store.execute_query(query, {"node_id": node_id, "silo_id": silo_id})
 
     if result and result[0].get("terminal_id") != node_id:
         return str(result[0]["terminal_id"])
