@@ -5,6 +5,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 ## Current state (2026-05-16)
 
 **Shipped:**
+- v2.10 GCP Deployment (Pulumi infra, Cloud Run API, GCE stateful host)
 - v2.9 Review Followup (P0 security/reliability fixes, N+1 batching, LLM timeout/retry)
 - v2.8 Content-Hash Dedup (full SHA256 hashes, dedup index, claim dedup tests)
 - v2.7 MCP Tool Surface Redesign (intent-based tools with YAML config and profiles)
@@ -27,11 +28,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 ## Active plans
 
-| Plan | Status | Description |
-|------|--------|-------------|
-| [2026-05-13-gcp-deployment.md](./2026-05-13-gcp-deployment.md) | Ready | Pulumi GCP infra - scaffold done, ready for first deploy |
-
-Next candidates:
+None currently. Next candidates:
 - Beacon receiving endpoint (Cloud Run)
 - Clustering algorithm evaluation (spike)
 
@@ -62,6 +59,7 @@ Next candidates:
 ## Archive
 
 Completed plans in `archive/`:
+- GCP Deployment (2026-05-16) - Pulumi infra, Cloud Run API, GCE stateful host
 - Review Followup (2026-05-16) - P0 security/reliability fixes, N+1 batching, LLM timeout/retry
 - Content-Hash Dedup (2026-05-16) - full SHA256 hashes, dedup index, claim dedup tests
 - MCP Tool Surface Redesign (2026-05-16) - intent-based tools with YAML config and profiles

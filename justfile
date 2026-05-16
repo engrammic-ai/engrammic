@@ -1,216 +1,75 @@
 # context-service - Development Commands
 
-# Variables
 dc := "docker compose -f docker-compose.dev.yml"
 
-# Import infra recipes
-import 'infra/just.infra'
-
-# List available recipes
 default:
     @just --list
 
-# --- Setup ---
+# --- Daily Workflow ---
 
-# Lock dependencies
-lock:
-    uv lock
-
-# Sync dependencies
-sync:
-    uv sync
-
-# Install production dependencies
-install:
-    uv sync --no-dev
-
-# Install development dependencies
+# Install dev dependencies
 install-dev:
     uv sync --all-extras
 
-# --- Code Quality ---
-
-# Run ruff linter
-lint:
+# Run all checks (lint + typecheck)
+check:
     uv run ruff check src tests
+    uv run mypy src
 
-# Format code with ruff
+# Format code
 format:
     uv run ruff format src tests
     uv run ruff check --fix src tests
 
-# Check formatting without modifying
-format-check:
-    uv run ruff format --check src tests
+# Run tests
+test *args:
+    uv run pytest {{args}}
 
-# Run mypy type checker
-typecheck:
-    uv run mypy src
-
-# Run all checks (lint + typecheck)
-check: lint typecheck
-
-# --- Testing ---
-
-# Run all tests
-test:
-    uv run pytest
-
-# Run integration tests (requires live docker stack)
-test-integration:
-    env $(cat .env.test | grep -v '^#' | xargs) uv run pytest -m integration -v
-
-# Run tests with coverage report
-coverage:
-    uv run pytest --cov=context_service --cov-report=html --cov-report=term-missing
-
-# --- Dagster ---
-
-# Start Dagster webserver (local)
-dagster-web:
-    uv run dagster-webserver -h 0.0.0.0 -p 3000 -m context_service.pipelines.definitions
-
-# Start Dagster daemon (local)
-dagster-daemon:
-    uv run dagster-daemon run -m context_service.pipelines.definitions
-
-# Trigger heat asset recompute for all silos (backfill after enabling unified_decay)
-heat-recompute:
-    uv run dagster asset materialize -m context_service.pipelines.definitions --select heat
-
-# --- Running ---
-
-# Run FastAPI server (production)
-run:
-    uv run python -m context_service
-
-# Run FastAPI server (development with reload)
+# Run dev server with reload
 dev:
     RELOAD=true uv run python -m context_service
 
 # --- Docker ---
 
-# Start app + infrastructure services
+# Start dev services
 docker-up:
     {{dc}} up -d --build
 
-# Stop app + infrastructure services
+# Stop dev services
 docker-down:
     {{dc}} down
 
-# View service logs
-docker-logs:
-    {{dc}} logs -f
+# View logs
+docker-logs *args:
+    {{dc}} logs -f {{args}}
 
 # Stop and remove volumes
 docker-clean:
     {{dc}} down -v
 
-# Check service status
-docker-ps:
-    {{dc}} ps
+# --- Database ---
 
-# --- Database Migrations ---
-
-# Run alembic migrations
+# Run migrations
 db-migrate:
     uv run alembic upgrade head
-
-# Show migration history
-db-history:
-    uv run alembic history
-
-# Current database revision
-db-current:
-    uv run alembic current
-
-# Repair orphan revision (stamps to head without running migrations)
-db-repair:
-    uv run alembic stamp head
 
 # Generate new migration
 db-revision message:
     uv run alembic revision --autogenerate -m "{{message}}"
 
-# --- Production Docker ---
+# --- Dagster ---
 
-# Start production services
-docker-prod-up:
-    {{dc}} -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# Start Dagster webserver
+dagster-web:
+    uv run dagster-webserver -h 0.0.0.0 -p 3000 -m context_service.pipelines.definitions
 
-# Stop production services
-docker-prod-down:
-    {{dc}} -f docker-compose.yml -f docker-compose.prod.yml down
+# Start Dagster daemon
+dagster-daemon:
+    uv run dagster-daemon run -m context_service.pipelines.definitions
 
-# View production service logs
-docker-prod-logs:
-    {{dc}} -f docker-compose.yml -f docker-compose.prod.yml logs -f
+# --- Observability ---
 
-# --- Dagger CI ---
-
-# Run lint via dagger
-dagger-lint:
-    dagger call lint --source=. --primitives=../primitives
-
-# Run typecheck via dagger
-dagger-typecheck:
-    dagger call typecheck --source=. --primitives=../primitives
-
-# Run unit tests via dagger
-dagger-test:
-    dagger call test --source=. --primitives=../primitives
-
-# Run integration tests via dagger (spins up services)
-dagger-test-integration:
-    dagger call test-integration --source=. --primitives=../primitives
-
-# Run lint + typecheck via dagger
-dagger-check:
-    dagger call check --source=. --primitives=../primitives
-
-# Run full pipeline via dagger
-dagger-all:
-    dagger call all --source=. --primitives=../primitives
-
-# --- Release ---
-
-# Preview next release (dry run)
-release-preview:
-    npx release-please release-pr --dry-run --repo-url=. --token=fake
-
-# Create release PR locally (inspect CHANGELOG before committing)
-release-pr:
-    npx release-please release-pr --repo-url=. --token=fake
-
-# Tag release after PR merge
-release-tag:
-    npx release-please github-release --repo-url=. --token=fake
-
-# --- Quality evals ---
-
-# Run HIL quality evals
-evals:
-    uv run python scripts/run_evals.py
-
-# Run evals with LLM agent mode
-evals-llm:
-    uv run python scripts/run_evals.py --with-llm
-
-# Run evals with verbose output
-evals-verbose:
-    uv run python scripts/run_evals.py -v
-
-# Run a single eval scenario by keyword (e.g. just evals-scenario recall)
-evals-scenario scenario:
-    uv run python scripts/run_evals.py --scenario {{scenario}} -v
-
-# Run evals and write results to evals-output.json
-evals-output:
-    uv run python scripts/run_evals.py --output evals-output.json -v
-
-# --- Observability (SigNoz) ---
-
-# Start SigNoz observability stack
+# Start SigNoz stack
 signoz-up:
     docker compose -f docker-compose.signoz.yml up -d
 
@@ -218,23 +77,59 @@ signoz-up:
 signoz-down:
     docker compose -f docker-compose.signoz.yml down
 
-# View SigNoz logs
-signoz-logs:
-    docker compose -f docker-compose.signoz.yml logs -f
-
-# Restart OTEL collector (after config changes)
-otel-restart:
-    docker restart context-service-otel
-
 # --- Cleanup ---
 
-# Remove cache and build artifacts
+# Remove cache artifacts
 clean:
-    #!/usr/bin/env bash
-    set -euo pipefail
     find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
     find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
     find . -type d -name ".mypy_cache" -exec rm -rf {} + 2>/dev/null || true
-    find . -type d -name ".ruff_cache" -exec rm -rf {} + 2>/dev/null || true
-    find . -type f -name "*.pyc" -delete 2>/dev/null || true
-    rm -rf htmlcov .coverage coverage.xml 2>/dev/null || true
+    rm -rf htmlcov .coverage 2>/dev/null || true
+
+# --- GCP Infrastructure ---
+
+instance := "engrammic-dev-stateful"
+zone := "europe-north1-a"
+region := "europe-north1"
+project := "engrammic"
+registry := "europe-north1-docker.pkg.dev/engrammic/engrammic"
+
+# SSH into stateful host
+ssh:
+    gcloud compute ssh {{instance}} --zone={{zone}} --tunnel-through-iap
+
+# Tunnel all services to localhost
+tunnel:
+    gcloud compute ssh {{instance}} --zone={{zone}} --tunnel-through-iap -- -NL 7687:localhost:7687 -L 6333:localhost:6333 -L 6334:localhost:6334 -L 6379:localhost:6379 -L 5432:localhost:5432 -L 3000:localhost:3000
+
+# Check instance status
+status:
+    gcloud compute instances describe {{instance}} --zone={{zone}} --format="table(name,status,networkInterfaces[0].networkIP)"
+
+# Check docker on instance
+docker-status:
+    gcloud compute ssh {{instance}} --zone={{zone}} --tunnel-through-iap --command="docker ps --format 'table {{{{.Names}}}}\t{{{{.Status}}}}'"
+
+# Pulumi preview
+infra-preview:
+    cd infra && pulumi preview
+
+# Pulumi deploy
+infra-up:
+    cd infra && pulumi up
+
+# Start instance
+infra-start:
+    gcloud compute instances start {{instance}} --zone={{zone}}
+
+# Stop instance (saves cost)
+infra-stop:
+    gcloud compute instances stop {{instance}} --zone={{zone}}
+
+# Build and push API image
+build tag="latest":
+    gcloud builds submit --config=cloudbuild.api.yaml --substitutions=_IMAGE={{registry}}/engrammic-api:{{tag}} --region={{region}} .
+
+# Sync secrets to GCP Secret Manager
+secrets-sync:
+    ENVIRONMENT=dev GCP_PROJECT={{project}} uv run python scripts/sync_secrets.py
