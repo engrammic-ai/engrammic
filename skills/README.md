@@ -13,9 +13,12 @@ cp -r skills/engrammic:* ~/.agents/skills/
 ```
 
 Claude Code also reads `~/.claude/skills/`; either location works for that
-harness. ICP overlay skills (`coding:*`, `b2b-ops:*`) are delivered per
-tenant through the `patterns` MCP tool and are not installed from the
-filesystem.
+harness. The local copy step covers the base `engrammic:*` skills only. ICP
+overlay skills (`coding:*`, `b2b-ops:*`) are not part of what you copy into
+your own harness. The Engrammic server keeps them in its skill catalog, and
+the preset-aware `patterns` tool surfaces the right one per tenant: it ranks
+by namespace and auto-qualifies a bare `onboarding` request to the tenant's
+ICP variant.
 
 ### Other Agents
 
