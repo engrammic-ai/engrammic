@@ -173,7 +173,7 @@ async def get_mcp_auth_context() -> AuthContext:
     )
     from context_service.config.settings import get_settings
 
-    headers = get_http_headers(include={"authorization", "x-agent-id", "x-session-id"})
+    headers = get_http_headers(include={"authorization", "x-agent-id", "x-session-id", "x-org-id"})
     auth_header = headers.get("authorization")
 
     if auth_header:
@@ -196,10 +196,12 @@ async def get_mcp_auth_context() -> AuthContext:
     settings = get_settings()
     if settings.auth_enabled:
         raise MCPAuthError("Missing Authorization header on authenticated MCP transport")
+    # In dev mode, allow X-Org-Id header to override dev_org_id for test isolation
+    org_id = headers.get("x-org-id") or settings.dev_org_id
     agent_id = headers.get("x-agent-id") or f"user:{settings.dev_user_id}"
     session_id = headers.get("x-session-id")  # str | None, already typed above
     return AuthContext(
-        org_id=settings.dev_org_id,
+        org_id=org_id,
         user_id=settings.dev_user_id,
         email=None,
         is_dev=True,
