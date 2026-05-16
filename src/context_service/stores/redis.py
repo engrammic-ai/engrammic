@@ -14,6 +14,7 @@ from redis.exceptions import RedisError
 
 from context_service.config.logging import get_logger
 from context_service.config.settings import Settings, get_settings
+from context_service.engine.storage_circuit import STORE_REDIS, guard_degrade
 from context_service.telemetry.metrics import record_db_query
 from context_service.utils.json import JSONDecodeError, dumps, loads
 
@@ -96,6 +97,20 @@ class RedisClient:
     ) -> bool:
         """Store session data.
 
+        Returns False if the Redis circuit is open (degrade).
+        """
+        return await guard_degrade(            STORE_REDIS, self._set_session_impl(silo_id, session_id, data, ttl_seconds), False
+        )
+
+    async def _set_session_impl(
+        self,
+        silo_id: str,
+        session_id: str,
+        data: dict[str, Any],
+        ttl_seconds: int = 86400,
+    ) -> bool:
+        """Store session data.
+
         Args:
             silo_id: Silo identifier for key namespacing.
             session_id: Unique session identifier.
@@ -120,6 +135,11 @@ class RedisClient:
             record_db_query("redis.set_session", (time.perf_counter() - start) * 1000)
 
     async def get_session(self, silo_id: str, session_id: str) -> dict[str, Any] | None:
+        """Retrieve session data; returns None if circuit is open (degrade)."""
+        return await guard_degrade(            STORE_REDIS, self._get_session_impl(silo_id, session_id), None
+        )
+
+    async def _get_session_impl(self, silo_id: str, session_id: str) -> dict[str, Any] | None:
         """Retrieve session data.
 
         Args:
@@ -147,6 +167,11 @@ class RedisClient:
             record_db_query("redis.get_session", (time.perf_counter() - start) * 1000)
 
     async def delete_session(self, silo_id: str, session_id: str) -> bool:
+        """Delete a session; returns False if circuit is open (degrade)."""
+        return await guard_degrade(            STORE_REDIS, self._delete_session_impl(silo_id, session_id), False
+        )
+
+    async def _delete_session_impl(self, silo_id: str, session_id: str) -> bool:
         """Delete a session and its associated nodes.
 
         Args:
@@ -175,19 +200,11 @@ class RedisClient:
             record_db_query("redis.delete_session", (time.perf_counter() - start) * 1000)
 
     async def add_session_node(self, silo_id: str, session_id: str, node_id: str) -> bool:
-        """Add a node ID to a session's node set.
+        """Add a node ID to a session's node set; returns False if circuit open."""
+        return await guard_degrade(            STORE_REDIS, self._add_session_node_impl(silo_id, session_id, node_id), False
+        )
 
-        Args:
-            silo_id: Silo identifier for key namespacing.
-            session_id: Unique session identifier.
-            node_id: Context node ID to associate.
-
-        Returns:
-            True if node was added (not already present).
-
-        Raises:
-            RedisOperationError: If the operation fails.
-        """
+    async def _add_session_node_impl(self, silo_id: str, session_id: str, node_id: str) -> bool:
         key = self._session_nodes_key(silo_id, session_id)
         start = time.perf_counter()
         try:
@@ -205,18 +222,11 @@ class RedisClient:
             record_db_query("redis.add_session_node", (time.perf_counter() - start) * 1000)
 
     async def get_session_nodes(self, silo_id: str, session_id: str) -> list[str]:
-        """Get all node IDs associated with a session.
+        """Get session node IDs; returns [] if circuit open."""
+        return await guard_degrade(            STORE_REDIS, self._get_session_nodes_impl(silo_id, session_id), []
+        )
 
-        Args:
-            silo_id: Silo identifier for key namespacing.
-            session_id: Unique session identifier.
-
-        Returns:
-            List of node IDs.
-
-        Raises:
-            RedisOperationError: If the operation fails.
-        """
+    async def _get_session_nodes_impl(self, silo_id: str, session_id: str) -> list[str]:
         key = self._session_nodes_key(silo_id, session_id)
         start = time.perf_counter()
         try:
@@ -229,19 +239,11 @@ class RedisClient:
             record_db_query("redis.get_session_nodes", (time.perf_counter() - start) * 1000)
 
     async def remove_session_node(self, silo_id: str, session_id: str, node_id: str) -> bool:
-        """Remove a node ID from a session's node set.
+        """Remove a session node; returns False if circuit open."""
+        return await guard_degrade(            STORE_REDIS, self._remove_session_node_impl(silo_id, session_id, node_id), False
+        )
 
-        Args:
-            silo_id: Silo identifier for key namespacing.
-            session_id: Unique session identifier.
-            node_id: Context node ID to remove.
-
-        Returns:
-            True if node was removed.
-
-        Raises:
-            RedisOperationError: If the operation fails.
-        """
+    async def _remove_session_node_impl(self, silo_id: str, session_id: str, node_id: str) -> bool:
         key = self._session_nodes_key(silo_id, session_id)
         start = time.perf_counter()
         try:
@@ -266,19 +268,11 @@ class RedisClient:
         value: str | bytes,
         ttl_seconds: int | None = None,
     ) -> bool:
-        """Set a cache value.
+        """Set a cache value; returns False if circuit open."""
+        return await guard_degrade(            STORE_REDIS, self._set_impl(key, value, ttl_seconds), False
+        )
 
-        Args:
-            key: Cache key.
-            value: Value to store.
-            ttl_seconds: Optional TTL.
-
-        Returns:
-            True if successful.
-
-        Raises:
-            RedisOperationError: If the operation fails.
-        """
+    async def _set_impl(self, key: str, value: str | bytes, ttl_seconds: int | None = None) -> bool:
         if isinstance(value, str):
             value = value.encode()
         start = time.perf_counter()
@@ -297,19 +291,11 @@ class RedisClient:
         value: str | bytes,
         ttl_seconds: int | None = None,
     ) -> bool:
-        """Set a cache value only if the key does not exist.
+        """Set a cache value only if absent; returns False if circuit open."""
+        return await guard_degrade(            STORE_REDIS, self._set_nx_impl(key, value, ttl_seconds), False
+        )
 
-        Args:
-            key: Cache key.
-            value: Value to store.
-            ttl_seconds: Optional TTL.
-
-        Returns:
-            True if key was set (did not exist), False if key already exists.
-
-        Raises:
-            RedisOperationError: If the operation fails.
-        """
+    async def _set_nx_impl(self, key: str, value: str | bytes, ttl_seconds: int | None = None) -> bool:
         if isinstance(value, str):
             value = value.encode()
         start = time.perf_counter()
@@ -323,17 +309,11 @@ class RedisClient:
             record_db_query("redis.set_nx", (time.perf_counter() - start) * 1000)
 
     async def get(self, key: str) -> bytes | None:
-        """Get a cache value.
+        """Get a cache value; returns None if circuit open."""
+        return await guard_degrade(            STORE_REDIS, self._get_impl(key), None
+        )
 
-        Args:
-            key: Cache key.
-
-        Returns:
-            Value or None if not found.
-
-        Raises:
-            RedisOperationError: If the operation fails.
-        """
+    async def _get_impl(self, key: str) -> bytes | None:
         start = time.perf_counter()
         try:
             result: bytes | None = await self._redis.get(key)
@@ -345,11 +325,10 @@ class RedisClient:
             record_db_query("redis.get", (time.perf_counter() - start) * 1000)
 
     async def mset(self, mapping: dict[str, bytes]) -> None:
-        """Set multiple cache values in one pipeline roundtrip.
+        """Set multiple cache values; no-ops if circuit open."""
+        await guard_degrade(STORE_REDIS, self._mset_impl(mapping), None)
 
-        Raises:
-            RedisOperationError: If the operation fails.
-        """
+    async def _mset_impl(self, mapping: dict[str, bytes]) -> None:
         start = time.perf_counter()
         try:
             pipeline = self._redis.pipeline(transaction=False)
@@ -363,17 +342,12 @@ class RedisClient:
             record_db_query("redis.mset", (time.perf_counter() - start) * 1000)
 
     async def mget(self, keys: list[str]) -> list[bytes | None]:
-        """Get multiple cache values in one roundtrip.
+        """Get multiple cache values; returns all-None list if circuit open."""
+        default: list[bytes | None] = [None] * len(keys)
+        return await guard_degrade(            STORE_REDIS, self._mget_impl(keys), default
+        )
 
-        Args:
-            keys: List of cache keys.
-
-        Returns:
-            List of values (None for missing keys), same order as input.
-
-        Raises:
-            RedisOperationError: If the operation fails.
-        """
+    async def _mget_impl(self, keys: list[str]) -> list[bytes | None]:
         start = time.perf_counter()
         try:
             result: list[bytes | None] = await self._redis.mget(keys)
@@ -385,17 +359,11 @@ class RedisClient:
             record_db_query("redis.mget", (time.perf_counter() - start) * 1000)
 
     async def delete(self, key: str) -> bool:
-        """Delete a cache key.
+        """Delete a cache key; returns False if circuit open."""
+        return await guard_degrade(            STORE_REDIS, self._delete_impl(key), False
+        )
 
-        Args:
-            key: Cache key.
-
-        Returns:
-            True if key existed and was deleted.
-
-        Raises:
-            RedisOperationError: If the operation fails.
-        """
+    async def _delete_impl(self, key: str) -> bool:
         start = time.perf_counter()
         try:
             result = await self._redis.delete(key)

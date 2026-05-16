@@ -1,7 +1,24 @@
 """Semantic reranking for improved recall accuracy."""
 
+from context_service.reranking.quality import (
+    LAYER_THRESHOLDS,
+    RetrievalQuality,
+    apply_threshold_filter,
+    classify_quality,
+    compute_retrieval_quality,
+)
 from context_service.reranking.query_classifier import is_hard_query
 from context_service.reranking.query_expander import QueryExpander
 from context_service.reranking.reranker import LiteLLMReranker, RerankResult
 
-__all__ = ["LiteLLMReranker", "QueryExpander", "RerankResult", "is_hard_query"]
+__all__ = [
+    "LAYER_THRESHOLDS",
+    "LiteLLMReranker",
+    "QueryExpander",
+    "RerankResult",
+    "RetrievalQuality",
+    "apply_threshold_filter",
+    "classify_quality",
+    "compute_retrieval_quality",
+    "is_hard_query",
+]

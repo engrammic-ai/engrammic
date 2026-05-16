@@ -10,6 +10,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from context_service.models.postgres.skill import _NAME_PATTERN, MAX_BODY_SIZE
 
+RESERVED_NAMESPACES: tuple[str, ...] = ("engrammic:", "coding:", "b2b-ops:")
+
 
 class SkillCreate(BaseModel):
     """Pydantic schema for creating a skill."""
@@ -24,8 +26,9 @@ class SkillCreate(BaseModel):
     def validate_name_format(cls, v: str) -> str:
         if not _NAME_PATTERN.match(v):
             raise ValueError("Name must be lowercase namespace:name format (e.g., 'myorg:mytool')")
-        if v.startswith("engrammic:"):
-            raise ValueError("The 'engrammic:' namespace is reserved")
+        for reserved in RESERVED_NAMESPACES:
+            if v.startswith(reserved):
+                raise ValueError(f"The '{reserved}' namespace is reserved")
         return v
 
 

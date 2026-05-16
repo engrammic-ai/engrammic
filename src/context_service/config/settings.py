@@ -97,6 +97,15 @@ class SynthesizerIdentityConfig(BaseModel):
     min_facts_for_synthesis: int = 3
 
 
+class EvidenceEnforcementConfig(BaseModel):
+    """Settings for Knowledge layer evidence enforcement (D1)."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    enabled: bool = Field(default=True, description="Enable evidence validation")
+    enforce: bool = Field(default=False, description="If false, log-only mode (no rejection)")
+
+
 class RerankingSettings(BaseModel):
     """Settings for semantic reranking and query expansion."""
 
@@ -720,6 +729,9 @@ class Settings(BaseSettings):
     )
     chain_feedback: ChainFeedbackConfig = Field(default_factory=ChainFeedbackConfig)
     reranking: RerankingSettings = Field(default_factory=RerankingSettings)
+    evidence_enforcement: EvidenceEnforcementConfig = Field(
+        default_factory=EvidenceEnforcementConfig
+    )
 
     # =========================================================================
     # Application Meta
@@ -760,7 +772,8 @@ class Settings(BaseSettings):
     dev_agent_id: str = Field(default="dev-agent")
 
     # MCP settings
-    mcp_tool_profile: str = Field(default="standard")
+    mcp_tool_profile: str = Field(default="reasoning")
+    default_icp_preset: str = Field(default="coding")
 
     # =========================================================================
     # Memgraph Settings

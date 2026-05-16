@@ -24,6 +24,7 @@ from tenacity import (
 
 from context_service.config.logging import get_logger
 from context_service.config.settings import Settings, get_settings
+from context_service.engine.storage_circuit import STORE_MEMGRAPH, guard_hard_fail
 from context_service.telemetry.metrics import record_db_query, record_store_error
 
 logger = get_logger(__name__)
@@ -236,8 +237,18 @@ class MemgraphClient:
             List of result records as dictionaries.
 
         Raises:
+            StorageCircuitOpenError: If the Memgraph circuit breaker is open.
             MemgraphOperationError: If the query fails.
         """
+        return await guard_hard_fail(
+            STORE_MEMGRAPH, self._execute_query_impl(query, parameters)
+        )
+
+    async def _execute_query_impl(
+        self,
+        query: str,
+        parameters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
 
         async def _run_once() -> list[dict[str, Any]]:
             async with self.session() as session:
@@ -302,8 +313,18 @@ class MemgraphClient:
             List of result records as dictionaries.
 
         Raises:
+            StorageCircuitOpenError: If the Memgraph circuit breaker is open.
             MemgraphOperationError: If the write fails.
         """
+        return await guard_hard_fail(
+            STORE_MEMGRAPH, self._execute_write_impl(query, parameters)
+        )
+
+    async def _execute_write_impl(
+        self,
+        query: str,
+        parameters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
 
         async def _write_tx(tx: Any, q: str, p: dict[str, Any]) -> list[dict[str, Any]]:
             result = await tx.run(q, p)

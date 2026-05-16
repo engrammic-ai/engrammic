@@ -18,6 +18,11 @@ mcp_instructions: |
   - Reference existing nodes when forming beliefs
   - Use recall before storing to avoid duplicates
 
+  Onboarding:
+  - At session start, call patterns(action='get', name='onboarding') for your workflow guide
+
+default_profile: reasoning
+
 profiles:
   standard:
     - remember

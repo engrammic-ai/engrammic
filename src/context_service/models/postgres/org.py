@@ -55,6 +55,7 @@ class SiloConfig(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     quotas: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'"))
     feature_flags: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'"))
+    preset: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
 
@@ -67,6 +68,7 @@ class SiloConfig(Base):
         name: str,
         quotas: dict[str, Any] | None = None,
         feature_flags: dict[str, Any] | None = None,
+        preset: str | None = None,
         **kw: Any,
     ) -> None:
         super().__init__(**kw)
@@ -75,3 +77,4 @@ class SiloConfig(Base):
         self.name = name
         self.quotas = quotas if quotas is not None else {}
         self.feature_flags = feature_flags if feature_flags is not None else {}
+        self.preset = preset

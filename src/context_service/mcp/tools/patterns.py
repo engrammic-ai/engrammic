@@ -6,7 +6,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any, Literal
 
-from context_service.mcp.server import get_mcp_auth_context, get_skill_service
+from context_service.mcp.server import get_mcp_auth_context, get_preset_resolver, get_skill_service
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.services.models import derive_silo_id
 from context_service.telemetry.metrics import record_mcp_tool
@@ -30,28 +30,58 @@ async def _patterns_impl(
     except RuntimeError:
         return {"error": "patterns_unavailable", "message": "Patterns service not configured"}
 
+    # When profile is omitted, resolve the silo's ICP preset namespace for ranking/qualification.
+    # When profile is explicit, use it verbatim as the namespace filter (no preset lookup).
+    preset_ns: str | None = None
+    if profile is None:
+        try:
+            preset = await get_preset_resolver().resolve(silo_id)
+            preset_ns = preset.namespace
+        except RuntimeError:
+            # Resolver not configured (startup) -> degrade gracefully to base, non-preset behavior.
+            preset_ns = None
+
+    def _rank(skills: list[Any]) -> list[Any]:
+        """Reorder so preset-namespace skills appear first, rest follow in original order."""
+        if preset_ns is None:
+            return skills
+        prefix = f"{preset_ns}:"
+        first = [s for s in skills if s.name.startswith(prefix)]
+        rest = [s for s in skills if not s.name.startswith(prefix)]
+        return first + rest
+
     if action == "list":
+        # Do NOT filter by namespace when using preset; rank instead so base skills remain visible.
         skills = await skill_svc.list(silo_id, namespace=profile, limit=50, offset=0)
+        ranked = _rank(skills)
         return {
-            "patterns": [s.model_dump(exclude_none=True) for s in skills],
-            "count": len(skills),
+            "patterns": [s.model_dump(exclude_none=True) for s in ranked],
+            "count": len(ranked),
         }
 
     elif action == "get":
         if not name:
             return {"error": "missing_name", "message": "name required for get action"}
-        skill = await skill_svc.get(silo_id, name)
+        # Auto-qualify bare names (no ':') ONLY against the preset namespace; a bare name that
+        # exists under a different namespace (e.g. engrammic:) returns not_found unless passed
+        # fully qualified.
+        resolved_name = name
+        if ":" not in name and preset_ns is not None:
+            resolved_name = f"{preset_ns}:{name}"
+        skill = await skill_svc.get(silo_id, resolved_name)
         if not skill:
-            return {"error": "not_found", "message": f"Pattern not found: {name}"}
+            return {"error": "not_found", "message": f"Pattern not found: {resolved_name}"}
         return {"pattern": skill.model_dump(exclude_none=True)}
 
     elif action == "search":
+        # Do NOT filter by namespace when using preset; rank instead.
         if not query:
             return {"error": "missing_query", "message": "query required for search action"}
         skills = await skill_svc.search(silo_id, query, namespace=profile, limit=20)
+        ranked = _rank(skills)
         return {
-            "patterns": [s.model_dump(exclude_none=True) for s in skills],
-            "count": len(skills),
+            "patterns": [s.model_dump(exclude_none=True) for s in ranked],
+            "count": len(ranked),
         }
 
     return {"error": "invalid_action", "valid": ["list", "get", "search"]}
@@ -76,7 +106,9 @@ def register(mcp: FastMCP) -> None:
             action: list|get|search.
             name: Pattern name (for get).
             query: Search query (for search).
-            profile: Filter by profile: standard|reasoning.
+            profile: Filter by profile namespace (e.g. standard|reasoning). When omitted, the
+                silo's ICP preset namespace is used to rank matching skills first and to
+                auto-qualify a bare name (no colon) in a get action to that namespace.
 
         Returns:
             {patterns: [...]} or {pattern: {...}}

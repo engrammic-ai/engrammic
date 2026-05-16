@@ -28,7 +28,11 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 ## Active plans
 
-None currently. Next candidates:
+| Plan | Status | Description |
+|------|--------|-------------|
+| [2026-05-16-icp-skill-presets.md](./2026-05-16-icp-skill-presets.md) | In progress | ICP skill presets: per-silo preset binding shaping `patterns` delivery and recall defaults |
+
+Next candidates:
 - Beacon receiving endpoint (Cloud Run)
 - Clustering algorithm evaluation (spike)
 

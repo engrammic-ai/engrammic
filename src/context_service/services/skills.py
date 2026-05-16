@@ -17,7 +17,12 @@ import yaml
 from sqlalchemy import delete, select
 
 from context_service.models.postgres.skill import Skill
-from context_service.schemas.skill import SkillCreate, SkillResponse, SkillUpdate
+from context_service.schemas.skill import (
+    RESERVED_NAMESPACES,
+    SkillCreate,
+    SkillResponse,
+    SkillUpdate,
+)
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -203,7 +208,7 @@ class SkillService:
         """Import a skill from a remote Engrammic instance.
 
         1. Validate source_url (SSRF protection)
-        2. Reject if name starts with "engrammic:"
+        2. Reject if name starts with any reserved namespace ("engrammic:", "coding:", "b2b-ops:")
         3. Check for existing skill (builtin or user)
         4. Fetch from remote: GET {source_url}/api/skills/{name}
         5. Sanitize fetched body
@@ -211,8 +216,11 @@ class SkillService:
         """
         _validate_import_url(source_url)
 
-        if name.startswith("engrammic:"):
-            raise ValueError(f"Skill name '{name}' uses reserved namespace 'engrammic'")
+        for reserved in RESERVED_NAMESPACES:
+            if name.startswith(reserved):
+                raise ValueError(
+                    f"Skill name '{name}' uses reserved namespace '{reserved.rstrip(':')}'"
+                )
 
         existing = await self.get(silo_id, name)
         if existing is not None:

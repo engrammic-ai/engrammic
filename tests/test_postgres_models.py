@@ -41,6 +41,7 @@ def test_silo_config_columns():
         "name",
         "quotas",
         "feature_flags",
+        "preset",
         "created_at",
         "updated_at",
     }
