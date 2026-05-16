@@ -34,7 +34,11 @@ async def _recall_impl(
         try:
             preset = await get_preset_resolver().resolve(silo_id)
             override = preset.param_overrides.get("default_recall_top_k")
-            if isinstance(override, int) and override > 0:
+            if (
+                isinstance(override, int)
+                and not isinstance(override, bool)
+                and override > 0
+            ):
                 effective_top_k = override
         except RuntimeError:
             pass

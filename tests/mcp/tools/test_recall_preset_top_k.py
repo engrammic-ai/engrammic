@@ -54,3 +54,15 @@ async def test_top_k_defaults_from_preset(_patch: dict[str, object]) -> None:
 async def test_explicit_top_k_overrides_preset(_patch: dict[str, object]) -> None:
     await recall_mod._recall_impl(query="x", top_k=3)
     assert _patch["top_k"] == 3
+
+
+@pytest.mark.asyncio
+async def test_top_k_falls_back_to_literal_when_resolver_unconfigured(
+    _patch: dict[str, object], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def _raising_resolver() -> object:
+        raise RuntimeError("not configured")
+
+    monkeypatch.setattr(recall_mod, "get_preset_resolver", _raising_resolver)
+    await recall_mod._recall_impl(query="x")
+    assert _patch["top_k"] == 10
