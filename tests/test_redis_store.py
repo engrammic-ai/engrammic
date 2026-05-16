@@ -13,11 +13,18 @@ import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import RedisError
 
-from context_service.stores.redis import RedisClient, RedisOperationError, create_redis_pool
+from context_service.extraction.filter import circuit_breaker
+from context_service.stores.redis import RedisClient, create_redis_pool
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def clear_cb_registry() -> None:
+    """Reset the CB registry between tests to prevent circuit state bleed."""
+    circuit_breaker._registry.clear()
 
 
 def _make_redis_mock(**overrides: Any) -> AsyncMock:
@@ -154,21 +161,22 @@ class TestSetSession:
         assert isinstance(call_val, bytes)
         assert b'"k"' in call_val
 
-    async def test_raises_operation_error_on_redis_error(self) -> None:
+    async def test_degrades_on_redis_error(self) -> None:
+        # Redis is an optimization layer; errors degrade to False, not raise.
         redis_mock = _make_redis_mock()
         redis_mock.set.side_effect = RedisError("write failed")
         client = RedisClient(redis_mock)
 
-        with pytest.raises(RedisOperationError, match="Failed to store session"):
-            await client.set_session("silo-1", "sess-1", {})
+        result = await client.set_session("silo-1", "sess-1", {})
+        assert result is False
 
-    async def test_raises_operation_error_on_connection_error(self) -> None:
+    async def test_degrades_on_connection_error(self) -> None:
         redis_mock = _make_redis_mock()
         redis_mock.set.side_effect = RedisConnectionError("conn lost")
         client = RedisClient(redis_mock)
 
-        with pytest.raises(RedisOperationError):
-            await client.set_session("silo-1", "sess-1", {})
+        result = await client.set_session("silo-1", "sess-1", {})
+        assert result is False
 
 
 class TestGetSession:
@@ -194,13 +202,14 @@ class TestGetSession:
 
         assert await client.get_session("silo-1", "sess-1") is None
 
-    async def test_raises_operation_error_on_redis_error(self) -> None:
+    async def test_degrades_on_redis_error(self) -> None:
+        # Redis is an optimization layer; errors degrade to None, not raise.
         redis_mock = _make_redis_mock()
         redis_mock.get.side_effect = RedisError("timeout")
         client = RedisClient(redis_mock)
 
-        with pytest.raises(RedisOperationError, match="Failed to retrieve session"):
-            await client.get_session("silo-1", "sess-1")
+        result = await client.get_session("silo-1", "sess-1")
+        assert result is None
 
 
 def _make_pipeline_mock(execute_return: Any = None, execute_side_effect: Any = None) -> MagicMock:
@@ -230,14 +239,15 @@ class TestDeleteSession:
 
         assert await client.delete_session("silo-1", "sess-1") is False
 
-    async def test_raises_operation_error_on_pipeline_failure(self) -> None:
+    async def test_degrades_on_pipeline_failure(self) -> None:
+        # Redis is an optimization layer; errors degrade to False, not raise.
         redis_mock = _make_redis_mock()
         pipeline_mock = _make_pipeline_mock(execute_side_effect=RedisError("pipeline error"))
         redis_mock.pipeline = MagicMock(return_value=pipeline_mock)
         client = RedisClient(redis_mock)
 
-        with pytest.raises(RedisOperationError, match="Failed to delete session"):
-            await client.delete_session("silo-1", "sess-1")
+        result = await client.delete_session("silo-1", "sess-1")
+        assert result is False
 
 
 # ---------------------------------------------------------------------------
@@ -260,13 +270,14 @@ class TestSessionNodes:
 
         assert await client.add_session_node("silo-1", "sess-1", "node-abc") is False
 
-    async def test_add_node_raises_on_redis_error(self) -> None:
+    async def test_add_node_degrades_on_redis_error(self) -> None:
+        # Redis is an optimization layer; errors degrade to False, not raise.
         redis_mock = _make_redis_mock()
         redis_mock.sadd.side_effect = RedisConnectionError("no conn")
         client = RedisClient(redis_mock)
 
-        with pytest.raises(RedisOperationError, match="Failed to add session node"):
-            await client.add_session_node("silo-1", "sess-1", "node-abc")
+        result = await client.add_session_node("silo-1", "sess-1", "node-abc")
+        assert result is False
 
     async def test_get_session_nodes_decodes_members(self) -> None:
         redis_mock = _make_redis_mock()
@@ -276,13 +287,14 @@ class TestSessionNodes:
         nodes = await client.get_session_nodes("silo-1", "sess-1")
         assert set(nodes) == {"node-1", "node-2"}
 
-    async def test_get_session_nodes_raises_on_redis_error(self) -> None:
+    async def test_get_session_nodes_degrades_on_redis_error(self) -> None:
+        # Redis is an optimization layer; errors degrade to [], not raise.
         redis_mock = _make_redis_mock()
         redis_mock.smembers.side_effect = RedisError("smembers failed")
         client = RedisClient(redis_mock)
 
-        with pytest.raises(RedisOperationError, match="Failed to get session nodes"):
-            await client.get_session_nodes("silo-1", "sess-1")
+        result = await client.get_session_nodes("silo-1", "sess-1")
+        assert result == []
 
     async def test_remove_node_returns_true_when_removed(self) -> None:
         redis_mock = _make_redis_mock()
@@ -298,13 +310,14 @@ class TestSessionNodes:
 
         assert await client.remove_session_node("silo-1", "sess-1", "node-1") is False
 
-    async def test_remove_node_raises_on_redis_error(self) -> None:
+    async def test_remove_node_degrades_on_redis_error(self) -> None:
+        # Redis is an optimization layer; errors degrade to False, not raise.
         redis_mock = _make_redis_mock()
         redis_mock.srem.side_effect = RedisConnectionError("srem fail")
         client = RedisClient(redis_mock)
 
-        with pytest.raises(RedisOperationError, match="Failed to remove session node"):
-            await client.remove_session_node("silo-1", "sess-1", "node-1")
+        result = await client.remove_session_node("silo-1", "sess-1", "node-1")
+        assert result is False
 
 
 # ---------------------------------------------------------------------------
@@ -342,13 +355,14 @@ class TestCacheSet:
         kwargs = redis_mock.set.call_args[1]
         assert kwargs.get("ex") is None
 
-    async def test_set_raises_on_redis_error(self) -> None:
+    async def test_set_degrades_on_redis_error(self) -> None:
+        # Redis is an optimization layer; errors degrade to False, not raise.
         redis_mock = _make_redis_mock()
         redis_mock.set.side_effect = RedisError("write error")
         client = RedisClient(redis_mock)
 
-        with pytest.raises(RedisOperationError, match="Failed to set cache value"):
-            await client.set("k", "v")
+        result = await client.set("k", "v")
+        assert result is False
 
 
 class TestCacheSetNx:
@@ -366,13 +380,14 @@ class TestCacheSetNx:
 
         assert await client.set_nx("k", "v") is False
 
-    async def test_raises_on_redis_error(self) -> None:
+    async def test_degrades_on_redis_error(self) -> None:
+        # Redis is an optimization layer; errors degrade to False, not raise.
         redis_mock = _make_redis_mock()
         redis_mock.set.side_effect = RedisError("nx error")
         client = RedisClient(redis_mock)
 
-        with pytest.raises(RedisOperationError, match="Failed to set_nx cache value"):
-            await client.set_nx("k", "v")
+        result = await client.set_nx("k", "v")
+        assert result is False
 
 
 class TestCacheGet:
@@ -390,13 +405,14 @@ class TestCacheGet:
 
         assert await client.get("missing") is None
 
-    async def test_raises_on_redis_error(self) -> None:
+    async def test_degrades_on_redis_error(self) -> None:
+        # Redis is an optimization layer; errors degrade to None, not raise.
         redis_mock = _make_redis_mock()
         redis_mock.get.side_effect = RedisConnectionError("conn error")
         client = RedisClient(redis_mock)
 
-        with pytest.raises(RedisOperationError, match="Failed to get cache value"):
-            await client.get("k")
+        result = await client.get("k")
+        assert result is None
 
 
 class TestCacheMget:
@@ -408,13 +424,14 @@ class TestCacheMget:
         result = await client.mget(["k1", "k2", "k3"])
         assert result == [b"v1", None, b"v3"]
 
-    async def test_raises_on_redis_error(self) -> None:
+    async def test_degrades_on_redis_error(self) -> None:
+        # Redis is an optimization layer; errors degrade to all-None list, not raise.
         redis_mock = _make_redis_mock()
         redis_mock.mget.side_effect = RedisError("mget fail")
         client = RedisClient(redis_mock)
 
-        with pytest.raises(RedisOperationError, match="Failed to mget cache values"):
-            await client.mget(["k1", "k2"])
+        result = await client.mget(["k1", "k2"])
+        assert result == [None, None]
 
 
 class TestCacheDelete:
@@ -432,13 +449,14 @@ class TestCacheDelete:
 
         assert await client.delete("missing") is False
 
-    async def test_raises_on_redis_error(self) -> None:
+    async def test_degrades_on_redis_error(self) -> None:
+        # Redis is an optimization layer; errors degrade to False, not raise.
         redis_mock = _make_redis_mock()
         redis_mock.delete.side_effect = RedisConnectionError("delete fail")
         client = RedisClient(redis_mock)
 
-        with pytest.raises(RedisOperationError, match="Failed to delete cache value"):
-            await client.delete("k")
+        result = await client.delete("k")
+        assert result is False
 
 
 # ---------------------------------------------------------------------------

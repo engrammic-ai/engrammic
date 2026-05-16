@@ -37,6 +37,8 @@ _query_expansion_duration: metrics.Histogram | None = None
 _query_expansion_counter: metrics.Counter | None = None
 _hard_query_counter: metrics.Counter | None = None
 _store_error_counter: metrics.Counter | None = None
+_circuit_breaker_state: metrics.UpDownCounter | None = None
+_circuit_breaker_trips: metrics.Counter | None = None
 
 
 def setup_metrics(service_name: str = "context-service") -> None:
@@ -55,7 +57,9 @@ def setup_metrics(service_name: str = "context-service") -> None:
         _query_expansion_duration, \
         _query_expansion_counter, \
         _hard_query_counter, \
-        _store_error_counter
+        _store_error_counter, \
+        _circuit_breaker_state, \
+        _circuit_breaker_trips
 
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     if not endpoint:
@@ -193,6 +197,18 @@ def setup_metrics(service_name: str = "context-service") -> None:
     _store_error_counter = _meter.create_counter(
         name="store.errors",
         description="Store operation errors",
+        unit="1",
+    )
+
+    _circuit_breaker_state = _meter.create_up_down_counter(
+        name="circuit_breaker_state",
+        description="Circuit breaker state (1=open, 0=closed) per store",
+        unit="1",
+    )
+
+    _circuit_breaker_trips = _meter.create_counter(
+        name="circuit_breaker_trips_total",
+        description="Total number of circuit breaker trips (closed->open) per store",
         unit="1",
     )
 
@@ -348,6 +364,20 @@ def record_hard_query_detection(is_hard: bool) -> None:
     """Record hard query detection for monitoring."""
     if _hard_query_counter is not None:
         _hard_query_counter.add(1, {"is_hard": str(is_hard).lower()})
+
+
+def record_circuit_breaker_opened(store: str) -> None:
+    """Record a circuit breaker trip (closed -> open)."""
+    if _circuit_breaker_trips is not None:
+        _circuit_breaker_trips.add(1, {"store": store})
+    if _circuit_breaker_state is not None:
+        _circuit_breaker_state.add(1, {"store": store})
+
+
+def record_circuit_breaker_closed(store: str) -> None:
+    """Record a circuit breaker reset (open -> closed)."""
+    if _circuit_breaker_state is not None:
+        _circuit_breaker_state.add(-1, {"store": store})
 
 
 def record_store_error(store: str, operation: str) -> None:

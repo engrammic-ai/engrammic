@@ -13,6 +13,7 @@ from qdrant_client.http import models
 from qdrant_client.http.exceptions import UnexpectedResponse
 
 from context_service.config.logging import get_logger
+from context_service.engine.storage_circuit import STORE_QDRANT, guard_hard_fail
 from context_service.telemetry.metrics import record_db_query
 
 tracer = trace.get_tracer(__name__)
@@ -196,6 +197,27 @@ class QdrantClient:
     ) -> bool:
         """Insert or update a vector.
 
+        Raises:
+            StorageCircuitOpenError: If the Qdrant circuit breaker is open.
+            QdrantOperationError: If the upsert fails.
+        """
+        return await guard_hard_fail(
+            STORE_QDRANT,
+            self._upsert_impl(node_id, vector, payload, silo_id, sparse_indices, sparse_values, expansion),
+        )
+
+    async def _upsert_impl(
+        self,
+        node_id: str,
+        vector: list[float],
+        payload: dict[str, Any] | None = None,
+        silo_id: str | None = None,
+        sparse_indices: list[int] | None = None,
+        sparse_values: list[float] | None = None,
+        expansion: str | None = None,
+    ) -> bool:
+        """Insert or update a vector.
+
         When ``sparse_indices`` and ``sparse_values`` are provided the point is
         stored with named dense + sparse vectors (hybrid mode). The collection
         must have been created with ``ensure_collection(hybrid=True)``
@@ -265,6 +287,30 @@ class QdrantClient:
                 record_db_query("qdrant.upsert", (time.perf_counter() - start) * 1000)
 
     async def search(
+        self,
+        vector: list[float],
+        limit: int = 10,
+        score_threshold: float | None = None,
+        silo_id: str | None = None,
+        filter_conditions: list[models.FieldCondition] | None = None,
+        search_mode: Literal["hybrid", "dense", "sparse"] = "dense",
+        sparse_indices: list[int] | None = None,
+        sparse_values: list[float] | None = None,
+    ) -> list[SearchResult]:
+        """Search for similar vectors.
+
+        Raises:
+            StorageCircuitOpenError: If the Qdrant circuit breaker is open.
+            QdrantOperationError: If the search fails.
+        """
+        return await guard_hard_fail(
+            STORE_QDRANT,
+            self._search_impl(
+                vector, limit, score_threshold, silo_id, filter_conditions, search_mode, sparse_indices, sparse_values
+            ),
+        )
+
+    async def _search_impl(
         self,
         vector: list[float],
         limit: int = 10,
@@ -406,6 +452,15 @@ class QdrantClient:
                 record_db_query("qdrant.search", (time.perf_counter() - start) * 1000)
 
     async def delete(self, node_id: str) -> bool:
+        """Delete a vector by node ID.
+
+        Raises:
+            StorageCircuitOpenError: If the Qdrant circuit breaker is open.
+            QdrantOperationError: If the delete fails.
+        """
+        return await guard_hard_fail(STORE_QDRANT, self._delete_impl(node_id))
+
+    async def _delete_impl(self, node_id: str) -> bool:
         """Delete a vector by node ID.
 
         Args:
