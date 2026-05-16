@@ -18,6 +18,8 @@ mcp_instructions: |
   - Reference existing nodes when forming beliefs
   - Use recall before storing to avoid duplicates
 
+default_profile: reasoning
+
 profiles:
   standard:
     - remember

@@ -6,12 +6,18 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
+import structlog
+from primitives.eag.transitions import MissingEvidenceError, validate_evidence_non_empty
+
+from context_service.config.settings import get_settings
 from context_service.mcp.tools.context_store import _context_assert
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.telemetry.metrics import record_mcp_tool
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
+
+log = structlog.get_logger(__name__)
 
 
 async def _learn_impl(
@@ -22,7 +28,18 @@ async def _learn_impl(
     tags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Implementation for learn tool."""
-    if not evidence:
+    settings = get_settings()
+    cfg = settings.evidence_enforcement
+
+    if cfg.enabled and not validate_evidence_non_empty(evidence):
+        log.warning(
+            "evidence_violation",
+            claim_preview=claim[:100] if claim else "",
+            evidence_count=len(evidence) if evidence else 0,
+            enforce_mode=cfg.enforce,
+        )
+        if cfg.enforce:
+            raise MissingEvidenceError()
         return {
             "error": "missing_evidence",
             "message": "evidence must reference at least one node or URI",
