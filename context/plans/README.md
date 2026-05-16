@@ -5,6 +5,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 ## Current state (2026-05-16)
 
 **Shipped:**
+- v2.9 Review Followup (P0 security/reliability fixes, N+1 batching, LLM timeout/retry)
 - v2.8 Content-Hash Dedup (full SHA256 hashes, dedup index, claim dedup tests)
 - v2.7 MCP Tool Surface Redesign (intent-based tools with YAML config and profiles)
 - v2.6 Semantic Reranking (Vertex AI reranking + LLM query expansion for entailment)
@@ -28,7 +29,6 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Status | Description |
 |------|--------|-------------|
-| [2026-05-15-review-followup.md](./2026-05-15-review-followup.md) | Ready | Address P0/P1 findings from codebase review |
 | [2026-05-13-gcp-deployment.md](./2026-05-13-gcp-deployment.md) | Ready | Pulumi GCP infra - scaffold done, ready for first deploy |
 
 Next candidates:
@@ -62,6 +62,7 @@ Next candidates:
 ## Archive
 
 Completed plans in `archive/`:
+- Review Followup (2026-05-16) - P0 security/reliability fixes, N+1 batching, LLM timeout/retry
 - Content-Hash Dedup (2026-05-16) - full SHA256 hashes, dedup index, claim dedup tests
 - MCP Tool Surface Redesign (2026-05-16) - intent-based tools with YAML config and profiles
 - Semantic Reranking (2026-05-16) - Vertex AI reranking + LLM query expansion
