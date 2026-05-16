@@ -3,9 +3,25 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Generator
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+
+@pytest.fixture
+def reset_preset_cache() -> Generator[None, None, None]:
+    """Reset the preset config cache before and after a test.
+
+    Non-autouse: opt in when a test needs to load synthetic preset config
+    (e.g. by patching the YAML path). Prevents the module-level cache from
+    leaking real or synthetic config across tests.
+    """
+    import context_service.mcp.tools.preset_registry as preset_mod
+
+    preset_mod._cached_config = None
+    yield
+    preset_mod._cached_config = None
 
 
 @pytest.fixture

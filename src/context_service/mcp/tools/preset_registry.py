@@ -39,11 +39,12 @@ def load_preset_config() -> dict[str, Any]:
         return _cached_config
 
     with open(_CONFIG_PATH) as f:
-        _cached_config = yaml.safe_load(f)
+        data = yaml.safe_load(f)
 
-    if not isinstance(_cached_config, dict) or "presets" not in _cached_config:
+    if not isinstance(data, dict) or "presets" not in data:
         raise ValueError(f"Malformed {_CONFIG_PATH}: missing 'presets' key")
 
+    _cached_config = data
     logger.info("mcp_preset_config_loaded", path=str(_CONFIG_PATH))
     return _cached_config
 
