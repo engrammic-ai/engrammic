@@ -696,6 +696,20 @@ class FeatureFlags(BaseModel):
     )
 
 
+class UsageRetentionConfig(BaseModel):
+    """Configuration for ToolUsage row retention."""
+
+    retention_enabled: bool = Field(
+        default=False,
+        description="Enable deletion of old ToolUsage rows. Disabled by default.",
+    )
+    retention_days: int = Field(
+        default=90,
+        ge=1,
+        description="Rows older than this many days are deleted when retention is enabled.",
+    )
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -742,6 +756,7 @@ class Settings(BaseSettings):
         default_factory=EvidenceEnforcementConfig
     )
     feature_flags: FeatureFlags = Field(default_factory=FeatureFlags)
+    usage: UsageRetentionConfig = Field(default_factory=UsageRetentionConfig)
 
     # =========================================================================
     # Application Meta
