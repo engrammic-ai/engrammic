@@ -90,10 +90,10 @@ async def _track_node_access(
     silo_id: str, session_id: str, results: list[dict[str, Any]]
 ) -> None:
     """Track that nodes were accessed by this session for evidence accessibility."""
+    import structlog
+
     from context_service.engine import queries
     from context_service.mcp.server import get_context_service
-
-    import structlog
 
     log = structlog.get_logger(__name__)
 
