@@ -13,9 +13,14 @@ verify_session, so it never triggers the import.
 from __future__ import annotations
 
 from typing import Any
+from uuid import UUID
+
+import structlog
 
 from context_service.auth.context import AuthContext
 from context_service.config.settings import get_settings
+
+logger = structlog.get_logger(__name__)
 
 
 async def verify_session(token: str) -> AuthContext:
@@ -57,9 +62,38 @@ async def verify_session(token: str) -> AuthContext:
     if org_id is None:
         raise ValueError("WorkOS session response missing organization_id")
 
+    db_user_id: UUID | None = None
+    try:
+        from context_service.db.postgres import get_session
+        from context_service.services.models import derive_silo_id
+        from context_service.services.user import UserService
+
+        first_name: str | None = user.get("first_name")
+        last_name: str | None = user.get("last_name")
+        full_name: str | None = " ".join(filter(None, [first_name, last_name])) or None
+
+        async with get_session() as session:
+            user_service = UserService(session)
+            db_user = await user_service.upsert_user(
+                workos_user_id=user["id"],
+                org_id=org_id,
+                silo_id=str(derive_silo_id(org_id)),
+                email=user.get("email", ""),
+                name=full_name,
+            )
+            db_user_id = db_user.id
+            await session.commit()
+    except Exception as exc:
+        logger.warning(
+            "user_upsert_failed",
+            error=str(exc),
+            workos_user_id=user["id"],
+        )
+
     return AuthContext(
         org_id=org_id,
         user_id=user["id"],
         email=user.get("email", ""),
         is_dev=False,
+        db_user_id=db_user_id,
     )

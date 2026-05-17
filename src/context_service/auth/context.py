@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from uuid import UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -13,3 +14,4 @@ class AuthContext:
     is_dev: bool
     agent_id: str | None = None
     session_id: str | None = None
+    db_user_id: UUID | None = None
