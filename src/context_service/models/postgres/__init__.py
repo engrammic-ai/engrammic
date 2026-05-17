@@ -9,6 +9,8 @@ from context_service.models.postgres.chain_feedback import (
 from context_service.models.postgres.org import OrgPreferences, SiloConfig
 from context_service.models.postgres.reasoning import OrphanedChains, ReasoningChainSteps
 from context_service.models.postgres.skill import Skill
+from context_service.models.postgres.usage import ToolUsage, ToolUsageSummary
+from context_service.models.postgres.user import User
 
 __all__ = [
     "AuditEvents",
@@ -21,4 +23,7 @@ __all__ = [
     "SessionStepEmbedding",
     "Skill",
     "SiloConfig",
+    "ToolUsage",
+    "ToolUsageSummary",
+    "User",
 ]
