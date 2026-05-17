@@ -52,6 +52,11 @@ async def _recall_impl(
         top_k=effective_top_k,
     )
 
+    # Track node access for evidence accessibility (Layer 3 chain reuse)
+    session_id = auth.session_id
+    if session_id and result.get("results"):
+        await _track_node_access(silo_id, session_id, result["results"])
+
     if include_hypotheses:
         # Fetch active hypotheses for current session
         from context_service.db.queries import GET_WORKING_HYPOTHESES_FOR_SESSION
@@ -79,6 +84,45 @@ async def _recall_impl(
             result["hypotheses"] = []
 
     return result
+
+
+async def _track_node_access(
+    silo_id: str, session_id: str, results: list[dict[str, Any]]
+) -> None:
+    """Track that nodes were accessed by this session for evidence accessibility."""
+    from context_service.engine import queries
+    from context_service.mcp.server import get_context_service
+
+    import structlog
+
+    log = structlog.get_logger(__name__)
+
+    try:
+        ctx = get_context_service()
+        store = ctx._memgraph
+
+        # Ensure session node exists (idempotent)
+        await store.execute_write(
+            queries.ENSURE_SESSION_NODE,
+            {"session_id": session_id, "silo_id": silo_id},
+        )
+
+        # Mark each retrieved node as accessed
+        for item in results:
+            node_id = item.get("node_id")
+            if not node_id:
+                continue
+            try:
+                await store.execute_write(
+                    queries.MARK_NODE_ACCESSED,
+                    {"node_id": node_id, "silo_id": silo_id, "session_id": session_id},
+                )
+            except Exception as e:
+                # Non-fatal: log and continue
+                log.warning("mark_node_accessed_failed", node_id=node_id, error=str(e))
+    except Exception as e:
+        # Non-fatal: don't break recall on tracking failure
+        log.warning("track_node_access_failed", error=str(e))
 
 
 def register(mcp: FastMCP) -> None:
