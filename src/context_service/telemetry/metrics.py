@@ -39,6 +39,8 @@ _hard_query_counter: metrics.Counter | None = None
 _store_error_counter: metrics.Counter | None = None
 _circuit_breaker_state: metrics.UpDownCounter | None = None
 _circuit_breaker_trips: metrics.Counter | None = None
+_orphan_chains_exhausted: metrics.Counter | None = None
+_orphan_chains_recovered: metrics.Counter | None = None
 
 
 def setup_metrics(service_name: str = "context-service") -> None:
@@ -59,7 +61,9 @@ def setup_metrics(service_name: str = "context-service") -> None:
         _hard_query_counter, \
         _store_error_counter, \
         _circuit_breaker_state, \
-        _circuit_breaker_trips
+        _circuit_breaker_trips, \
+        _orphan_chains_exhausted, \
+        _orphan_chains_recovered
 
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     if not endpoint:
@@ -209,6 +213,18 @@ def setup_metrics(service_name: str = "context-service") -> None:
     _circuit_breaker_trips = _meter.create_counter(
         name="circuit_breaker_trips_total",
         description="Total number of circuit breaker trips (closed->open) per store",
+        unit="1",
+    )
+
+    _orphan_chains_exhausted = _meter.create_counter(
+        name="context_orphan_chains_exhausted_total",
+        description="Number of orphan chains that exhausted all retries",
+        unit="1",
+    )
+
+    _orphan_chains_recovered = _meter.create_counter(
+        name="context_orphan_chains_recovered_total",
+        description="Number of orphan chains successfully recovered",
         unit="1",
     )
 
@@ -385,3 +401,22 @@ def record_store_error(store: str, operation: str) -> None:
     if _store_error_counter is None:
         return
     _store_error_counter.add(1, {"store": store, "operation": operation})
+
+
+def record_orphan_chain_exhausted(silo_id: str) -> None:
+    """Record an orphan chain that exhausted all retries."""
+    if _orphan_chains_exhausted is None:
+        return
+    _orphan_chains_exhausted.add(1, {"silo_id": silo_id})
+
+
+def record_orphan_chain_recovered(silo_id: str) -> None:
+    """Record an orphan chain that was successfully recovered."""
+    if _orphan_chains_recovered is None:
+        return
+    _orphan_chains_recovered.add(1, {"silo_id": silo_id})
+
+
+# Public references used for import checks and direct access
+ORPHAN_CHAINS_EXHAUSTED = record_orphan_chain_exhausted
+ORPHAN_CHAINS_RECOVERED = record_orphan_chain_recovered
