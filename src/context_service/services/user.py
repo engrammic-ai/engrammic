@@ -35,6 +35,9 @@ class UserService:
 
         On existing user: updates last_active_at and name/email if changed.
         On new user: creates with all fields.
+
+        Note: passing name=None will set the DB column to NULL. This is
+        intentional; callers should omit name only when no name is available.
         """
         now = datetime.now(UTC)
 
