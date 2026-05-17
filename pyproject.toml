@@ -49,6 +49,7 @@ dependencies = [
     "python-dotenv>=1.0",
     # JSON
     "orjson>=3.9",
+    "json-repair>=0.28",
     # Numeric
     "numpy>=1.26",
     "dtaidistance>=2.3.0",  # DTW for reasoning chain matching
