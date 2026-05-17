@@ -6,7 +6,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
-from context_service.mcp.server import get_context_service, get_mcp_auth_context
+from context_service.mcp.server import get_context_service, get_mcp_auth_context, track_tool_usage
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.services.models import derive_silo_id
 from context_service.telemetry.metrics import record_mcp_tool
@@ -21,6 +21,7 @@ async def _trace_impl(node_id: str) -> dict[str, Any]:
         return {"error": "missing_node_id", "message": "node_id is required"}
 
     auth = await get_mcp_auth_context()
+    await track_tool_usage(auth, "trace")
     silo_id = str(derive_silo_id(auth.org_id))
     ctx_svc = get_context_service()
 

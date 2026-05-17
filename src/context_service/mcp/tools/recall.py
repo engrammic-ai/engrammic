@@ -6,7 +6,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
-from context_service.mcp.server import get_mcp_auth_context, get_preset_resolver
+from context_service.mcp.server import get_mcp_auth_context, get_preset_resolver, track_tool_usage
 from context_service.mcp.tools.context_recall import _context_recall
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.services.models import derive_silo_id
@@ -26,6 +26,7 @@ async def _recall_impl(
 ) -> dict[str, Any]:
     """Implementation for recall tool."""
     auth = await get_mcp_auth_context()
+    await track_tool_usage(auth, "recall")
     silo_id = str(derive_silo_id(auth.org_id))
 
     effective_top_k = top_k
@@ -34,11 +35,7 @@ async def _recall_impl(
         try:
             preset = await get_preset_resolver().resolve(silo_id)
             override = preset.param_overrides.get("default_recall_top_k")
-            if (
-                isinstance(override, int)
-                and not isinstance(override, bool)
-                and override > 0
-            ):
+            if isinstance(override, int) and not isinstance(override, bool) and override > 0:
                 effective_top_k = override
         except RuntimeError:
             pass
@@ -86,9 +83,7 @@ async def _recall_impl(
     return result
 
 
-async def _track_node_access(
-    silo_id: str, session_id: str, results: list[dict[str, Any]]
-) -> None:
+async def _track_node_access(silo_id: str, session_id: str, results: list[dict[str, Any]]) -> None:
     """Track that nodes were accessed by this session for evidence accessibility."""
     import structlog
 

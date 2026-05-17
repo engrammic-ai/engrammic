@@ -6,6 +6,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
+from context_service.mcp.server import get_mcp_auth_context, track_tool_usage
 from context_service.mcp.tools.context_store import _context_reflect
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.telemetry.metrics import record_mcp_tool
@@ -21,6 +22,8 @@ async def _reflect_impl(
     confidence: float = 0.8,
 ) -> dict[str, Any]:
     """Implementation for reflect tool."""
+    auth = await get_mcp_auth_context()
+    await track_tool_usage(auth, "reflect")
     return await _context_reflect(
         silo_id=None,
         observation=observation,

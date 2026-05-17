@@ -6,7 +6,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
-from context_service.mcp.server import get_mcp_auth_context
+from context_service.mcp.server import get_mcp_auth_context, track_tool_usage
 from context_service.mcp.tools.context_link import _context_link
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.services.models import derive_silo_id
@@ -25,6 +25,7 @@ async def _link_impl(
 ) -> dict[str, Any]:
     """Implementation for link tool."""
     auth = await get_mcp_auth_context()
+    await track_tool_usage(auth, "link")
     silo_id = str(derive_silo_id(auth.org_id))
     return await _context_link(
         silo_id=silo_id,

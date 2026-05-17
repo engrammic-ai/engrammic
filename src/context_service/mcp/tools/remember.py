@@ -6,6 +6,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
+from context_service.mcp.server import get_mcp_auth_context, track_tool_usage
 from context_service.mcp.tools.context_store import _context_remember
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.telemetry.metrics import record_mcp_tool
@@ -20,6 +21,8 @@ async def _remember_impl(
     decay: str = "standard",
 ) -> dict[str, Any]:
     """Implementation for remember tool."""
+    auth = await get_mcp_auth_context()
+    await track_tool_usage(auth, "remember")
     return await _context_remember(
         silo_id=None,  # auto-derived from auth
         content=content,

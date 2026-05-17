@@ -3,8 +3,10 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
+from uuid import UUID
 
 import structlog
 from fastmcp import FastMCP
@@ -124,9 +126,7 @@ def get_skill_service() -> SkillService:
 def get_preset_resolver() -> PresetResolver:
     """Get the configured PresetResolver instance."""
     if "preset_resolver" not in _services:
-        raise RuntimeError(
-            "PresetResolver not configured - call configure_services() at startup"
-        )
+        raise RuntimeError("PresetResolver not configured - call configure_services() at startup")
     from context_service.mcp.preset_resolver import PresetResolver as _PR
 
     return cast(_PR, _services["preset_resolver"])
@@ -229,6 +229,28 @@ async def get_mcp_auth_context() -> AuthContext:
         agent_id=agent_id,
         session_id=session_id,
     )
+
+
+async def track_tool_usage(auth: AuthContext, tool_name: str) -> None:
+    """Track tool usage for authenticated users. Fire-and-forget."""
+    if auth.db_user_id is None:
+        return  # Dev mode or Postgres unavailable, skip tracking
+    asyncio.create_task(_record_usage_task(auth.db_user_id, auth.org_id, tool_name))
+
+
+async def _record_usage_task(user_id: UUID, org_id: str, tool_name: str) -> None:
+    """Background task to record usage. Swallows errors."""
+    try:
+        from context_service.db.postgres import get_session
+        from context_service.services.models import derive_silo_id
+        from context_service.services.usage import UsageService
+
+        async with get_session() as session:
+            usage_service = UsageService(session)
+            await usage_service.record_usage(user_id, str(derive_silo_id(org_id)), tool_name)
+            await session.commit()
+    except Exception as e:
+        logger.warning("usage_tracking_failed", error=str(e), tool_name=tool_name)
 
 
 def create_mcp_server(profile: str | None = None) -> FastMCP:
