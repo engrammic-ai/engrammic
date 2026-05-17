@@ -30,7 +30,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Status | Description |
 |------|--------|-------------|
-| [2026-05-16-icp-skill-presets.md](./2026-05-16-icp-skill-presets.md) | In progress | ICP skill presets: per-silo preset binding shaping `patterns` delivery and recall defaults |
+| — | — | No active plans |
 
 Next candidates:
 - Beacon receiving endpoint (Cloud Run)
@@ -55,7 +55,6 @@ Next candidates:
 
 | Plan | Description |
 |------|-------------|
-| [2026-05-09-architecture-review.md](./2026-05-09-architecture-review.md) | Architecture decisions: hypergraph, consistency, custodian split, observability |
 | [eag-integration-audit.md](./eag-integration-audit.md) | Deferred items from EAG port |
 | [../specs/reasoning-chain-applicability.md](../specs/reasoning-chain-applicability.md) | Spec: reasoning chain applicability matching design |
 | [../specs/semantic-reranking.md](../specs/semantic-reranking.md) | Spec: semantic reranking with query expansion for entailment |
@@ -63,6 +62,10 @@ Next candidates:
 ## Archive
 
 Completed plans in `archive/`:
+- ICP Skill Presets (2026-05-17) - per-silo preset binding, patterns delivery
+- Identity LLM Wiring (2026-05-17) - Custodian LLM agents, Dagster jobs
+- Architecture Review (2026-05-17) - hypergraph, consistency, custodian split decisions
+- Unused Params Audit (2026-05-17) - codebase cleanup
 - GCP Deployment (2026-05-16) - Pulumi infra, Cloud Run API, GCE stateful host
 - Review Followup (2026-05-16) - P0 security/reliability fixes, N+1 batching, LLM timeout/retry
 - Content-Hash Dedup (2026-05-16) - full SHA256 hashes, dedup index, claim dedup tests
