@@ -687,6 +687,15 @@ def _load_models_config() -> ModelsConfig:
     return load_models_config()
 
 
+class FeatureFlags(BaseModel):
+    """Feature flags for gradual rollout."""
+
+    use_epistemic_store: bool = Field(
+        default=False,
+        description="Use EpistemicStore abstraction for synthesis operations",
+    )
+
+
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
@@ -732,6 +741,7 @@ class Settings(BaseSettings):
     evidence_enforcement: EvidenceEnforcementConfig = Field(
         default_factory=EvidenceEnforcementConfig
     )
+    feature_flags: FeatureFlags = Field(default_factory=FeatureFlags)
 
     # =========================================================================
     # Application Meta

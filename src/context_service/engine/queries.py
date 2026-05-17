@@ -1090,3 +1090,121 @@ MERGE (f)-[:PROMOTED_FROM]->(c)
 SET c.status = 'superseded'
 RETURN count(c) AS updated
 """
+
+# ---------------------------------------------------------------------------
+# Evidence Accessibility (chain_applicability Layer 3)
+# ---------------------------------------------------------------------------
+
+GET_SESSION_ACCESSIBLE_EVIDENCE = f"""
+MATCH (n)
+WHERE {content_union_predicate("n")}
+  AND n.silo_id = $silo_id
+  AND n.committed = true
+  AND (n.session_id = $session_id
+       OR (n)<-[:ACCESSED_BY]-(:Session {{id: $session_id}}))
+RETURN n.id AS node_id
+"""
+
+MARK_NODE_ACCESSED = f"""
+MATCH (n) WHERE {content_union_predicate("n")}
+  AND n.id = $node_id AND n.silo_id = $silo_id
+MATCH (s:Session {{id: $session_id, silo_id: $silo_id}})
+MERGE (n)<-[:ACCESSED_BY {{at: timestamp()}}]-(s)
+RETURN n.id AS node_id
+"""
+
+ENSURE_SESSION_NODE = """
+MERGE (s:Session {id: $session_id, silo_id: $silo_id})
+ON CREATE SET s.created_at = timestamp()
+"""
+
+GET_SILO_EVIDENCE_NODES = f"""
+MATCH (n) WHERE {content_union_predicate("n")}
+  AND n.silo_id = $silo_id
+  AND n.committed = true
+RETURN n.id AS node_id
+LIMIT $limit
+"""
+
+# ---------------------------------------------------------------------------
+# EpistemicStore queries (belief synthesis domain operations)
+# ---------------------------------------------------------------------------
+
+EPISTEMIC_GET_FACT_CLUSTER = """
+MATCH (f:Fact {silo_id: $silo_id})-[:IN_CLUSTER]->(c:Cluster {id: $cluster_id})
+RETURN f.id AS id, f.content AS content, f.confidence AS confidence
+"""
+
+EPISTEMIC_GET_UNCLUSTERED_FACTS = """
+MATCH (f:Fact {silo_id: $silo_id})
+WHERE NOT (f)-[:IN_CLUSTER]->()
+RETURN f.id AS id, f.content AS content, f.confidence AS confidence
+LIMIT $limit
+"""
+
+EPISTEMIC_CREATE_BELIEF = """
+CREATE (b:Belief:Node {
+    id: randomUUID(),
+    silo_id: $silo_id,
+    content: $content,
+    confidence: $confidence,
+    reasoning: $reasoning,
+    created_at: timestamp(),
+    committed: false
+})
+RETURN b.id AS id
+"""
+
+EPISTEMIC_LINK_BELIEF_TO_FACTS = """
+MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
+UNWIND $fact_ids AS fact_id
+MATCH (f:Fact {id: fact_id, silo_id: $silo_id})
+CREATE (b)-[:SYNTHESIZED_FROM]->(f)
+"""
+
+EPISTEMIC_GET_BELIEF = """
+MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
+RETURN b.content AS content, b.confidence AS confidence
+"""
+
+EPISTEMIC_UPDATE_BELIEF_CENTROID = """
+MATCH (b:Belief {id: $belief_id})
+SET b.centroid = $centroid
+"""
+
+EPISTEMIC_FIND_SIMILAR_BELIEFS = """
+MATCH (b:Belief {silo_id: $silo_id})
+WHERE b.committed = true
+RETURN b.id AS id, b.content AS content, b.confidence AS confidence
+"""
+
+EPISTEMIC_CHECK_BELIEF_COVERAGE = """
+MATCH (f:Fact {silo_id: $silo_id})
+WHERE f.id IN $fact_ids
+OPTIONAL MATCH (f)<-[:SYNTHESIZED_FROM]-(b:Belief {committed: true})
+RETURN f.id AS fact_id, collect(b.id) AS covering_beliefs
+"""
+
+EPISTEMIC_CREATE_MERGED_BELIEF = """
+CREATE (b:Belief:Node {
+    id: randomUUID(),
+    silo_id: $silo_id,
+    content: $content,
+    created_at: timestamp(),
+    committed: false,
+    is_merged: true
+})
+RETURN b.id AS id
+"""
+
+EPISTEMIC_LINK_MERGED_FROM_SOURCES = """
+MATCH (merged:Belief {id: $merged_id})
+UNWIND $source_ids AS source_id
+MATCH (source:Belief {id: source_id})
+CREATE (merged)-[:MERGED_FROM]->(source)
+"""
+
+EPISTEMIC_MARK_BELIEF_STALE = """
+MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
+SET b.stale = true, b.stale_reason = $reason, b.stale_at = timestamp()
+"""

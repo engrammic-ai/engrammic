@@ -276,3 +276,72 @@ class HyperGraphStore(Protocol):
         Prefer this over session() + begin_transaction() for atomic writes.
         """
         ...
+
+
+@runtime_checkable
+class EpistemicStore(Protocol):
+    """CITE-domain operations for Wisdom/Intelligence layers.
+
+    Sits above HyperGraphStore. Encapsulates belief synthesis,
+    fact clustering, and reasoning chain operations.
+    """
+
+    async def get_fact_cluster(
+        self, silo_id: str, cluster_id: str
+    ) -> list[dict[str, Any]]:
+        """Get all facts in a cluster."""
+        ...
+
+    async def get_unclustered_facts(
+        self, silo_id: str, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        """Get facts not yet assigned to any cluster."""
+        ...
+
+    async def create_belief_with_links(
+        self,
+        silo_id: str,
+        content: str,
+        fact_ids: list[str],
+        confidence: float,
+        reasoning: str | None = None,
+    ) -> str:
+        """Atomically create a belief and link it to source facts."""
+        ...
+
+    async def update_belief_centroid(
+        self,
+        silo_id: str,
+        belief_id: str,
+        embedding_client: Any | None = None,
+    ) -> None:
+        """Update belief's centroid embedding. No-op if embedding_client is None."""
+        ...
+
+    async def find_similar_beliefs(
+        self, silo_id: str, content: str, threshold: float = 0.8
+    ) -> list[dict[str, Any]]:
+        """Find beliefs similar to the given content."""
+        ...
+
+    async def check_belief_coverage(
+        self, silo_id: str, fact_ids: list[str]
+    ) -> dict[str, Any]:
+        """Check which facts are covered by existing beliefs."""
+        ...
+
+    async def merge_beliefs(
+        self,
+        silo_id: str,
+        source_belief_ids: list[str],
+        merged_content: str,
+        fact_ids: list[str],
+    ) -> str:
+        """Atomically merge beliefs: create merged, link facts, mark sources stale."""
+        ...
+
+    async def mark_belief_stale(
+        self, silo_id: str, belief_id: str, reason: str
+    ) -> None:
+        """Mark a belief as stale with a reason."""
+        ...
