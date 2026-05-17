@@ -1090,3 +1090,38 @@ MERGE (f)-[:PROMOTED_FROM]->(c)
 SET c.status = 'superseded'
 RETURN count(c) AS updated
 """
+
+# ---------------------------------------------------------------------------
+# Evidence Accessibility (chain_applicability Layer 3)
+# ---------------------------------------------------------------------------
+
+GET_SESSION_ACCESSIBLE_EVIDENCE = f"""
+MATCH (n)
+WHERE {content_union_predicate("n")}
+  AND n.silo_id = $silo_id
+  AND n.committed = true
+  AND (n.session_id = $session_id
+       OR (n)<-[:ACCESSED_BY]-(:Session {{id: $session_id}}))
+RETURN n.id AS node_id
+"""
+
+MARK_NODE_ACCESSED = f"""
+MATCH (n) WHERE {content_union_predicate("n")}
+  AND n.id = $node_id AND n.silo_id = $silo_id
+MATCH (s:Session {{id: $session_id, silo_id: $silo_id}})
+MERGE (n)<-[:ACCESSED_BY {{at: timestamp()}}]-(s)
+RETURN n.id AS node_id
+"""
+
+ENSURE_SESSION_NODE = """
+MERGE (s:Session {id: $session_id, silo_id: $silo_id})
+ON CREATE SET s.created_at = timestamp()
+"""
+
+GET_SILO_EVIDENCE_NODES = f"""
+MATCH (n) WHERE {content_union_predicate("n")}
+  AND n.silo_id = $silo_id
+  AND n.committed = true
+RETURN n.id AS node_id
+LIMIT $limit
+"""
