@@ -9,6 +9,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -21,7 +22,7 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.create_table(
         "users",
-        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("workos_user_id", sa.String(length=255), nullable=False),
         sa.Column("org_id", sa.String(length=255), nullable=False),
         sa.Column("silo_id", sa.String(length=255), nullable=False),
@@ -42,14 +43,13 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("workos_user_id"),
     )
-    op.create_index("ix_users_workos_user_id", "users", ["workos_user_id"])
     op.create_index("ix_users_org_id", "users", ["org_id"])
     op.create_index("ix_users_silo_id", "users", ["silo_id"])
 
     op.create_table(
         "tool_usage",
-        sa.Column("id", sa.UUID(), nullable=False),
-        sa.Column("user_id", sa.UUID(), nullable=False),
+        sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("silo_id", sa.String(length=255), nullable=False),
         sa.Column("tool_name", sa.String(length=100), nullable=False),
         sa.Column(
@@ -76,5 +76,4 @@ def downgrade() -> None:
 
     op.drop_index("ix_users_silo_id", table_name="users")
     op.drop_index("ix_users_org_id", table_name="users")
-    op.drop_index("ix_users_workos_user_id", table_name="users")
     op.drop_table("users")
