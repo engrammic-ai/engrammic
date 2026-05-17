@@ -212,6 +212,7 @@ async def get_mcp_auth_context() -> AuthContext:
             is_dev=base.is_dev,
             agent_id=agent_id,
             session_id=session_id,
+            db_user_id=base.db_user_id,
         )
 
     settings = get_settings()
