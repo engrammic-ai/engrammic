@@ -51,18 +51,21 @@ class TestBackoffElapsed:
 
 
 class TestFetchChainFromPostgres:
-    """Tests for chain data fetching."""
+    """Tests for chain data fetching.
+
+    ReasoningChainSteps stores one row per chain_id with a JSONB `steps` column
+    (list of step dicts) and a `silo_id` column.
+    """
 
     @pytest.mark.asyncio
     async def test_fetches_chain_steps(self):
-        """Should fetch and format chain steps."""
+        """Should fetch and format chain steps from the JSONB steps column."""
         mock_session = AsyncMock()
         mock_result = MagicMock()
-        mock_step = MagicMock()
-        mock_step.content = "step content"
-        mock_step.step_index = 0
-        mock_step.silo_id = uuid4()
-        mock_result.scalars.return_value.all.return_value = [mock_step]
+        mock_row = MagicMock()
+        mock_row.steps = [{"content": "step content", "step_index": 0}]
+        mock_row.silo_id = uuid4()
+        mock_result.scalars.return_value.one_or_none.return_value = mock_row
         mock_session.execute.return_value = mock_result
 
         with patch(
@@ -79,14 +82,14 @@ class TestFetchChainFromPostgres:
 
             assert result["chain_id"] == str(chain_id)
             assert result["step_count"] == 1
-            assert result["steps"][0]["content"] == "step content"
+            assert result["steps"][0]["content"] == "step content"  # type: ignore[index]
 
     @pytest.mark.asyncio
     async def test_raises_on_no_steps(self):
-        """Should raise ValueError when no steps found."""
+        """Should raise ValueError when no row found for chain."""
         mock_session = AsyncMock()
         mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = []
+        mock_result.scalars.return_value.one_or_none.return_value = None
         mock_session.execute.return_value = mock_result
 
         with patch(
