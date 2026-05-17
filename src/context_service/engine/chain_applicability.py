@@ -25,6 +25,13 @@ from context_service.telemetry.metrics import record_chain_lookup
 log = structlog.get_logger()
 
 
+def get_context_service() -> Any:
+    """Lazy proxy to mcp.server.get_context_service for testability."""
+    from context_service.mcp.server import get_context_service as _get
+
+    return _get()
+
+
 # ---------------------------------------------------------------------------
 # Module-level helpers (designed for testability via patching)
 # ---------------------------------------------------------------------------
@@ -131,17 +138,52 @@ async def get_session_step_embeddings(session_id: str) -> list[list[float]]:
         return []
 
 
-async def get_accessible_evidence(silo_id: str, session_id: str) -> set[str]:  # noqa: ARG001
-    """Return the set of evidence node IDs accessible within this session context.
+async def get_accessible_evidence(silo_id: str, session_id: str) -> set[str]:
+    """Return evidence node IDs accessible within this session context.
 
-    Returns an empty set when evidence access cannot be determined. The empty
-    set causes evidence_used.issubset(accessible) to be True only for chains
-    with no required evidence, which is a safe default.
+    Queries nodes that were:
+    1. Created by this session (agent authored, via session_id property)
+    2. Retrieved/accessed during this session (tracked via ACCESSED_BY edge)
 
-    Full implementation requires querying the graph store for nodes reachable
-    from the session's knowledge layer.
+    Session ID availability: passed from MCP auth context through find_applicable_chain.
     """
-    return set()
+    from context_service.engine import queries
+
+    ctx = get_context_service()
+    store = ctx._memgraph
+
+    try:
+        rows = await store.execute_query(
+            queries.GET_SESSION_ACCESSIBLE_EVIDENCE,
+            {"silo_id": silo_id, "session_id": session_id},
+        )
+        accessible = {str(r["node_id"]) for r in rows}
+
+        # Fallback: if session tracking incomplete, be permissive
+        # Better to reuse too many chains than penalize evidence use
+        if not accessible:
+            log.info(
+                "session_evidence_empty_fallback",
+                silo_id=silo_id,
+                session_id=session_id,
+            )
+            return await _get_silo_wide_evidence(silo_id, store)
+        return accessible
+    except Exception as e:
+        log.warning("accessible_evidence_query_failed", error=str(e))
+        # On failure, permissive fallback
+        return await _get_silo_wide_evidence(silo_id, store)
+
+
+async def _get_silo_wide_evidence(silo_id: str, store: Any) -> set[str]:
+    """Fallback: return all evidence in silo (permissive)."""
+    from context_service.engine import queries
+
+    rows = await store.execute_query(
+        queries.GET_SILO_EVIDENCE_NODES,
+        {"silo_id": silo_id, "limit": 1000},
+    )
+    return {str(r["node_id"]) for r in rows}
 
 
 async def log_chain_delivery(
