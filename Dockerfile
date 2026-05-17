@@ -6,14 +6,14 @@ WORKDIR /app
 # Install uv for fast dependency resolution
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy primitives (local dependency)
-COPY primitives/ /primitives/
+# Copy dependency files (uv.lock not needed - we re-resolve for PyPI primitives)
+COPY context-service/pyproject.toml context-service/README.md ./
 
-# Copy dependency files
-COPY context-service/pyproject.toml context-service/uv.lock context-service/README.md ./
+# Remove local path source override - install primitives from PyPI
+RUN sed -i '/engrammic-primitives.*path/d' pyproject.toml
 
-# Install production dependencies only
-RUN uv sync --frozen --no-dev --no-install-project
+# Install production dependencies (re-resolves to fetch primitives from PyPI)
+RUN uv sync --no-dev --no-install-project
 
 # Stage 2: Runtime
 FROM python:3.13-slim
@@ -25,9 +25,8 @@ RUN groupadd -g 1000 engrammic && useradd -u 1000 -g engrammic -m engrammic \
     && mkdir -p /var/lib/engrammic \
     && chown engrammic:engrammic /var/lib/engrammic
 
-# Copy virtual environment and primitives from builder
+# Copy virtual environment from builder (primitives installed from PyPI)
 COPY --from=builder /app/.venv /app/.venv
-COPY --from=builder /primitives /primitives
 
 # Copy application code
 COPY context-service/pyproject.toml context-service/uv.lock context-service/README.md ./

@@ -7,14 +7,14 @@ WORKDIR /app
 # Install uv for fast dependency resolution
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy primitives (local dependency)
-COPY primitives/ /primitives/
+# Copy dependency files (uv.lock not needed - we re-resolve for PyPI primitives)
+COPY context-service/pyproject.toml ./
 
-# Copy dependency files
-COPY context-service/pyproject.toml context-service/uv.lock ./
+# Remove local path source override - install primitives from PyPI
+RUN sed -i '/engrammic-primitives.*path/d' pyproject.toml
 
-# Install production dependencies only
-RUN uv sync --frozen --no-dev --no-install-project
+# Install production dependencies
+RUN uv sync --no-dev --no-install-project
 
 # Stage 2: Runtime
 FROM python:3.13-slim
@@ -24,11 +24,8 @@ WORKDIR /app
 # Create non-root user
 RUN groupadd -r context-service && useradd -r -g context-service context-service
 
-# Copy virtual environment from builder
+# Copy virtual environment from builder (primitives installed from PyPI)
 COPY --from=builder /app/.venv /app/.venv
-
-# Copy primitives (needed at runtime for imports)
-COPY --from=builder /primitives /primitives
 
 # Copy application code
 COPY context-service/pyproject.toml ./
@@ -36,10 +33,11 @@ COPY context-service/config/ /app/config/
 COPY context-service/src/ /app/src/
 COPY context-service/alembic.ini /app/alembic.ini
 COPY context-service/alembic/ /app/alembic/
+
 # Compile to bytecode and remove source files
-RUN python -m compileall -b /app/src /primitives
-RUN find /app/src /primitives -name "*.py" -delete
-RUN find /app/src /primitives -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+RUN python -m compileall -b /app/src
+RUN find /app/src -name "*.py" -delete
+RUN find /app/src -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
 # Set environment
 ENV PATH="/app/.venv/bin:$PATH"
