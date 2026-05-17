@@ -40,17 +40,28 @@ beta branch push
 +------------------+                +------------------+
 | Cloud Run: API   |                | Cloud Run: Beacon|
 | beta.engrammic.ai|                | tel.engrammic.ai |
-+--------+---------+                +------------------+
-         | VPC Connector
-         v
-+------------------------------------------------------+
-| GCE StatefulHost (beta)                              |
-| +----------+ +--------+ +-------+ +----------------+ |
-| | Memgraph | | Qdrant | | Redis | | Postgres       | |
-| | :7687    | | :6333  | | :6379 | | :5432          | |
-| +----------+ +--------+ +-------+ +----------------+ |
-+------------------------------------------------------+
++--------+---------+                +--------+---------+
+         |                                   |
+         +----------------+------------------+
+                          | VPC / Private Service Connect
+         +----------------+------------------+
+         v                                   v
++--------------------+           +---------------------------+
+| Cloud SQL Postgres |           | GCE StatefulHost (beta)   |
+| (managed, backups) |           | +----------+ +--------+   |
+| :5432              |           | | Memgraph | | Qdrant |   |
++--------------------+           | | :7687    | | :6333  |   |
+                                 | +----------+ +--------+   |
+                                 | +-------+                 |
+                                 | | Redis |                 |
+                                 | | :6379 |                 |
+                                 | +-------+                 |
+                                 +---------------------------+
 ```
+
+**Database split rationale:**
+- **Cloud SQL for Postgres**: Automatic backups, PITR, easier migrations, no VM dependency for critical relational data
+- **StatefulHost for Memgraph/Qdrant/Redis**: No managed GCP alternatives, self-hosting is the only option
 
 ## File Changes
 
@@ -62,9 +73,11 @@ beta branch push
 | `src/beacon_service/main.py` | New: FastAPI app with POST /v1/beacon |
 | `src/beacon_service/config.py` | New: Postgres connection config |
 | `infra/Pulumi.beta.yaml` | New: beta stack config |
+| `infra/components/cloudsql.py` | New: Cloud SQL Postgres instance |
 | `infra/components/beacon.py` | New: BeaconServiceRun component |
 | `infra/components/cloudrun.py` | Update: support multiple services |
-| `infra/__main__.py` | Update: add beacon service |
+| `infra/components/compute.py` | Update: remove Postgres from StatefulHost |
+| `infra/__main__.py` | Update: add beacon service + Cloud SQL |
 | `.github/workflows/deploy-beta.yml` | New: CI/CD workflow |
 
 ## Pulumi Beta Stack Config
@@ -74,36 +87,82 @@ beta branch push
 config:
   gcp:project: engrammic
   engrammic-infra:environment: beta
-  engrammic-infra:instance_type: e2-standard-4
-  engrammic-infra:min_cloudrun_instances: 1
+  # StatefulHost (Memgraph, Qdrant, Redis only - no Postgres)
+  engrammic-infra:instance_type: e2-standard-2
   engrammic-infra:use_spot: false
   engrammic-infra:disk_size_memgraph: 50
   engrammic-infra:disk_size_qdrant: 50
-  engrammic-infra:disk_size_postgres: 20
+  # Cloud SQL Postgres
+  engrammic-infra:cloudsql_tier: db-f1-micro
+  engrammic-infra:cloudsql_disk_size: 20
+  engrammic-infra:cloudsql_ha: false
+  # Cloud Run
+  engrammic-infra:min_cloudrun_instances: 1
 ```
 
-Sizing rationale: between dev (e2-standard-2) and prod (e2-standard-8). No spot instances for reliability during partner demos.
+Sizing rationale:
+- StatefulHost downsized to e2-standard-2 (no Postgres load)
+- Cloud SQL db-f1-micro (~$10/month) sufficient for beta, upgrade to db-g1-small if needed
+- HA disabled for cost savings during beta
 
 ## Beacon Service
 
-Minimal FastAPI service to receive telemetry beacons:
+Minimal FastAPI service to receive telemetry beacons with shared-secret authentication.
+
+**Authentication:** Each self-hosted instance is provisioned with a `BEACON_SECRET` that maps to a `silo_id`. The beacon service validates the secret and derives `silo_id` server-side (never trusts client-supplied silo_id).
 
 ```python
 # src/beacon_service/main.py
-from fastapi import FastAPI, Request
-from datetime import datetime, UTC
+from fastapi import FastAPI, Header, HTTPException, Request
+from contextlib import asynccontextmanager
+import asyncpg
 import structlog
+import os
 
-app = FastAPI(title="Engrammic Beacon")
 log = structlog.get_logger()
 
+# Secret -> silo_id mapping (loaded from DB or config at startup)
+# In production: query beacon_secrets table
+SECRET_TO_SILO: dict[str, str] = {}
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.pool = await asyncpg.create_pool(os.environ["DATABASE_URL"])
+    # Load secret mappings
+    async with app.state.pool.acquire() as conn:
+        rows = await conn.fetch("SELECT secret, silo_id FROM beacon_secrets")
+        for row in rows:
+            SECRET_TO_SILO[row["secret"]] = row["silo_id"]
+    yield
+    await app.state.pool.close()
+
+app = FastAPI(title="Engrammic Beacon", lifespan=lifespan)
+
 @app.post("/v1/beacon")
-async def receive_beacon(request: Request):
+async def receive_beacon(
+    request: Request,
+    x_beacon_secret: str = Header(..., alias="X-Beacon-Secret"),
+):
     """Receive and store telemetry beacon from self-hosted instances."""
+    silo_id = SECRET_TO_SILO.get(x_beacon_secret)
+    if not silo_id:
+        raise HTTPException(status_code=401, detail="Invalid beacon secret")
+
     payload = await request.json()
-    # Store to Postgres (beacon_events table)
-    # Fields: silo_id, event_type, payload, received_at
-    log.info("beacon_received", silo_id=payload.get("silo_id"))
+    event_type = payload.get("event_type", "unknown")
+
+    async with app.state.pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO beacon_events (silo_id, event_type, payload)
+            VALUES ($1, $2, $3)
+            """,
+            silo_id,
+            event_type,
+            payload,
+        )
+
+    log.info("beacon_received", silo_id=silo_id, event_type=event_type)
     return {"status": "ok"}
 
 @app.get("/health")
@@ -111,17 +170,29 @@ async def health():
     return {"status": "healthy"}
 ```
 
-Database table (add to existing Postgres):
+**Database tables** (Alembic migration):
 ```sql
+-- beacon_secrets: maps shared secrets to silos
+CREATE TABLE beacon_secrets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    silo_id VARCHAR(255) NOT NULL UNIQUE,
+    secret VARCHAR(64) NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX idx_beacon_secrets_secret ON beacon_secrets(secret);
+
+-- beacon_events: stores received telemetry
 CREATE TABLE beacon_events (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    silo_id VARCHAR(255),
+    silo_id VARCHAR(255) NOT NULL,
     event_type VARCHAR(100),
     payload JSONB,
     received_at TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX idx_beacon_silo_time ON beacon_events(silo_id, received_at);
 ```
+
+**Provisioning a new partner:** Generate secret, insert into `beacon_secrets`, provide to partner for their `.env`.
 
 ## GitHub Actions Workflow
 
@@ -180,7 +251,21 @@ jobs:
           uv run pulumi up --stack beta --yes
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+
+      - name: Run database migrations
+        run: |
+          # Use Cloud SQL Auth Proxy to connect securely
+          wget -q https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy
+          chmod +x cloud_sql_proxy
+          ./cloud_sql_proxy -instances=engrammic:europe-north1:engrammic-beta=tcp:5432 &
+          sleep 5
+          # Run migrations
+          uv run alembic upgrade head
+        env:
+          DATABASE_URL: postgresql://context:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/engrammic
 ```
+
+**Migration strategy:** Cloud SQL Auth Proxy provides secure, IAM-authenticated access without exposing the database publicly. Migrations run after `pulumi up` creates/updates the Cloud SQL instance. Cloud Run health checks ensure new revisions don't receive traffic until the app is ready.
 
 ## Release Flow
 
@@ -196,7 +281,8 @@ jobs:
    - Tags with commit SHA + `latest`
    - Pushes to Artifact Registry
    - Runs `pulumi up --stack beta`
-4. Cloud Run pulls new images and deploys
+   - Runs database migrations via SSH to StatefulHost
+4. Cloud Run pulls new images and deploys (after migrations complete)
 
 ## Secrets
 
