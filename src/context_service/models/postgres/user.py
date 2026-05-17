@@ -1,12 +1,12 @@
-"""User model for WorkOS-authenticated demo users."""
+"""User model for WorkOS-authenticated users."""
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import String, func
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,24 +14,18 @@ from context_service.db.postgres import Base
 
 
 class User(Base):
-    """Demo user authenticated via WorkOS magic link."""
+    """User authenticated via WorkOS."""
 
     __tablename__ = "users"
 
     id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
-    workos_user_id: Mapped[str] = mapped_column(
-        String(255), unique=True, index=True, nullable=False
-    )
-    org_id: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
-    silo_id: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
-    email: Mapped[str] = mapped_column(String(255), nullable=False)
+    workos_user_id: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    org_id: Mapped[str] = mapped_column(String(255), index=True)
+    silo_id: Mapped[str] = mapped_column(String(255), index=True)
+    email: Mapped[str] = mapped_column(String(255))
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC)
-    )
-    last_active_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC)
-    )
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    last_active_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     def __init__(
         self,
@@ -49,5 +43,3 @@ class User(Base):
         self.silo_id = silo_id
         self.email = email
         self.name = name
-        self.created_at = datetime.now(UTC)
-        self.last_active_at = datetime.now(UTC)
