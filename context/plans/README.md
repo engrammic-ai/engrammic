@@ -31,6 +31,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 | Plan | Status | Description |
 |------|--------|-------------|
 | [source-tier-classification.md](./source-tier-classification.md) | In progress | Source tier classification for confidence scoring |
+| [2026-05-19-supersession-head-pointer.md](./2026-05-19-supersession-head-pointer.md) | Ready | O(1) chain lookups via linked-list pointers (tail_id/head_id) |
 
 ## Future work
 
@@ -39,7 +40,6 @@ Specced or checkpointed for later implementation:
 | Item | Spec/Note | Trigger |
 |------|-----------|---------|
 | **Concepts** | [concepts-design.md](../../docs/superpowers/specs/2026-05-18-concepts-design.md) | Post-closed-beta, when retrieval quality degrades at scale |
-| **Supersession head pointer** | Memory checkpoint | When SUPERSEDES chain traversal becomes a perf bottleneck |
 
 **Concepts:** Emergent abstract nodes (Wisdom layer) that organize knowledge without asserting conclusions. Includes Weaver SAGE persona, weighted edges, 5-phase incremental impl plan.
 
