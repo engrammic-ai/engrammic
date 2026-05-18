@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import String, func
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from context_service.db.postgres import Base
+
+if TYPE_CHECKING:
+    from context_service.models.postgres.oauth import OAuthAuthorizationCode, OAuthToken
 
 
 class User(Base):
@@ -26,6 +29,11 @@ class User(Base):
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     last_active_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    oauth_tokens: Mapped[list[OAuthToken]] = relationship(back_populates="user")
+    authorization_codes: Mapped[list[OAuthAuthorizationCode]] = relationship(
+        back_populates="user"
+    )
 
     def __init__(
         self,

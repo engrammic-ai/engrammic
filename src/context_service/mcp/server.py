@@ -150,20 +150,48 @@ def get_postgres_store() -> Any:
     return _services["postgres_store"]
 
 
+async def _resolve_oauth_token(token: str) -> AuthContext | None:
+    """Resolve auth context from our OAuth token.
+
+    Returns AuthContext if token is valid, None otherwise.
+    """
+    from context_service.db.postgres import get_session
+    from context_service.models.postgres.user import User
+    from context_service.services.oauth import OAuthService
+
+    async with get_session() as session:
+        oauth_svc = OAuthService(session)
+        oauth_token = await oauth_svc.validate_access_token(token)
+        if oauth_token is None:
+            return None
+
+        user = await session.get(User, oauth_token.user_id)
+        if user is None:
+            return None
+
+        return AuthContext(
+            org_id=user.org_id,
+            user_id=user.workos_user_id,
+            email=user.email,
+            is_dev=False,
+            db_user_id=user.id,
+        )
+
+
 async def get_mcp_auth_context() -> AuthContext:
     """Resolve the MCP auth context for the current request.
 
     Reads the inbound Authorization header from the live FastMCP request via
     ``fastmcp.server.dependencies.get_http_headers`` and verifies it through
-    WorkOS.  Auth is resolved per tool invocation (per-request), not at
-    session start, so org boundaries are enforced on every call.
+    either our OAuth tokens or WorkOS.  Auth is resolved per tool invocation
+    (per-request), not at session start, so org boundaries are enforced on
+    every call.
 
     Implementation note -- two auth paths exist in this package:
 
     1. This function (active path): reads the Authorization header on every
-       tool call via FastMCP's ``get_http_headers`` dependency and returns a
-       WorkOS-backed ``AuthContext``.  All tool callsites must use this
-       function.
+       tool call via FastMCP's ``get_http_headers`` dependency and returns an
+       ``AuthContext``.  All tool callsites must use this function.
 
     2. ``context_service.mcp.auth.MCPAuthMiddleware`` (not mounted --
        known limitation): a Starlette middleware that stores auth in a
@@ -176,8 +204,12 @@ async def get_mcp_auth_context() -> AuthContext:
        raise ``RuntimeError``.
 
     Behaviour:
+      - HTTP transport with ``Authorization: Bearer <oauth-token>``:
+        verifies via our OAuth token store first and returns the resulting
+        ``AuthContext`` if found.
       - HTTP transport with ``Authorization: Bearer <sealed-session>``:
-        verifies via WorkOS and returns the resulting ``AuthContext``.
+        falls back to WorkOS verification and returns the resulting
+        ``AuthContext``.
       - No header (stdio transport, dev runs, tests, or a misconfigured
         client) and ``auth_enabled=true``: raises ``MCPAuthError`` -- auth
         fails closed.
@@ -198,11 +230,31 @@ async def get_mcp_auth_context() -> AuthContext:
     auth_header = headers.get("authorization")
 
     if auth_header:
+        token = auth_header.removeprefix("Bearer ").strip()
+
+        # Try OAuth token first (our issued tokens).
+        oauth_context = await _resolve_oauth_token(token)
+        if oauth_context is not None:
+            agent_id = headers.get("x-agent-id") or f"user:{oauth_context.user_id}"
+            session_id: str | None = (
+                headers.get("x-session-id") or hashlib.sha256(auth_header.encode()).hexdigest()
+            )
+            return AuthContext(
+                org_id=oauth_context.org_id,
+                user_id=oauth_context.user_id,
+                email=oauth_context.email,
+                is_dev=oauth_context.is_dev,
+                agent_id=agent_id,
+                session_id=session_id,
+                db_user_id=oauth_context.db_user_id,
+            )
+
+        # Fall back to WorkOS sealed session (existing path).
         base = await resolve_mcp_auth_from_header(auth_header)
         agent_id = headers.get("x-agent-id") or f"user:{base.user_id}"
         # Derive a stable session identifier from the token so the same
         # sealed session always maps to the same session_id.
-        session_id: str | None = (
+        session_id = (
             headers.get("x-session-id") or hashlib.sha256(auth_header.encode()).hexdigest()
         )
         return AuthContext(

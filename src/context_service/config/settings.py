@@ -406,6 +406,30 @@ class AuthConfig(BaseModel):
     workos: WorkosConfig = Field(default_factory=WorkosConfig)
 
 
+class OAuthConfig(BaseModel):
+    """OAuth 2.0 configuration for MCP client authentication.
+
+    The allowed_redirect_hosts setting validates only the hostname portion of
+    redirect URIs, not the full URI. This is intentional for MCP clients (e.g.,
+    Claude Desktop) which use localhost callbacks with varying ports and paths.
+    PKCE provides code injection protection regardless of exact redirect path.
+
+    To allow additional hosts, set OAUTH__ALLOWED_REDIRECT_HOSTS as a
+    JSON-encoded list: '["localhost", "127.0.0.1", "myapp.local"]'
+    """
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    issuer: str = "https://api.engrammic.ai"
+    access_token_ttl_seconds: int = 3600  # 1 hour
+    refresh_token_ttl_days: int = 90
+    authorization_code_ttl_seconds: int = 600  # 10 minutes
+    allowed_redirect_hosts: list[str] = Field(
+        default_factory=lambda: ["localhost", "127.0.0.1"],
+        description="Allowed hostnames for redirect_uri (not full URI validation)",
+    )
+
+
 class PromptsConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -729,6 +753,7 @@ class Settings(BaseSettings):
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
+    oauth: OAuthConfig = Field(default_factory=OAuthConfig)
     prompts: PromptsConfig = Field(default_factory=PromptsConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
     cache: CacheConfig = Field(default_factory=CacheConfig)

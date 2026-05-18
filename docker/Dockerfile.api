@@ -15,15 +15,10 @@ RUN sed -i '/engrammic-primitives.*path/d' pyproject.toml
 # Install production dependencies (re-resolves to fetch primitives from PyPI)
 RUN uv sync --no-dev --no-install-project
 
-# Stage 2: Runtime
-FROM python:3.13-slim
+# Stage 2: Runtime (distroless for minimal attack surface)
+FROM gcr.io/distroless/python3-debian12:nonroot
 
 WORKDIR /app
-
-# Create non-root user with predictable UID for volume mounts
-RUN groupadd -g 1000 engrammic && useradd -u 1000 -g engrammic -m engrammic \
-    && mkdir -p /var/lib/engrammic \
-    && chown engrammic:engrammic /var/lib/engrammic
 
 # Copy virtual environment from builder (primitives installed from PyPI)
 COPY --from=builder /app/.venv /app/.venv
@@ -34,7 +29,6 @@ COPY config/ /app/config/
 COPY src/ /app/src/
 COPY alembic.ini /app/alembic.ini
 COPY alembic/ /app/alembic/
-COPY scripts/entrypoint.sh /entrypoint.sh
 
 # Set environment
 ENV PATH="/app/.venv/bin:$PATH"
@@ -42,14 +36,10 @@ ENV PYTHONPATH="/app/src"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Switch to non-root user
-USER engrammic
-
+# Distroless nonroot user is UID 65532
+# No shell available - healthcheck must use different approach
 EXPOSE 8000
 
-# Health check (uses PORT env var, defaults to 8000 for local docker)
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import os, urllib.request; urllib.request.urlopen(f'http://localhost:{os.environ.get(\"PORT\", \"8000\")}/health')"
-
-ENTRYPOINT ["/entrypoint.sh"]
-CMD ["sh", "-c", "exec python -m uvicorn context_service.api.app:create_app --factory --host 0.0.0.0 --port ${PORT:-8000}"]
+# No HEALTHCHECK in distroless (no shell) - Cloud Run uses HTTP probes instead
+# CMD uses exec form (no shell interpretation)
+CMD ["python", "-m", "context_service.entrypoint"]

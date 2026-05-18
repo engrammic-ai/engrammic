@@ -1,19 +1,80 @@
 steps:
-  - name: 'gcr.io/cloud-builders/docker'
+  # Build the image
+  - id: 'build'
+    name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
       - '-t'
-      - '${_IMAGE}:latest'
-      - '-t'
       - '${_IMAGE}:${SHORT_SHA}'
+      - '-t'
+      - '${_IMAGE}:latest'
       - '-f'
-      - 'context-service/Dockerfile'
+      - 'docker/Dockerfile.api'
       - '.'
+
+  # Push to Artifact Registry (required before scanning)
+  - id: 'push'
+    name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '${_IMAGE}:${SHORT_SHA}'
+
+  # Scan for vulnerabilities
+  - id: 'scan'
+    name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        set -e
+
+        # Start scan and get scan ID
+        gcloud artifacts docker images scan ${_IMAGE}:${SHORT_SHA} \
+          --format='value(response.scan)' > /workspace/scan_id.txt
+
+        # Wait for scan to complete
+        echo "Waiting for scan to complete..."
+        while true; do
+          STATUS=$(gcloud artifacts docker images describe $(cat /workspace/scan_id.txt) \
+            --format='value(scan_status)' 2>/dev/null || echo "PENDING")
+          if [ "$STATUS" = "FINISHED" ]; then
+            break
+          fi
+          echo "Scan status: $STATUS"
+          sleep 5
+        done
+
+        # Get vulnerabilities once
+        VULNS=$(gcloud artifacts docker images list-vulnerabilities \
+          $(cat /workspace/scan_id.txt) \
+          --format='table(vulnerability.effectiveSeverity,vulnerability.cvssScore,vulnerability.packageIssue.affectedPackage,vulnerability.packageIssue.fixedPackage)')
+
+        echo "$VULNS"
+
+        # Count CRITICAL (grep returns 1 if no matches, which is fine)
+        CRITICAL_COUNT=$(echo "$VULNS" | grep -c CRITICAL || true)
+
+        if [ "$CRITICAL_COUNT" -gt 0 ]; then
+          echo "ERROR: $CRITICAL_COUNT CRITICAL vulnerabilities found - blocking deployment"
+          exit 1
+        fi
+
+        echo "Scan passed - no CRITICAL vulnerabilities"
+
+  # Tag as latest after scan passes
+  - id: 'tag-latest'
+    name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '${_IMAGE}:latest'
+
 images:
-  - '${_IMAGE}:latest'
   - '${_IMAGE}:${SHORT_SHA}'
+
 substitutions:
   _IMAGE: 'europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-api'
+
 options:
   logging: CLOUD_LOGGING_ONLY
+
 serviceAccount: 'projects/engrammic/serviceAccounts/cloudbuild-dev@engrammic.iam.gserviceaccount.com'

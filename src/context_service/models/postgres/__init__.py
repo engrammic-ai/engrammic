@@ -6,6 +6,11 @@ from context_service.models.postgres.chain_feedback import (
     ChainFeedback,
     SessionStepEmbedding,
 )
+from context_service.models.postgres.oauth import (
+    OAuthAuthorizationCode,
+    OAuthAuthorizationRequest,
+    OAuthToken,
+)
 from context_service.models.postgres.org import OrgPreferences, SiloConfig
 from context_service.models.postgres.reasoning import OrphanedChains, ReasoningChainSteps
 from context_service.models.postgres.skill import Skill
@@ -17,6 +22,9 @@ __all__ = [
     "ChainDelivery",
     "ChainFeedback",
     "Events",
+    "OAuthAuthorizationCode",
+    "OAuthAuthorizationRequest",
+    "OAuthToken",
     "OrgPreferences",
     "OrphanedChains",
     "ReasoningChainSteps",

@@ -213,17 +213,42 @@ if [ "$USE_CLOUDSQL" != "true" ]; then
     export POSTGRES_PASSWORD=$(gcloud secrets versions access latest --secret="engrammic-$ENV-postgres-password" --project="$PROJECT" 2>/dev/null || echo "devpassword")
 fi
 
+mkdir -p /opt/engrammic
+
+# Write .env file for docker-compose
+cat > /opt/engrammic/.env << ENV_EOF
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+ENV_EOF
+chmod 600 /opt/engrammic/.env
+
 # Write docker-compose.yml
 echo "Writing docker-compose.yml..."
-mkdir -p /opt/engrammic
 cat > /opt/engrammic/docker-compose.yml << 'COMPOSE_EOF'
 {compose_content}
 COMPOSE_EOF
 
-# Start services
-echo "Starting services with docker compose..."
-cd /opt/engrammic
-docker compose up -d
+# Create systemd service for docker-compose auto-restart
+cat > /etc/systemd/system/engrammic-stateful.service << 'SERVICE_EOF'
+[Unit]
+Description=Engrammic Stateful Services
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/engrammic
+ExecStart=/usr/local/bin/docker-compose up -d
+ExecStop=/usr/local/bin/docker-compose down
+ExecReload=/usr/local/bin/docker-compose restart
+
+[Install]
+WantedBy=multi-user.target
+SERVICE_EOF
+
+systemctl daemon-reload
+systemctl enable engrammic-stateful.service
+systemctl start engrammic-stateful.service
 
 echo "Stateful host ready"
 """.replace("{env}", env).replace("{disks}", disk_config).replace("{project}", project).replace("{use_cloudsql}", str(use_cloudsql).lower()).replace("{compose_content}", compose_content)
@@ -263,8 +288,26 @@ echo "Stateful host ready"
             opts=pulumi.ResourceOptions(parent=self),
         )
 
+        # Health check for monitoring - can be used for alerting/dashboards
+        # Note: Auto-restart is handled by:
+        # - VM level: GCE automatic_restart=True (already set for non-spot)
+        # - Container level: docker restart: unless-stopped
+        self.health_check = compute.HealthCheck(
+            f"{name}-health-check",
+            name=f"engrammic-{env}-stateful-health",
+            check_interval_sec=30,
+            timeout_sec=10,
+            healthy_threshold=2,
+            unhealthy_threshold=3,
+            tcp_health_check=compute.HealthCheckTcpHealthCheckArgs(
+                port=7687,  # Memgraph bolt port
+            ),
+            opts=pulumi.ResourceOptions(parent=self),
+        )
+
         self.register_outputs({
             "instance_id": self.instance.id,
             "instance_name": self.instance.name,
             "internal_ip": self.instance.network_interfaces[0].network_ip,
+            "health_check_id": self.health_check.id,
         })
