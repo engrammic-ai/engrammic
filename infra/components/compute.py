@@ -113,14 +113,23 @@ class StatefulHost(pulumi.ComponentResource):
                 opts=pulumi.ResourceOptions(parent=self),
             )
 
-        # Build attached disks list
+        # Build attached disks list with device_name to control /dev/disk/by-id/ names
         attached_disks = [
-            compute.InstanceAttachedDiskArgs(source=self.memgraph_disk.self_link),
-            compute.InstanceAttachedDiskArgs(source=self.qdrant_disk.self_link),
+            compute.InstanceAttachedDiskArgs(
+                source=self.memgraph_disk.self_link,
+                device_name=f"engrammic-{env}-memgraph",
+            ),
+            compute.InstanceAttachedDiskArgs(
+                source=self.qdrant_disk.self_link,
+                device_name=f"engrammic-{env}-qdrant",
+            ),
         ]
         if self.postgres_disk:
             attached_disks.append(
-                compute.InstanceAttachedDiskArgs(source=self.postgres_disk.self_link)
+                compute.InstanceAttachedDiskArgs(
+                    source=self.postgres_disk.self_link,
+                    device_name=f"engrammic-{env}-postgres",
+                )
             )
 
         # Build disk list for startup script
