@@ -2,7 +2,7 @@ services:
   app:
     build:
       context: ..
-      dockerfile: context-service/Dockerfile
+      dockerfile: context-service/docker/Dockerfile.api
     container_name: engrammic-app
     ports:
       - "8000:8000"
