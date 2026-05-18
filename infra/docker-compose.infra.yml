@@ -4,6 +4,8 @@ services:
     container_name: memgraph
     ports:
       - "7687:7687"
+    volumes:
+      - /mnt/memgraph:/var/lib/memgraph
     command: ["--log-level=WARNING", "--also-log-to-stderr", "--storage-properties-on-edges=true"]
     restart: unless-stopped
 
@@ -14,7 +16,7 @@ services:
       - "6333:6333"
       - "6334:6334"
     volumes:
-      - /mnt/disks/qdrant/data:/qdrant/storage
+      - /mnt/qdrant:/qdrant/storage
     environment:
       - QDRANT__SERVICE__GRPC_PORT=6334
     healthcheck:
@@ -53,7 +55,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - /mnt/disks/postgres/data:/var/lib/postgresql/data
+      - /mnt/postgres:/var/lib/postgresql/data
     environment:
       - POSTGRES_USER=context
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-devpassword}

@@ -3,6 +3,59 @@
 import pulumi
 from pulumi_gcp import compute
 
+DOCKER_COMPOSE_TEMPLATE = '''
+services:
+  memgraph:
+    image: memgraph/memgraph:2.18.1
+    container_name: memgraph
+    ports:
+      - "7687:7687"
+    volumes:
+      - /mnt/memgraph:/var/lib/memgraph
+    command: ["--log-level=WARNING", "--also-log-to-stderr", "--storage-properties-on-edges=true"]
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.9.0
+    container_name: qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - /mnt/qdrant:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    restart: unless-stopped
+{postgres_service}
+volumes:
+  redis-data:
+'''
+
+POSTGRES_SERVICE = '''
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - /mnt/postgres:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=context
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=context_service
+    restart: unless-stopped
+'''
+
 
 class StatefulHost(pulumi.ComponentResource):
     """Single GCE instance running Docker Compose for stateful services."""
@@ -20,6 +73,7 @@ class StatefulHost(pulumi.ComponentResource):
         config = pulumi.Config()
         gcp_config = pulumi.Config("gcp")
         env = config.require("environment")
+        project = gcp_config.require("project")
         instance_type = config.get("instance_type") or "e2-standard-8"
         use_spot = config.get_bool("use_spot") or False
         disk_size_memgraph = int(config.get("disk_size_memgraph") or "100")
@@ -69,10 +123,21 @@ class StatefulHost(pulumi.ComponentResource):
                 compute.InstanceAttachedDiskArgs(source=self.postgres_disk.self_link)
             )
 
-        # Startup script - conditional postgres mount
-        if use_cloudsql:
-            startup_script = """#!/bin/bash
+        # Build disk list for startup script
+        disk_config = "memgraph qdrant" if use_cloudsql else "memgraph qdrant postgres"
+
+        # Build compose content
+        postgres_service = "" if use_cloudsql else POSTGRES_SERVICE
+        compose_content = DOCKER_COMPOSE_TEMPLATE.format(postgres_service=postgres_service)
+
+        # Startup script - formats disks if needed, mounts with nofail
+        startup_script = """#!/bin/bash
 set -e
+
+ENV="{env}"
+DISKS="{disks}"
+PROJECT="{project}"
+USE_CLOUDSQL="{use_cloudsql}"
 
 # Install Docker
 if ! command -v docker &> /dev/null; then
@@ -86,46 +151,64 @@ if ! command -v docker-compose &> /dev/null; then
     chmod +x /usr/local/bin/docker-compose
 fi
 
-# Mount persistent disks (no Postgres - using Cloud SQL)
-mkdir -p /mnt/memgraph /mnt/qdrant
-mount -o discard,defaults /dev/disk/by-id/google-engrammic-{env}-memgraph /mnt/memgraph || true
-mount -o discard,defaults /dev/disk/by-id/google-engrammic-{env}-qdrant /mnt/qdrant || true
+# Format and mount persistent disks
+for DISK in $DISKS; do
+    DEVICE="/dev/disk/by-id/google-engrammic-$ENV-$DISK"
+    MOUNT="/mnt/$DISK"
 
-# Add to fstab for persistence
-grep -q memgraph /etc/fstab || echo '/dev/disk/by-id/google-engrammic-{env}-memgraph /mnt/memgraph ext4 discard,defaults 0 2' >> /etc/fstab
-grep -q qdrant /etc/fstab || echo '/dev/disk/by-id/google-engrammic-{env}-qdrant /mnt/qdrant ext4 discard,defaults 0 2' >> /etc/fstab
+    mkdir -p "$MOUNT"
 
-echo "Stateful host ready (Cloud SQL mode)"
-""".replace("{env}", env)
-        else:
-            startup_script = """#!/bin/bash
-set -e
+    # Wait for disk device to appear (up to 60 seconds)
+    echo "Waiting for $DEVICE..."
+    for i in $(seq 1 60); do
+        if [ -e "$DEVICE" ]; then
+            break
+        fi
+        sleep 1
+    done
 
-# Install Docker
-if ! command -v docker &> /dev/null; then
-    curl -fsSL https://get.docker.com | sh
-    usermod -aG docker $(whoami)
+    if [ ! -e "$DEVICE" ]; then
+        echo "ERROR: $DEVICE not found after 60s"
+        continue
+    fi
+
+    # Check if disk has a filesystem, format if not
+    if ! blkid "$DEVICE" &>/dev/null; then
+        echo "Formatting $DEVICE as ext4..."
+        mkfs.ext4 -F "$DEVICE"
+    fi
+
+    # Mount if not already mounted
+    if ! mountpoint -q "$MOUNT"; then
+        mount -o discard,defaults "$DEVICE" "$MOUNT"
+    fi
+
+    # Add to fstab with nofail option (won't block boot if mount fails)
+    if ! grep -q "$DISK" /etc/fstab; then
+        echo "$DEVICE $MOUNT ext4 discard,defaults,nofail 0 2" >> /etc/fstab
+    fi
+done
+
+# Fetch secrets from Secret Manager (only if not using Cloud SQL)
+if [ "$USE_CLOUDSQL" != "true" ]; then
+    echo "Fetching Postgres password from Secret Manager..."
+    export POSTGRES_PASSWORD=$(gcloud secrets versions access latest --secret="engrammic-$ENV-postgres-password" --project="$PROJECT" 2>/dev/null || echo "devpassword")
 fi
 
-# Install Docker Compose
-if ! command -v docker-compose &> /dev/null; then
-    curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
-fi
+# Write docker-compose.yml
+echo "Writing docker-compose.yml..."
+mkdir -p /opt/engrammic
+cat > /opt/engrammic/docker-compose.yml << 'COMPOSE_EOF'
+{compose_content}
+COMPOSE_EOF
 
-# Mount persistent disks
-mkdir -p /mnt/memgraph /mnt/qdrant /mnt/postgres
-mount -o discard,defaults /dev/disk/by-id/google-engrammic-{env}-memgraph /mnt/memgraph || true
-mount -o discard,defaults /dev/disk/by-id/google-engrammic-{env}-qdrant /mnt/qdrant || true
-mount -o discard,defaults /dev/disk/by-id/google-engrammic-{env}-postgres /mnt/postgres || true
-
-# Add to fstab for persistence
-grep -q memgraph /etc/fstab || echo '/dev/disk/by-id/google-engrammic-{env}-memgraph /mnt/memgraph ext4 discard,defaults 0 2' >> /etc/fstab
-grep -q qdrant /etc/fstab || echo '/dev/disk/by-id/google-engrammic-{env}-qdrant /mnt/qdrant ext4 discard,defaults 0 2' >> /etc/fstab
-grep -q postgres /etc/fstab || echo '/dev/disk/by-id/google-engrammic-{env}-postgres /mnt/postgres ext4 discard,defaults 0 2' >> /etc/fstab
+# Start services
+echo "Starting services with docker compose..."
+cd /opt/engrammic
+docker compose up -d
 
 echo "Stateful host ready"
-""".replace("{env}", env)
+""".replace("{env}", env).replace("{disks}", disk_config).replace("{project}", project).replace("{use_cloudsql}", str(use_cloudsql).lower()).replace("{compose_content}", compose_content)
 
         # GCE Instance
         self.instance = compute.Instance(
