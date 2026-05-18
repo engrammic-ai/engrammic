@@ -29,30 +29,72 @@ Fires after `remember`, `learn`, or `recall` MCP calls. Extracts node IDs from r
 
 **Trigger:** `mcp__engrammic__remember|mcp__engrammic__learn|mcp__engrammic__recall`
 
+**Input (stdin):**
+```json
+{
+  "session_id": "abc123",
+  "cwd": "/path/to/project",
+  "tool_name": "mcp__engrammic__remember",
+  "tool_input": { "content": "...", "tags": [...] },
+  "tool_response": "{ \"node_id\": \"mem_abc123\", ... }"
+}
+```
+
 **Behavior:**
-- Parse tool result from stdin
-- Extract node ID from response
-- Append to checkpoint state file
+- Parse `tool_response` JSON to extract node ID
+- Append to checkpoint state file at `~/.engrammic/checkpoints/{project_hash}.json`
+- Exit 0 (silent success)
 
 ### 2. engrammic-checkpoint (PreCompact)
 
 Fires before context compaction. Finalizes the checkpoint with a summary.
 
+**Matcher:** `manual|auto` (fires on both `/compact` and automatic compaction)
+
+**Input (stdin):**
+```json
+{
+  "session_id": "abc123",
+  "cwd": "/path/to/project",
+  "hook_event_name": "PreCompact"
+}
+```
+
 **Behavior:**
 - Read accumulated node IDs from state file
 - Call Engrammic to generate a summary of the working context
 - Write final checkpoint with summary + timestamp
+- Exit 0 (silent success)
 
 ### 3. engrammic-restore (SessionStart)
 
 Fires at session start. Checks for existing checkpoint and informs the agent.
 
+**Matcher:** `startup|resume|clear|compact` (fires on session start and after compaction/clear)
+
+**Input (stdin):**
+```json
+{
+  "session_id": "abc123",
+  "cwd": "/path/to/project",
+  "hook_event_name": "SessionStart",
+  "session_resume_reason": "startup"
+}
+```
+
+**Output (stdout on exit 0):**
+```json
+{
+  "hookSpecificOutput": {
+    "additionalContext": "Previous session checkpoint found for this project.\nSummary: \"Working on OAuth implementation\"\nNode IDs: [mem_abc123, mem_def456]\nIf user wants to continue, call recall with these IDs."
+  }
+}
+```
+
 **Behavior:**
-- Check if checkpoint exists for current project
-- If found, output `additionalContext` JSON with:
-  - Node IDs
-  - Checkpoint summary
-  - Instruction for agent to offer restore to user
+- Check if checkpoint exists for current project (hash of `cwd`)
+- If found, output `additionalContext` JSON with node IDs and summary
+- If not found, exit 0 with no output
 - Agent asks user if they want to restore; user confirms or declines
 
 ## State File
@@ -95,6 +137,7 @@ In `~/.claude/settings.json` or `~/.claude/settings.local.json`:
     ],
     "PreCompact": [
       {
+        "matcher": "manual|auto",
         "hooks": [
           {
             "type": "command",
@@ -106,6 +149,7 @@ In `~/.claude/settings.json` or `~/.claude/settings.local.json`:
     ],
     "SessionStart": [
       {
+        "matcher": "startup|resume|clear|compact",
         "hooks": [
           {
             "type": "command",
@@ -132,6 +176,24 @@ curl -X POST "${ENGRAMMIC_MCP_URL:-http://localhost:8000/mcp/}" \
 ```
 
 Endpoint URL is configurable via `ENGRAMMIC_MCP_URL` environment variable. Defaults to localhost for local development.
+
+## Authentication
+
+Hooks need credentials to call Engrammic. Configuration via `~/.engrammic/config.json`:
+
+```json
+{
+  "mcp_url": "http://strata-finance:8000/mcp/",
+  "silo_id": "user-silo-id",
+  "api_key": "optional-api-key-if-required"
+}
+```
+
+Hooks read this file on each invocation. For the research spike, we assume:
+- Local development with no auth required, OR
+- Pre-configured credentials in the config file
+
+Production auth (OAuth, WorkOS) is out of scope for this spike.
 
 ## Restore Flow
 
