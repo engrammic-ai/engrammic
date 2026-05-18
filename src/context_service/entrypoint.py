@@ -1,4 +1,5 @@
 """Entrypoint for distroless container - reads PORT from environment."""
+
 import os
 import sys
 

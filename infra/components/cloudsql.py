@@ -11,6 +11,7 @@ class CloudSQLPostgres(pulumi.ComponentResource):
         self,
         name: str,
         network_id: pulumi.Input[str],
+        private_connection: pulumi.Resource | None = None,
         opts: pulumi.ResourceOptions | None = None,
     ):
         super().__init__("engrammic:cloudsql:CloudSQLPostgres", name, None, opts)
@@ -31,6 +32,7 @@ class CloudSQLPostgres(pulumi.ComponentResource):
             region=region,
             deletion_protection=env == "prod",
             settings=sql.DatabaseInstanceSettingsArgs(
+                edition="ENTERPRISE",
                 tier=tier,
                 disk_size=disk_size,
                 disk_type="PD_SSD",
@@ -55,7 +57,10 @@ class CloudSQLPostgres(pulumi.ComponentResource):
                     hour=4,
                 ),
             ),
-            opts=pulumi.ResourceOptions(parent=self),
+            opts=pulumi.ResourceOptions(
+                parent=self,
+                depends_on=[private_connection] if private_connection else [],
+            ),
         )
 
         self.database = sql.Database(

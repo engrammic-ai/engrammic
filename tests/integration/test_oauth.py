@@ -76,9 +76,7 @@ def app() -> FastAPI:
 
 @pytest.fixture
 async def client(app: FastAPI) -> AsyncClient:  # type: ignore[override]
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://testserver"
-    ) as c:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as c:
         yield c  # type: ignore[misc]
 
 
@@ -197,25 +195,19 @@ class TestOAuthAuthorize:
         assert resp.status_code == 400
         assert "response_type" in resp.json()["detail"]
 
-    async def test_invalid_code_challenge_method_returns_400(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_invalid_code_challenge_method_returns_400(self, client: AsyncClient) -> None:
         params = self._params(code_challenge_method="plain")
         resp = await client.get("/oauth/authorize", params=params, follow_redirects=False)
         assert resp.status_code == 400
         assert "S256" in resp.json()["detail"]
 
-    async def test_disallowed_redirect_host_returns_400(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_disallowed_redirect_host_returns_400(self, client: AsyncClient) -> None:
         params = self._params(redirect_uri="https://evil.example.com/callback")
         resp = await client.get("/oauth/authorize", params=params, follow_redirects=False)
         assert resp.status_code == 400
         assert "redirect_uri" in resp.json()["detail"]
 
-    async def test_valid_authorize_redirects_to_workos(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_valid_authorize_redirects_to_workos(self, client: AsyncClient) -> None:
         """Happy path: valid params redirect to WorkOS authorization URL."""
         verifier, challenge = generate_pkce_pair()
         params = self._params(code_challenge=challenge)
@@ -244,9 +236,7 @@ class TestOAuthAuthorize:
                 new=AsyncMock(return_value=workos_url),
             ),
         ):
-            resp = await client.get(
-                "/oauth/authorize", params=params, follow_redirects=False
-            )
+            resp = await client.get("/oauth/authorize", params=params, follow_redirects=False)
 
         assert resp.status_code == 302
         assert resp.headers["location"] == workos_url
@@ -277,9 +267,7 @@ class TestOAuthAuthorize:
                 new=AsyncMock(side_effect=ValueError("WorkOS not configured")),
             ),
         ):
-            resp = await client.get(
-                "/oauth/authorize", params=params, follow_redirects=False
-            )
+            resp = await client.get("/oauth/authorize", params=params, follow_redirects=False)
 
         assert resp.status_code == 500
 
@@ -322,9 +310,7 @@ class TestOAuthCallback:
         assert resp.status_code == 400
         assert "state" in resp.json()["detail"]
 
-    async def test_workos_exchange_failure_returns_400(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_workos_exchange_failure_returns_400(self, client: AsyncClient) -> None:
         """If exchange_code_for_user raises ValueError, route returns 400."""
         fake_auth_request = MagicMock()
         fake_auth_request.id = uuid.uuid4()
@@ -355,9 +341,7 @@ class TestOAuthCallback:
         assert resp.status_code == 400
         assert "exchange" in resp.json()["detail"].lower()
 
-    async def test_happy_path_redirects_with_code_and_state(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_happy_path_redirects_with_code_and_state(self, client: AsyncClient) -> None:
         """Successful callback redirects to the original redirect_uri with code+state."""
         original_state = "client-original-state"
         redirect_uri = "http://localhost:8080/callback"
@@ -537,9 +521,7 @@ class TestOAuthTokenAuthorizationCode:
                 },
             )
 
-        fake_oauth_svc.exchange_code_for_tokens.assert_awaited_once_with(
-            "some-code", verifier
-        )
+        fake_oauth_svc.exchange_code_for_tokens.assert_awaited_once_with("some-code", verifier)
 
 
 # ---------------------------------------------------------------------------
@@ -579,9 +561,7 @@ class TestOAuthTokenRefresh:
         assert resp.status_code == 400
         assert "Invalid" in resp.json()["detail"]
 
-    async def test_valid_refresh_token_returns_new_access_token(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_valid_refresh_token_returns_new_access_token(self, client: AsyncClient) -> None:
         token_response = {
             "access_token": "new-at-xyz",
             "expires_in": 3600,
@@ -677,9 +657,7 @@ class TestOAuthRevoke:
 
         assert resp.status_code == 200
 
-    async def test_revoke_unknown_token_still_returns_200(
-        self, client: AsyncClient
-    ) -> None:
+    async def test_revoke_unknown_token_still_returns_200(self, client: AsyncClient) -> None:
         """RFC 7009 requires 200 even when token not found."""
         fake_oauth_svc = AsyncMock()
         fake_oauth_svc.revoke_token = AsyncMock(return_value=False)

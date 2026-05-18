@@ -31,9 +31,7 @@ class User(Base):
     last_active_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
     oauth_tokens: Mapped[list[OAuthToken]] = relationship(back_populates="user")
-    authorization_codes: Mapped[list[OAuthAuthorizationCode]] = relationship(
-        back_populates="user"
-    )
+    authorization_codes: Mapped[list[OAuthAuthorizationCode]] = relationship(back_populates="user")
 
     def __init__(
         self,

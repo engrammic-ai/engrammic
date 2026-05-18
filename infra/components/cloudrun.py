@@ -1,4 +1,4 @@
-"""Cloud Run v2 service for context-service API."""
+"""Cloud Run v2 service for Engrammic API."""
 
 import pulumi
 from pulumi_gcp import cloudrunv2, vpcaccess
@@ -62,8 +62,9 @@ class ContextServiceRun(pulumi.ComponentResource):
         # Cloud Run v2 Service
         self.service = cloudrunv2.Service(
             f"{name}-service",
-            name=f"engrammic-{env}-context-service",
+            name=f"engrammic-{env}-api",
             location=region,
+            deletion_protection=False,
             template=cloudrunv2.ServiceTemplateArgs(
                 service_account=service_account_email,
                 scaling=cloudrunv2.ServiceTemplateScalingArgs(

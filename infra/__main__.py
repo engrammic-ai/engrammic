@@ -42,6 +42,7 @@ if use_cloudsql:
     cloudsql = CloudSQLPostgres(
         "engrammic-cloudsql",
         network_id=network.vpc.id,
+        private_connection=network.private_connection,
     )
     postgres_host = cloudsql.instance.private_ip_address
 

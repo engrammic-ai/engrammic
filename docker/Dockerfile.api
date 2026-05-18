@@ -15,10 +15,13 @@ RUN sed -i '/engrammic-primitives.*path/d' pyproject.toml
 # Install production dependencies (re-resolves to fetch primitives from PyPI)
 RUN uv sync --no-dev --no-install-project
 
-# Stage 2: Runtime (distroless for minimal attack surface)
-FROM gcr.io/distroless/python3-debian12:nonroot
+# Stage 2: Runtime
+FROM python:3.13-slim
 
 WORKDIR /app
+
+# Create non-root user
+RUN groupadd -g 1000 engrammic && useradd -u 1000 -g engrammic -m engrammic
 
 # Copy virtual environment from builder (primitives installed from PyPI)
 COPY --from=builder /app/.venv /app/.venv
@@ -36,10 +39,8 @@ ENV PYTHONPATH="/app/src"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Distroless nonroot user is UID 65532
-# No shell available - healthcheck must use different approach
+USER engrammic
+
 EXPOSE 8000
 
-# No HEALTHCHECK in distroless (no shell) - Cloud Run uses HTTP probes instead
-# CMD uses exec form (no shell interpretation)
 CMD ["python", "-m", "context_service.entrypoint"]

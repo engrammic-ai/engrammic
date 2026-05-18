@@ -38,9 +38,7 @@ class OAuthAuthorizationRequest(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     authorization_codes: Mapped[list[OAuthAuthorizationCode]] = relationship(
         back_populates="authorization_request"
@@ -69,12 +67,8 @@ class OAuthAuthorizationCode(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    used_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped[User] = relationship(back_populates="authorization_codes")
     authorization_request: Mapped[OAuthAuthorizationRequest | None] = relationship(
@@ -95,12 +89,8 @@ class OAuthToken(Base):
     user_id: Mapped[UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True
     )
-    access_token_hash: Mapped[str] = mapped_column(
-        String(64), nullable=False, index=True
-    )
-    refresh_token_hash: Mapped[str | None] = mapped_column(
-        String(64), nullable=True, index=True
-    )
+    access_token_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    refresh_token_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     scope: Mapped[str | None] = mapped_column(Text(), nullable=True)
     client_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     client_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -113,8 +103,6 @@ class OAuthToken(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    revoked_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped[User] = relationship(back_populates="oauth_tokens")

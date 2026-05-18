@@ -46,9 +46,7 @@ class OAuthService:
     ) -> OAuthAuthorizationRequest:
         """Store a PKCE authorization request keyed by state."""
         now = datetime.now(UTC)
-        expires_at = now + timedelta(
-            seconds=self._settings.authorization_code_ttl_seconds
-        )
+        expires_at = now + timedelta(seconds=self._settings.authorization_code_ttl_seconds)
 
         auth_request = OAuthAuthorizationRequest(
             state=state,
@@ -69,13 +67,9 @@ class OAuthService:
         )
         return auth_request
 
-    async def get_authorization_request(
-        self, state: str
-    ) -> OAuthAuthorizationRequest | None:
+    async def get_authorization_request(self, state: str) -> OAuthAuthorizationRequest | None:
         """Retrieve an authorization request by state, checking expiration."""
-        stmt = select(OAuthAuthorizationRequest).where(
-            OAuthAuthorizationRequest.state == state
-        )
+        stmt = select(OAuthAuthorizationRequest).where(OAuthAuthorizationRequest.state == state)
         result = await self._session.execute(stmt)
         auth_request = result.scalar_one_or_none()
 
@@ -104,9 +98,7 @@ class OAuthService:
         raw_code = self._generate_token()
         code_hash = self._hash_token(raw_code)
         now = datetime.now(UTC)
-        expires_at = now + timedelta(
-            seconds=self._settings.authorization_code_ttl_seconds
-        )
+        expires_at = now + timedelta(seconds=self._settings.authorization_code_ttl_seconds)
 
         auth_code = OAuthAuthorizationCode(
             code=code_hash,
@@ -134,9 +126,7 @@ class OAuthService:
         Returns a token response dict or None if validation fails.
         """
         code_hash = self._hash_token(code)
-        stmt = select(OAuthAuthorizationCode).where(
-            OAuthAuthorizationCode.code == code_hash
-        )
+        stmt = select(OAuthAuthorizationCode).where(OAuthAuthorizationCode.code == code_hash)
         result = await self._session.execute(stmt)
         auth_code = result.scalar_one_or_none()
 
@@ -184,12 +174,8 @@ class OAuthService:
         access_token = self._generate_token()
         refresh_token = self._generate_token()
 
-        access_token_expires_at = now + timedelta(
-            seconds=self._settings.access_token_ttl_seconds
-        )
-        refresh_token_expires_at = now + timedelta(
-            days=self._settings.refresh_token_ttl_days
-        )
+        access_token_expires_at = now + timedelta(seconds=self._settings.access_token_ttl_seconds)
+        refresh_token_expires_at = now + timedelta(days=self._settings.refresh_token_ttl_days)
 
         oauth_token = OAuthToken(
             user_id=auth_code.user_id,
@@ -216,17 +202,13 @@ class OAuthService:
             "token_type": "Bearer",
         }
 
-    async def refresh_access_token(
-        self, refresh_token: str
-    ) -> dict[str, Any] | None:
+    async def refresh_access_token(self, refresh_token: str) -> dict[str, Any] | None:
         """Issue a new access token from a valid refresh token.
 
         Returns a token response dict or None if the refresh token is invalid.
         """
         refresh_token_hash = self._hash_token(refresh_token)
-        stmt = select(OAuthToken).where(
-            OAuthToken.refresh_token_hash == refresh_token_hash
-        )
+        stmt = select(OAuthToken).where(OAuthToken.refresh_token_hash == refresh_token_hash)
         result = await self._session.execute(stmt)
         token = result.scalar_one_or_none()
 
@@ -237,9 +219,7 @@ class OAuthService:
         now = datetime.now(UTC)
 
         if token.revoked_at is not None:
-            logger.warning(
-                "oauth.refresh.token_revoked", token_id=str(token.id)
-            )
+            logger.warning("oauth.refresh.token_revoked", token_id=str(token.id))
             return None
 
         if token.refresh_token_expires_at is not None and token.refresh_token_expires_at <= now:
@@ -247,9 +227,7 @@ class OAuthService:
             return None
 
         new_access_token = self._generate_token()
-        access_token_expires_at = now + timedelta(
-            seconds=self._settings.access_token_ttl_seconds
-        )
+        access_token_expires_at = now + timedelta(seconds=self._settings.access_token_ttl_seconds)
 
         token.access_token_hash = self._hash_token(new_access_token)
         token.access_token_expires_at = access_token_expires_at
@@ -270,9 +248,7 @@ class OAuthService:
     async def validate_access_token(self, access_token: str) -> OAuthToken | None:
         """Check token validity and return the OAuthToken record or None."""
         access_token_hash = self._hash_token(access_token)
-        stmt = select(OAuthToken).where(
-            OAuthToken.access_token_hash == access_token_hash
-        )
+        stmt = select(OAuthToken).where(OAuthToken.access_token_hash == access_token_hash)
         result = await self._session.execute(stmt)
         token = result.scalar_one_or_none()
 
@@ -310,9 +286,7 @@ class OAuthService:
             return False
 
         if oauth_token.revoked_at is not None:
-            logger.info(
-                "oauth.revoke.already_revoked", token_id=str(oauth_token.id)
-            )
+            logger.info("oauth.revoke.already_revoked", token_id=str(oauth_token.id))
             return True
 
         oauth_token.revoked_at = now

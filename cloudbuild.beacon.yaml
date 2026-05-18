@@ -3,7 +3,7 @@ steps:
     args:
       - 'build'
       - '-f'
-      - 'docker/Dockerfile.api'
+      - 'docker/Dockerfile.beacon'
       - '-t'
       - '${_IMAGE}'
       - '.'
@@ -17,7 +17,7 @@ images:
   - '${_IMAGE}'
 
 substitutions:
-  _IMAGE: 'europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-api:latest'
+  _IMAGE: 'europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-beacon:latest'
 
 options:
   logging: CLOUD_LOGGING_ONLY

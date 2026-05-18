@@ -1,7 +1,7 @@
 """VPC, subnets, Cloud NAT, and firewall rules."""
 
 import pulumi
-from pulumi_gcp import compute
+from pulumi_gcp import compute, servicenetworking
 
 
 class NetworkStack(pulumi.ComponentResource):
@@ -93,6 +93,25 @@ class NetworkStack(pulumi.ComponentResource):
             ip_cidr_range="10.0.3.0/28",
             region=pulumi.Config("gcp").require("region"),
             network=self.vpc.id,
+            opts=pulumi.ResourceOptions(parent=self),
+        )
+
+        # Private services access for Cloud SQL
+        self.private_ip_range = compute.GlobalAddress(
+            f"{name}-private-ip-range",
+            name=f"engrammic-{env}-private-services",
+            purpose="VPC_PEERING",
+            address_type="INTERNAL",
+            prefix_length=16,
+            network=self.vpc.id,
+            opts=pulumi.ResourceOptions(parent=self),
+        )
+
+        self.private_connection = servicenetworking.Connection(
+            f"{name}-private-connection",
+            network=self.vpc.id,
+            service="servicenetworking.googleapis.com",
+            reserved_peering_ranges=[self.private_ip_range.name],
             opts=pulumi.ResourceOptions(parent=self),
         )
 

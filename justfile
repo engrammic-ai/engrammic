@@ -130,6 +130,18 @@ infra-stop:
 build tag="latest":
     gcloud builds submit --config=cloudbuild.api.yaml --substitutions=_IMAGE={{registry}}/engrammic-api:{{tag}} --region={{region}} .
 
-# Sync secrets to GCP Secret Manager
+# Build and push beacon image
+build-beacon tag="latest":
+    gcloud builds submit --config=cloudbuild.beacon.yaml --substitutions=_IMAGE={{registry}}/engrammic-beacon:{{tag}} --region={{region}} .
+
+# Sync secrets to GCP Secret Manager (dev)
 secrets-sync:
     ENVIRONMENT=dev GCP_PROJECT={{project}} uv run python scripts/sync_secrets.py
+
+# Sync secrets to GCP Secret Manager (beta)
+secrets-sync-beta:
+    ENVIRONMENT=beta GCP_PROJECT={{project}} uv run python scripts/sync_secrets.py
+
+# Run migrations on beta Cloud SQL (via stateful host)
+db-migrate-beta:
+    gcloud compute ssh engrammic-beta-stateful --project={{project}} --zone={{zone}} --tunnel-through-iap --command="docker run --rm postgres:16-alpine psql 'postgresql://context:\$(gcloud secrets versions access latest --secret=engrammic-beta-postgres-password --project={{project}})@10.162.0.3:5432/engrammic?sslmode=disable' -c '\dt'"

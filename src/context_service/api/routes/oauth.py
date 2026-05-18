@@ -80,9 +80,7 @@ async def authorize(
         raise HTTPException(status_code=400, detail="response_type must be 'code'")
 
     if code_challenge_method != "S256":
-        raise HTTPException(
-            status_code=400, detail="Only S256 code_challenge_method is supported"
-        )
+        raise HTTPException(status_code=400, detail="Only S256 code_challenge_method is supported")
 
     parsed = urlparse(redirect_uri)
     if parsed.hostname not in settings.oauth.allowed_redirect_hosts:
@@ -164,7 +162,9 @@ async def callback(
             user_info = await exchange_code_for_user(code)
         except ValueError as exc:
             logger.error("oauth.callback.exchange_failed", error=str(exc))
-            raise HTTPException(status_code=400, detail="Failed to exchange authorization code") from exc
+            raise HTTPException(
+                status_code=400, detail="Failed to exchange authorization code"
+            ) from exc
 
         workos_user_id: str = user_info["id"]
         email: str = user_info.get("email", "")
@@ -224,14 +224,10 @@ async def token(
 
         if grant_type == "authorization_code":
             if not code or not code_verifier:
-                raise HTTPException(
-                    status_code=400, detail="code and code_verifier are required"
-                )
+                raise HTTPException(status_code=400, detail="code and code_verifier are required")
             result = await oauth_svc.exchange_code_for_tokens(code, code_verifier)
             if result is None:
-                raise HTTPException(
-                    status_code=400, detail="Invalid or expired authorization code"
-                )
+                raise HTTPException(status_code=400, detail="Invalid or expired authorization code")
             return result
 
         if grant_type == "refresh_token":
@@ -239,9 +235,7 @@ async def token(
                 raise HTTPException(status_code=400, detail="refresh_token is required")
             result = await oauth_svc.refresh_access_token(refresh_token)
             if result is None:
-                raise HTTPException(
-                    status_code=400, detail="Invalid or expired refresh token"
-                )
+                raise HTTPException(status_code=400, detail="Invalid or expired refresh token")
             return result
 
         raise HTTPException(
