@@ -1,0 +1,17 @@
+config:
+  gcp:project: engrammic
+  gcp:region: europe-north1
+  gcp:zone: europe-north1-a
+  engrammic-infra:environment: beta
+  # StatefulHost (Memgraph, Qdrant, Redis only)
+  engrammic-infra:instance_type: e2-standard-2
+  engrammic-infra:use_spot: "false"
+  engrammic-infra:disk_size_memgraph: "50"
+  engrammic-infra:disk_size_qdrant: "50"
+  engrammic-infra:use_cloudsql: "true"
+  # Cloud SQL Postgres
+  engrammic-infra:cloudsql_tier: db-f1-micro
+  engrammic-infra:cloudsql_disk_size: "20"
+  engrammic-infra:cloudsql_ha: "false"
+  # Cloud Run
+  engrammic-infra:min_cloudrun_instances: "1"
