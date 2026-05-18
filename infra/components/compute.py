@@ -200,6 +200,11 @@ for DISK in $DISKS; do
     if ! grep -q "$DISK" /etc/fstab; then
         echo "$DEVICE $MOUNT ext4 discard,defaults,nofail 0 2" >> /etc/fstab
     fi
+
+    # Fix permissions for service data directories
+    if [ "$DISK" = "memgraph" ]; then
+        chown -R 100:101 "$MOUNT"
+    fi
 done
 
 # Fetch secrets from Secret Manager (only if not using Cloud SQL)
