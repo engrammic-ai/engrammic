@@ -67,9 +67,6 @@ context_service = ContextServiceRun(
         "POSTGRES_PASSWORD": secrets.secrets["postgres-password"].id,
         "MEMGRAPH_PASSWORD": secrets.secrets["memgraph-password"].id,
         "WORKOS_API_KEY": secrets.secrets["workos-api-key"].id,
-        "ANTHROPIC_API_KEY": secrets.secrets["anthropic-api-key"].id,
-        "OPENAI_API_KEY": secrets.secrets["openai-api-key"].id,
-        "GOOGLE_API_KEY": secrets.secrets["google-api-key"].id,
     },
 )
 

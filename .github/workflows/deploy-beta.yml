@@ -6,7 +6,7 @@ on:
 
 env:
   REGION: europe-north1
-  REGISTRY: europe-north1-docker.pkg.dev/engrammic/engrammic
+  PROJECT_ID: engrammic
 
 jobs:
   build-and-deploy:
@@ -24,22 +24,28 @@ jobs:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
-      - name: Configure Docker
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
 
-      - name: Build and push API image
+      - name: Build API image with Cloud Build
         run: |
-          docker build -f docker/Dockerfile.api -t ${{ env.REGISTRY }}/engrammic-api:${{ github.sha }} .
-          docker push ${{ env.REGISTRY }}/engrammic-api:${{ github.sha }}
-          docker tag ${{ env.REGISTRY }}/engrammic-api:${{ github.sha }} ${{ env.REGISTRY }}/engrammic-api:latest
-          docker push ${{ env.REGISTRY }}/engrammic-api:latest
+          gcloud builds submit \
+            --tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-api:${{ github.sha }} \
+            --dockerfile docker/Dockerfile.api \
+            --timeout 600s
+          gcloud artifacts docker tags add \
+            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-api:${{ github.sha }} \
+            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-api:latest
 
-      - name: Build and push Beacon image
+      - name: Build Beacon image with Cloud Build
         run: |
-          docker build -f docker/Dockerfile.beacon -t ${{ env.REGISTRY }}/engrammic-beacon:${{ github.sha }} .
-          docker push ${{ env.REGISTRY }}/engrammic-beacon:${{ github.sha }}
-          docker tag ${{ env.REGISTRY }}/engrammic-beacon:${{ github.sha }} ${{ env.REGISTRY }}/engrammic-beacon:latest
-          docker push ${{ env.REGISTRY }}/engrammic-beacon:latest
+          gcloud builds submit \
+            --tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-beacon:${{ github.sha }} \
+            --dockerfile docker/Dockerfile.beacon \
+            --timeout 300s
+          gcloud artifacts docker tags add \
+            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-beacon:${{ github.sha }} \
+            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-beacon:latest
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
@@ -59,7 +65,7 @@ jobs:
         run: |
           wget -q https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy
           chmod +x cloud_sql_proxy
-          ./cloud_sql_proxy -instances=engrammic:europe-north1:engrammic-beta=tcp:5432 &
+          ./cloud_sql_proxy -instances=${{ env.PROJECT_ID }}:${{ env.REGION }}:engrammic-beta=tcp:5432 &
           sleep 5
           uv sync
           uv run alembic upgrade head

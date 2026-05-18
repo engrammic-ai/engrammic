@@ -17,9 +17,6 @@ class SecretsStack(pulumi.ComponentResource):
             "postgres-password",
             "memgraph-password",
             "workos-api-key",
-            "anthropic-api-key",
-            "openai-api-key",
-            "google-api-key",
         ]
 
         self.secrets: dict[str, secretmanager.Secret] = {}
