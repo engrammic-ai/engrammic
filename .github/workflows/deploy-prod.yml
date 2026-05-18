@@ -25,7 +25,8 @@ jobs:
   build-and-deploy:
     needs: validate
     runs-on: ubuntu-latest
-    environment: production
+    environment: production  # Real security gate: required reviewers + branch protection rules on this environment
+    timeout-minutes: 30
     permissions:
       contents: read
       id-token: write
@@ -42,11 +43,14 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Set short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+
       - name: Build and scan API image
         run: |
           gcloud builds submit \
             --config=cloudbuild.api.yaml \
-            --substitutions=SHORT_SHA=${{ github.sha }}
+            --substitutions=SHORT_SHA=${{ env.SHORT_SHA }}
 
       - name: Build Beacon image
         run: |
@@ -74,7 +78,8 @@ jobs:
 
       - name: Run database migrations
         run: |
-          wget -q https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy
+          # TODO(production-hardening): verify sha256 checksum after pinning a specific version
+          wget -q https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.3/cloud-sql-proxy.linux.amd64 -O cloud_sql_proxy
           chmod +x cloud_sql_proxy
           ./cloud_sql_proxy -instances=${{ env.PROJECT_ID }}:${{ env.REGION }}:engrammic-prod=tcp:5432 &
           sleep 5
