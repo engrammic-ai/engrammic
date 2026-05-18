@@ -49,6 +49,7 @@ Specced or checkpointed for later implementation:
 
 | Plan | Status | Description |
 |------|--------|-------------|
+| [2026-05-18-context-checkpoint-hooks.md](./2026-05-18-context-checkpoint-hooks.md) | Spike | Claude Code hooks for context checkpoint/restore via Engrammic |
 | [clustering-algo-eval.md](./clustering-algo-eval.md) | Spike | Evaluate LPA/HDBSCAN as Leiden replacements |
 | [dagger-test-pipeline.md](./dagger-test-pipeline.md) | Draft | Dagger-based test pipeline |
 
