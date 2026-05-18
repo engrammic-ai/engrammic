@@ -406,6 +406,18 @@ class AuthConfig(BaseModel):
     workos: WorkosConfig = Field(default_factory=WorkosConfig)
 
 
+class OAuthConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    issuer: str = "https://api.engrammic.ai"
+    access_token_ttl_seconds: int = 3600  # 1 hour
+    refresh_token_ttl_days: int = 90
+    authorization_code_ttl_seconds: int = 600  # 10 minutes
+    allowed_redirect_hosts: list[str] = Field(
+        default_factory=lambda: ["localhost", "127.0.0.1"]
+    )
+
+
 class PromptsConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -729,6 +741,7 @@ class Settings(BaseSettings):
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     llm: LLMConfig = Field(default_factory=LLMConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
+    oauth: OAuthConfig = Field(default_factory=OAuthConfig)
     prompts: PromptsConfig = Field(default_factory=PromptsConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
     cache: CacheConfig = Field(default_factory=CacheConfig)
