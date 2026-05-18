@@ -2,6 +2,8 @@
 
 import pulumi
 from components import (
+    BeaconServiceRun,
+    CloudSQLPostgres,
     ContextServiceRun,
     IAMStack,
     NetworkStack,
@@ -9,6 +11,9 @@ from components import (
     StatefulHost,
     StorageStack,
 )
+
+config = pulumi.Config()
+use_cloudsql = config.get_bool("use_cloudsql") or False
 
 # IAM first - service accounts needed by other resources
 iam = IAMStack("engrammic-iam")
@@ -22,13 +27,23 @@ storage = StorageStack("engrammic-storage", stateful_host_email=iam.stateful_hos
 # Secrets - Secret Manager resources
 secrets = SecretsStack("engrammic-secrets")
 
-# Stateful host - GCE instance for Memgraph, Qdrant, Redis, Postgres, Dagster
+# Stateful host - GCE instance for Memgraph, Qdrant, Redis (+ Postgres if not using Cloud SQL)
 stateful_host = StatefulHost(
     "engrammic-stateful",
     network=network.vpc,
     subnet=network.private_subnet,
     service_account_email=iam.stateful_host.email,
 )
+
+# Cloud SQL (if enabled)
+cloudsql = None
+postgres_host = stateful_host.instance.network_interfaces[0].network_ip
+if use_cloudsql:
+    cloudsql = CloudSQLPostgres(
+        "engrammic-cloudsql",
+        network_id=network.vpc.id,
+    )
+    postgres_host = cloudsql.instance.private_ip_address
 
 # Cloud Run API deployment
 context_service = ContextServiceRun(
@@ -38,13 +53,13 @@ context_service = ContextServiceRun(
     service_account_email=iam.context_service_run.email,
     image="europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-api:latest",
     env_vars={
-        "ENVIRONMENT": pulumi.Config().require("environment"),
+        "ENVIRONMENT": config.require("environment"),
         "MEMGRAPH_HOST": stateful_host.instance.network_interfaces[0].network_ip,
         "QDRANT_HOST": stateful_host.instance.network_interfaces[0].network_ip,
         "REDIS_HOST": stateful_host.instance.network_interfaces[0].network_ip,
-        "POSTGRES_HOST": stateful_host.instance.network_interfaces[0].network_ip,
+        "POSTGRES_HOST": postgres_host,
         "POSTGRES_USER": "context",
-        "POSTGRES_DATABASE": "context_service",
+        "POSTGRES_DATABASE": "engrammic",
         "VERTEX_PROJECT_ID": "engrammic",
         "VERTEX_LOCATION": "europe-north1",
     },
@@ -58,6 +73,22 @@ context_service = ContextServiceRun(
     },
 )
 
+# Beacon service (if Cloud SQL enabled - beta/prod only)
+beacon_service = None
+if use_cloudsql:
+    database_url = pulumi.Output.all(
+        postgres_host,
+        config.require_secret("postgres_password"),
+    ).apply(lambda args: f"postgresql://context:{args[1]}@{args[0]}:5432/engrammic")
+
+    beacon_service = BeaconServiceRun(
+        "engrammic-beacon",
+        vpc_connector_id=context_service.connector.id,
+        service_account_email=iam.context_service_run.email,
+        image="europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-beacon:latest",
+        database_url=database_url,
+    )
+
 # Exports
 pulumi.export("vpc_id", network.vpc.id)
 pulumi.export("stateful_host_ip", stateful_host.instance.network_interfaces[0].network_ip)
@@ -70,3 +101,10 @@ pulumi.export(
     },
 )
 pulumi.export("api_url", context_service.service.uri)
+
+if cloudsql:
+    pulumi.export("cloudsql_connection_name", cloudsql.instance.connection_name)
+    pulumi.export("cloudsql_private_ip", cloudsql.instance.private_ip_address)
+
+if beacon_service:
+    pulumi.export("beacon_url", beacon_service.service.uri)
