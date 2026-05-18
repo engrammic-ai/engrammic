@@ -30,11 +30,20 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Status | Description |
 |------|--------|-------------|
-| — | — | No active plans |
+| [source-tier-classification.md](./source-tier-classification.md) | In progress | Source tier classification for confidence scoring |
 
-Next candidates:
-- Beacon receiving endpoint (Cloud Run)
-- Clustering algorithm evaluation (spike)
+## Future work
+
+Specced or checkpointed for later implementation:
+
+| Item | Spec/Note | Trigger |
+|------|-----------|---------|
+| **Concepts** | [concepts-design.md](../../docs/superpowers/specs/2026-05-18-concepts-design.md) | Post-closed-beta, when retrieval quality degrades at scale |
+| **Supersession head pointer** | Memory checkpoint | When SUPERSEDES chain traversal becomes a perf bottleneck |
+
+**Concepts:** Emergent abstract nodes (Wisdom layer) that organize knowledge without asserting conclusions. Includes Weaver SAGE persona, weighted edges, 5-phase incremental impl plan.
+
+**Supersession head pointer:** Denormalized `current_head` field on superseded nodes for O(1) lookup to chain head instead of walking SUPERSEDES edges at query time.
 
 ## Spikes / drafts
 
@@ -62,6 +71,12 @@ Next candidates:
 ## Archive
 
 Completed plans in `archive/`:
+- Epistemic Layer Fixes (2026-05-17) - belief architecture, flow compliance, evidence discipline
+- Architectural Decisions (2026-05-16) - 9 decisions on enforcement, reliability, integration
+- Cognitive Runtime Pivot (2026-05-07) - deferred pivot notes
+- Partner Deployment (2026-05-08) - partner deployment planning
+- Proposal Worker (2026-05-07) - proposal worker design
+- Search Quality Document Expansion (2026-05-07) - query expansion spike
 - ICP Skill Presets (2026-05-17) - per-silo preset binding, patterns delivery
 - Identity LLM Wiring (2026-05-17) - Custodian LLM agents, Dagster jobs
 - Architecture Review (2026-05-17) - hypergraph, consistency, custodian split decisions
