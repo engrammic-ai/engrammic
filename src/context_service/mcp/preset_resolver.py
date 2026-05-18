@@ -57,7 +57,5 @@ class PresetResolver:
         try:
             return get_preset(name)
         except KeyError:
-            logger.warning(
-                "invalid_mcp_preset", preset=name, fallback=self._default
-            )
+            logger.warning("invalid_mcp_preset", preset=name, fallback=self._default)
             return get_preset(self._default)

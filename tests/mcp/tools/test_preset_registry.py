@@ -31,9 +31,7 @@ def test_unknown_preset_raises_keyerror():
         get_preset("does-not-exist")
 
 
-def test_malformed_config_does_not_poison_cache(
-    reset_preset_cache, tmp_path, monkeypatch
-):
+def test_malformed_config_does_not_poison_cache(reset_preset_cache, tmp_path, monkeypatch):
     """A malformed config must raise on every call, not cache a bad value."""
     bad = tmp_path / "bad.yaml"
     bad.write_text("just a string, not a mapping\n")
@@ -49,9 +47,7 @@ def test_malformed_config_does_not_poison_cache(
     monkeypatch.setattr(
         preset_registry,
         "_CONFIG_PATH",
-        Path(preset_registry.__file__).parent.parent.parent
-        / "config"
-        / "mcp_presets.yaml",
+        Path(preset_registry.__file__).parent.parent.parent / "config" / "mcp_presets.yaml",
     )
     preset_registry._cached_config = None
     cfg = load_preset_config()

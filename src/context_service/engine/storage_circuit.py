@@ -117,9 +117,7 @@ async def guard_hard_fail[T](
     try:
         result = await coro
     except Exception as exc:
-        should_trip = (
-            is_infrastructure_error is None or isinstance(exc, is_infrastructure_error)
-        )
+        should_trip = is_infrastructure_error is None or isinstance(exc, is_infrastructure_error)
         if should_trip:
             tripped = await cb.record_failure()
             if tripped:
@@ -171,9 +169,7 @@ async def guard_degrade[T](
     try:
         result2 = await coro
     except Exception as exc:
-        should_trip = (
-            is_infrastructure_error is None or isinstance(exc, is_infrastructure_error)
-        )
+        should_trip = is_infrastructure_error is None or isinstance(exc, is_infrastructure_error)
         if should_trip:
             tripped = await cb.record_failure()
             if tripped:

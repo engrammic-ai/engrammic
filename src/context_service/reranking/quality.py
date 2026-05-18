@@ -94,11 +94,12 @@ def compute_retrieval_quality(
         (quality, suggestion)
     """
     if not kept:
-        return "none", "No results met the relevance threshold. Try a broader query or contact support to adjust per-silo thresholds."
+        return (
+            "none",
+            "No results met the relevance threshold. Try a broader query or contact support to adjust per-silo thresholds.",
+        )
 
-    scores: list[float] = [
-        float(s) for r in kept if (s := r.get("relevance_score")) is not None
-    ]
+    scores: list[float] = [float(s) for r in kept if (s := r.get("relevance_score")) is not None]
     if not scores:
         # Kept results but no scores (e.g. node fetch path) -- treat as high.
         return "high", None

@@ -240,9 +240,7 @@ class MemgraphClient:
             StorageCircuitOpenError: If the Memgraph circuit breaker is open.
             MemgraphOperationError: If the query fails.
         """
-        return await guard_hard_fail(
-            STORE_MEMGRAPH, self._execute_query_impl(query, parameters)
-        )
+        return await guard_hard_fail(STORE_MEMGRAPH, self._execute_query_impl(query, parameters))
 
     async def _execute_query_impl(
         self,
@@ -316,9 +314,7 @@ class MemgraphClient:
             StorageCircuitOpenError: If the Memgraph circuit breaker is open.
             MemgraphOperationError: If the write fails.
         """
-        return await guard_hard_fail(
-            STORE_MEMGRAPH, self._execute_write_impl(query, parameters)
-        )
+        return await guard_hard_fail(STORE_MEMGRAPH, self._execute_write_impl(query, parameters))
 
     async def _execute_write_impl(
         self,

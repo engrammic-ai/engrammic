@@ -38,7 +38,6 @@ class TestBackoffElapsed:
     def test_exponential_backoff(self):
         """Backoff should be exponential: 5, 10, 20, 40, 80 minutes."""
         from context_service.pipelines.jobs.orphan_recovery import (
-            BASE_BACKOFF_MINUTES,
             backoff_elapsed,
         )
 

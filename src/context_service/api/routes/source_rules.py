@@ -65,8 +65,12 @@ class AddSourceRuleRequest(BaseModel):
     """Request body for adding a new source tier rule."""
 
     pattern: str = Field(..., min_length=1, max_length=500, description="fnmatch glob pattern")
-    tier: SourceTierLiteral = Field(..., description="Quality tier: authoritative, validated, or community")
-    reason: str | None = Field(default=None, max_length=500, description="Human-readable reason for this rule")
+    tier: SourceTierLiteral = Field(
+        ..., description="Quality tier: authoritative, validated, or community"
+    )
+    reason: str | None = Field(
+        default=None, max_length=500, description="Human-readable reason for this rule"
+    )
     priority: int = Field(default=0, ge=0, le=1000, description="Higher priority checked first")
     silo_id: str | None = Field(
         default=None,
@@ -121,8 +125,7 @@ class TestResolutionRequest(BaseModel):
     silo_id: str | None = Field(
         default=None,
         description=(
-            "Silo UUID to include silo-specific rules. "
-            "If absent, only global rules are applied."
+            "Silo UUID to include silo-specific rules. If absent, only global rules are applied."
         ),
     )
 

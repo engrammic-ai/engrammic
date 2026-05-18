@@ -67,9 +67,7 @@ async def fetch_chain_from_postgres(chain_id: UUID) -> dict[str, object]:
 async def delete_orphan(orphan_id: UUID) -> None:
     """Delete recovered orphan from dead-letter table."""
     async with get_session() as session:
-        await session.execute(
-            delete(OrphanedChains).where(OrphanedChains.chain_id == orphan_id)
-        )
+        await session.execute(delete(OrphanedChains).where(OrphanedChains.chain_id == orphan_id))
         await session.commit()
 
 
@@ -90,6 +88,7 @@ async def increment_retry(orphan_id: UUID) -> None:
 @op(out={"eligible": Out(), "exhausted": Out()})
 def fetch_orphaned_chains(context) -> Any:
     """Fetch chains eligible for retry and those exhausted."""
+
     async def _fetch() -> tuple[list[OrphanedChains], list[OrphanedChains]]:
         async with get_session() as session:
             # Eligible for retry
@@ -97,9 +96,7 @@ def fetch_orphaned_chains(context) -> Any:
                 select(OrphanedChains).where(OrphanedChains.retry_count < MAX_RETRIES)
             )
             chains: list[OrphanedChains] = list(result.scalars().all())
-            eligible = [
-                c for c in chains if backoff_elapsed(c.retry_count, c.last_retry_at)
-            ]
+            eligible = [c for c in chains if backoff_elapsed(c.retry_count, c.last_retry_at)]
 
             # Exhausted (for alerting)
             exhausted_result = await session.execute(

@@ -60,7 +60,9 @@ class UsageService:
         result = await self._session.execute(stmt)
         rows = result.all()
         return [
-            ToolUsageSummary(tool_name=row.tool_name, count=cast(int, row.count), last_used=row.last_used)
+            ToolUsageSummary(
+                tool_name=row.tool_name, count=cast(int, row.count), last_used=row.last_used
+            )
             for row in rows
         ]
 
@@ -89,6 +91,8 @@ class UsageService:
         result = await self._session.execute(stmt)
         rows = result.all()
         return [
-            ToolUsageSummary(tool_name=row.tool_name, count=cast(int, row.count), last_used=row.last_used)
+            ToolUsageSummary(
+                tool_name=row.tool_name, count=cast(int, row.count), last_used=row.last_used
+            )
             for row in rows
         ]

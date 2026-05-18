@@ -32,7 +32,12 @@ def global_rules() -> list[SourceRule]:
 def silo_rules() -> list[SourceRule]:
     """Silo-specific rules listed before global rules (as DB returns them)."""
     return [
-        SourceRule(pattern="https://internal.example.com/*", tier="authoritative", silo_id="silo-1", priority=150),
+        SourceRule(
+            pattern="https://internal.example.com/*",
+            tier="authoritative",
+            silo_id="silo-1",
+            priority=150,
+        ),
         SourceRule(pattern="https://*.gov/*", tier="community", silo_id="silo-1", priority=90),
         SourceRule(pattern="https://*.gov/*", tier="authoritative", silo_id=None, priority=100),
         SourceRule(pattern="https://*.edu/*", tier="validated", silo_id=None, priority=80),
@@ -150,9 +155,9 @@ async def test_highest_tier_across_multiple_refs(global_rules):
         tier, layer = await resolve_source_tier(
             silo_id="silo-1",
             evidence_refs=[
-                "https://community.org/post/1",   # community
-                "https://mit.edu/paper/42",        # validated
-                "https://www.fda.gov/doc/9",       # authoritative  <- winner
+                "https://community.org/post/1",  # community
+                "https://mit.edu/paper/42",  # validated
+                "https://www.fda.gov/doc/9",  # authoritative  <- winner
             ],
         )
     assert tier == SourceTier.AUTHORITATIVE
@@ -319,12 +324,15 @@ async def test_node_refs_skipped_for_rule_matching():
     rules = [
         SourceRule(pattern="node:*", tier="authoritative", silo_id=None, priority=100),
     ]
-    with patch(
-        "context_service.services.source_tier_resolver.get_source_rules",
-        new=AsyncMock(return_value=rules),
-    ), patch(
-        "context_service.services.source_tier_resolver.batch_get_node_tiers",
-        new=AsyncMock(return_value={}),
+    with (
+        patch(
+            "context_service.services.source_tier_resolver.get_source_rules",
+            new=AsyncMock(return_value=rules),
+        ),
+        patch(
+            "context_service.services.source_tier_resolver.batch_get_node_tiers",
+            new=AsyncMock(return_value={}),
+        ),
     ):
         tier, layer = await resolve_source_tier(
             silo_id="silo-1",
@@ -337,13 +345,16 @@ async def test_node_refs_skipped_for_rule_matching():
 @pytest.mark.asyncio
 async def test_invalid_node_id_skipped():
     """Invalid (non-UUID) node IDs are skipped without calling batch_get_node_tiers."""
-    with patch(
-        "context_service.services.source_tier_resolver.get_source_rules",
-        new=AsyncMock(return_value=[]),
-    ), patch(
-        "context_service.services.source_tier_resolver.batch_get_node_tiers",
-        new=AsyncMock(return_value={}),
-    ) as mock_batch:
+    with (
+        patch(
+            "context_service.services.source_tier_resolver.get_source_rules",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "context_service.services.source_tier_resolver.batch_get_node_tiers",
+            new=AsyncMock(return_value={}),
+        ) as mock_batch,
+    ):
         tier, layer = await resolve_source_tier(
             silo_id="silo-1",
             evidence_refs=["node:not-a-uuid"],
@@ -357,12 +368,15 @@ async def test_invalid_node_id_skipped():
 @pytest.mark.asyncio
 async def test_node_ref_with_tier_from_batch_lookup():
     """When batch_get_node_tiers returns a tier for a node, it should be used."""
-    with patch(
-        "context_service.services.source_tier_resolver.get_source_rules",
-        new=AsyncMock(return_value=[]),
-    ), patch(
-        "context_service.services.source_tier_resolver.batch_get_node_tiers",
-        new=AsyncMock(return_value={TEST_NODE_ID: "validated"}),
+    with (
+        patch(
+            "context_service.services.source_tier_resolver.get_source_rules",
+            new=AsyncMock(return_value=[]),
+        ),
+        patch(
+            "context_service.services.source_tier_resolver.batch_get_node_tiers",
+            new=AsyncMock(return_value={TEST_NODE_ID: "validated"}),
+        ),
     ):
         tier, layer = await resolve_source_tier(
             silo_id="silo-1",
@@ -460,12 +474,15 @@ async def test_resolve_source_tier_passes_silo_id_to_node_lookup():
         captured["silo_id"] = silo_id
         return {TEST_NODE_ID: "authoritative"}
 
-    with patch(
-        "context_service.services.source_tier_resolver.batch_get_node_tiers",
-        new=fake_batch_get_node_tiers,
-    ), patch(
-        "context_service.services.source_tier_resolver.get_source_rules",
-        new=AsyncMock(return_value=[]),
+    with (
+        patch(
+            "context_service.services.source_tier_resolver.batch_get_node_tiers",
+            new=fake_batch_get_node_tiers,
+        ),
+        patch(
+            "context_service.services.source_tier_resolver.get_source_rules",
+            new=AsyncMock(return_value=[]),
+        ),
     ):
         tier, layer = await resolve_source_tier(
             silo_id="silo-99",
@@ -486,18 +503,21 @@ async def test_resolve_source_tier_passes_silo_id_to_node_lookup():
 @pytest.mark.asyncio
 async def test_mixed_refs_highest_tier_wins(global_rules):
     """node: refs and URL refs can be mixed; highest tier across all wins."""
-    with patch(
-        "context_service.services.source_tier_resolver.get_source_rules",
-        new=AsyncMock(return_value=global_rules),
-    ), patch(
-        "context_service.services.source_tier_resolver.batch_get_node_tiers",
-        new=AsyncMock(return_value={"node-xyz": "community"}),
+    with (
+        patch(
+            "context_service.services.source_tier_resolver.get_source_rules",
+            new=AsyncMock(return_value=global_rules),
+        ),
+        patch(
+            "context_service.services.source_tier_resolver.batch_get_node_tiers",
+            new=AsyncMock(return_value={"node-xyz": "community"}),
+        ),
     ):
         tier, layer = await resolve_source_tier(
             silo_id="silo-1",
             evidence_refs=[
-                "node:node-xyz",                      # community from node
-                "https://mit.edu/paper/42",           # validated from global rule
+                "node:node-xyz",  # community from node
+                "https://mit.edu/paper/42",  # validated from global rule
             ],
         )
     assert tier == SourceTier.VALIDATED

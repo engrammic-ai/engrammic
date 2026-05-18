@@ -21,18 +21,14 @@ class MemgraphEpistemicStore:
     def __init__(self, graph_store: HyperGraphStore) -> None:
         self._store = graph_store
 
-    async def get_fact_cluster(
-        self, silo_id: str, cluster_id: str
-    ) -> list[dict[str, Any]]:
+    async def get_fact_cluster(self, silo_id: str, cluster_id: str) -> list[dict[str, Any]]:
         """Get all facts in a cluster."""
         return await self._store.execute_query(
             queries.EPISTEMIC_GET_FACT_CLUSTER,
             {"silo_id": silo_id, "cluster_id": cluster_id},
         )
 
-    async def get_unclustered_facts(
-        self, silo_id: str, limit: int = 100
-    ) -> list[dict[str, Any]]:
+    async def get_unclustered_facts(self, silo_id: str, limit: int = 100) -> list[dict[str, Any]]:
         """Get facts not yet assigned to any cluster."""
         return await self._store.execute_query(
             queries.EPISTEMIC_GET_UNCLUSTERED_FACTS,
@@ -103,9 +99,7 @@ class MemgraphEpistemicStore:
             {"silo_id": silo_id, "content": content, "threshold": threshold},
         )
 
-    async def check_belief_coverage(
-        self, silo_id: str, fact_ids: list[str]
-    ) -> dict[str, Any]:
+    async def check_belief_coverage(self, silo_id: str, fact_ids: list[str]) -> dict[str, Any]:
         """Check which facts are covered by existing beliefs."""
         rows = await self._store.execute_query(
             queries.EPISTEMIC_CHECK_BELIEF_COVERAGE,
@@ -154,9 +148,7 @@ class MemgraphEpistemicStore:
 
             return str(merged_id)
 
-    async def mark_belief_stale(
-        self, silo_id: str, belief_id: str, reason: str
-    ) -> None:
+    async def mark_belief_stale(self, silo_id: str, belief_id: str, reason: str) -> None:
         """Mark a belief as stale with a reason."""
         await self._store.execute_write(
             queries.EPISTEMIC_MARK_BELIEF_STALE,

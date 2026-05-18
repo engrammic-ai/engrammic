@@ -99,7 +99,8 @@ class RedisClient:
 
         Returns False if the Redis circuit is open (degrade).
         """
-        return await guard_degrade(            STORE_REDIS, self._set_session_impl(silo_id, session_id, data, ttl_seconds), False
+        return await guard_degrade(
+            STORE_REDIS, self._set_session_impl(silo_id, session_id, data, ttl_seconds), False
         )
 
     async def _set_session_impl(
@@ -136,8 +137,7 @@ class RedisClient:
 
     async def get_session(self, silo_id: str, session_id: str) -> dict[str, Any] | None:
         """Retrieve session data; returns None if circuit is open (degrade)."""
-        return await guard_degrade(            STORE_REDIS, self._get_session_impl(silo_id, session_id), None
-        )
+        return await guard_degrade(STORE_REDIS, self._get_session_impl(silo_id, session_id), None)
 
     async def _get_session_impl(self, silo_id: str, session_id: str) -> dict[str, Any] | None:
         """Retrieve session data.
@@ -168,7 +168,8 @@ class RedisClient:
 
     async def delete_session(self, silo_id: str, session_id: str) -> bool:
         """Delete a session; returns False if circuit is open (degrade)."""
-        return await guard_degrade(            STORE_REDIS, self._delete_session_impl(silo_id, session_id), False
+        return await guard_degrade(
+            STORE_REDIS, self._delete_session_impl(silo_id, session_id), False
         )
 
     async def _delete_session_impl(self, silo_id: str, session_id: str) -> bool:
@@ -201,7 +202,8 @@ class RedisClient:
 
     async def add_session_node(self, silo_id: str, session_id: str, node_id: str) -> bool:
         """Add a node ID to a session's node set; returns False if circuit open."""
-        return await guard_degrade(            STORE_REDIS, self._add_session_node_impl(silo_id, session_id, node_id), False
+        return await guard_degrade(
+            STORE_REDIS, self._add_session_node_impl(silo_id, session_id, node_id), False
         )
 
     async def _add_session_node_impl(self, silo_id: str, session_id: str, node_id: str) -> bool:
@@ -223,7 +225,8 @@ class RedisClient:
 
     async def get_session_nodes(self, silo_id: str, session_id: str) -> list[str]:
         """Get session node IDs; returns [] if circuit open."""
-        return await guard_degrade(            STORE_REDIS, self._get_session_nodes_impl(silo_id, session_id), []
+        return await guard_degrade(
+            STORE_REDIS, self._get_session_nodes_impl(silo_id, session_id), []
         )
 
     async def _get_session_nodes_impl(self, silo_id: str, session_id: str) -> list[str]:
@@ -240,7 +243,8 @@ class RedisClient:
 
     async def remove_session_node(self, silo_id: str, session_id: str, node_id: str) -> bool:
         """Remove a session node; returns False if circuit open."""
-        return await guard_degrade(            STORE_REDIS, self._remove_session_node_impl(silo_id, session_id, node_id), False
+        return await guard_degrade(
+            STORE_REDIS, self._remove_session_node_impl(silo_id, session_id, node_id), False
         )
 
     async def _remove_session_node_impl(self, silo_id: str, session_id: str, node_id: str) -> bool:
@@ -269,8 +273,7 @@ class RedisClient:
         ttl_seconds: int | None = None,
     ) -> bool:
         """Set a cache value; returns False if circuit open."""
-        return await guard_degrade(            STORE_REDIS, self._set_impl(key, value, ttl_seconds), False
-        )
+        return await guard_degrade(STORE_REDIS, self._set_impl(key, value, ttl_seconds), False)
 
     async def _set_impl(self, key: str, value: str | bytes, ttl_seconds: int | None = None) -> bool:
         if isinstance(value, str):
@@ -292,10 +295,11 @@ class RedisClient:
         ttl_seconds: int | None = None,
     ) -> bool:
         """Set a cache value only if absent; returns False if circuit open."""
-        return await guard_degrade(            STORE_REDIS, self._set_nx_impl(key, value, ttl_seconds), False
-        )
+        return await guard_degrade(STORE_REDIS, self._set_nx_impl(key, value, ttl_seconds), False)
 
-    async def _set_nx_impl(self, key: str, value: str | bytes, ttl_seconds: int | None = None) -> bool:
+    async def _set_nx_impl(
+        self, key: str, value: str | bytes, ttl_seconds: int | None = None
+    ) -> bool:
         if isinstance(value, str):
             value = value.encode()
         start = time.perf_counter()
@@ -310,8 +314,7 @@ class RedisClient:
 
     async def get(self, key: str) -> bytes | None:
         """Get a cache value; returns None if circuit open."""
-        return await guard_degrade(            STORE_REDIS, self._get_impl(key), None
-        )
+        return await guard_degrade(STORE_REDIS, self._get_impl(key), None)
 
     async def _get_impl(self, key: str) -> bytes | None:
         start = time.perf_counter()
@@ -344,8 +347,7 @@ class RedisClient:
     async def mget(self, keys: list[str]) -> list[bytes | None]:
         """Get multiple cache values; returns all-None list if circuit open."""
         default: list[bytes | None] = [None] * len(keys)
-        return await guard_degrade(            STORE_REDIS, self._mget_impl(keys), default
-        )
+        return await guard_degrade(STORE_REDIS, self._mget_impl(keys), default)
 
     async def _mget_impl(self, keys: list[str]) -> list[bytes | None]:
         start = time.perf_counter()
@@ -360,8 +362,7 @@ class RedisClient:
 
     async def delete(self, key: str) -> bool:
         """Delete a cache key; returns False if circuit open."""
-        return await guard_degrade(            STORE_REDIS, self._delete_impl(key), False
-        )
+        return await guard_degrade(STORE_REDIS, self._delete_impl(key), False)
 
     async def _delete_impl(self, key: str) -> bool:
         start = time.perf_counter()

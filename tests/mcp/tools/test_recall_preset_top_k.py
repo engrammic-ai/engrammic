@@ -38,9 +38,7 @@ def _patch(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
     monkeypatch.setattr(recall_mod, "_context_recall", _fake_context_recall)
     monkeypatch.setattr(recall_mod, "get_mcp_auth_context", _auth)
     monkeypatch.setattr(recall_mod, "derive_silo_id", lambda _: "silo-1")
-    monkeypatch.setattr(
-        recall_mod, "get_preset_resolver", lambda: _FakeResolver(), raising=False
-    )
+    monkeypatch.setattr(recall_mod, "get_preset_resolver", lambda: _FakeResolver(), raising=False)
     return captured
 
 

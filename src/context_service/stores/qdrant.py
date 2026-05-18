@@ -203,7 +203,9 @@ class QdrantClient:
         """
         return await guard_hard_fail(
             STORE_QDRANT,
-            self._upsert_impl(node_id, vector, payload, silo_id, sparse_indices, sparse_values, expansion),
+            self._upsert_impl(
+                node_id, vector, payload, silo_id, sparse_indices, sparse_values, expansion
+            ),
         )
 
     async def _upsert_impl(
@@ -306,7 +308,14 @@ class QdrantClient:
         return await guard_hard_fail(
             STORE_QDRANT,
             self._search_impl(
-                vector, limit, score_threshold, silo_id, filter_conditions, search_mode, sparse_indices, sparse_values
+                vector,
+                limit,
+                score_threshold,
+                silo_id,
+                filter_conditions,
+                search_mode,
+                sparse_indices,
+                sparse_values,
             ),
         )
 
