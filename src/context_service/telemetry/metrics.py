@@ -41,6 +41,7 @@ _circuit_breaker_state: metrics.UpDownCounter | None = None
 _circuit_breaker_trips: metrics.Counter | None = None
 _orphan_chains_exhausted: metrics.Counter | None = None
 _orphan_chains_recovered: metrics.Counter | None = None
+_source_tier_counter: metrics.Counter | None = None
 
 
 def setup_metrics(service_name: str = "context-service") -> None:
@@ -63,7 +64,8 @@ def setup_metrics(service_name: str = "context-service") -> None:
         _circuit_breaker_state, \
         _circuit_breaker_trips, \
         _orphan_chains_exhausted, \
-        _orphan_chains_recovered
+        _orphan_chains_recovered, \
+        _source_tier_counter
 
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     if not endpoint:
@@ -225,6 +227,12 @@ def setup_metrics(service_name: str = "context-service") -> None:
     _orphan_chains_recovered = _meter.create_counter(
         name="context_orphan_chains_recovered_total",
         description="Number of orphan chains successfully recovered",
+        unit="1",
+    )
+
+    _source_tier_counter = _meter.create_counter(
+        name="source_tier_resolved",
+        description="Count of source tier resolutions by tier and layer",
         unit="1",
     )
 
@@ -415,6 +423,13 @@ def record_orphan_chain_recovered(silo_id: str) -> None:
     if _orphan_chains_recovered is None:
         return
     _orphan_chains_recovered.add(1, {"silo_id": silo_id})
+
+
+def record_source_tier_resolved(tier: str, layer: str, silo_id: str) -> None:
+    """Record a source tier resolution event."""
+    if _source_tier_counter is None:
+        return
+    _source_tier_counter.add(1, {"tier": tier, "resolution_layer": layer, "silo_id": silo_id})
 
 
 # Public references used for import checks and direct access

@@ -1,6 +1,6 @@
 # Source Tier Classification
 
-**Status:** Draft  
+**Status:** Complete  
 **Branch:** `feat/source-tier-classification`
 
 ## Problem
@@ -110,13 +110,13 @@ INSERT INTO silo_source_rules (silo_id, pattern, tier, reason, priority) VALUES
 - [x] **T10.** `POST /admin/source-rules` - add rule with pattern validation (reject invalid fnmatch)
 - [x] **T11.** `DELETE /admin/source-rules/{id}` - remove rule (silo rules only for partners, super-admin for global)
 - [x] **T12.** `POST /admin/source-rules/test` - debug endpoint to preview resolution
-- [ ] **T13.** Add super-admin check for `org_id` override and global rule deletion
+- [x] **T13.** Add super-admin check for `org_id` override and global rule deletion
 
 ### Phase 4: Observability
 
-- [ ] **T14.** Add metrics: `source_tier_resolved{tier, resolution_layer, silo_id}`
-- [ ] **T15.** Log tier resolution for audit trail
-- [ ] **T16.** Add to partner onboarding docs
+- [x] **T14.** Add metrics: `source_tier_resolved{tier, resolution_layer, silo_id}`
+- [x] **T15.** Log tier resolution for audit trail
+- [x] **T16.** Add to partner onboarding docs
 
 ## Performance notes
 

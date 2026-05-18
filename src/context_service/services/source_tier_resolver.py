@@ -22,6 +22,7 @@ import structlog
 from sqlalchemy import text
 
 from context_service.db.postgres import get_session
+from context_service.telemetry.metrics import record_source_tier_resolved
 
 if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
@@ -226,6 +227,7 @@ async def resolve_source_tier(
             layer=best_layer,
             evidence_count=len(evidence_refs),
         )
+        record_source_tier_resolved(best_tier.value, best_layer, str(silo_id))
         return best_tier, best_layer
 
     # Layer 4: Agent hint
@@ -239,6 +241,7 @@ async def resolve_source_tier(
                 layer="agent_hint",
                 evidence_count=len(evidence_refs),
             )
+            record_source_tier_resolved(hint_tier.value, "agent_hint", str(silo_id))
             return hint_tier, "agent_hint"
         except ValueError:
             logger.warning(
@@ -254,4 +257,5 @@ async def resolve_source_tier(
         layer="fallback",
         evidence_count=len(evidence_refs),
     )
+    record_source_tier_resolved(SourceTier.UNKNOWN.value, "fallback", str(silo_id))
     return SourceTier.UNKNOWN, "fallback"
