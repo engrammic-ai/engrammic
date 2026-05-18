@@ -7,7 +7,7 @@ WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Copy dependency files (uv.lock not needed - we re-resolve for PyPI primitives)
-COPY context-service/pyproject.toml context-service/README.md ./
+COPY pyproject.toml README.md ./
 
 # Remove local path source override - install primitives from PyPI
 RUN sed -i '/engrammic-primitives.*path/d' pyproject.toml
@@ -29,12 +29,12 @@ RUN groupadd -g 1000 engrammic && useradd -u 1000 -g engrammic -m engrammic \
 COPY --from=builder /app/.venv /app/.venv
 
 # Copy application code
-COPY context-service/pyproject.toml context-service/uv.lock context-service/README.md ./
-COPY context-service/config/ /app/config/
-COPY context-service/src/ /app/src/
-COPY context-service/alembic.ini /app/alembic.ini
-COPY context-service/alembic/ /app/alembic/
-COPY context-service/scripts/entrypoint.sh /entrypoint.sh
+COPY pyproject.toml uv.lock README.md ./
+COPY config/ /app/config/
+COPY src/ /app/src/
+COPY alembic.ini /app/alembic.ini
+COPY alembic/ /app/alembic/
+COPY scripts/entrypoint.sh /entrypoint.sh
 
 # Set environment
 ENV PATH="/app/.venv/bin:$PATH"
