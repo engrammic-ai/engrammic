@@ -53,6 +53,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("state"),
     )
+    op.create_index("ix_oauth_auth_requests_workos_state", "oauth_authorization_requests", ["workos_state"])
 
     # oauth_authorization_codes: single-use authorization codes
     op.create_table(
@@ -130,4 +131,5 @@ def downgrade() -> None:
     op.drop_index("ix_oauth_tokens_user_id", table_name="oauth_tokens")
     op.drop_table("oauth_tokens")
     op.drop_table("oauth_authorization_codes")
+    op.drop_index("ix_oauth_auth_requests_workos_state", table_name="oauth_authorization_requests")
     op.drop_table("oauth_authorization_requests")
