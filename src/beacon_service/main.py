@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-import asyncpg
+import asyncpg  # type: ignore[import-untyped]
 import structlog
 from fastapi import FastAPI, Header, HTTPException, Request
 
@@ -17,7 +18,7 @@ SECRET_TO_SILO: dict[str, str] = {}
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage database connection pool lifecycle."""
     config = BeaconConfig.from_env()
     app.state.pool = await asyncpg.create_pool(config.database_url)
