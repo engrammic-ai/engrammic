@@ -160,6 +160,10 @@ if ! command -v docker-compose &> /dev/null; then
     chmod +x /usr/local/bin/docker-compose
 fi
 
+# Memgraph requires higher vm.max_map_count
+sysctl -w vm.max_map_count=262144
+echo "vm.max_map_count=262144" >> /etc/sysctl.conf
+
 # Format and mount persistent disks
 for DISK in $DISKS; do
     DEVICE="/dev/disk/by-id/google-engrammic-$ENV-$DISK"
