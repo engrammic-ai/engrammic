@@ -93,16 +93,23 @@ class OAuthService:
         self,
         user_id: UUID,
         request_id: UUID,
-    ) -> OAuthAuthorizationCode:
-        """Create a single-use authorization code tied to a PKCE request."""
-        code = self._generate_token()
+    ) -> tuple[OAuthAuthorizationCode, str]:
+        """Create a single-use authorization code tied to a PKCE request.
+
+        Returns a (OAuthAuthorizationCode, raw_code) tuple.  The raw_code must
+        be returned to the caller and included in the redirect; the database
+        record stores only its SHA256 hash so a leaked DB row cannot be
+        replayed.
+        """
+        raw_code = self._generate_token()
+        code_hash = self._hash_token(raw_code)
         now = datetime.now(UTC)
         expires_at = now + timedelta(
             seconds=self._settings.authorization_code_ttl_seconds
         )
 
         auth_code = OAuthAuthorizationCode(
-            code=code,
+            code=code_hash,
             user_id=user_id,
             authorization_request_id=request_id,
             expires_at=expires_at,
@@ -115,7 +122,7 @@ class OAuthService:
             user_id=str(user_id),
             request_id=str(request_id),
         )
-        return auth_code
+        return auth_code, raw_code
 
     async def exchange_code_for_tokens(
         self,
@@ -126,8 +133,9 @@ class OAuthService:
 
         Returns a token response dict or None if validation fails.
         """
+        code_hash = self._hash_token(code)
         stmt = select(OAuthAuthorizationCode).where(
-            OAuthAuthorizationCode.code == code
+            OAuthAuthorizationCode.code == code_hash
         )
         result = await self._session.execute(stmt)
         auth_code = result.scalar_one_or_none()

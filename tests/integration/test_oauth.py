@@ -25,7 +25,6 @@ import sys
 import types
 import uuid
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -35,7 +34,6 @@ from httpx import ASGITransport, AsyncClient
 
 from context_service.api.routes.oauth import router as oauth_router
 from context_service.services.oauth import OAuthService
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -377,7 +375,6 @@ class TestOAuthCallback:
         fake_db_user.email = "test@example.com"
 
         fake_auth_code = MagicMock()
-        fake_auth_code.code = issued_code
 
         fake_session = _make_fake_session()
         fake_result = MagicMock()
@@ -385,7 +382,9 @@ class TestOAuthCallback:
         fake_session.execute = AsyncMock(return_value=fake_result)
 
         fake_oauth_svc = AsyncMock()
-        fake_oauth_svc.create_authorization_code = AsyncMock(return_value=fake_auth_code)
+        fake_oauth_svc.create_authorization_code = AsyncMock(
+            return_value=(fake_auth_code, issued_code)
+        )
 
         fake_user_svc = AsyncMock()
         fake_user_svc.upsert_user = AsyncMock(return_value=fake_db_user)

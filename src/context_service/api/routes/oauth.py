@@ -185,14 +185,13 @@ async def callback(
         )
 
         oauth_svc = OAuthService(session)
-        auth_code = await oauth_svc.create_authorization_code(
+        _auth_code, issued_code = await oauth_svc.create_authorization_code(
             user_id=db_user.id,
             request_id=auth_request.id,
         )
 
         redirect_uri = auth_request.redirect_uri
         original_state = auth_request.state
-        issued_code = auth_code.code
 
     params = urlencode({"code": issued_code, "state": original_state})
     redirect_url = f"{redirect_uri}?{params}"
