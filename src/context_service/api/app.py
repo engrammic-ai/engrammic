@@ -15,6 +15,7 @@ from context_service.api.metrics import REGISTRY, metrics_endpoint
 from context_service.api.middleware import PrometheusTimingMiddleware
 from context_service.api.routes import admin, health
 from context_service.api.routes.skills import router as skills_router
+from context_service.api.routes.source_rules import router as source_rules_router
 from context_service.config.logging import configure_logging, get_logger
 from context_service.config.settings import get_settings
 from context_service.core.service_registry import ServiceRegistry
@@ -291,6 +292,7 @@ def create_app() -> ASGIApp:
     app.include_router(health.router)
     app.include_router(admin.router)
     app.include_router(skills_router)
+    app.include_router(source_rules_router)
     app.add_route("/metrics", metrics_endpoint, include_in_schema=False)
 
     if settings.mcp_enabled:

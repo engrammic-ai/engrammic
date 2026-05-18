@@ -27,6 +27,7 @@ async def _learn_impl(
     source: str,
     confidence: float = 0.8,
     tags: list[str] | None = None,
+    source_tier: str | None = None,
 ) -> dict[str, Any]:
     """Implementation for learn tool."""
     auth = await get_mcp_auth_context()
@@ -55,6 +56,7 @@ async def _learn_impl(
         source_type=source,
         confidence=confidence,
         tags=tags,
+        source_tier=source_tier,
     )
 
 
@@ -71,6 +73,7 @@ def register(mcp: FastMCP) -> None:
         source: str,
         confidence: float = 0.8,
         tags: list[str] | None = None,
+        source_tier: str | None = None,
     ) -> dict[str, Any]:
         """Record something you learned with evidence.
 
@@ -80,6 +83,8 @@ def register(mcp: FastMCP) -> None:
             source: Source type: document|user|external|agent.
             confidence: 0.0-1.0 (default 0.8).
             tags: Optional categorization.
+            source_tier: Optional quality tier hint: authoritative|validated|community|unknown.
+                If omitted, tier is resolved automatically from evidence refs and silo rules.
 
         Returns:
             {node_id, evidence_status, created_at}
@@ -87,7 +92,7 @@ def register(mcp: FastMCP) -> None:
         start = time.perf_counter()
         success = True
         try:
-            return await _learn_impl(claim, evidence, source, confidence, tags)
+            return await _learn_impl(claim, evidence, source, confidence, tags, source_tier)
         except Exception:
             success = False
             raise
