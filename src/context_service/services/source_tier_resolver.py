@@ -12,6 +12,7 @@ All evidence refs are checked; the highest tier across all matches is returned.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from enum import StrEnum
 from fnmatch import fnmatch
@@ -28,6 +29,10 @@ if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
 
 logger = structlog.get_logger(__name__)
+
+# TTL cache for source rules (5 minutes)
+_RULES_CACHE_TTL = 300
+_rules_cache: dict[str, tuple[float, list[SourceRule]]] = {}
 
 
 class SourceTier(StrEnum):
@@ -60,6 +65,7 @@ class SourceRule:
 async def get_source_rules(silo_id: str | UUID) -> list[SourceRule]:
     """Fetch rules for this silo plus global rules, ordered highest-priority first.
 
+    Results are cached for 5 minutes per silo_id to avoid repeated database queries.
     Silo-specific rules are returned before global rules (silo_id IS NOT NULL
     sorts first). Within each group, rules are ordered by priority DESC.
 
@@ -70,6 +76,14 @@ async def get_source_rules(silo_id: str | UUID) -> list[SourceRule]:
         List of SourceRule ordered by (silo_id IS NOT NULL) DESC, priority DESC.
     """
     silo_id_str = str(silo_id)
+    now = time.monotonic()
+
+    # Check cache
+    if silo_id_str in _rules_cache:
+        cached_at, cached_rules = _rules_cache[silo_id_str]
+        if now - cached_at < _RULES_CACHE_TTL:
+            logger.debug("source_rules.cache_hit", silo_id=silo_id_str)
+            return cached_rules
 
     async with get_session() as session:
         result = await session.execute(
@@ -95,6 +109,9 @@ async def get_source_rules(silo_id: str | UUID) -> list[SourceRule]:
                 priority=row[3],
             )
         )
+
+    # Update cache
+    _rules_cache[silo_id_str] = (now, rules)
 
     logger.debug(
         "source_rules.fetched",
@@ -177,7 +194,17 @@ async def resolve_source_tier(
     best_layer: str = "fallback"
 
     # Layer 1: Evidence node inheritance
-    node_ids = [ref[5:] for ref in evidence_refs if ref.startswith("node:")]
+    # Extract and validate node IDs (must be valid UUIDs)
+    node_ids: list[str] = []
+    for ref in evidence_refs:
+        if ref.startswith("node:"):
+            node_id = ref[5:]
+            try:
+                UUID(node_id)
+                node_ids.append(node_id)
+            except ValueError:
+                logger.warning("source_tier_resolver.invalid_node_id", node_id=node_id)
+
     if node_ids:
         node_tiers = await batch_get_node_tiers(node_ids, silo_id=str(silo_id))
         for node_id, tier_str in node_tiers.items():

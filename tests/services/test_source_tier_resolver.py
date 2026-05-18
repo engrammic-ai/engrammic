@@ -11,6 +11,9 @@ from context_service.services.source_tier_resolver import (
     resolve_source_tier,
 )
 
+# Test UUID for node references
+TEST_NODE_ID = "00000000-0000-0000-0000-000000000001"
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -325,10 +328,30 @@ async def test_node_refs_skipped_for_rule_matching():
     ):
         tier, layer = await resolve_source_tier(
             silo_id="silo-1",
-            evidence_refs=["node:abc-123"],
+            evidence_refs=[f"node:{TEST_NODE_ID}"],
         )
     assert tier == SourceTier.UNKNOWN
     assert layer == "fallback"
+
+
+@pytest.mark.asyncio
+async def test_invalid_node_id_skipped():
+    """Invalid (non-UUID) node IDs are skipped without calling batch_get_node_tiers."""
+    with patch(
+        "context_service.services.source_tier_resolver.get_source_rules",
+        new=AsyncMock(return_value=[]),
+    ), patch(
+        "context_service.services.source_tier_resolver.batch_get_node_tiers",
+        new=AsyncMock(return_value={}),
+    ) as mock_batch:
+        tier, layer = await resolve_source_tier(
+            silo_id="silo-1",
+            evidence_refs=["node:not-a-uuid"],
+        )
+    assert tier == SourceTier.UNKNOWN
+    assert layer == "fallback"
+    # batch_get_node_tiers should not be called with invalid IDs
+    mock_batch.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -339,11 +362,11 @@ async def test_node_ref_with_tier_from_batch_lookup():
         new=AsyncMock(return_value=[]),
     ), patch(
         "context_service.services.source_tier_resolver.batch_get_node_tiers",
-        new=AsyncMock(return_value={"abc-123": "validated"}),
+        new=AsyncMock(return_value={TEST_NODE_ID: "validated"}),
     ):
         tier, layer = await resolve_source_tier(
             silo_id="silo-1",
-            evidence_refs=["node:abc-123"],
+            evidence_refs=[f"node:{TEST_NODE_ID}"],
         )
     assert tier == SourceTier.VALIDATED
     assert layer == "evidence_node"
@@ -435,7 +458,7 @@ async def test_resolve_source_tier_passes_silo_id_to_node_lookup():
     ) -> dict[str, str | None]:
         captured["node_ids"] = node_ids
         captured["silo_id"] = silo_id
-        return {"abc-123": "authoritative"}
+        return {TEST_NODE_ID: "authoritative"}
 
     with patch(
         "context_service.services.source_tier_resolver.batch_get_node_tiers",
@@ -446,13 +469,13 @@ async def test_resolve_source_tier_passes_silo_id_to_node_lookup():
     ):
         tier, layer = await resolve_source_tier(
             silo_id="silo-99",
-            evidence_refs=["node:abc-123"],
+            evidence_refs=[f"node:{TEST_NODE_ID}"],
         )
 
     assert tier == SourceTier.AUTHORITATIVE
     assert layer == "evidence_node"
     assert captured["silo_id"] == "silo-99"
-    assert captured["node_ids"] == ["abc-123"]
+    assert captured["node_ids"] == [TEST_NODE_ID]
 
 
 # ---------------------------------------------------------------------------

@@ -69,7 +69,7 @@ def upgrade() -> None:
             (NULL, 'bloomberg://*', 'validated', 'Bloomberg', 80),
             (NULL, 'crunchbase://*', 'validated', 'Crunchbase', 75),
             (NULL, 'https://arxiv.org/*', 'validated', 'arXiv preprints', 70),
-            (NULL, 'https://linkedin.com/*', 'community', 'LinkedIn (self-reported)', 50),
+            (NULL, 'https://*.linkedin.com/*', 'community', 'LinkedIn (self-reported)', 50),
             (NULL, 'https://medium.com/*', 'community', 'Medium articles', 50),
             (NULL, 'wikipedia://*', 'community', 'Wikipedia', 50)
         """
