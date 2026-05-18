@@ -30,6 +30,7 @@ from context_service.models.mcp import (
 )
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
+from context_service.services.source_tier_resolver import resolve_source_tier
 from context_service.signals import emit_access_event
 from context_service.telemetry.metrics import record_mcp_tool
 
@@ -269,6 +270,17 @@ async def _context_assert(
     _start = time.perf_counter()
     # Use validated node IDs if available, else fall back to raw refs
     evidence_refs = [f"node:{nid}" for nid in evidence_nodes] if evidence_nodes else evidence_list
+
+    # Resolve source tier if not provided by the caller
+    resolved_tier = source_tier
+    if resolved_tier is None:
+        tier_enum, _resolution_layer = await resolve_source_tier(
+            silo_id=str(expected_silo_id),
+            evidence_refs=evidence_refs,
+            agent_hint=None,
+        )
+        resolved_tier = tier_enum.value
+
     node = await ctx_svc.assert_claim(
         scope=scope,
         claim=parsed_claim,
@@ -278,7 +290,7 @@ async def _context_assert(
         metadata=metadata,
         tags=tags,
         agent_id=auth.agent_id,
-        source_tier=source_tier,
+        source_tier=resolved_tier,
     )
     CONTEXT_STORE_LATENCY.labels(silo_id=expected_silo_id, layer="knowledge").observe(
         time.perf_counter() - _start

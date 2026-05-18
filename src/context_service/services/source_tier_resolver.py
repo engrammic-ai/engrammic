@@ -24,7 +24,7 @@ from sqlalchemy import text
 from context_service.db.postgres import get_session
 
 if TYPE_CHECKING:
-    pass
+    from context_service.engine.protocols import HyperGraphStore
 
 logger = structlog.get_logger(__name__)
 
@@ -103,21 +103,47 @@ async def get_source_rules(silo_id: str | UUID) -> list[SourceRule]:
     return rules
 
 
-async def batch_get_node_tiers(_node_ids: list[str]) -> dict[str, str | None]:
+async def batch_get_node_tiers(
+    node_ids: list[str],
+    silo_id: str | None = None,
+    memgraph: HyperGraphStore | None = None,
+) -> dict[str, str | None]:
     """Batch fetch source_tier property from evidence nodes in Memgraph.
 
-    Phase 2 (T8): Full implementation will issue a single batched Cypher query
-    against Memgraph to retrieve node source_tier properties. Returns empty
-    dict for now to keep Phase 1 focused on rule-based resolution.
+    Issues a single batched Cypher query to retrieve node source_tier
+    properties. When memgraph is not provided, the context service singleton
+    is used via a lazy import.
 
     Args:
         node_ids: List of node IDs (without the "node:" prefix).
+        silo_id: Optional silo to scope the lookup. When None, all nodes
+            matching the IDs are returned regardless of silo.
+        memgraph: Optional HyperGraphStore instance. When None, the context
+            service singleton is used.
 
     Returns:
         Dict mapping node_id -> source_tier string (or None if not set).
     """
-    # TODO: implement Memgraph batch lookup (T8)
-    return {}
+    if not node_ids:
+        return {}
+
+    if memgraph is None:
+        from context_service.mcp.server import get_context_service
+
+        ctx_svc = get_context_service()
+        memgraph = ctx_svc._memgraph
+
+    rows = await memgraph.execute_query(
+        """
+        UNWIND $node_ids AS nid
+        MATCH (n {id: nid})
+        WHERE n.silo_id = $silo_id OR $silo_id IS NULL
+        RETURN n.id AS id, n.source_tier AS source_tier
+        """,
+        {"node_ids": node_ids, "silo_id": silo_id},
+    )
+
+    return {row["id"]: row.get("source_tier") for row in rows}
 
 
 async def resolve_source_tier(
@@ -152,7 +178,7 @@ async def resolve_source_tier(
     # Layer 1: Evidence node inheritance
     node_ids = [ref[5:] for ref in evidence_refs if ref.startswith("node:")]
     if node_ids:
-        node_tiers = await batch_get_node_tiers(node_ids)
+        node_tiers = await batch_get_node_tiers(node_ids, silo_id=str(silo_id))
         for node_id, tier_str in node_tiers.items():
             if not tier_str:
                 continue

@@ -1,12 +1,13 @@
 """Tests for source tier resolution service."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from context_service.services.source_tier_resolver import (
     SourceRule,
     SourceTier,
+    batch_get_node_tiers,
     resolve_source_tier,
 )
 
@@ -369,6 +370,89 @@ async def test_invalid_rule_tier_is_skipped():
         )
     assert tier == SourceTier.UNKNOWN
     assert layer == "fallback"
+
+
+# ---------------------------------------------------------------------------
+# batch_get_node_tiers: direct unit tests (T8)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_batch_get_node_tiers_empty_list_returns_empty():
+    """Empty node_ids should return {} without touching the store."""
+    result = await batch_get_node_tiers([])
+    assert result == {}
+
+
+@pytest.mark.asyncio
+async def test_batch_get_node_tiers_with_memgraph_store():
+    """batch_get_node_tiers passes node_ids and silo_id to Memgraph and maps results."""
+    mock_memgraph = MagicMock()
+    mock_memgraph.execute_query = AsyncMock(
+        return_value=[
+            {"id": "node-a", "source_tier": "authoritative"},
+            {"id": "node-b", "source_tier": None},
+        ]
+    )
+
+    result = await batch_get_node_tiers(
+        ["node-a", "node-b"],
+        silo_id="silo-1",
+        memgraph=mock_memgraph,
+    )
+
+    assert result == {"node-a": "authoritative", "node-b": None}
+    mock_memgraph.execute_query.assert_awaited_once()
+    call_params = mock_memgraph.execute_query.call_args[0][1]
+    assert call_params["node_ids"] == ["node-a", "node-b"]
+    assert call_params["silo_id"] == "silo-1"
+
+
+@pytest.mark.asyncio
+async def test_batch_get_node_tiers_no_silo_passes_none():
+    """When silo_id is omitted, None is forwarded so all silos are matched."""
+    mock_memgraph = MagicMock()
+    mock_memgraph.execute_query = AsyncMock(
+        return_value=[{"id": "node-x", "source_tier": "validated"}]
+    )
+
+    result = await batch_get_node_tiers(["node-x"], memgraph=mock_memgraph)
+
+    assert result == {"node-x": "validated"}
+    call_params = mock_memgraph.execute_query.call_args[0][1]
+    assert call_params["silo_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_resolve_source_tier_passes_silo_id_to_node_lookup():
+    """resolve_source_tier forwards silo_id to batch_get_node_tiers."""
+    captured: dict = {}
+
+    async def fake_batch_get_node_tiers(
+        node_ids: list[str],
+        silo_id: str | None = None,
+        memgraph=None,
+    ) -> dict[str, str | None]:
+        captured["node_ids"] = node_ids
+        captured["silo_id"] = silo_id
+        return {"abc-123": "authoritative"}
+
+    with patch(
+        "context_service.services.source_tier_resolver.batch_get_node_tiers",
+        new=fake_batch_get_node_tiers,
+    ), patch(
+        "context_service.services.source_tier_resolver.get_source_rules",
+        new=AsyncMock(return_value=[]),
+    ):
+        tier, layer = await resolve_source_tier(
+            silo_id="silo-99",
+            evidence_refs=["node:abc-123"],
+        )
+
+    assert tier == SourceTier.AUTHORITATIVE
+    assert layer == "evidence_node"
+    assert captured["silo_id"] == "silo-99"
+    assert captured["node_ids"] == ["abc-123"]
 
 
 # ---------------------------------------------------------------------------

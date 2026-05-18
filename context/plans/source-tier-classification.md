@@ -99,17 +99,17 @@ INSERT INTO silo_source_rules (silo_id, pattern, tier, reason, priority) VALUES
 
 ### Phase 2: Integration
 
-- [ ] **T5.** Update `learn` tool to accept `source_tier` param (agent hint)
-- [ ] **T6.** Update `_context_assert` to call resolver before storing
-- [ ] **T7.** Update `context.assert_claim` to use resolved tier
-- [ ] **T8.** Add evidence node inheritance lookup (check if `node:<id>` has `source_tier`)
+- [x] **T5.** Update `learn` tool to accept `source_tier` param (agent hint)
+- [x] **T6.** Update `_context_assert` to call resolver before storing
+- [x] **T7.** Update `context.assert_claim` to use resolved tier
+- [x] **T8.** Add evidence node inheritance lookup (check if `node:<id>` has `source_tier`)
 
 ### Phase 3: Admin API
 
-- [ ] **T9.** `GET /admin/source-rules` - list rules (silo inferred from auth + global)
-- [ ] **T10.** `POST /admin/source-rules` - add rule with pattern validation (reject invalid fnmatch)
-- [ ] **T11.** `DELETE /admin/source-rules/{id}` - remove rule (silo rules only for partners, super-admin for global)
-- [ ] **T12.** `POST /admin/source-rules/test` - debug endpoint to preview resolution
+- [x] **T9.** `GET /admin/source-rules` - list rules (silo + global)
+- [x] **T10.** `POST /admin/source-rules` - add rule with pattern validation (reject invalid fnmatch)
+- [x] **T11.** `DELETE /admin/source-rules/{id}` - remove rule (silo rules only for partners, super-admin for global)
+- [x] **T12.** `POST /admin/source-rules/test` - debug endpoint to preview resolution
 - [ ] **T13.** Add super-admin check for `org_id` override and global rule deletion
 
 ### Phase 4: Observability
