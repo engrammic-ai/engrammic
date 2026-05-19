@@ -100,6 +100,6 @@ Debug/admin: `context_belief_history(subject)` already shows supersession chains
 
 ## References
 
-- Transitions spec: `../primitives/context/specs/03-transitions.md` (T4)
-- Layers spec: `../primitives/context/specs/02-layers.md` (Wisdom scoring)
+- Transitions spec: `../primitives/docs/03-transitions.md` (T4)
+- Layers spec: `../primitives/docs/02-layers.md` (Wisdom scoring)
 - Supersession in Knowledge layer: `src/context_service/custodian/supersession.py`

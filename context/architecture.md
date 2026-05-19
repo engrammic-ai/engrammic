@@ -339,6 +339,6 @@ RedisCache   QdrantClient  MemgraphStore
 
 ## Related Docs
 
-- `../primitives/context/specs/` - EAG paradigm (layers, transitions)
+- `../primitives/docs/` - EAG paradigm (layers, transitions)
 - `context/specs/` - Service-level specs
 - `context/plans/` - Implementation plans

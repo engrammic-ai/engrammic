@@ -140,7 +140,7 @@ Location: primitives/docs/manifesto.md (MIT licensed, freely quotable)
 Mine these for language and framing (distill, don't copy):
 - ../docs-vault/Positioning.md
 - ../docs-vault/Competitive Landscape.md
-- primitives/context/specs/ (technical accuracy)
+- primitives/docs/ (technical accuracy)
 
 ## Done Criteria
 

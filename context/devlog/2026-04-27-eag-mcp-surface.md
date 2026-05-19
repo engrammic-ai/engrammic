@@ -83,7 +83,7 @@ Also resolved 6 P0s from codebase review via separate team (`review-fixes`):
 ## Specs
 
 - `context/specs/mcp-tool-surface.md` — Full design with signatures
-- `../primitives/context/specs/05-mcp-contract.md` — Paradigm-level contract
+- `../primitives/docs/05-mcp-contract.md` — Paradigm-level contract
 
 ## Verification
 

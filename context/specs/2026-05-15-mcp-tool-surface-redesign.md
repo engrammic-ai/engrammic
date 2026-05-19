@@ -744,4 +744,4 @@ No deprecation period needed - still in dev. Clean cut replacement.
 - [Agentic Design Patterns Part 3: Tool Use](https://www.deeplearning.ai/the-batch/agentic-design-patterns-part-3-tool-use/)
 - [Design Patterns for LLM Agent Systems](https://onagents.org/patterns/)
 - [v1.4.1 MCP QoL Plan](../plans/archive/v1.4.1-mcp-qol.md) - prior consolidation
-- [05-mcp-contract.md](../../primitives/context/specs/05-mcp-contract.md) - original spec
+- [05-mcp-contract.md](../../primitives/docs/05-mcp-contract.md) - original spec

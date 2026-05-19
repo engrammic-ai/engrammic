@@ -112,6 +112,6 @@ New asset: `reasoning_compaction`
 
 ## References
 
-- Transitions spec: `../primitives/context/specs/03-transitions.md` (T6)
-- Layers spec: `../primitives/context/specs/02-layers.md` (Intelligence, Memory)
+- Transitions spec: `../primitives/docs/03-transitions.md` (T6)
+- Layers spec: `../primitives/docs/02-layers.md` (Intelligence, Memory)
 - Current reasoning impl: `src/context_service/mcp/tools/context_reason.py`

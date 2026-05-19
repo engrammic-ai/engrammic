@@ -32,6 +32,6 @@ Read tools that filter by `layer="knowledge"` return both `:Finding` and `:Claim
 ### Cross-references
 
 - Implementation plan: `context/plans/v1a-claim-fact-promotion.md`
-- EAG paradigm and layer definitions: `../primitives/context/specs/`
+- EAG paradigm and layer definitions: `../primitives/docs/`
 - Promotion predicates: `../primitives/src/primitives/eag/epistemology/promotion.py`
 - Index for `:Fact`: `src/context_service/db/indexes.py` (lines 54-56)

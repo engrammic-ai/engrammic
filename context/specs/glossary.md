@@ -1,6 +1,6 @@
 # Glossary
 
-Service-layer terminology for Engrammic. For EAG layer/transition definitions, see `primitives/context/specs/`.
+Service-layer terminology for Engrammic. For EAG layer/transition definitions, see `primitives/docs/`.
 
 ---
 
@@ -50,7 +50,7 @@ Groundskeeper enforces these thresholds. Nodes can be upgraded (never downgraded
 
 ## EAG Transition Reference
 
-Quick reference for transitions mentioned above. Full spec in `primitives/context/specs/03-transitions.md`.
+Quick reference for transitions mentioned above. Full spec in `primitives/docs/03-transitions.md`.
 
 | ID | Transition | Description |
 |----|------------|-------------|
