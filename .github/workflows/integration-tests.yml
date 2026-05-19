@@ -21,12 +21,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check out primitives sibling
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ github.repository_owner }}/primitives
-          path: ../primitives
-
       - name: Install uv
         uses: astral-sh/setup-uv@v4
         with:
@@ -36,7 +30,7 @@ jobs:
         uses: extractions/setup-just@v2
 
       - name: Install dependencies
-        run: just install-dev
+        run: uv sync --all-extras --no-sources
 
       - name: Start docker-compose stack
         run: |
