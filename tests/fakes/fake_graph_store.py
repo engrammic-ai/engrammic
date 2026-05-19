@@ -160,6 +160,13 @@ class FakeGraphStore:
     ) -> dict[uuid.UUID, uuid.UUID]:
         raise NotImplementedError("FakeGraphStore.filter_superseded_at not implemented")
 
+    async def resolve_current_head(
+        self,
+        node_id: uuid.UUID,
+        silo_id: str,
+    ) -> uuid.UUID | None:
+        raise NotImplementedError("FakeGraphStore.resolve_current_head not implemented")
+
     async def find_nodes(
         self,
         silo_id: str,

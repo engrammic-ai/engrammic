@@ -82,6 +82,18 @@ class HyperGraphStore(Protocol):
         """
         ...
 
+    async def resolve_current_head(
+        self,
+        node_id: uuid.UUID,
+        silo_id: str,
+    ) -> uuid.UUID | None:
+        """Resolve the current chain head for a node using O(1) pointer lookup.
+
+        Returns the head node's id, or the input id if it's standalone/head.
+        Returns None if node doesn't exist.
+        """
+        ...
+
     async def find_nodes(
         self,
         silo_id: str,
