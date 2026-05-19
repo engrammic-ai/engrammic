@@ -16,10 +16,12 @@ The Pulumi beta deployment is incomplete:
 - Missing secrets (WorkOS client ID, cookie password)
 - No workflow for syncing local secrets with GCP Secret Manager
 - StatefulHost undersized for running Dagster alongside DBs
+- Database name inconsistency (`context_service` vs `engrammic`) across config
+- GitHub Actions missing Dagster image build step
 
 Existing work already done:
 - `__main__.py`: Added MEMGRAPH_URI, QDRANT_URL, REDIS_URL
-- `compute.py`: Added Dagster services to docker-compose template
+- `compute.py`: Added Dagster services to docker-compose template (but with wrong DB name)
 
 ## Architecture
 
@@ -77,10 +79,12 @@ Existing work already done:
 | `infra/Pulumi.beta.yaml` | Upgrade instance_type to e2-standard-4 |
 | `infra/__main__.py` | Add missing env vars, auth secrets, pass postgres_host |
 | `infra/components/secrets.py` | Add workos-client-id, workos-cookie-password |
-| `infra/components/compute.py` | Accept postgres_host, use metadata, add Vertex/Custodian env vars |
-| `.env.example` | Add auth, Vertex, Custodian config entries |
+| `infra/components/compute.py` | Accept postgres_host, use metadata, fix DB name to `engrammic`, add Vertex/Custodian env vars |
+| `src/context_service/config/settings.py` | Fix postgres_database default to `engrammic` |
+| `.env.example` | Add auth, Vertex, Custodian config; fix POSTGRES_DATABASE to `engrammic` |
 | `.env.beta.example` | Create - template for beta secrets |
 | `justfile` | Add secrets-push, secrets-pull recipes |
+| `.github/workflows/deploy-beta.yml` | Add Dagster image build/push step |
 
 ## Implementation Details
 
@@ -133,6 +137,16 @@ USER dagster
 Change line 7:
 ```yaml
 engrammic-infra:instance_type: e2-standard-4
+```
+
+**Note:** This change requires VM replacement, causing ~5 min outage for StatefulHost services. Schedule during maintenance window.
+
+### 2b. settings.py
+
+Fix the flat shim default at line ~1081:
+
+```python
+postgres_database: str = Field(default="engrammic")  # was "context_service"
 ```
 
 ### 3. __main__.py env_vars
@@ -212,6 +226,10 @@ secret_names = [
 ```
 
 ### 5. compute.py
+
+**Database name fix:** Change all `POSTGRES_DATABASE=context_service` to `POSTGRES_DATABASE=engrammic` in DAGSTER_SERVICES and POSTGRES_SERVICE templates.
+
+**Startup script fix:** Replace Secret Manager lookup with instance metadata for Cloud SQL IP.
 
 Add `postgres_host` parameter to `__init__`:
 
@@ -333,9 +351,12 @@ DAGSTER_SERVICES = '''
 
 ### 6. .env.example
 
-Add these entries:
+Update POSTGRES_DATABASE and add new entries:
 
 ```bash
+# Fix database name
+POSTGRES_DATABASE=engrammic  # was context_service
+
 # =============================================================================
 # Auth (required for beta/prod)
 # =============================================================================
@@ -415,6 +436,19 @@ secrets-pull env="beta":
         fi
     done
     echo "Wrote .env.{{env}}"
+```
+
+### 9. deploy-beta.yml
+
+Add Dagster image build step after the API image build:
+
+```yaml
+      - name: Build and push Dagster image
+        run: |
+          docker build -f docker/Dockerfile.dagster -t ${{ env.REGISTRY }}/engrammic-dagster:${{ github.sha }} .
+          docker push ${{ env.REGISTRY }}/engrammic-dagster:${{ github.sha }}
+          docker tag ${{ env.REGISTRY }}/engrammic-dagster:${{ github.sha }} ${{ env.REGISTRY }}/engrammic-dagster:latest
+          docker push ${{ env.REGISTRY }}/engrammic-dagster:latest
 ```
 
 ## Pre-Deploy Steps
