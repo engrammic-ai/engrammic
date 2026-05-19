@@ -526,7 +526,7 @@ class QdrantClient:
                 )
                 return results
             except UnexpectedResponse as e:
-                if e.status_code == 404 and "Not found" in str(e):
+                if e.status_code == 404:
                     logger.warning(
                         "qdrant_collection_not_found_recreating",
                         collection=self._collection_name,
