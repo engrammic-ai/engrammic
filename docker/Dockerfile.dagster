@@ -35,4 +35,6 @@ ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app/src"
 ENV DAGSTER_HOME="/app"
 
+RUN chown -R dagster:dagster /app
+
 USER dagster
