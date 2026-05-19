@@ -235,6 +235,99 @@ async def test_hybrid_search_with_quantization() -> None:
 
 
 @pytest.mark.asyncio
+async def test_engine_qdrant_store_applies_quantization() -> None:
+    """EngineQdrantStore passes quantization config from QdrantClient on collection creation."""
+    from context_service.engine.qdrant_store import EngineQdrantStore
+
+    qdrant_client = QdrantClient(
+        vector_size=768,
+        url="http://localhost:6333",
+        collection_name="unused",
+        scalar_quantization=True,
+        always_ram=True,
+    )
+
+    store = EngineQdrantStore(qdrant_client, hybrid=False)
+
+    mock_async_client = AsyncMock()
+    mock_collections = MagicMock()
+    mock_collections.collections = []
+    mock_async_client.get_collections.return_value = mock_collections
+    mock_async_client.create_collection = AsyncMock()
+    mock_async_client.create_payload_index = AsyncMock()
+
+    with patch.object(qdrant_client, "_get_client", return_value=mock_async_client):
+        await store._ensure_collection("test-silo")
+
+    mock_async_client.create_collection.assert_called_once()
+    call_kwargs = mock_async_client.create_collection.call_args.kwargs
+    quant = call_kwargs["quantization_config"]
+    assert isinstance(quant, ScalarQuantization)
+    assert quant.scalar.type == ScalarType.INT8
+    assert quant.scalar.always_ram is True
+
+
+@pytest.mark.asyncio
+async def test_engine_qdrant_store_no_quantization_when_disabled() -> None:
+    """EngineQdrantStore passes quantization_config=None when scalar_quantization is False."""
+    from context_service.engine.qdrant_store import EngineQdrantStore
+
+    qdrant_client = QdrantClient(
+        vector_size=768,
+        url="http://localhost:6333",
+        collection_name="unused",
+        scalar_quantization=False,
+    )
+
+    store = EngineQdrantStore(qdrant_client, hybrid=False)
+
+    mock_async_client = AsyncMock()
+    mock_collections = MagicMock()
+    mock_collections.collections = []
+    mock_async_client.get_collections.return_value = mock_collections
+    mock_async_client.create_collection = AsyncMock()
+    mock_async_client.create_payload_index = AsyncMock()
+
+    with patch.object(qdrant_client, "_get_client", return_value=mock_async_client):
+        await store._ensure_collection("test-silo-no-quant")
+
+    call_kwargs = mock_async_client.create_collection.call_args.kwargs
+    assert call_kwargs["quantization_config"] is None
+
+
+@pytest.mark.asyncio
+async def test_engine_qdrant_store_cluster_collection_applies_quantization() -> None:
+    """ensure_cluster_collection also passes quantization config from QdrantClient."""
+    from context_service.engine.qdrant_store import EngineQdrantStore
+
+    qdrant_client = QdrantClient(
+        vector_size=768,
+        url="http://localhost:6333",
+        collection_name="unused",
+        scalar_quantization=True,
+        always_ram=False,
+    )
+
+    store = EngineQdrantStore(qdrant_client, hybrid=False)
+
+    mock_async_client = AsyncMock()
+    mock_collections = MagicMock()
+    mock_collections.collections = []
+    mock_async_client.get_collections.return_value = mock_collections
+    mock_async_client.create_collection = AsyncMock()
+
+    with patch.object(qdrant_client, "_get_client", return_value=mock_async_client):
+        await store.ensure_cluster_collection("test-silo-clusters")
+
+    mock_async_client.create_collection.assert_called_once()
+    call_kwargs = mock_async_client.create_collection.call_args.kwargs
+    quant = call_kwargs["quantization_config"]
+    assert isinstance(quant, ScalarQuantization)
+    assert quant.scalar.type == ScalarType.INT8
+    assert quant.scalar.always_ram is False
+
+
+@pytest.mark.asyncio
 async def test_migration_script_skips_already_quantized() -> None:
     """Migration skips collections that already have INT8 scalar quantization."""
     from scripts.migrate_qdrant_quantization import run_migration

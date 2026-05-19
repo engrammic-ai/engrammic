@@ -119,6 +119,17 @@ class QdrantClient:
                     )
         return self._client
 
+    def get_quantization_config(self) -> ScalarQuantization | None:
+        """Return the quantization config for collection creation, or None if disabled."""
+        if not self._scalar_quantization:
+            return None
+        return ScalarQuantization(
+            scalar=ScalarQuantizationConfig(
+                type=ScalarType.INT8,
+                always_ram=self._always_ram,
+            )
+        )
+
     async def ensure_collection(self, *, hybrid: bool = False) -> None:
         """Create the collection if it doesn't exist.
 
