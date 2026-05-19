@@ -611,7 +611,7 @@ requires-dist = [
     { name = "dagster-postgres", specifier = ">=0.23" },
     { name = "dagster-webserver", specifier = ">=1.7" },
     { name = "dtaidistance", specifier = ">=2.3.0" },
-    { name = "engrammic-primitives", editable = "../primitives" },
+    { name = "engrammic-primitives" },
     { name = "fastapi", specifier = ">=0.111" },
     { name = "fastmcp", specifier = ">=2.0" },
     { name = "httpx", specifier = ">=0.27" },
@@ -1045,20 +1045,13 @@ wheels = [
 [[package]]
 name = "engrammic-primitives"
 version = "0.1.1"
-source = { editable = "../primitives" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
 ]
-
-[package.metadata]
-requires-dist = [{ name = "pydantic", specifier = ">=2.0" }]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mypy", specifier = ">=1.10" },
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "pytest-asyncio", specifier = ">=0.23" },
-    { name = "ruff", specifier = ">=0.4" },
+sdist = { url = "https://files.pythonhosted.org/packages/c5/48/469289522083bd5e9da2b192686aab53c10a045969200e746d56b6479a9a/engrammic_primitives-0.1.1.tar.gz", hash = "sha256:aafa7b8d415d854d54740d484bed8836dfb3bd13abd3fc1602a8faa7c2a9fd13", size = 56791, upload-time = "2026-05-19T06:04:08.805Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1a/3a/ac9f13edd0b18d65edeeff6c9fd90c4cb4946bc8253b7b03e8b07ca2136e/engrammic_primitives-0.1.1-py3-none-any.whl", hash = "sha256:f5951d42b14cbe96dd997da4a50866ac94f06688eceb8b0e4597bf1f2b9fd94c", size = 33552, upload-time = "2026-05-19T06:04:07.217Z" },
 ]
 
 [[package]]
