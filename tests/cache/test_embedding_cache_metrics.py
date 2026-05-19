@@ -23,9 +23,7 @@ async def test_cache_hit_records_hit_metric(mock_redis: AsyncMock) -> None:
     mock_redis.get.return_value = b"[0.1, 0.2, 0.3]"
     cache = EmbeddingCache(mock_redis, ttl=3600)
 
-    with patch(
-        "context_service.cache.embedding_cache.record_embedding_cache_hit"
-    ) as mock_hit:
+    with patch("context_service.cache.embedding_cache.record_embedding_cache_hit") as mock_hit:
         result = await cache.get("test text", "query")
 
         assert result == [0.1, 0.2, 0.3]
@@ -39,12 +37,8 @@ async def test_cache_miss_records_miss_metric(mock_redis: AsyncMock) -> None:
     cache = EmbeddingCache(mock_redis, ttl=3600)
 
     with (
-        patch(
-            "context_service.cache.embedding_cache.record_embedding_cache_hit"
-        ) as mock_hit,
-        patch(
-            "context_service.cache.embedding_cache.record_embedding_cache_miss"
-        ) as mock_miss,
+        patch("context_service.cache.embedding_cache.record_embedding_cache_hit") as mock_hit,
+        patch("context_service.cache.embedding_cache.record_embedding_cache_miss") as mock_miss,
     ):
         result = await cache.get("test text", "query")
 

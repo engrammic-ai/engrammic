@@ -371,9 +371,7 @@ class ContextService:
 
             # Bump knowledge version to invalidate result cache
             if self._cache is not None:
-                asyncio.create_task(
-                    self._cache.incr(f"silo:{silo_id}:knowledge_version")
-                )
+                asyncio.create_task(self._cache.incr(f"silo:{silo_id}:knowledge_version"))
 
         return node
 

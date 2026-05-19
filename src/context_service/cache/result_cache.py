@@ -52,9 +52,15 @@ class ResultCacheStore:
 
         if not _enabled:
             # Cache disabled: all buckets are None so get() returns None and set() is a no-op.
-            self._memory_cache: TTLCache[tuple[Any, ...], tuple[list[dict[str, Any]], float]] | None = None
-            self._knowledge_cache: TTLCache[tuple[Any, ...], tuple[list[dict[str, Any]], float]] | None = None
-            self._wisdom_cache: TTLCache[tuple[Any, ...], tuple[list[dict[str, Any]], float]] | None = None
+            self._memory_cache: (
+                TTLCache[tuple[Any, ...], tuple[list[dict[str, Any]], float]] | None
+            ) = None
+            self._knowledge_cache: (
+                TTLCache[tuple[Any, ...], tuple[list[dict[str, Any]], float]] | None
+            ) = None
+            self._wisdom_cache: (
+                TTLCache[tuple[Any, ...], tuple[list[dict[str, Any]], float]] | None
+            ) = None
             return
 
         # TTLCache operations are synchronous and GIL-protected; no asyncio Lock is needed.
@@ -116,12 +122,8 @@ class ResultCacheStore:
         search_mode: str,
     ) -> tuple[Any, ...]:
         query_hash = _sha256(effective_query.lower().strip())
-        sorted_layers = (
-            ",".join(sorted(layers)) if layers is not None else "all"
-        )
-        filters_hash = (
-            _sha256(json.dumps(filters, sort_keys=True)) if filters else "none"
-        )
+        sorted_layers = ",".join(sorted(layers)) if layers is not None else "all"
+        filters_hash = _sha256(json.dumps(filters, sort_keys=True)) if filters else "none"
         return (
             query_hash,
             sorted_layers,

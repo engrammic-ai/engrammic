@@ -76,7 +76,12 @@ async def _emit_access_events(redis: Any, silo_id: str, results: list[Any]) -> N
     try:
         await asyncio.wait_for(
             asyncio.gather(
-                *(emit_access_event(redis, silo_id, str(r["node_id"]) if isinstance(r, dict) else str(r.node_id)) for r in results)
+                *(
+                    emit_access_event(
+                        redis, silo_id, str(r["node_id"]) if isinstance(r, dict) else str(r.node_id)
+                    )
+                    for r in results
+                )
             ),
             timeout=2.0,
         )

@@ -86,9 +86,7 @@ class TEIEmbeddingService:
 
             embeddings = await self._embed_batch(uncached_texts)
 
-            for idx, (text, embedding) in enumerate(
-                zip(uncached_texts, embeddings, strict=True)
-            ):
+            for idx, (text, embedding) in enumerate(zip(uncached_texts, embeddings, strict=True)):
                 await self._embedding_cache.set(text, task, embedding)
                 cached_results[uncached_indices[idx]] = embedding
 

@@ -120,9 +120,7 @@ class TestContextCrystallizeRationaleChain:
         chain_id = str(uuid.uuid4())
         fake_store.seed_write_result([{"commitment_id": "x"}])
 
-        await _context_crystallize(
-            belief_ids=[_BELIEF_A], silo_id=_SILO_ID, chain_id=chain_id
-        )
+        await _context_crystallize(belief_ids=[_BELIEF_A], silo_id=_SILO_ID, chain_id=chain_id)
 
         _cypher, params = fake_store.write_log[0]
         assert params["rationale_chain_id"] == chain_id

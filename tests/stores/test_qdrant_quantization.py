@@ -147,7 +147,8 @@ async def test_matryoshka_dimension_mismatch_is_detected() -> None:
 
     # Warning must have been issued with the correct keys.
     warning_calls = [
-        call for call in mock_logger.warning.call_args_list
+        call
+        for call in mock_logger.warning.call_args_list
         if call.args and call.args[0] == "qdrant_dimension_mismatch"
     ]
     assert len(warning_calls) == 1, "Expected exactly one qdrant_dimension_mismatch warning"
@@ -192,7 +193,8 @@ async def test_matryoshka_dimension_mismatch_not_logged_when_matching() -> None:
         await client.ensure_collection(hybrid=False)
 
     warning_calls = [
-        call for call in mock_logger.warning.call_args_list
+        call
+        for call in mock_logger.warning.call_args_list
         if call.args and call.args[0] == "qdrant_dimension_mismatch"
     ]
     assert len(warning_calls) == 0, "No dimension mismatch warning expected when sizes match"
@@ -222,7 +224,9 @@ async def test_hybrid_search_with_quantization() -> None:
     call_kwargs = mock_async_client.create_collection.call_args.kwargs
 
     # Verify sparse_vectors_config is present and contains the sparse vector name.
-    assert "sparse_vectors_config" in call_kwargs, "sparse_vectors_config must be present for hybrid collections"
+    assert "sparse_vectors_config" in call_kwargs, (
+        "sparse_vectors_config must be present for hybrid collections"
+    )
     sparse_config = call_kwargs["sparse_vectors_config"]
     assert sparse_config is not None
     assert "sparse" in sparse_config, "sparse_vectors_config must contain 'sparse' key"

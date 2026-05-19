@@ -441,16 +441,19 @@ class TestResultCacheStoreDisabled:
                 search_mode="hybrid",
                 results=SAMPLE_RESULTS,
             )
-            assert store.get(
-                effective_query="q",
-                layers=layer,
-                silo_id="silo-1",
-                knowledge_version=1,
-                top_k=5,
-                filters=None,
-                include_superseded=False,
-                search_mode="hybrid",
-            ) is None
+            assert (
+                store.get(
+                    effective_query="q",
+                    layers=layer,
+                    silo_id="silo-1",
+                    knowledge_version=1,
+                    top_k=5,
+                    filters=None,
+                    include_superseded=False,
+                    search_mode="hybrid",
+                )
+                is None
+            )
 
 
 class TestGetKnowledgeVersion:

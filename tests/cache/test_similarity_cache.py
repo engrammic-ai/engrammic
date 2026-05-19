@@ -57,7 +57,9 @@ def make_cache(
 # ---------------------------------------------------------------------------
 
 
-def test_encode_decode_roundtrip(mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig) -> None:
+def test_encode_decode_roundtrip(
+    mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig
+) -> None:
     """float16 codec preserves vector within tolerance."""
     cache = make_cache(mock_redis, mock_exact_cache, enabled_config)
     text_hash = "a" * 64
@@ -70,7 +72,9 @@ def test_encode_decode_roundtrip(mock_redis: AsyncMock, mock_exact_cache: AsyncM
     np.testing.assert_allclose(decoded_arr, np.array(vector, dtype=np.float16), rtol=1e-3)
 
 
-def test_set_converts_float32_to_float16(mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig) -> None:
+def test_set_converts_float32_to_float16(
+    mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig
+) -> None:
     """Input list[float] stored as float16 in index entry."""
     cache = make_cache(mock_redis, mock_exact_cache, enabled_config)
     text_hash = "b" * 64
@@ -91,7 +95,9 @@ def test_set_converts_float32_to_float16(mock_redis: AsyncMock, mock_exact_cache
 # ---------------------------------------------------------------------------
 
 
-def test_l2_normalize_unit_vector(mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig) -> None:
+def test_l2_normalize_unit_vector(
+    mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig
+) -> None:
     """Unit vector is unchanged after normalization."""
     cache = make_cache(mock_redis, mock_exact_cache, enabled_config)
     arr = np.array([1.0, 0.0, 0.0], dtype=np.float32)
@@ -99,7 +105,9 @@ def test_l2_normalize_unit_vector(mock_redis: AsyncMock, mock_exact_cache: Async
     np.testing.assert_allclose(result, arr, atol=1e-6)
 
 
-def test_l2_normalize_zero_vector(mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig) -> None:
+def test_l2_normalize_zero_vector(
+    mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig
+) -> None:
     """Zero vector is returned as-is without raising."""
     cache = make_cache(mock_redis, mock_exact_cache, enabled_config)
     arr = np.zeros(4, dtype=np.float32)
@@ -113,7 +121,9 @@ def test_l2_normalize_zero_vector(mock_redis: AsyncMock, mock_exact_cache: Async
 
 
 @pytest.mark.asyncio
-async def test_set_pushes_to_index(mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig) -> None:
+async def test_set_pushes_to_index(
+    mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig
+) -> None:
     """set() populates index when enabled."""
     cache = make_cache(mock_redis, mock_exact_cache, enabled_config)
     vector = [0.1] * 512
@@ -125,7 +135,9 @@ async def test_set_pushes_to_index(mock_redis: AsyncMock, mock_exact_cache: Asyn
 
 
 @pytest.mark.asyncio
-async def test_disabled_skips_index(mock_redis: AsyncMock, mock_exact_cache: AsyncMock, disabled_config: SimilarityCacheConfig) -> None:
+async def test_disabled_skips_index(
+    mock_redis: AsyncMock, mock_exact_cache: AsyncMock, disabled_config: SimilarityCacheConfig
+) -> None:
     """set() does not touch index when enabled=False."""
     cache = make_cache(mock_redis, mock_exact_cache, disabled_config)
     vector = [0.1] * 512
@@ -137,7 +149,9 @@ async def test_disabled_skips_index(mock_redis: AsyncMock, mock_exact_cache: Asy
 
 
 @pytest.mark.asyncio
-async def test_index_trims_to_max_entries(mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig) -> None:
+async def test_index_trims_to_max_entries(
+    mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig
+) -> None:
     """list_push_trim_expire is called with correct max_entries."""
     cache = make_cache(mock_redis, mock_exact_cache, enabled_config)
     vector = [0.5] * 128
@@ -165,7 +179,9 @@ def _sha256(text: str) -> str:
 
 
 @pytest.mark.asyncio
-async def test_similarity_lookup_above_threshold(mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig) -> None:
+async def test_similarity_lookup_above_threshold(
+    mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig
+) -> None:
     """Near-identical vector returns a match."""
     cache = make_cache(mock_redis, mock_exact_cache, enabled_config)
 
@@ -189,7 +205,9 @@ async def test_similarity_lookup_above_threshold(mock_redis: AsyncMock, mock_exa
 
 
 @pytest.mark.asyncio
-async def test_similarity_lookup_below_threshold(mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig) -> None:
+async def test_similarity_lookup_below_threshold(
+    mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig
+) -> None:
     """Orthogonal vector returns None."""
     cache = make_cache(mock_redis, mock_exact_cache, enabled_config)
 
@@ -209,7 +227,9 @@ async def test_similarity_lookup_below_threshold(mock_redis: AsyncMock, mock_exa
 
 
 @pytest.mark.asyncio
-async def test_similarity_lookup_empty_index(mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig) -> None:
+async def test_similarity_lookup_empty_index(
+    mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig
+) -> None:
     """Returns None gracefully when index is empty."""
     cache = make_cache(mock_redis, mock_exact_cache, enabled_config)
     mock_redis.lrange.return_value = []
@@ -220,7 +240,9 @@ async def test_similarity_lookup_empty_index(mock_redis: AsyncMock, mock_exact_c
 
 
 @pytest.mark.asyncio
-async def test_similarity_lookup_disabled(mock_redis: AsyncMock, mock_exact_cache: AsyncMock, disabled_config: SimilarityCacheConfig) -> None:
+async def test_similarity_lookup_disabled(
+    mock_redis: AsyncMock, mock_exact_cache: AsyncMock, disabled_config: SimilarityCacheConfig
+) -> None:
     """Returns None without touching Redis when disabled."""
     cache = make_cache(mock_redis, mock_exact_cache, disabled_config)
 
@@ -236,7 +258,9 @@ async def test_similarity_lookup_disabled(mock_redis: AsyncMock, mock_exact_cach
 
 
 @pytest.mark.asyncio
-async def test_get_exact_match_wins(mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig) -> None:
+async def test_get_exact_match_wins(
+    mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig
+) -> None:
     """get() returns exact cached embedding when present."""
     cached_vector = [0.1, 0.2, 0.3]
     mock_exact_cache.get.return_value = cached_vector
@@ -249,7 +273,9 @@ async def test_get_exact_match_wins(mock_redis: AsyncMock, mock_exact_cache: Asy
 
 
 @pytest.mark.asyncio
-async def test_get_returns_none_on_miss(mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig) -> None:
+async def test_get_returns_none_on_miss(
+    mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig
+) -> None:
     """get() returns None when nothing cached."""
     mock_exact_cache.get.return_value = None
     cache = make_cache(mock_redis, mock_exact_cache, enabled_config)
@@ -265,7 +291,9 @@ async def test_get_returns_none_on_miss(mock_redis: AsyncMock, mock_exact_cache:
 
 
 @pytest.mark.asyncio
-async def test_different_providers_use_different_indexes(mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig) -> None:
+async def test_different_providers_use_different_indexes(
+    mock_redis: AsyncMock, mock_exact_cache: AsyncMock, enabled_config: SimilarityCacheConfig
+) -> None:
     """Provider namespace prevents cross-contamination between providers."""
     cache_a = make_cache(mock_redis, mock_exact_cache, enabled_config, provider="tei")
     cache_b = make_cache(mock_redis, mock_exact_cache, enabled_config, provider="openai")

@@ -3,6 +3,7 @@
 Catches FastMCP's "initialization was complete" errors and returns HTTP 404,
 triggering spec-compliant client re-initialization per MCP spec 2025-11-25.
 """
+
 from __future__ import annotations
 
 import structlog
@@ -41,14 +42,18 @@ class MCPSessionRecoveryMiddleware:
             error_str = str(e).lower()
             if "initialization" in error_str and not response_started:
                 logger.warning("mcp_session_corrupted", error=str(e))
-                await send({
-                    "type": "http.response.start",
-                    "status": 404,
-                    "headers": [(b"content-type", b"application/json")],
-                })
-                await send({
-                    "type": "http.response.body",
-                    "body": b'{"error": "Session expired or invalid"}',
-                })
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 404,
+                        "headers": [(b"content-type", b"application/json")],
+                    }
+                )
+                await send(
+                    {
+                        "type": "http.response.body",
+                        "body": b'{"error": "Session expired or invalid"}',
+                    }
+                )
             else:
                 raise

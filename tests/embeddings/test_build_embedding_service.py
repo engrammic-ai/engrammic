@@ -24,9 +24,7 @@ def mock_tei_config() -> dict:
 
 def test_build_litellm_when_provider_litellm(mock_litellm_config: dict) -> None:
     """Factory should return LiteLLMEmbeddingService when provider=litellm."""
-    with patch(
-        "context_service.embeddings.load_config", return_value=mock_litellm_config
-    ):
+    with patch("context_service.embeddings.load_config", return_value=mock_litellm_config):
         # Import inside patch scope to get the patched version
         from context_service.embeddings import build_embedding_service
 

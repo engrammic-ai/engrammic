@@ -40,20 +40,14 @@ def build_embedding_service(
     if provider == "tei":
         settings = get_settings()
         if not settings.tei_url:
-            raise RuntimeError(
-                "embeddings.yaml sets provider=tei but TEI_URL is not configured."
-            )
+            raise RuntimeError("embeddings.yaml sets provider=tei but TEI_URL is not configured.")
         tei_service = TEIEmbeddingService(
             base_url=settings.tei_url,
             dimensions=config.get("dimensions", 768),
             _embedding_cache=embedding_cache,
         )
-        fallback_service = LiteLLMEmbeddingService.from_config(
-            _embedding_cache=embedding_cache
-        )
-        return TEIWithFallbackEmbeddingService(
-            primary=tei_service, fallback=fallback_service
-        )
+        fallback_service = LiteLLMEmbeddingService.from_config(_embedding_cache=embedding_cache)
+        return TEIWithFallbackEmbeddingService(primary=tei_service, fallback=fallback_service)
 
     return LiteLLMEmbeddingService.from_config(_embedding_cache=embedding_cache)
 

@@ -165,7 +165,14 @@ def register(mcp: FastMCP) -> None:
         success = True
         try:
             return await _recall_impl(
-                query, node_ids, depth, layers, top_k, include_hypotheses, bypass_cache, max_age_seconds
+                query,
+                node_ids,
+                depth,
+                layers,
+                top_k,
+                include_hypotheses,
+                bypass_cache,
+                max_age_seconds,
             )
         except Exception:
             success = False

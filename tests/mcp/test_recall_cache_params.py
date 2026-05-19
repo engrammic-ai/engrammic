@@ -74,7 +74,9 @@ async def test_recall_threads_bypass_cache() -> None:
         patch(
             "context_service.mcp.tools.recall.get_mcp_auth_context",
             new_callable=AsyncMock,
-            return_value=AsyncMock(org_id=uuid.UUID("00000000-0000-0000-0000-000000000001"), session_id=None),
+            return_value=AsyncMock(
+                org_id=uuid.UUID("00000000-0000-0000-0000-000000000001"), session_id=None
+            ),
         ),
         patch(
             "context_service.mcp.tools.recall.track_tool_usage",
@@ -106,7 +108,9 @@ async def test_recall_threads_max_age_seconds() -> None:
         patch(
             "context_service.mcp.tools.recall.get_mcp_auth_context",
             new_callable=AsyncMock,
-            return_value=AsyncMock(org_id=uuid.UUID("00000000-0000-0000-0000-000000000001"), session_id=None),
+            return_value=AsyncMock(
+                org_id=uuid.UUID("00000000-0000-0000-0000-000000000001"), session_id=None
+            ),
         ),
         patch(
             "context_service.mcp.tools.recall.track_tool_usage",

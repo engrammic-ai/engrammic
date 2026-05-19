@@ -1,4 +1,5 @@
 """Tests for MCP session recovery middleware."""
+
 import pytest
 from starlette.requests import Request
 from starlette.responses import JSONResponse
