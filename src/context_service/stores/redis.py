@@ -438,6 +438,46 @@ class RedisClient:
         finally:
             record_db_query("redis.xadd", (time.perf_counter() - start) * 1000)
 
+    async def lrange(self, key: str, start: int, end: int) -> list[bytes]:
+        """Return a range of elements from a Redis list; returns [] if circuit open."""
+        default: list[bytes] = []
+        return await guard_degrade(STORE_REDIS, self._lrange_impl(key, start, end), default)
+
+    async def _lrange_impl(self, key: str, start: int, end: int) -> list[bytes]:
+        t = time.perf_counter()
+        try:
+            result: list[bytes] = await self._redis.lrange(key, start, end)  # type: ignore[misc]
+            return result
+        except (RedisConnectionError, RedisError) as e:
+            logger.error("redis_lrange_failed", key=key, error=str(e))
+            raise RedisOperationError(f"Failed to lrange: {e}") from e
+        finally:
+            record_db_query("redis.lrange", (time.perf_counter() - t) * 1000)
+
+    async def list_push_trim_expire(
+        self, key: str, entry: bytes, max_entries: int, ttl: int
+    ) -> None:
+        """Atomically lpush + ltrim + expire a bounded list. No-ops if circuit open."""
+        await guard_degrade(
+            STORE_REDIS, self._list_push_trim_expire_impl(key, entry, max_entries, ttl), None
+        )
+
+    async def _list_push_trim_expire_impl(
+        self, key: str, entry: bytes, max_entries: int, ttl: int
+    ) -> None:
+        t = time.perf_counter()
+        try:
+            pipeline = self._redis.pipeline(transaction=False)
+            pipeline.lpush(key, entry)
+            pipeline.ltrim(key, 0, max_entries - 1)
+            pipeline.expire(key, ttl)
+            await pipeline.execute()
+        except (RedisConnectionError, RedisError) as e:
+            logger.error("redis_list_push_trim_expire_failed", key=key, error=str(e))
+            raise RedisOperationError(f"Failed to list_push_trim_expire: {e}") from e
+        finally:
+            record_db_query("redis.list_push_trim_expire", (time.perf_counter() - t) * 1000)
+
     async def close(self) -> None:
         """Close the Redis connection pool."""
         try:
