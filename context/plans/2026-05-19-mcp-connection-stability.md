@@ -4,7 +4,7 @@
 
 **Goal:** Make MCP connections resilient to transient backend errors and fix root cause of VPC Connector instability.
 
-**Architecture:** Error boundaries catch backend exceptions at tool level, preventing FastMCP session corruption. Session recovery middleware returns HTTP 404 on corrupted sessions, triggering spec-compliant client re-initialization. Direct VPC Egress replaces VPC Connector for reliable networking.
+**Architecture:** Error boundaries catch backend exceptions at tool level, converting them to JSON-RPC -32000 errors instead of letting them corrupt FastMCP session state. Session recovery middleware returns HTTP 404 on corrupted sessions, triggering spec-compliant client re-initialization. Direct VPC Egress replaces VPC Connector for reliable networking.
 
 **Tech Stack:** FastMCP, Starlette ASGI, Pulumi GCP, Cloud Run v2
 
@@ -17,7 +17,7 @@
 ### Phase 1: Application Code
 | File | Responsibility |
 |------|----------------|
-| `src/context_service/mcp/error_boundary.py` | Decorator to catch backend errors, classify, and wrap cleanly |
+| `src/context_service/mcp/error_boundary.py` | Decorator to catch backend errors, classify, wrap as JSON-RPC -32000 |
 | `src/context_service/mcp/session_recovery.py` | ASGI middleware to return 404 on session corruption |
 | `src/context_service/api/app.py` | Wire middleware into MCP dispatcher |
 | `tests/mcp/test_error_boundary.py` | Unit tests for error classification and boundary |
@@ -28,6 +28,7 @@
 |------|----------------|
 | `infra/components/cloudrun.py` | Direct VPC Egress config, remove connector |
 | `infra/components/network.py` | Firewall rule for Cloud Run subnet |
+| `infra/__main__.py` | Update call site for renamed parameter |
 
 ---
 
@@ -43,6 +44,7 @@
 
 ```python
 # tests/mcp/test_error_boundary.py
+"""Tests for MCP error boundary module."""
 import pytest
 from context_service.mcp.error_boundary import _classify_backend
 
@@ -82,9 +84,9 @@ Expected: FAIL with "ModuleNotFoundError: No module named 'context_service.mcp.e
 # src/context_service/mcp/error_boundary.py
 """Error boundary for MCP tools.
 
-Catches backend exceptions and wraps them in MCPBackendError to prevent
-FastMCP session corruption. Backend errors are classified for logging
-and retry decisions.
+Catches backend exceptions and converts them to JSON-RPC -32000 errors,
+preventing FastMCP session corruption. Backend errors are classified for
+logging and retry decisions.
 """
 from __future__ import annotations
 
@@ -179,6 +181,14 @@ class TestMCPBackendError:
     def test_default_retriable(self):
         exc = MCPBackendError(backend="redis", message="timeout")
         assert exc.retriable is True
+
+    def test_jsonrpc_error_code(self):
+        exc = MCPBackendError(backend="qdrant", message="timeout", retriable=True)
+        assert exc.jsonrpc_code == -32000  # Server error for retriable
+
+    def test_jsonrpc_error_code_non_retriable(self):
+        exc = MCPBackendError(backend="postgres", message="auth failed", retriable=False)
+        assert exc.jsonrpc_code == -32000  # Still server error, but not retriable
 ```
 
 - [ ] **Step 10: Run test to verify it fails**
@@ -186,26 +196,38 @@ class TestMCPBackendError:
 Run: `uv run pytest tests/mcp/test_error_boundary.py::TestMCPBackendError -v`
 Expected: FAIL with "cannot import name 'MCPBackendError'"
 
-- [ ] **Step 11: Implement MCPBackendError**
+- [ ] **Step 11: Implement MCPBackendError with JSON-RPC code**
 
 ```python
 # src/context_service/mcp/error_boundary.py (insert after imports, before _classify_backend)
+from mcp.shared.exceptions import McpError
+from mcp.types import INTERNAL_ERROR
 
 
-class MCPBackendError(Exception):
-    """Raised when a backend operation fails.
+class MCPBackendError(McpError):
+    """Backend error that maps to JSON-RPC -32000.
+
+    Extends McpError so FastMCP serializes it properly as a JSON-RPC error
+    response instead of letting it propagate and corrupt session state.
 
     Attributes:
         backend: Which backend caused the error (qdrant, redis, memgraph, postgres, unknown)
         message: Human-readable error message
         retriable: Whether client should retry after backoff
+        jsonrpc_code: JSON-RPC error code (-32000 for server errors)
     """
 
     def __init__(self, backend: str, message: str, retriable: bool = True) -> None:
         self.backend = backend
         self.message = message
         self.retriable = retriable
-        super().__init__(message)
+        self.jsonrpc_code = INTERNAL_ERROR  # -32000
+        # McpError expects (code, message, data)
+        super().__init__(
+            INTERNAL_ERROR,
+            f"{backend} error: {message}",
+            {"backend": backend, "retriable": retriable},
+        )
 ```
 
 - [ ] **Step 12: Run test to verify it passes**
@@ -215,14 +237,14 @@ Expected: PASS
 
 - [ ] **Step 13: Write failing test for mcp_error_boundary decorator**
 
+Note: The repo uses `asyncio_mode = "auto"` in pytest config, so async tests run automatically without markers.
+
 ```python
 # tests/mcp/test_error_boundary.py (append)
-import pytest
 from context_service.mcp.error_boundary import mcp_error_boundary, MCPBackendError
 
 
 class TestMCPErrorBoundary:
-    @pytest.mark.anyio
     async def test_passes_through_success(self):
         @mcp_error_boundary
         async def successful_tool():
@@ -231,8 +253,7 @@ class TestMCPErrorBoundary:
         result = await successful_tool()
         assert result == {"result": "ok"}
 
-    @pytest.mark.anyio
-    async def test_wraps_backend_error(self):
+    async def test_wraps_backend_error_as_mcp_error(self):
         @mcp_error_boundary
         async def failing_tool():
             raise Exception("qdrant connection timeout")
@@ -242,9 +263,8 @@ class TestMCPErrorBoundary:
 
         assert exc_info.value.backend == "qdrant"
         assert exc_info.value.retriable is True
-        assert "qdrant" in exc_info.value.message
+        assert exc_info.value.jsonrpc_code == -32000
 
-    @pytest.mark.anyio
     async def test_preserves_already_wrapped_error(self):
         @mcp_error_boundary
         async def tool_with_wrapped_error():
@@ -267,24 +287,27 @@ Expected: FAIL with "cannot import name 'mcp_error_boundary'"
 ```python
 # src/context_service/mcp/error_boundary.py (append after MCPBackendError)
 import functools
-from typing import Callable, TypeVar
+from collections.abc import Awaitable, Callable
+from typing import ParamSpec, TypeVar
 
 import structlog
 
 logger = structlog.get_logger(__name__)
 
-T = TypeVar("T")
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
-def mcp_error_boundary(func: Callable[..., T]) -> Callable[..., T]:
+def mcp_error_boundary(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
     """Wrap MCP tool handlers to catch backend errors cleanly.
 
-    Returns structured MCPBackendError instead of letting exceptions propagate
-    to FastMCP's session layer, which can corrupt session state.
+    Converts backend exceptions to MCPBackendError (which extends McpError),
+    so FastMCP serializes them as JSON-RPC -32000 errors instead of letting
+    them propagate and corrupt session state.
     """
 
     @functools.wraps(func)
-    async def wrapper(*args, **kwargs) -> T:  # type: ignore[return]
+    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
         try:
             return await func(*args, **kwargs)
         except MCPBackendError:
@@ -301,7 +324,7 @@ def mcp_error_boundary(func: Callable[..., T]) -> Callable[..., T]:
             )
             raise MCPBackendError(
                 backend=backend,
-                message=f"{backend} error: {e}",
+                message=str(e),
                 retriable=retriable,
             ) from e
 
@@ -322,9 +345,9 @@ Expected: All tests PASS
 
 ```bash
 git add src/context_service/mcp/error_boundary.py tests/mcp/test_error_boundary.py
-git commit -m "feat(mcp): add error boundary for backend error handling
+git commit -m "feat(mcp): add error boundary with JSON-RPC -32000 mapping
 
-- MCPBackendError wraps backend exceptions with classification
+- MCPBackendError extends McpError for proper JSON-RPC serialization
 - _classify_backend identifies qdrant/redis/memgraph/postgres
 - _is_retriable determines if error is transient
 - @mcp_error_boundary decorator for tool handlers"
@@ -342,6 +365,7 @@ git commit -m "feat(mcp): add error boundary for backend error handling
 
 ```python
 # tests/mcp/test_session_recovery.py
+"""Tests for MCP session recovery middleware."""
 import pytest
 from starlette.testclient import TestClient
 from starlette.applications import Starlette
@@ -383,9 +407,9 @@ class TestMCPSessionRecoveryMiddleware:
             raise ValueError("Something else went wrong")
 
         app = make_test_app(handler)
-        client = TestClient(app, raise_server_exceptions=False)
-        response = client.post("/mcp/test")
-        assert response.status_code == 500
+        with pytest.raises(ValueError, match="Something else went wrong"):
+            client = TestClient(app, raise_server_exceptions=True)
+            client.post("/mcp/test")
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -478,31 +502,36 @@ client re-initialization per spec 2025-11-25"
 
 - [ ] **Step 1: Read current app.py MCP setup**
 
-Run: `uv run grep -n "MCPDispatcher\|mcp_app\|create_mcp_server" src/context_service/api/app.py`
+Run: `grep -n "MCPDispatcher\|mcp_app\|create_mcp_server" src/context_service/api/app.py`
 
 Understand the current wiring before modifying.
 
-- [ ] **Step 2: Add middleware import and wiring**
+- [ ] **Step 2: Add middleware import at top of file**
 
-Edit `src/context_service/api/app.py`:
+Edit `src/context_service/api/app.py`, add import near other imports (around line 20):
 
 ```python
-# After line ~303 (after "if settings.mcp_enabled:")
-# Add import at top of the if block:
-        from context_service.mcp.session_recovery import MCPSessionRecoveryMiddleware
-
-# Change line ~328 from:
-#     return _MCPDispatcher(app, mcp_app, prefix="/mcp")
-# to:
-        return _MCPDispatcher(app, MCPSessionRecoveryMiddleware(mcp_app), prefix="/mcp")
+from context_service.mcp.session_recovery import MCPSessionRecoveryMiddleware
 ```
 
-- [ ] **Step 3: Run existing MCP tests to verify no regression**
+- [ ] **Step 3: Wire middleware into MCP dispatcher**
 
-Run: `uv run pytest tests/mcp/ -v -k "not test_error_boundary and not test_session_recovery" --ignore=tests/mcp/test_error_boundary.py --ignore=tests/mcp/test_session_recovery.py`
+Find the line (around 328):
+```python
+return _MCPDispatcher(app, mcp_app, prefix="/mcp")
+```
+
+Change it to:
+```python
+return _MCPDispatcher(app, MCPSessionRecoveryMiddleware(mcp_app), prefix="/mcp")
+```
+
+- [ ] **Step 4: Run existing MCP tests to verify no regression**
+
+Run: `uv run pytest tests/mcp/ -v --ignore=tests/mcp/test_error_boundary.py --ignore=tests/mcp/test_session_recovery.py`
 Expected: Existing tests PASS
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add src/context_service/api/app.py
@@ -524,8 +553,17 @@ spec-compliant 404 on session corruption"
 - Modify: `src/context_service/mcp/tools/trace.py`
 - Modify: `src/context_service/mcp/tools/link.py`
 - Modify: `src/context_service/mcp/tools/patterns.py`
-- Modify: `src/context_service/mcp/tools/reason.py` (if exists)
-- Modify: `src/context_service/mcp/tools/reflect.py` (if exists)
+
+**Important:** Decorator stacking order matters. The `@mcp_error_boundary` decorator must be **INSIDE** (below) the `@mcp.tool()` decorator:
+
+```python
+@mcp.tool()  # OUTER - registers the tool with FastMCP
+@mcp_error_boundary  # INNER - wraps the actual function
+async def my_tool(...):
+    ...
+```
+
+This ensures the error boundary catches exceptions from the tool implementation before FastMCP sees them.
 
 - [ ] **Step 1: List all MCP tool files**
 
@@ -535,39 +573,41 @@ Identify which tool files need the decorator.
 
 - [ ] **Step 2: Apply decorator to remember.py**
 
-Add import and decorator:
+Add import at top:
 ```python
-# At top of file, add:
 from context_service.mcp.error_boundary import mcp_error_boundary
+```
 
-# Find the main tool function (async def remember(...)) and add decorator:
-@mcp_error_boundary
+Find the tool function and add decorator **below** `@mcp.tool()`:
+```python
+@mcp.tool()
+@mcp_error_boundary  # Add this line
 async def remember(...):
 ```
 
 - [ ] **Step 3: Apply decorator to learn.py**
 
-Same pattern as Step 2.
+Same pattern: import at top, `@mcp_error_boundary` below `@mcp.tool()`.
 
 - [ ] **Step 4: Apply decorator to recall.py**
 
-Same pattern as Step 2.
+Same pattern.
 
 - [ ] **Step 5: Apply decorator to believe.py**
 
-Same pattern as Step 2.
+Same pattern.
 
 - [ ] **Step 6: Apply decorator to trace.py**
 
-Same pattern as Step 2.
+Same pattern.
 
 - [ ] **Step 7: Apply decorator to link.py**
 
-Same pattern as Step 2.
+Same pattern.
 
 - [ ] **Step 8: Apply decorator to patterns.py**
 
-Same pattern as Step 2.
+Same pattern.
 
 - [ ] **Step 9: Apply decorator to remaining tool files**
 
@@ -589,8 +629,8 @@ Expected: All tests PASS
 git add src/context_service/mcp/tools/
 git commit -m "feat(mcp): apply error boundary to all MCP tools
 
-Wraps tool handlers with @mcp_error_boundary to prevent
-backend errors from corrupting FastMCP session state"
+Wraps tool handlers with @mcp_error_boundary (below @mcp.tool())
+to convert backend errors to JSON-RPC -32000 responses"
 ```
 
 ---
@@ -608,52 +648,62 @@ Run: `cat infra/components/cloudrun.py`
 
 Understand current VPC connector setup.
 
-- [ ] **Step 2: Remove VPC Connector, add Direct VPC Egress**
+- [ ] **Step 2: Remove VPC Connector resource**
 
-Edit `infra/components/cloudrun.py`:
-
+Delete the VPC Access Connector block (around lines 29-39):
 ```python
-# Remove these lines (around line 29-39):
-#         # VPC Access Connector
-#         self.connector = vpcaccess.Connector(
-#             f"{name}-connector",
-#             ...
-#         )
-
-# Change vpc_access block (around line 74-77) from:
-#                 vpc_access=cloudrunv2.ServiceTemplateVpcAccessArgs(
-#                     connector=self.connector.id,
-#                     egress="ALL_TRAFFIC",
-#                 ),
-# to:
-                vpc_access=cloudrunv2.ServiceTemplateVpcAccessArgs(
-                    network_interfaces=[
-                        cloudrunv2.ServiceTemplateVpcAccessNetworkInterfaceArgs(
-                            network=vpc_id,
-                            subnetwork=connector_subnet_id,  # Reuse the subnet parameter
-                        )
-                    ],
-                    egress="ALL_TRAFFIC",
-                ),
-
-# Remove the vpcaccess import if no longer needed:
-# from pulumi_gcp import cloudrunv2, vpcaccess
-# becomes:
-# from pulumi_gcp import cloudrunv2
-
-# Remove self.connector from register_outputs if present
+# DELETE THIS BLOCK:
+# self.connector = vpcaccess.Connector(
+#     f"{name}-connector",
+#     ...
+# )
 ```
 
-- [ ] **Step 3: Update __init__.py constructor signature if needed**
+- [ ] **Step 3: Update vpc_access to use Direct VPC Egress**
 
-The `connector_subnet_id` parameter is already passed but was used for the connector. Now it's the subnet for Direct VPC Egress. No signature change needed.
+Change the vpc_access block (around line 74-77) from:
+```python
+vpc_access=cloudrunv2.ServiceTemplateVpcAccessArgs(
+    connector=self.connector.id,
+    egress="ALL_TRAFFIC",
+),
+```
 
-- [ ] **Step 4: Run Pulumi preview**
+To:
+```python
+vpc_access=cloudrunv2.ServiceTemplateVpcAccessArgs(
+    network_interfaces=[
+        cloudrunv2.ServiceTemplateVpcAccessNetworkInterfaceArgs(
+            network=vpc_id,
+            subnetwork=connector_subnet_id,
+        )
+    ],
+    egress="ALL_TRAFFIC",
+),
+```
+
+- [ ] **Step 4: Remove vpcaccess import**
+
+Change:
+```python
+from pulumi_gcp import cloudrunv2, vpcaccess
+```
+
+To:
+```python
+from pulumi_gcp import cloudrunv2
+```
+
+- [ ] **Step 5: Remove self.connector from register_outputs if present**
+
+Check `register_outputs` block and remove any connector reference.
+
+- [ ] **Step 6: Run Pulumi preview**
 
 Run: `cd infra && pulumi preview`
 Expected: Shows removal of VPC Connector, update to Cloud Run service
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add infra/components/cloudrun.py
@@ -673,11 +723,11 @@ git commit -m "infra: migrate Cloud Run to Direct VPC Egress
 
 - [ ] **Step 1: Read current network.py firewall rules**
 
-Run: `uv run grep -n "Firewall\|fw_" infra/components/network.py`
+Run: `grep -n "Firewall\|fw_" infra/components/network.py`
 
 - [ ] **Step 2: Add firewall rule for Cloud Run Direct VPC Egress**
 
-Edit `infra/components/network.py`, add after existing firewall rules:
+Edit `infra/components/network.py`, add after existing firewall rules (around line 87):
 
 ```python
         # Firewall: allow Cloud Run Direct VPC Egress to StatefulHost
@@ -695,14 +745,18 @@ Edit `infra/components/network.py`, add after existing firewall rules:
         )
 ```
 
-- [ ] **Step 3: Remove connector subnet if no longer needed**
+- [ ] **Step 3: Keep connector subnet for Direct VPC Egress**
 
-Check if `self.vpc_connector` subnet is only used for the removed VPC connector. If so, it can be removed to clean up. If it's reused for Direct VPC Egress subnet, keep it.
+The `self.vpc_connector` subnet (10.0.3.0/28) was for the VPC Connector. Direct VPC Egress uses the private subnet (10.0.2.0/24) directly. The connector subnet can be removed, but verify it's not referenced elsewhere first.
+
+Run: `grep -r "connector_subnet\|vpc_connector" infra/`
+
+If only used in cloudrun.py for the old connector, it can be removed. If referenced in `__main__.py` or elsewhere, update those references.
 
 - [ ] **Step 4: Run Pulumi preview**
 
 Run: `cd infra && pulumi preview`
-Expected: Shows new firewall rule, possibly removal of connector subnet
+Expected: Shows new firewall rule
 
 - [ ] **Step 5: Commit**
 
@@ -752,10 +806,10 @@ Look for `mcp_session_corrupted` or `mcp_tool_error` log entries to verify error
 - [ ] **Step 6: Final commit**
 
 ```bash
-git add .
+git add infra/components/cloudrun.py infra/components/network.py
 git commit -m "feat: MCP connection stability - Phase 1 + Phase 2 complete
 
-- Error boundaries prevent session corruption
+- Error boundaries convert backend errors to JSON-RPC -32000
 - HTTP 404 on corrupted sessions per MCP spec
 - Direct VPC Egress replaces VPC Connector"
 ```
@@ -764,7 +818,7 @@ git commit -m "feat: MCP connection stability - Phase 1 + Phase 2 complete
 
 ## Done Criteria
 
-- [ ] Backend errors (Qdrant, Redis, Memgraph) return clean MCPBackendError, not -32602
+- [ ] Backend errors (Qdrant, Redis, Memgraph) return JSON-RPC -32000, not -32602
 - [ ] Session corruption returns HTTP 404, client re-initializes
 - [ ] VPC Connector removed, Direct VPC Egress active
 - [ ] All existing tests pass
