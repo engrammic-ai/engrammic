@@ -109,7 +109,9 @@ class LiteLLMEmbeddingService:
                     uncached_indices.append(i)
 
             if not uncached_texts:
-                return [r for r in cached_results if r is not None]
+                result = [r for r in cached_results if r is not None]
+                assert len(result) == len(texts), "Cache/batch length mismatch"
+                return result
 
             # Embed uncached texts
             embeddings = await self._embed_batch(uncached_texts)
@@ -119,7 +121,9 @@ class LiteLLMEmbeddingService:
                 await self._embedding_cache.set(text, task, embedding)
                 cached_results[uncached_indices[idx]] = embedding
 
-            return [r for r in cached_results if r is not None]
+            result = [r for r in cached_results if r is not None]
+            assert len(result) == len(texts), "Cache/batch length mismatch"
+            return result
 
         return await self._embed_batch(texts)
 
@@ -172,8 +176,7 @@ class LiteLLMEmbeddingService:
     async def embed_query(self, query: str) -> list[float]:
         """Generate embedding for a search query.
 
-        LiteLLM doesn't distinguish between passage and query embeddings,
-        so this simply delegates to embed_single.
+        Uses task='query' cache key to separate from passage embeddings.
 
         Args:
             query: Query text to embed.
@@ -181,7 +184,14 @@ class LiteLLMEmbeddingService:
         Returns:
             Embedding vector.
         """
-        return await self.embed_single(query)
+        if self._embedding_cache:
+            cached = await self._embedding_cache.get(query, "query")
+            if cached is not None:
+                return cached
+            vector = (await self._embed_batch([query]))[0]
+            await self._embedding_cache.set(query, "query", vector)
+            return vector
+        return (await self._embed_batch([query]))[0]
 
     async def close(self) -> None:
         """Close any resources (no-op for LiteLLM)."""

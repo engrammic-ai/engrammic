@@ -131,5 +131,3 @@ markers = [
     "integration: tests that require live docker stack (Memgraph, Qdrant, Redis)",
 ]
 
-[tool.uv.sources]
-engrammic-primitives = { path = "../primitives", editable = true }

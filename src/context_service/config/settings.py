@@ -1013,6 +1013,7 @@ class Settings(BaseSettings):
     node_cache_ttl: int = Field(default=3600)
     embedding_cache_ttl: int = Field(default=604800)
     lookup_cache_ttl: int = Field(default=300)
+    tei_url: str | None = Field(default=None, description="TEI sidecar URL for local embeddings")
 
     # =========================================================================
     # Temporal Decay Settings (unified decay via heat asset)
@@ -1077,7 +1078,7 @@ class Settings(BaseSettings):
     postgres_port: int = Field(default=5432)
     postgres_user: str = Field(default="context")
     postgres_password: SecretStr = Field(default=SecretStr("context"))
-    postgres_database: str = Field(default="context_service")
+    postgres_database: str = Field(default="engrammic")
 
     @property
     def postgres_dsn(self) -> str:

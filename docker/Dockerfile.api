@@ -6,14 +6,11 @@ WORKDIR /app
 # Install uv for fast dependency resolution
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy dependency files (uv.lock not needed - we re-resolve for PyPI primitives)
-COPY pyproject.toml README.md ./
+# Copy dependency files
+COPY pyproject.toml uv.lock README.md ./
 
-# Remove local path source override - install primitives from PyPI
-RUN sed -i '/engrammic-primitives.*path/d' pyproject.toml
-
-# Install production dependencies (re-resolves to fetch primitives from PyPI)
-RUN uv sync --no-dev --no-install-project
+# Install production dependencies
+RUN uv sync --frozen --no-dev --no-install-project
 
 # Stage 2: Runtime
 FROM python:3.13-slim

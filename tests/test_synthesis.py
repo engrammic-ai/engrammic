@@ -139,7 +139,10 @@ async def test_synthesize_belief_write_params() -> None:
     assert params["evidence_count"] == 3
     assert abs(params["confidence"] - 0.75) < 1e-9
     assert params["content"] == "Belief text."
-    assert sorted(params["fact_ids"]) == sorted(f["fact_id"] for f in facts)
+    # fact_ids are now passed in the second write (edge creation)
+    if len(store.write_log) > 1:
+        _, edge_params = store.write_log[1]
+        assert sorted(edge_params["fact_ids"]) == sorted(f["fact_id"] for f in facts)
 
 
 @pytest.mark.asyncio

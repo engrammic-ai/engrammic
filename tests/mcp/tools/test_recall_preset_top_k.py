@@ -32,6 +32,7 @@ def _patch(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
         class A:
             org_id = "org-1"
             session_id = None
+            db_user_id = None
 
         return A()
 

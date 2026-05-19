@@ -4,7 +4,7 @@ config:
   gcp:zone: europe-north1-a
   engrammic-infra:environment: beta
   # StatefulHost (Memgraph, Qdrant, Redis only)
-  engrammic-infra:instance_type: e2-standard-2
+  engrammic-infra:instance_type: e2-standard-4
   engrammic-infra:use_spot: "false"
   engrammic-infra:disk_size_memgraph: "50"
   engrammic-infra:disk_size_qdrant: "50"

@@ -134,6 +134,17 @@ build tag="latest":
 build-beacon tag="latest":
     gcloud builds submit --config=cloudbuild.beacon.yaml --substitutions=_IMAGE={{registry}}/engrammic-beacon:{{tag}} --region={{region}} .
 
+# Build and push dagster image
+build-dagster tag="latest":
+    gcloud builds submit --tag {{registry}}/engrammic-dagster:{{tag}} --dockerfile docker/Dockerfile.dagster --timeout 600s .
+    gcloud artifacts docker tags add {{registry}}/engrammic-dagster:{{tag}} {{registry}}/engrammic-dagster:latest
+
+# Build all images
+build-all tag="latest":
+    just build {{tag}}
+    just build-beacon {{tag}}
+    just build-dagster {{tag}}
+
 # Sync secrets to GCP Secret Manager (dev)
 secrets-sync:
     ENVIRONMENT=dev GCP_PROJECT={{project}} uv run python scripts/sync_secrets.py
@@ -142,6 +153,57 @@ secrets-sync:
 secrets-sync-beta:
     ENVIRONMENT=beta GCP_PROJECT={{project}} uv run python scripts/sync_secrets.py
 
-# Run migrations on beta Cloud SQL (via stateful host)
+# Run migrations on beta Cloud SQL (via API container on stateful host)
 db-migrate-beta:
-    gcloud compute ssh engrammic-beta-stateful --project={{project}} --zone={{zone}} --tunnel-through-iap --command="docker run --rm postgres:16-alpine psql 'postgresql://context:\$(gcloud secrets versions access latest --secret=engrammic-beta-postgres-password --project={{project}})@10.162.0.3:5432/engrammic?sslmode=disable' -c '\dt'"
+    gcloud compute ssh engrammic-beta-stateful --project={{project}} --zone={{zone}} --tunnel-through-iap --command='export PGPASSWORD=$$(gcloud secrets versions access latest --secret=engrammic-beta-postgres-password --project={{project}}) && docker run --rm -e POSTGRES_HOST=10.162.0.3 -e POSTGRES_PORT=5432 -e POSTGRES_USER=context -e POSTGRES_PASSWORD="$$PGPASSWORD" -e POSTGRES_DATABASE=engrammic {{registry}}/engrammic-api:latest alembic upgrade head'
+
+# Check beta database tables
+db-tables-beta:
+    gcloud compute ssh engrammic-beta-stateful --project={{project}} --zone={{zone}} --tunnel-through-iap --command='export PGPASSWORD=$$(gcloud secrets versions access latest --secret=engrammic-beta-postgres-password --project={{project}}) && docker run --rm -e PGPASSWORD="$$PGPASSWORD" postgres:16-alpine psql "postgresql://context@10.162.0.3:5432/engrammic" -c "\dt"'
+
+# Check alembic version on beta
+db-version-beta:
+    gcloud compute ssh engrammic-beta-stateful --project={{project}} --zone={{zone}} --tunnel-through-iap --command='export PGPASSWORD=$$(gcloud secrets versions access latest --secret=engrammic-beta-postgres-password --project={{project}}) && docker run --rm -e PGPASSWORD="$$PGPASSWORD" postgres:16-alpine psql "postgresql://context@10.162.0.3:5432/engrammic" -c "SELECT * FROM alembic_version;"'
+
+# Interactive psql on beta (via stateful host)
+db-psql-beta:
+    gcloud compute ssh engrammic-beta-stateful --project={{project}} --zone={{zone}} --tunnel-through-iap --command='export PGPASSWORD=$$(gcloud secrets versions access latest --secret=engrammic-beta-postgres-password --project={{project}}) && docker run -it --rm -e PGPASSWORD="$$PGPASSWORD" postgres:16-alpine psql "postgresql://context@10.162.0.3:5432/engrammic"'
+
+# --- Secrets Management ---
+
+# Push local .env.{env} secrets to GCP Secret Manager
+secrets-push env="beta":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Pushing secrets for {{env}} to GCP Secret Manager..."
+    if [ ! -f ".env.{{env}}" ]; then
+        echo "Error: .env.{{env}} not found"
+        exit 1
+    fi
+    grep -E "^[A-Z_]+=.+" .env.{{env}} | while IFS= read -r line; do
+        key=$(echo "$line" | cut -d= -f1 | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+        value=$(echo "$line" | cut -d= -f2-)
+        secret_name="engrammic-{{env}}-$key"
+        echo "  -> $secret_name"
+        if gcloud secrets describe "$secret_name" &>/dev/null; then
+            echo -n "$value" | gcloud secrets versions add "$secret_name" --data-file=-
+        else
+            echo -n "$value" | gcloud secrets create "$secret_name" --data-file=- --replication-policy=automatic
+        fi
+    done
+    echo "Done."
+
+# Pull GCP secrets to local .env.{env}
+secrets-pull env="beta":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Pulling secrets for {{env}} from GCP Secret Manager..."
+    > .env.{{env}}
+    for secret in $(gcloud secrets list --filter="name:engrammic-{{env}}" --format="value(name)"); do
+        key=$(basename "$secret" | sed "s/engrammic-{{env}}-//" | tr '-' '_' | tr '[:lower:]' '[:upper:]')
+        value=$(gcloud secrets versions access latest --secret="$secret" 2>/dev/null || echo "")
+        if [ -n "$value" ]; then
+            echo "$key=$value" >> .env.{{env}}
+        fi
+    done
+    echo "Wrote .env.{{env}}"

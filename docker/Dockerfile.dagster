@@ -1,0 +1,40 @@
+# Stage 1: Build
+FROM python:3.13-slim AS builder
+
+WORKDIR /app
+
+# Install uv for fast dependency resolution
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Copy dependency files
+COPY pyproject.toml uv.lock README.md ./
+
+# Install production dependencies
+RUN uv sync --frozen --no-dev --no-install-project
+
+# Copy application code
+COPY src/ /app/src/
+COPY config/ /app/config/
+COPY dagster.yaml workspace.yaml ./
+
+# Install the project
+RUN uv sync --frozen --no-dev
+
+# Stage 2: Runtime
+FROM python:3.13-slim
+
+RUN useradd -m -u 1000 dagster
+
+WORKDIR /app
+COPY --from=builder /app/.venv /app/.venv
+COPY --from=builder /app/src /app/src
+COPY --from=builder /app/config /app/config
+COPY --from=builder /app/dagster.yaml /app/workspace.yaml ./
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app/src"
+ENV DAGSTER_HOME="/app"
+
+RUN chown -R dagster:dagster /app
+
+USER dagster

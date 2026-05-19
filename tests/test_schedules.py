@@ -34,15 +34,15 @@ def test_sage_groundskeeper_schedule_registered(defs: dg.Definitions) -> None:
 
 
 def test_sage_custodian_schedule_cron() -> None:
-    assert sage_custodian_schedule.cron_schedule == "*/10 * * * *"
+    assert sage_custodian_schedule.cron_schedule == "0 */2 * * *"
 
 
 def test_sage_synthesizer_schedule_cron() -> None:
-    assert sage_synthesizer_schedule.cron_schedule == "*/30 * * * *"
+    assert sage_synthesizer_schedule.cron_schedule == "0 * * * *"
 
 
 def test_sage_groundskeeper_schedule_cron() -> None:
-    assert sage_groundskeeper_schedule.cron_schedule == "*/15 * * * *"
+    assert sage_groundskeeper_schedule.cron_schedule == "0 * * * *"
 
 
 def test_all_schedules_count() -> None:

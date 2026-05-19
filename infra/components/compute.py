@@ -36,9 +36,86 @@ services:
       - redis-data:/data
     command: ["redis-server", "--appendonly", "yes"]
     restart: unless-stopped
-{postgres_service}
+{postgres_service}{dagster_services}
 volumes:
   redis-data:
+'''
+
+DAGSTER_SERVICES = '''
+  dagster-code-server:
+    image: europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-dagster:latest
+    container_name: engrammic-dagster-code
+    command: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-m", "context_service.pipelines.definitions"]
+    ports:
+      - "4000:4000"
+    environment:
+      - DAGSTER_HOME=/app
+      - MEMGRAPH_URI=bolt://memgraph:7687
+      - QDRANT_URL=http://qdrant:6333
+      - REDIS_URL=redis://redis:6379
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_USER=context
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DATABASE=engrammic
+      - VERTEX_PROJECT_ID=engrammic
+      - VERTEX_LOCATION=europe-north1
+      - EMBEDDING_PROVIDER=vertex
+      - LLM_PROVIDER=vertex_gemini
+      - DEFAULT_LLM_MODEL=gemini-2.5-flash
+      - CUSTODIAN__ENABLED=true
+    depends_on:
+      - memgraph
+      - qdrant
+      - redis
+    restart: unless-stopped
+
+  dagster-webserver:
+    image: europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-dagster:latest
+    container_name: engrammic-dagster-web
+    command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "workspace.yaml"]
+    ports:
+      - "3000:3000"
+    environment:
+      - DAGSTER_HOME=/app
+      - MEMGRAPH_URI=bolt://memgraph:7687
+      - QDRANT_URL=http://qdrant:6333
+      - REDIS_URL=redis://redis:6379
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_USER=context
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DATABASE=engrammic
+      - VERTEX_PROJECT_ID=engrammic
+      - VERTEX_LOCATION=europe-north1
+      - EMBEDDING_PROVIDER=vertex
+      - LLM_PROVIDER=vertex_gemini
+      - DEFAULT_LLM_MODEL=gemini-2.5-flash
+      - CUSTODIAN__ENABLED=true
+    depends_on:
+      - dagster-code-server
+    restart: unless-stopped
+
+  dagster-daemon:
+    image: europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-dagster:latest
+    container_name: engrammic-dagster-daemon
+    command: ["dagster-daemon", "run"]
+    environment:
+      - DAGSTER_HOME=/app
+      - MEMGRAPH_URI=bolt://memgraph:7687
+      - QDRANT_URL=http://qdrant:6333
+      - REDIS_URL=redis://redis:6379
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_USER=context
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DATABASE=engrammic
+      - VERTEX_PROJECT_ID=engrammic
+      - VERTEX_LOCATION=europe-north1
+      - EMBEDDING_PROVIDER=vertex
+      - LLM_PROVIDER=vertex_gemini
+      - DEFAULT_LLM_MODEL=gemini-2.5-flash
+      - CUSTODIAN__ENABLED=true
+    depends_on:
+      - dagster-code-server
+    restart: unless-stopped
 '''
 
 POSTGRES_SERVICE = '''
@@ -52,7 +129,7 @@ POSTGRES_SERVICE = '''
     environment:
       - POSTGRES_USER=context
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=context_service
+      - POSTGRES_DB=engrammic
     restart: unless-stopped
 '''
 
@@ -66,6 +143,7 @@ class StatefulHost(pulumi.ComponentResource):
         network: compute.Network,
         subnet: compute.Subnetwork,
         service_account_email: str,
+        postgres_host: pulumi.Input[str] | None = None,
         opts: pulumi.ResourceOptions | None = None,
     ):
         super().__init__("engrammic:compute:StatefulHost", name, None, opts)
@@ -81,6 +159,8 @@ class StatefulHost(pulumi.ComponentResource):
         disk_size_postgres = int(config.get("disk_size_postgres") or "50")
         use_cloudsql = config.get_bool("use_cloudsql") or False
         zone = gcp_config.require("zone")
+
+        self._postgres_host = postgres_host
 
         # Persistent disks
         self.memgraph_disk = compute.Disk(
@@ -137,7 +217,11 @@ class StatefulHost(pulumi.ComponentResource):
 
         # Build compose content
         postgres_service = "" if use_cloudsql else POSTGRES_SERVICE
-        compose_content = DOCKER_COMPOSE_TEMPLATE.format(postgres_service=postgres_service)
+        dagster_services = DAGSTER_SERVICES
+        compose_content = DOCKER_COMPOSE_TEMPLATE.format(
+            postgres_service=postgres_service,
+            dagster_services=dagster_services,
+        )
 
         # Startup script - formats disks if needed, mounts with nofail
         startup_script = """#!/bin/bash
@@ -159,6 +243,9 @@ if ! command -v docker-compose &> /dev/null; then
     curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
     chmod +x /usr/local/bin/docker-compose
 fi
+
+# Configure Docker to authenticate with Artifact Registry
+gcloud auth configure-docker europe-north1-docker.pkg.dev --quiet
 
 # Memgraph requires higher vm.max_map_count
 sysctl -w vm.max_map_count=262144
@@ -207,10 +294,16 @@ for DISK in $DISKS; do
     fi
 done
 
-# Fetch secrets from Secret Manager (only if not using Cloud SQL)
-if [ "$USE_CLOUDSQL" != "true" ]; then
-    echo "Fetching Postgres password from Secret Manager..."
-    export POSTGRES_PASSWORD=$(gcloud secrets versions access latest --secret="engrammic-$ENV-postgres-password" --project="$PROJECT" 2>/dev/null || echo "devpassword")
+# Fetch secrets from Secret Manager
+echo "Fetching Postgres password from Secret Manager..."
+export POSTGRES_PASSWORD=$(gcloud secrets versions access latest --secret="engrammic-$ENV-postgres-password" --project="$PROJECT" 2>/dev/null || echo "devpassword")
+
+# Set POSTGRES_HOST based on Cloud SQL config
+if [ "$USE_CLOUDSQL" = "true" ]; then
+    # Read Cloud SQL IP from instance metadata (set by Pulumi)
+    export POSTGRES_HOST=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/postgres-host" -H "Metadata-Flavor: Google")
+else
+    export POSTGRES_HOST=postgres
 fi
 
 mkdir -p /opt/engrammic
@@ -218,6 +311,7 @@ mkdir -p /opt/engrammic
 # Write .env file for docker-compose
 cat > /opt/engrammic/.env << ENV_EOF
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+POSTGRES_HOST=${POSTGRES_HOST}
 ENV_EOF
 chmod 600 /opt/engrammic/.env
 
@@ -284,6 +378,9 @@ echo "Stateful host ready"
             ),
             metadata_startup_script=startup_script,
             tags=["stateful-host"],
+            metadata={
+                "postgres-host": self._postgres_host or "postgres",
+            },
             allow_stopping_for_update=True,
             opts=pulumi.ResourceOptions(parent=self),
         )
