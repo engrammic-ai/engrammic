@@ -5,6 +5,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 ## Current state (2026-05-19)
 
 **Shipped:**
+- v2.15 Supersession Head Pointer (O(1) chain lookups via tail_id/head_id pointers)
 - v2.14 Recall Optimization Phase 4 (similarity cache for semantic near-matches)
 - v2.13 Recall Optimization Phase 3 (Qdrant scalar quantization, Matryoshka 512-dim validation)
 - v2.12 Recall Optimization Phase 2 (tiered result cache, version-based invalidation, bypass_cache/max_age_seconds params)
@@ -35,7 +36,6 @@ Active implementation plans for context-service. Completed plans are moved to `a
 | Plan | Status | Description |
 |------|--------|-------------|
 | [2026-05-19-mcp-connection-stability.md](./2026-05-19-mcp-connection-stability.md) | Ready | Error boundaries + Direct VPC Egress for MCP resilience |
-| [2026-05-19-supersession-head-pointer.md](./2026-05-19-supersession-head-pointer.md) | Ready | O(1) chain lookups via linked-list pointers (tail_id/head_id) |
 | [2026-05-19-wire-unpopulated-fields.md](./2026-05-19-wire-unpopulated-fields.md) | Ready | Wire unpopulated optional fields in recall responses |
 
 ## Future work
@@ -75,6 +75,7 @@ Specced or checkpointed for later implementation:
 ## Archive
 
 Completed plans in `archive/`:
+- Supersession Head Pointer (2026-05-19) - O(1) chain lookups via tail_id/head_id pointers
 - Recall Optimization Phase 4 (2026-05-19) - similarity cache for semantic near-matches
 - Recall Optimization Phase 3 (2026-05-19) - Qdrant scalar quantization, Matryoshka validation
 - Recall Optimization Phase 2 (2026-05-19) - tiered result cache, version-based invalidation

@@ -463,6 +463,25 @@ class MemgraphStore(EAGKnowledgeStore):
         )
         return bool(result and result[0].get("created", 0) > 0)
 
+    async def resolve_current_head(
+        self,
+        node_id: uuid.UUID,
+        silo_id: str,
+    ) -> uuid.UUID | None:
+        """Resolve the current chain head for a node using O(1) pointer lookup.
+
+        Returns the head node's id, or the input id if it's standalone/head.
+        Returns None if node doesn't exist.
+        """
+        result = await self._client.execute_query(
+            queries.RESOLVE_CURRENT_HEAD,
+            {"id": str(node_id), "silo_id": silo_id},
+        )
+        if not result:
+            return None
+        head_id = result[0].get("head_id")
+        return uuid.UUID(head_id) if head_id else None
+
     async def batch_get_nodes(
         self, node_ids: list[uuid.UUID], silo_id: str
     ) -> dict[uuid.UUID, Node]:
