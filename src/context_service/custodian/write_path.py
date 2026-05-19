@@ -422,7 +422,7 @@ class WritePath:
             claims_rejected=claims_rejected,
             edges_committed=len(surviving_edges),
             edges_rejected=edges_rejected,
-            references_upserted=0,
+            references_upserted=len(cites_batch),
             history_snapshot_created=history_created,
             skipped=False,
         )

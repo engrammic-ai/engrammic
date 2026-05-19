@@ -350,9 +350,9 @@ class NodeValidator(Protocol):
 
 ## References
 
-- `primitives/context/specs/02-layers.md` - Layer definitions
-- `primitives/context/specs/03-transitions.md` - Transition catalogue  
-- `primitives/context/specs/05-mcp-contract.md` - MCP invariants
+- `primitives/docs/02-layers.md` - Layer definitions
+- `primitives/docs/03-transitions.md` - Transition catalogue  
+- `primitives/docs/05-mcp-contract.md` - MCP invariants
 - Industry research: Neo4j GRAPH TYPE, Wikidata constraints, LangGraph reducers, AGM belief revision
 
 ## Review Notes (2026-05-16)

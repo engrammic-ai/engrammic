@@ -119,5 +119,5 @@ Optional (v1.2): `context_patterns(subject)` — list patterns involving a subje
 
 ## References
 
-- Layers spec: `../primitives/context/specs/02-layers.md` (Wisdom)
+- Layers spec: `../primitives/docs/02-layers.md` (Wisdom)
 - Clustering for co-occurrence: `src/context_service/clustering/service.py`

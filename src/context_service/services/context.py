@@ -1025,7 +1025,8 @@ class ContextService:
             WHERE c.tombstoned_at IS NULL
             RETURN c.id AS id, c.type AS type, c.content AS content,
                    c.silo_id AS silo_id, c.source_uri AS source_uri,
-                   c.content_hash AS content_hash, c.created_at AS created_at
+                   c.content_hash AS content_hash, c.created_at AS created_at,
+                   c.properties AS properties
             LIMIT 1
             """,
             {"silo_id": str(scope.silo_id), "content_hash": claim_hash},
@@ -1034,11 +1035,18 @@ class ContextService:
         if existing_rows:
             row = existing_rows[0]
             logger.debug("assert_claim_content_hash_hit", content_hash=claim_hash)
+            raw_props = row.get("properties")
+            if raw_props is None:
+                props_existing = {}
+            elif isinstance(raw_props, str):
+                props_existing = loads(raw_props)
+            else:
+                props_existing = raw_props
             existing_node = Node(
                 id=uuid.UUID(row["id"]),
                 type=row["type"],
                 content=row["content"],
-                properties={},
+                properties=props_existing,
                 silo_id=uuid.UUID(row["silo_id"]) if row.get("silo_id") else None,
                 source_uri=row.get("source_uri"),
                 content_hash=row.get("content_hash"),

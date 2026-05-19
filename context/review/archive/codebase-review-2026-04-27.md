@@ -1,7 +1,7 @@
 # Codebase Review — 2026-04-27
 
 **Mode**: full
-**Scope**: entire `src/context_service/` (118 Python files), specs at `../primitives/context/specs/`, plans at `context/plans/`
+**Scope**: entire `src/context_service/` (118 Python files), specs at `../primitives/docs/`, plans at `context/plans/`
 **Branch**: `main`   **Base**: `main` (no diff base)   **Active Phase Plan**: none
 **Prior review**: none (first review)
 **Invariants file**: not present (`context/review/invariants.md` absent — Agent 7 skipped)

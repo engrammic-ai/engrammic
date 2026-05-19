@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -114,9 +115,149 @@ class TestContextCrystallizePartialFailure:
         assert set(result["not_found"]) == {_BELIEF_A, _BELIEF_B}
 
 
+class TestContextCrystallizeRationaleChain:
+    async def test_rationale_chain_id_passed_to_write(self, fake_store):
+        chain_id = str(uuid.uuid4())
+        fake_store.seed_write_result([{"commitment_id": "x"}])
+
+        await _context_crystallize(
+            belief_ids=[_BELIEF_A], silo_id=_SILO_ID, chain_id=chain_id
+        )
+
+        _cypher, params = fake_store.write_log[0]
+        assert params["rationale_chain_id"] == chain_id
+
+    async def test_rationale_chain_id_none_by_default(self, fake_store):
+        fake_store.seed_write_result([{"commitment_id": "x"}])
+
+        await _context_crystallize(belief_ids=[_BELIEF_A], silo_id=_SILO_ID)
+
+        _cypher, params = fake_store.write_log[0]
+        assert params["rationale_chain_id"] is None
+
+    async def test_commitment_links_to_reasoning_chain(self, fake_store):
+        """Commitment records the rationale_chain_id that motivated it."""
+        chain_id = str(uuid.uuid4())
+        fake_store.seed_write_result([{"commitment_id": "x"}])
+
+        result = await _context_crystallize(
+            belief_ids=[_BELIEF_A], silo_id=_SILO_ID, chain_id=chain_id
+        )
+
+        assert len(result["commitment_ids"]) == 1
+        _cypher, params = fake_store.write_log[0]
+        assert params["rationale_chain_id"] == chain_id
+        assert params["belief_id"] == _BELIEF_A
+
+
 class TestContextCrystallizeGuards:
     async def test_empty_belief_ids_returns_error(self, fake_store):
         result = await _context_crystallize(belief_ids=[], silo_id=_SILO_ID)
 
         assert result["error"] == "missing_belief_ids"
         assert fake_store.write_log == []
+
+
+def _capture_tool_fn() -> Any:
+    """Call register() with a mock FastMCP and return the captured inner tool function."""
+    from unittest.mock import MagicMock
+
+    from context_service.mcp.tools.context_crystallize import register
+
+    captured: dict[str, Any] = {}
+
+    def fake_tool(**kwargs):
+        def decorator(fn):
+            captured["fn"] = fn
+            return fn
+
+        return decorator
+
+    mock_mcp = MagicMock()
+    mock_mcp.tool = fake_tool
+    register(mock_mcp)
+    assert "fn" in captured, "register() did not decorate a function"
+    return captured["fn"]
+
+
+class TestContextCrystallizeMCPWiring:
+    """Verify that the public MCP tool wrapper passes chain_id through to the implementation."""
+
+    async def test_chain_id_forwarded_via_mcp_wrapper(self):
+        """chain_id supplied to the MCP surface must reach _context_crystallize."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from context_service.auth.context import AuthContext
+
+        auth = AuthContext(org_id="test-org", user_id="test-user", email=None, is_dev=True)
+        chain_id = str(uuid.uuid4())
+        expected_result = {"commitment_ids": ["cid-1"], "crystallized_belief_ids": [_BELIEF_A]}
+
+        tool_fn = _capture_tool_fn()
+
+        with (
+            patch(
+                "context_service.mcp.server.get_mcp_auth_context",
+                new=AsyncMock(return_value=auth),
+            ),
+            patch(
+                "context_service.mcp.server.get_silo_service",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "context_service.services.silo.validate_silo_ownership",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "context_service.mcp.tools.context_crystallize._context_crystallize",
+                new=AsyncMock(return_value=expected_result),
+            ) as mock_impl,
+        ):
+            result = await tool_fn(
+                belief_ids=[_BELIEF_A],
+                reason="test reason",
+                silo_id=_SILO_ID,
+                chain_id=chain_id,
+            )
+
+        assert result == expected_result
+        mock_impl.assert_awaited_once_with(
+            belief_ids=[_BELIEF_A],
+            silo_id=_SILO_ID,
+            reason="test reason",
+            chain_id=chain_id,
+        )
+
+    async def test_chain_id_none_by_default_at_mcp_surface(self):
+        """Omitting chain_id at the MCP surface passes None to _context_crystallize."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from context_service.auth.context import AuthContext
+
+        auth = AuthContext(org_id="test-org", user_id="test-user", email=None, is_dev=True)
+        expected_result = {"commitment_ids": ["cid-1"], "crystallized_belief_ids": [_BELIEF_A]}
+
+        tool_fn = _capture_tool_fn()
+
+        with (
+            patch(
+                "context_service.mcp.server.get_mcp_auth_context",
+                new=AsyncMock(return_value=auth),
+            ),
+            patch(
+                "context_service.mcp.server.get_silo_service",
+                return_value=MagicMock(),
+            ),
+            patch(
+                "context_service.services.silo.validate_silo_ownership",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "context_service.mcp.tools.context_crystallize._context_crystallize",
+                new=AsyncMock(return_value=expected_result),
+            ) as mock_impl,
+        ):
+            await tool_fn(belief_ids=[_BELIEF_A], silo_id=_SILO_ID)
+
+        _call_kwargs = mock_impl.call_args.kwargs
+        assert _call_kwargs["chain_id"] is None

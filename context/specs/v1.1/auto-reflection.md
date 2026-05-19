@@ -115,6 +115,6 @@ Optional filter: `exclude_auto: bool` parameter on reflection queries.
 
 ## References
 
-- Metacognition spec: `../primitives/context/specs/04-metacognition.md`
+- Metacognition spec: `../primitives/docs/04-metacognition.md`
 - Current reflection impl: `src/context_service/mcp/tools/context_reflect.py`
 - Supersession: `src/context_service/custodian/supersession.py`

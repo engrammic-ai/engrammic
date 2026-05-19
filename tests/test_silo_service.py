@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import uuid
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
 
 from context_service.services.models import ScopeContext, derive_silo_id
-from context_service.services.silo import SiloService, validate_silo_ownership
+from context_service.services.silo import SiloService, _parse_datetime, validate_silo_ownership
 
 
 @pytest.fixture
@@ -136,6 +137,128 @@ class TestList:
         silos = await silo_service.list("org-no-silos")
 
         assert silos == []
+
+
+class TestParseDatetime:
+    def test_none_returns_none(self) -> None:
+        assert _parse_datetime(None) is None
+
+    def test_datetime_passthrough(self) -> None:
+        dt = datetime(2024, 1, 15, 12, 0, 0, tzinfo=UTC)
+        assert _parse_datetime(dt) is dt
+
+    def test_iso_string(self) -> None:
+        dt = _parse_datetime("2024-01-15T12:00:00+00:00")
+        assert isinstance(dt, datetime)
+        assert dt.year == 2024
+        assert dt.month == 1
+        assert dt.day == 15
+
+    def test_epoch_microseconds(self) -> None:
+        # epoch-microseconds for 2024-01-15T12:00:00 UTC
+        epoch_us = 1705320000 * 1_000_000
+        dt = _parse_datetime(epoch_us)
+        assert isinstance(dt, datetime)
+        assert dt.year == 2024
+
+    def test_neo4j_iso_format(self) -> None:
+        class FakeNeo4jDt:
+            def iso_format(self) -> str:
+                return "2024-01-15T12:00:00+00:00"
+
+        dt = _parse_datetime(FakeNeo4jDt())
+        assert isinstance(dt, datetime)
+        assert dt.year == 2024
+
+
+class TestSiloCreatedAtHydration:
+    @pytest.mark.asyncio
+    async def test_get_by_id_hydrates_created_at(
+        self, silo_service: SiloService, mock_store: AsyncMock
+    ) -> None:
+        silo_id = uuid.uuid4()
+        mock_store.execute_query.return_value = [
+            {
+                "id": str(silo_id),
+                "name": "my-silo",
+                "org_id": "org-1",
+                "description": "Desc",
+                "dissolvability": 0.5,
+                "created_at": "2024-01-15T12:00:00+00:00",
+            }
+        ]
+
+        scope = ScopeContext(org_id="org-1", silo_id=silo_id)
+        silo = await silo_service.get_by_id(scope)
+
+        assert silo is not None
+        assert silo.created_at is not None
+        assert isinstance(silo.created_at, datetime)
+        assert silo.created_at.year == 2024
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_created_at_none_when_missing(
+        self, silo_service: SiloService, mock_store: AsyncMock
+    ) -> None:
+        silo_id = uuid.uuid4()
+        mock_store.execute_query.return_value = [
+            {
+                "id": str(silo_id),
+                "name": "my-silo",
+                "org_id": "org-1",
+            }
+        ]
+
+        scope = ScopeContext(org_id="org-1", silo_id=silo_id)
+        silo = await silo_service.get_by_id(scope)
+
+        assert silo is not None
+        assert silo.created_at is None
+
+    @pytest.mark.asyncio
+    async def test_list_hydrates_created_at(
+        self, silo_service: SiloService, mock_store: AsyncMock
+    ) -> None:
+        mock_store.execute_query.return_value = [
+            {
+                "id": str(uuid.uuid4()),
+                "name": "silo-a",
+                "org_id": "org-1",
+                "created_at": "2024-03-10T08:00:00+00:00",
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "name": "silo-b",
+                "org_id": "org-1",
+                "created_at": None,
+            },
+        ]
+
+        silos = await silo_service.list("org-1")
+
+        assert len(silos) == 2
+        assert silos[0].created_at is not None
+        assert isinstance(silos[0].created_at, datetime)
+        assert silos[0].created_at.month == 3
+        assert silos[1].created_at is None
+
+    @pytest.mark.asyncio
+    async def test_create_query_includes_created_at(
+        self, silo_service: SiloService, mock_store: AsyncMock
+    ) -> None:
+        """Verify the CREATE Cypher query includes created_at: datetime()."""
+        mock_store.execute_query.return_value = []  # get_by_id finds nothing
+        mock_store.execute_write.return_value = None
+
+        await silo_service.get_or_create(name="new-silo", org_id="org-new")
+
+        call_args = mock_store.execute_write.call_args
+        query: str = call_args[0][0]
+        assert "created_at" in query
+        assert "datetime()" in query
+
+        returned_silo = await silo_service.get_or_create(name="another-silo", org_id="org-another")
+        assert returned_silo.created_at is not None
 
 
 class TestValidateSiloOwnership:

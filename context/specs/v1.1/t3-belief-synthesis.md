@@ -81,6 +81,6 @@ Optional: `context_synthesize(cluster_id)` to force synthesis of a specific clus
 
 ## References
 
-- Transitions spec: `../primitives/context/specs/03-transitions.md` (T3)
-- Layers spec: `../primitives/context/specs/02-layers.md` (Wisdom)
+- Transitions spec: `../primitives/docs/03-transitions.md` (T3)
+- Layers spec: `../primitives/docs/02-layers.md` (Wisdom)
 - Clustering service: `src/context_service/clustering/service.py`

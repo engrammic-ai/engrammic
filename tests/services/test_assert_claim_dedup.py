@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import uuid
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -142,6 +143,90 @@ class TestAssertClaimDedup:
         params = edge_call.args[1]
         assert params["claim_id"] == existing_id
         assert ev_node_id in params["ev_ids"]
+
+    @pytest.mark.asyncio
+    async def test_assert_claim_dedup_preserves_properties(self) -> None:
+        """Dedup hit returns existing node with its stored properties, not an empty dict."""
+        svc, memgraph, _ = _make_service()
+        scope = _make_scope()
+        content = "Caffeine is a stimulant"
+        existing_id = str(uuid.uuid4())
+        stored_props = {
+            "confidence": 0.9,
+            "source_tier": "primary",
+            "evidence_ref": "node:abc123",
+        }
+
+        dedup_row = _dedup_row(existing_id, str(scope.silo_id), content)
+        # Simulate Memgraph returning properties as a dict (most common case).
+        dedup_row["properties"] = stored_props
+        memgraph.execute_query.return_value = [dedup_row]
+
+        with patch("context_service.services.context.get_settings") as mock_settings:
+            mock_settings.return_value = MagicMock(**_SETTINGS_PATCH)
+            node = await svc.assert_claim(
+                scope=scope,
+                claim=content,
+                evidence=["https://example.com/source"],
+                source_type="observation",
+            )
+
+        assert str(node.id) == existing_id
+        assert node.properties == stored_props, (
+            f"Expected stored properties {stored_props!r}, got {node.properties!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_assert_claim_dedup_preserves_properties_json_string(self) -> None:
+        """Dedup hit parses properties correctly when Memgraph returns them as a JSON string."""
+        svc, memgraph, _ = _make_service()
+        scope = _make_scope()
+        content = "Iron is a metal"
+        existing_id = str(uuid.uuid4())
+        stored_props = {"confidence": 0.75, "source_tier": "secondary"}
+
+        dedup_row = _dedup_row(existing_id, str(scope.silo_id), content)
+        # Simulate Memgraph returning properties serialised as a JSON string.
+        dedup_row["properties"] = json.dumps(stored_props)
+        memgraph.execute_query.return_value = [dedup_row]
+
+        with patch("context_service.services.context.get_settings") as mock_settings:
+            mock_settings.return_value = MagicMock(**_SETTINGS_PATCH)
+            node = await svc.assert_claim(
+                scope=scope,
+                claim=content,
+                evidence=["https://example.com/source"],
+                source_type="observation",
+            )
+
+        assert str(node.id) == existing_id
+        assert node.properties == stored_props, (
+            f"Expected stored properties {stored_props!r}, got {node.properties!r}"
+        )
+
+    @pytest.mark.asyncio
+    async def test_assert_claim_dedup_handles_null_properties(self) -> None:
+        """Dedup hit with NULL properties from Memgraph returns an empty dict, not None."""
+        svc, memgraph, _ = _make_service()
+        scope = _make_scope()
+        content = "The earth orbits the sun"
+        existing_id = str(uuid.uuid4())
+
+        dedup_row = _dedup_row(existing_id, str(scope.silo_id), content)
+        dedup_row["properties"] = None
+        memgraph.execute_query.return_value = [dedup_row]
+
+        with patch("context_service.services.context.get_settings") as mock_settings:
+            mock_settings.return_value = MagicMock(**_SETTINGS_PATCH)
+            node = await svc.assert_claim(
+                scope=scope,
+                claim=content,
+                evidence=["https://example.com/source"],
+                source_type="observation",
+            )
+
+        assert str(node.id) == existing_id
+        assert node.properties == {}
 
     @pytest.mark.asyncio
     async def test_dedup_skips_edge_creation_when_no_node_evidence(self) -> None:

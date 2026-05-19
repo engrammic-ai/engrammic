@@ -14,8 +14,8 @@ Service-level specifications for the context-service. These cover implementation
 
 ## Relationship to primitives docs
 
-EAG (Epistemic Augmented Generation) paradigm documentation (layers, transitions, epistemology) lives in `primitives/context/specs/`. This directory covers what the service layer adds on top: storage integration, MCP interface, Custodian workers, extraction pipeline, and operational config.
+EAG (Epistemic Augmented Generation) paradigm documentation (layers, transitions, epistemology) lives in `primitives/docs/`. This directory covers what the service layer adds on top: storage integration, MCP interface, Custodian workers, extraction pipeline, and operational config.
 
 ## Relationship to prototype (original prototype)
 
-The RAG-era specs that informed this service — cache, custodian, extraction, heatmap, ingest, retrieval — were authored in the `prototype` prototype repo (`NovusEdge/CTXR`, private). The ported docs live in `context/specs/rag/` within the `primitives` package (split out during the 2026-04-26 port session). When tracing the rationale for a shipped code path, the relevant spec is in `primitives/context/specs/rag/` rather than here.
+The RAG-era specs that informed this service — cache, custodian, extraction, heatmap, ingest, retrieval — were authored in the `prototype` prototype repo (`NovusEdge/CTXR`, private). The ported docs live in `context/specs/rag/` within the `primitives` package (split out during the 2026-04-26 port session). When tracing the rationale for a shipped code path, the relevant spec is in `primitives/docs/rag/` rather than here.
