@@ -110,3 +110,18 @@ async def test_close_closes_both(
 
     mock_primary.close.assert_called_once()
     mock_fallback.close.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_non_tei_error_propagates(
+    wrapper_service: TEIWithFallbackEmbeddingService,
+    mock_primary: AsyncMock,
+    mock_fallback: AsyncMock,
+) -> None:
+    """Non-TEIEmbeddingError should propagate without fallback."""
+    mock_primary.embed.side_effect = RuntimeError("Unexpected error")
+
+    with pytest.raises(RuntimeError, match="Unexpected error"):
+        await wrapper_service.embed(["test text"])
+
+    mock_fallback.embed.assert_not_called()

@@ -10,7 +10,7 @@ from opentelemetry import trace
 
 from context_service.config.logging import get_logger
 from context_service.embeddings.base import EmbeddingService
-from context_service.telemetry.metrics import record_embedding, record_embedding_cache_miss
+from context_service.telemetry.metrics import record_embedding
 
 if TYPE_CHECKING:
     from context_service.cache.embedding_cache import EmbeddingCache
@@ -80,10 +80,9 @@ class TEIEmbeddingService:
                     uncached_indices.append(i)
 
             if not uncached_texts:
-                return [r for r in cached_results if r is not None]
-
-            for _ in uncached_texts:
-                record_embedding_cache_miss(task)
+                result = [r for r in cached_results if r is not None]
+                assert len(result) == len(texts), "Cache/batch length mismatch"
+                return result
 
             embeddings = await self._embed_batch(uncached_texts)
 
@@ -93,7 +92,9 @@ class TEIEmbeddingService:
                 await self._embedding_cache.set(text, task, embedding)
                 cached_results[uncached_indices[idx]] = embedding
 
-            return [r for r in cached_results if r is not None]
+            result = [r for r in cached_results if r is not None]
+            assert len(result) == len(texts), "Cache/batch length mismatch"
+            return result
 
         return await self._embed_batch(texts)
 
@@ -160,7 +161,6 @@ class TEIEmbeddingService:
             cached = await self._embedding_cache.get(query, "query")
             if cached is not None:
                 return cached
-            record_embedding_cache_miss("query")
             vector = (await self._embed_batch([query]))[0]
             await self._embedding_cache.set(query, "query", vector)
             return vector
