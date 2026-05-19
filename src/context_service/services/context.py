@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -1040,7 +1039,7 @@ class ContextService:
             if raw_props is None:
                 props_existing = {}
             elif isinstance(raw_props, str):
-                props_existing = json.loads(raw_props)
+                props_existing = loads(raw_props)
             else:
                 props_existing = raw_props
             existing_node = Node(

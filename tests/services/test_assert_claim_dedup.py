@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import uuid
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -178,8 +179,6 @@ class TestAssertClaimDedup:
     @pytest.mark.asyncio
     async def test_assert_claim_dedup_preserves_properties_json_string(self) -> None:
         """Dedup hit parses properties correctly when Memgraph returns them as a JSON string."""
-        import json as _json
-
         svc, memgraph, _ = _make_service()
         scope = _make_scope()
         content = "Iron is a metal"
@@ -188,7 +187,7 @@ class TestAssertClaimDedup:
 
         dedup_row = _dedup_row(existing_id, str(scope.silo_id), content)
         # Simulate Memgraph returning properties serialised as a JSON string.
-        dedup_row["properties"] = _json.dumps(stored_props)
+        dedup_row["properties"] = json.dumps(stored_props)
         memgraph.execute_query.return_value = [dedup_row]
 
         with patch("context_service.services.context.get_settings") as mock_settings:
