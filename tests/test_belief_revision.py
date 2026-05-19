@@ -304,7 +304,7 @@ async def test_revise_belief_happy_path_write_sequence() -> None:
     new_id = await revise_belief(store, "old-b", "silo-1", llm, client)
 
     assert new_id == _make_revised_belief_id("old-b", 1)
-    assert len(store.write_log) == 4
+    assert len(store.write_log) == 5
 
     # Write 0: CREATE_BELIEF_FROM_FACTS
     _, p0 = store.write_log[0]
@@ -313,23 +313,28 @@ async def test_revise_belief_happy_path_write_sequence() -> None:
     assert p0["content"] == "Revised statement."
     assert p0["evidence_count"] == 4
 
-    # Write 1: UPDATE_BELIEF_CENTROID
+    # Write 1: CREATE_BELIEF_FACT_EDGES
     _, p1 = store.write_log[1]
     assert p1["belief_id"] == new_id
-    assert p1["revision_count"] == 1
-    assert len(p1["centroid_embedding"]) == 2
+    assert "fact_ids" in p1
 
-    # Write 2: CREATE_BELIEF_SUPERSEDES
+    # Write 2: UPDATE_BELIEF_CENTROID
     _, p2 = store.write_log[2]
-    assert p2["new_belief_id"] == new_id
-    assert p2["old_belief_id"] == "old-b"
-    assert p2["reason"] == "evidence_shift"
+    assert p2["belief_id"] == new_id
+    assert p2["revision_count"] == 1
+    assert len(p2["centroid_embedding"]) == 2
 
-    # Write 3: MARK_BELIEF_STALE
+    # Write 3: CREATE_BELIEF_SUPERSEDES
     _, p3 = store.write_log[3]
-    assert p3["belief_id"] == "old-b"
-    assert p3["silo_id"] == "silo-1"
-    assert "valid_to" in p3
+    assert p3["new_belief_id"] == new_id
+    assert p3["old_belief_id"] == "old-b"
+    assert p3["reason"] == "evidence_shift"
+
+    # Write 4: MARK_BELIEF_STALE
+    _, p4 = store.write_log[4]
+    assert p4["belief_id"] == "old-b"
+    assert p4["silo_id"] == "silo-1"
+    assert "valid_to" in p4
 
 
 @pytest.mark.asyncio
@@ -349,5 +354,6 @@ async def test_revise_belief_increments_revision_count() -> None:
 
     # revision_count should be old (2) + 1 = 3
     assert new_id == _make_revised_belief_id("b-orig", 3)
-    _, p1 = store.write_log[1]
-    assert p1["revision_count"] == 3
+    # revision_count is in UPDATE_BELIEF_CENTROID which is now write[2]
+    _, p2 = store.write_log[2]
+    assert p2["revision_count"] == 3

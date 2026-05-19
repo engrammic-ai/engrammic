@@ -162,10 +162,12 @@ async def test_merge_beliefs_unions_fact_ids() -> None:
 
     await merge_beliefs(store, "silo-1", sources, llm)
 
-    # First write is CREATE_MERGED_BELIEF — check unioned fact_ids
+    # First write is CREATE_MERGED_BELIEF
     _, params = store.write_log[0]
-    assert sorted(params["fact_ids"]) == ["f-1", "f-2", "f-3"]
     assert params["evidence_count"] == 3
+    # Second write is CREATE_MERGED_BELIEF_FACT_EDGES - check unioned fact_ids
+    _, edge_params = store.write_log[1]
+    assert sorted(edge_params["fact_ids"]) == ["f-1", "f-2", "f-3"]
 
 
 @pytest.mark.asyncio
@@ -194,7 +196,8 @@ async def test_merge_beliefs_weighted_confidence() -> None:
 async def test_merge_beliefs_creates_merged_from_edges() -> None:
     store = FakeGraphStore()
     store.seed_write_result([{"belief_id": "merged", "edges_created": 2}])
-    store.seed_write_result([{"edges_created": 2}])
+    store.seed_write_result([{"edges_created": 2}])  # fact edges
+    store.seed_write_result([{"edges_created": 2}])  # merged_from edges
     store.seed_write_result([{"belief_id": "b-1"}])
     store.seed_write_result([{"belief_id": "b-2"}])
 
@@ -203,8 +206,8 @@ async def test_merge_beliefs_creates_merged_from_edges() -> None:
 
     merged_id = await merge_beliefs(store, "silo-1", sources, llm)
 
-    # Second write is CREATE_MERGED_FROM_EDGES
-    _, params = store.write_log[1]
+    # Third write is CREATE_MERGED_FROM_EDGES (after belief + fact edges)
+    _, params = store.write_log[2]
     assert params["merged_belief_id"] == merged_id
     assert sorted(params["source_belief_ids"]) == ["b-1", "b-2"]
     assert params["silo_id"] == "silo-1"
@@ -214,7 +217,8 @@ async def test_merge_beliefs_creates_merged_from_edges() -> None:
 async def test_merge_beliefs_stales_source_beliefs() -> None:
     store = FakeGraphStore()
     store.seed_write_result([{"belief_id": "merged", "edges_created": 2}])
-    store.seed_write_result([{"edges_created": 2}])
+    store.seed_write_result([{"edges_created": 2}])  # fact edges
+    store.seed_write_result([{"edges_created": 2}])  # merged_from edges
     store.seed_write_result([{"belief_id": "b-1"}])
     store.seed_write_result([{"belief_id": "b-2"}])
 
@@ -223,8 +227,8 @@ async def test_merge_beliefs_stales_source_beliefs() -> None:
 
     await merge_beliefs(store, "silo-1", sources, llm)
 
-    # Writes 3 and 4 are MARK_BELIEF_STALE for each source
-    stale_ids = {store.write_log[2][1]["belief_id"], store.write_log[3][1]["belief_id"]}
+    # Writes 4 and 5 are MARK_BELIEF_STALE for each source (after belief, fact edges, merged_from)
+    stale_ids = {store.write_log[3][1]["belief_id"], store.write_log[4][1]["belief_id"]}
     assert stale_ids == {"b-1", "b-2"}
 
 
