@@ -10,6 +10,7 @@ Service-level specifications for the context-service. These cover implementation
 | [mcp-tool-surface.md](mcp-tool-surface.md) | Stable | MCP tool contracts |
 | [silo-portability.md](silo-portability.md) | Stable (v1-β4) | Silo export/import JSONL format |
 | [signals-port.md](signals-port.md) | Draft 2026-04-30 | Heat / freshness / priority port from prototype (phased) |
+| [supersession-pointer-spec.md](supersession-pointer-spec.md) | Draft | O(1) chain head resolution via tail_id/head_id pointers |
 
 ## Relationship to primitives docs
 
