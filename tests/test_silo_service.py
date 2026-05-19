@@ -257,6 +257,9 @@ class TestSiloCreatedAtHydration:
         assert "created_at" in query
         assert "datetime()" in query
 
+        returned_silo = await silo_service.get_or_create(name="another-silo", org_id="org-another")
+        assert returned_silo.created_at is not None
+
 
 class TestValidateSiloOwnership:
     @pytest.mark.asyncio

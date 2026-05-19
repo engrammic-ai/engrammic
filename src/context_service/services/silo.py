@@ -78,6 +78,7 @@ class SiloService:
             description=description,
             dissolvability=dissolvability,
             metadata=metadata or {},
+            created_at=datetime.now(UTC),
         )
 
         await self._memgraph.execute_write(
