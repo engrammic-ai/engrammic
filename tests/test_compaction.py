@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 from context_service.engine.compaction import (
@@ -229,6 +231,55 @@ async def test_compact_hot_chain_passes_compacted_by_model_to_tombstone() -> Non
     # The value is either a model string or None (when LLM is unavailable in test env)
     model_val = second_write_params["compacted_by_model"]
     assert model_val is None or isinstance(model_val, str)
+
+
+@pytest.mark.asyncio
+async def test_compact_hot_chain_passes_model_string_on_llm_success() -> None:
+    """When LLM summarization succeeds, compacted_by_model must equal the model ID string."""
+    _MOD = "context_service.engine.compaction"
+
+    store = FakeGraphStore()
+    steps = _make_steps(2)
+    store.seed_query_result(
+        [
+            {
+                "id": "chain-llm",
+                "steps": steps,
+                "compact_summary": None,
+                "agent_id": "agent-llm",
+                "tier": "hot",
+                "status": "published",
+                "compacted": False,
+            }
+        ]
+    )
+    store.seed_write_result([{"event_id": "ev-llm"}])
+    store.seed_write_result([{"chain_id": "chain-llm"}])
+
+    expected_model_id = "test-model-id-123"
+
+    mock_model_spec = MagicMock()
+    mock_model_spec.provider = "anthropic"
+    mock_model_spec.model = expected_model_id
+
+    mock_settings = MagicMock()
+    mock_settings.models.get_model.return_value = mock_model_spec
+
+    mock_llm_client = MagicMock()
+
+    with (
+        patch("context_service.config.settings.get_settings", return_value=mock_settings),
+        patch("context_service.llm.build_llm_provider", return_value=mock_llm_client),
+        patch(
+            f"{_MOD}.summarize_reasoning_steps",
+            new=AsyncMock(return_value="LLM-generated summary"),
+        ),
+    ):
+        await compact_reasoning_chain(store, "chain-llm", "silo-1", "committed")
+
+    second_write_cypher, second_write_params = store.write_log[1]
+    assert "compacted_by_model" in second_write_cypher
+    assert second_write_params["compacted_by_model"] == expected_model_id
 
 
 @pytest.mark.asyncio
