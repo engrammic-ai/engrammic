@@ -354,10 +354,37 @@ SET tail.head_id = new.id
 RETURN count(*) AS created
 """
 
-# Batch version-check — internal/maintenance, no committed filter needed.
+# Batch version-check with O(1) pointer fast-path for live-tip lookups.
+# Falls back to chain walk for historical as_of or missing pointers.
 FILTER_SUPERSEDED_AT = f"""
 UNWIND $ids AS input_id
 MATCH (input) WHERE {content_union_predicate("input")} AND input.id = input_id AND input.silo_id = $silo_id
+
+// Fast path: use pointers if available
+WITH input_id, input, COALESCE(input.tail_id, input.id) AS tail_id
+OPTIONAL MATCH (tail) WHERE {content_union_predicate("tail")} AND tail.id = tail_id AND tail.silo_id = $silo_id
+WITH input_id, input, tail, COALESCE(tail.head_id, input.id) AS pointer_head_id
+
+// Check if pointer head is valid at as_of
+OPTIONAL MATCH (head) WHERE {content_union_predicate("head")} AND head.id = pointer_head_id AND head.silo_id = $silo_id
+  AND coalesce(head.valid_from, head.created_at) <= $as_of
+  AND (head.valid_to IS NULL OR head.valid_to > $as_of)
+
+// If pointer head is valid, use it; otherwise fall back to chain walk
+WITH input_id, input, head
+WHERE head IS NOT NULL
+RETURN input_id, head.id AS valid_id
+
+UNION
+
+// Fallback: chain walk for historical queries or missing pointers
+UNWIND $ids AS input_id
+MATCH (input) WHERE {content_union_predicate("input")} AND input.id = input_id AND input.silo_id = $silo_id
+
+// Only fall back if pointer path didn't return a result
+WITH input_id, input
+WHERE input.tail_id IS NULL AND input.head_id IS NULL
+
 OPTIONAL MATCH path = (tip)-[:SUPERSEDES*0..]->(input)
 WHERE {content_union_predicate("tip")}
   AND tip.silo_id = $silo_id

@@ -238,3 +238,44 @@ async def test_resolve_current_head_nonexistent_node(
     head = await memgraph_store.resolve_current_head(node_id, silo_id)
 
     assert head is None
+
+
+@pytest.mark.asyncio
+async def test_filter_superseded_at_uses_pointers(
+    memgraph_store: MemgraphStore,
+    mock_client: MagicMock,
+    silo_id: str,
+    now: datetime,
+) -> None:
+    """filter_superseded_at returns head for all nodes in chain.
+
+    The query should use pointer fast-path when available, falling back
+    to chain walk for historical queries or nodes without pointers.
+    """
+    node_a_id, node_b_id, node_c_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+
+    # Mock: all three nodes resolve to C (the head)
+    mock_client.execute_query.return_value = [
+        {"input_id": str(node_a_id), "valid_id": str(node_c_id)},
+        {"input_id": str(node_b_id), "valid_id": str(node_c_id)},
+        {"input_id": str(node_c_id), "valid_id": str(node_c_id)},
+    ]
+
+    result = await memgraph_store.filter_superseded_at(
+        node_ids=[node_a_id, node_b_id, node_c_id],
+        silo_id=silo_id,
+        as_of=now,
+    )
+
+    # All should map to C
+    assert result[node_a_id] == node_c_id
+    assert result[node_b_id] == node_c_id
+    assert result[node_c_id] == node_c_id
+
+    # Verify the query was called
+    mock_client.execute_query.assert_called_once()
+
+    # Verify the query includes pointer fast-path
+    query = mock_client.execute_query.call_args[0][0]
+    assert "tail_id" in query, "Query should use tail_id for fast-path"
+    assert "head_id" in query, "Query should use head_id for fast-path"
