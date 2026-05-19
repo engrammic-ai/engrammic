@@ -30,32 +30,38 @@ jobs:
 
       - name: Build API image with Cloud Build
         run: |
-          gcloud builds submit \
-            --tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-api:${{ github.sha }} \
-            --dockerfile docker/Dockerfile.api \
-            --timeout 600s
-          gcloud artifacts docker tags add \
-            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-api:${{ github.sha }} \
+          IMAGE=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-api:${{ github.sha }}
+          gcloud builds submit --timeout 600s --config - <<EOF
+          steps:
+            - name: 'gcr.io/cloud-builders/docker'
+              args: ['build', '-t', '$IMAGE', '-f', 'docker/Dockerfile.api', '.']
+          images: ['$IMAGE']
+          EOF
+          gcloud artifacts docker tags add $IMAGE \
             ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-api:latest
 
       - name: Build Beacon image with Cloud Build
         run: |
-          gcloud builds submit \
-            --tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-beacon:${{ github.sha }} \
-            --dockerfile docker/Dockerfile.beacon \
-            --timeout 300s
-          gcloud artifacts docker tags add \
-            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-beacon:${{ github.sha }} \
+          IMAGE=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-beacon:${{ github.sha }}
+          gcloud builds submit --timeout 300s --config - <<EOF
+          steps:
+            - name: 'gcr.io/cloud-builders/docker'
+              args: ['build', '-t', '$IMAGE', '-f', 'docker/Dockerfile.beacon', '.']
+          images: ['$IMAGE']
+          EOF
+          gcloud artifacts docker tags add $IMAGE \
             ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-beacon:latest
 
       - name: Build Dagster image with Cloud Build
         run: |
-          gcloud builds submit \
-            --tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-dagster:${{ github.sha }} \
-            --dockerfile docker/Dockerfile.dagster \
-            --timeout 600s
-          gcloud artifacts docker tags add \
-            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-dagster:${{ github.sha }} \
+          IMAGE=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-dagster:${{ github.sha }}
+          gcloud builds submit --timeout 600s --config - <<EOF
+          steps:
+            - name: 'gcr.io/cloud-builders/docker'
+              args: ['build', '-t', '$IMAGE', '-f', 'docker/Dockerfile.dagster', '.']
+          images: ['$IMAGE']
+          EOF
+          gcloud artifacts docker tags add $IMAGE \
             ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-dagster:latest
 
       - name: Deploy API to Cloud Run
