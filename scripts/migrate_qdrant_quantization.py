@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from typing import Any
 
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import ScalarQuantization, ScalarQuantizationConfig, ScalarType
@@ -23,7 +24,7 @@ from context_service.config.settings import get_settings
 _COLLECTION_PREFIXES = ("ctx_", "ctx_clusters_")
 
 
-def _has_int8_quantization(collection_info: object) -> bool:
+def _has_int8_quantization(collection_info: Any) -> bool:
     """Return True if the collection already has INT8 scalar quantization configured."""
     try:
         quant = collection_info.config.quantization_config  # type: ignore[union-attr]
@@ -66,6 +67,7 @@ async def run_migration(
         return -1
 
     # Determine target prefixes.
+    target_prefixes: tuple[str, ...]
     if prefix is not None:
         target_prefixes = (prefix,)
     else:
