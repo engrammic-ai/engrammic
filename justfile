@@ -157,3 +157,42 @@ db-version-beta:
 # Interactive psql on beta (via stateful host)
 db-psql-beta:
     gcloud compute ssh engrammic-beta-stateful --project={{project}} --zone={{zone}} --tunnel-through-iap --command='export PGPASSWORD=$$(gcloud secrets versions access latest --secret=engrammic-beta-postgres-password --project={{project}}) && docker run -it --rm -e PGPASSWORD="$$PGPASSWORD" postgres:16-alpine psql "postgresql://context@10.162.0.3:5432/engrammic"'
+
+# --- Secrets Management ---
+
+# Push local .env.{env} secrets to GCP Secret Manager
+secrets-push env="beta":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Pushing secrets for {{env}} to GCP Secret Manager..."
+    if [ ! -f ".env.{{env}}" ]; then
+        echo "Error: .env.{{env}} not found"
+        exit 1
+    fi
+    grep -E "^[A-Z_]+=.+" .env.{{env}} | while IFS= read -r line; do
+        key=$(echo "$line" | cut -d= -f1 | tr '[:upper:]' '[:lower:]' | tr '_' '-')
+        value=$(echo "$line" | cut -d= -f2-)
+        secret_name="engrammic-{{env}}-$key"
+        echo "  -> $secret_name"
+        if gcloud secrets describe "$secret_name" &>/dev/null; then
+            echo -n "$value" | gcloud secrets versions add "$secret_name" --data-file=-
+        else
+            echo -n "$value" | gcloud secrets create "$secret_name" --data-file=- --replication-policy=automatic
+        fi
+    done
+    echo "Done."
+
+# Pull GCP secrets to local .env.{env}
+secrets-pull env="beta":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Pulling secrets for {{env}} from GCP Secret Manager..."
+    > .env.{{env}}
+    for secret in $(gcloud secrets list --filter="name:engrammic-{{env}}" --format="value(name)"); do
+        key=$(basename "$secret" | sed "s/engrammic-{{env}}-//" | tr '-' '_' | tr '[:lower:]' '[:upper:]')
+        value=$(gcloud secrets versions access latest --secret="$secret" 2>/dev/null || echo "")
+        if [ -n "$value" ]; then
+            echo "$key=$value" >> .env.{{env}}
+        fi
+    done
+    echo "Wrote .env.{{env}}"
