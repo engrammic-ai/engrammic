@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -16,6 +17,27 @@ if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
 
 logger = structlog.get_logger(__name__)
+
+def _parse_datetime(value: Any) -> datetime | None:
+    """Parse a datetime from Memgraph -- handles str, native datetime, neo4j DateTime, and epoch-us int."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, (int, float)):
+        # Memgraph timestamp() returns epoch-microseconds (not ms)
+        return datetime.fromtimestamp(value / 1_000_000.0, tz=UTC)
+    if isinstance(value, str):
+        return datetime.fromisoformat(value)
+    # neo4j driver returns neo4j.time.DateTime -- convert via iso_format()
+    if hasattr(value, "iso_format"):
+        return datetime.fromisoformat(value.iso_format())
+    if hasattr(value, "to_native"):
+        native = value.to_native()
+        if not isinstance(native, datetime):
+            raise TypeError(f"to_native() returned {type(native).__name__!r}, expected datetime")
+        return native
+    return datetime.fromisoformat(str(value))
 
 
 class SiloService:
@@ -64,7 +86,8 @@ class SiloService:
                 name: $name,
                 org_id: $org_id,
                 description: $description,
-                dissolvability: $dissolvability
+                dissolvability: $dissolvability,
+                created_at: datetime()
             })
             RETURN s
             """,
@@ -87,7 +110,8 @@ class SiloService:
             MATCH (s:Silo {id: $silo_id, org_id: $org_id})
             RETURN s.id AS id, s.name AS name, s.org_id AS org_id,
                    s.description AS description, s.dissolvability AS dissolvability,
-                   s.causal_coverage_from AS causal_coverage_from
+                   s.causal_coverage_from AS causal_coverage_from,
+                   s.created_at AS created_at
             """,
             {"silo_id": str(scope.silo_id), "org_id": scope.org_id},
         )
@@ -106,6 +130,7 @@ class SiloService:
             description=row.get("description"),
             dissolvability=row.get("dissolvability", 0.5),
             metadata=meta,
+            created_at=_parse_datetime(row.get("created_at")),
         )
 
     async def list(self, org_id: str) -> list[Silo]:
@@ -114,7 +139,8 @@ class SiloService:
             """
             MATCH (s:Silo {org_id: $org_id})
             RETURN s.id AS id, s.name AS name, s.org_id AS org_id,
-                   s.description AS description, s.dissolvability AS dissolvability
+                   s.description AS description, s.dissolvability AS dissolvability,
+                   s.created_at AS created_at
             ORDER BY s.name
             """,
             {"org_id": org_id},
@@ -127,6 +153,7 @@ class SiloService:
                 org_id=row["org_id"],
                 description=row.get("description"),
                 dissolvability=row.get("dissolvability", 0.5),
+                created_at=_parse_datetime(row.get("created_at")),
             )
             for row in results
         ]
