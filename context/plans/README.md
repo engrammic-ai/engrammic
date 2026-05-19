@@ -31,10 +31,9 @@ Active implementation plans for context-service. Completed plans are moved to `a
 | Plan | Status | Description |
 |------|--------|-------------|
 | [2026-05-19-supersession-head-pointer.md](./2026-05-19-supersession-head-pointer.md) | Ready | O(1) chain lookups via linked-list pointers (tail_id/head_id) |
-| [2026-05-19-recall-optimization-phase1.md](./2026-05-19-recall-optimization-phase1.md) | Planning | Embedding cache + TEI backend (500ms -> 50ms) |
-| [2026-05-19-recall-optimization-phase2.md](./2026-05-19-recall-optimization-phase2.md) | Planning | Tiered result cache with layer-dependent TTLs |
-| [2026-05-19-recall-optimization-phase3.md](./2026-05-19-recall-optimization-phase3.md) | Planning | Qdrant scalar quantization + Matryoshka validation |
-| [2026-05-19-recall-optimization-phase4.md](./2026-05-19-recall-optimization-phase4.md) | Planning | Similarity cache for semantic near-matches (optional) |
+| [2026-05-19-recall-optimization-phase2.md](./2026-05-19-recall-optimization-phase2.md) | Ready | Tiered result cache with layer-dependent TTLs |
+| [2026-05-19-recall-optimization-phase3.md](./2026-05-19-recall-optimization-phase3.md) | Ready | Qdrant scalar quantization + Matryoshka validation |
+| [2026-05-19-recall-optimization-phase4.md](./2026-05-19-recall-optimization-phase4.md) | Ready | Similarity cache for semantic near-matches (optional) |
 
 ## Future work
 

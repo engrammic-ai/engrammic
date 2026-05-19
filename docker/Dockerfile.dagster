@@ -29,11 +29,15 @@ WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src
 COPY --from=builder /app/config /app/config
-COPY --from=builder /app/dagster.yaml /app/workspace.yaml ./
+COPY --from=builder /app/pyproject.toml /app/dagster.yaml /app/workspace.yaml ./
+COPY scripts/validate_imports.py /app/scripts/
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app/src"
 ENV DAGSTER_HOME="/app"
+
+# Validate critical imports at build time
+RUN BUILD_TARGET=dagster python /app/scripts/validate_imports.py
 
 RUN chown -R dagster:dagster /app
 

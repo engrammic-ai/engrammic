@@ -119,6 +119,8 @@ async def _context_recall(
     include_steps: bool = False,
     include_content: bool = True,
     include_proposals: bool = False,
+    bypass_cache: bool = False,
+    max_age_seconds: int | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     if not query and not node_ids:
@@ -172,6 +174,8 @@ async def _context_recall(
             layers=layers,
             top_k=top_k,
             as_of=as_of,
+            bypass_cache=bypass_cache,
+            max_age_seconds=max_age_seconds,
         )
         if not include_content:
             response = _strip_content(response)
@@ -221,6 +225,8 @@ def register(mcp: FastMCP) -> None:
         include_steps: bool = False,
         include_content: bool = True,
         include_proposals: bool = False,
+        bypass_cache: bool = False,
+        max_age_seconds: int | None = None,
     ) -> dict[str, Any]:
         """Unified read across Memory, Knowledge, Wisdom, and Intelligence layers.
 
@@ -251,6 +257,11 @@ def register(mcp: FastMCP) -> None:
                 pagination before a follow-up fetch by node_id.
             include_proposals: When True, append pending ProposedBelief nodes
                 to the response in a `pending_proposals` field.
+            bypass_cache: When True, skip the result cache and force a fresh
+                search. Only applies to query + depth=0 mode.
+            max_age_seconds: Maximum acceptable cache age in seconds. If the
+                cached result is older than this, a fresh search is performed.
+                Only applies to query + depth=0 mode.
 
         Returns:
             Depends on mode:
@@ -277,6 +288,8 @@ def register(mcp: FastMCP) -> None:
                 include_steps=include_steps,
                 include_content=include_content,
                 include_proposals=include_proposals,
+                bypass_cache=bypass_cache,
+                max_age_seconds=max_age_seconds,
             )
             node_count = len(result.get("results", result.get("nodes", [])))
             avg_node_bytes = 500 if include_content else 100

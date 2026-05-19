@@ -522,6 +522,16 @@ class CacheConfig(BaseModel):
     lookup_ttl: int = 300
 
 
+class ResultCacheConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    enabled: bool = Field(default=True, description="Enable in-process tiered result cache")
+    memory_ttl: int = Field(default=300, description="Memory layer TTL in seconds (5 min)")
+    knowledge_ttl: int = Field(default=3600, description="Knowledge layer TTL in seconds (1 hour)")
+    wisdom_ttl: int = Field(default=1800, description="Wisdom layer TTL in seconds (30 min)")
+    maxsize: int = Field(default=10000, description="Max entries per layer cache")
+
+
 class ClusteringConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -757,6 +767,7 @@ class Settings(BaseSettings):
     prompts: PromptsConfig = Field(default_factory=PromptsConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
     cache: CacheConfig = Field(default_factory=CacheConfig)
+    result_cache: ResultCacheConfig = Field(default_factory=ResultCacheConfig)
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     clustering: ClusteringConfig = Field(default_factory=ClusteringConfig)
     extraction: ExtractionConfig = Field(default_factory=ExtractionConfig)

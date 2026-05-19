@@ -360,6 +360,21 @@ class RedisClient:
         finally:
             record_db_query("redis.mget", (time.perf_counter() - start) * 1000)
 
+    async def incr(self, key: str) -> int:
+        """Increment an integer counter at key; returns 0 if circuit open."""
+        return await guard_degrade(STORE_REDIS, self._incr_impl(key), 0)
+
+    async def _incr_impl(self, key: str) -> int:
+        start = time.perf_counter()
+        try:
+            result: int = await self._redis.incr(key)
+            return result
+        except (RedisConnectionError, RedisError) as e:
+            logger.error("redis_incr_failed", key=key, error=str(e))
+            raise RedisOperationError(f"Failed to increment key: {e}") from e
+        finally:
+            record_db_query("redis.incr", (time.perf_counter() - start) * 1000)
+
     async def delete(self, key: str) -> bool:
         """Delete a cache key; returns False if circuit open."""
         return await guard_degrade(STORE_REDIS, self._delete_impl(key), False)

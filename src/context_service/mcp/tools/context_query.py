@@ -10,6 +10,7 @@ from typing import Any, Literal
 import structlog
 from opentelemetry import trace
 
+from context_service.cache.result_cache import ResultCacheStore, get_knowledge_version
 from context_service.config.models import load_models_config
 from context_service.config.settings import get_settings
 from context_service.engine.reflection_triggers import compute_reflection_suggested
@@ -41,6 +42,48 @@ logger = structlog.get_logger(__name__)
 tracer = trace.get_tracer(__name__)
 
 _VALID_SEARCH_MODES = frozenset({"hybrid", "dense", "sparse"})
+
+_result_cache: ResultCacheStore | None = None
+
+
+def _get_result_cache() -> ResultCacheStore:
+    global _result_cache
+    if _result_cache is None:
+        _result_cache = ResultCacheStore()
+    return _result_cache
+
+
+def _layer_ttls_for(layers: list[str] | None) -> dict[str, int]:
+    """Return TTL values for the queried layers from settings.
+
+    When layers is None (all layers), returns TTLs for all cacheable layers.
+    """
+    cfg = get_settings().result_cache
+    all_ttls = {
+        "memory": cfg.memory_ttl,
+        "knowledge": cfg.knowledge_ttl,
+        "wisdom": cfg.wisdom_ttl,
+    }
+    if layers is None:
+        return all_ttls
+    return {layer: all_ttls[layer] for layer in layers if layer in all_ttls}
+
+
+async def _emit_access_events(redis: Any, silo_id: str, results: list[Any]) -> None:
+    """Emit access events for retrieved nodes (used on both cache hit and miss paths)."""
+    if redis is None or not results:
+        return
+    try:
+        await asyncio.wait_for(
+            asyncio.gather(
+                *(emit_access_event(redis, silo_id, str(r["node_id"]) if isinstance(r, dict) else str(r.node_id)) for r in results)
+            ),
+            timeout=2.0,
+        )
+    except TimeoutError:
+        logger.warning("access_event_emit_timeout", silo_id=silo_id, result_count=len(results))
+    except Exception as exc:
+        logger.warning("access_event_emit_failed", silo_id=silo_id, error=str(exc))
 
 
 async def _apply_reranking(
@@ -160,6 +203,8 @@ async def _context_query(
     include_superseded: bool = False,
     as_of: str | None = None,
     search_mode: Literal["hybrid", "dense", "sparse"] = "hybrid",
+    bypass_cache: bool = False,
+    max_age_seconds: int | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
 
@@ -232,6 +277,52 @@ async def _context_query(
     if was_expanded:
         logger.info("query_expanded", original=query, expanded=effective_query)
 
+    # Fetch knowledge version for cache keying (None falls back to 0)
+    knowledge_version: int | None = None
+    if redis is not None:
+        knowledge_version = await get_knowledge_version(redis, silo_id)
+    kv_for_cache = knowledge_version if knowledge_version is not None else 0
+
+    layer_ttls = _layer_ttls_for(layers)
+
+    # Result cache lookup (skipped when bypass_cache is set)
+    if not bypass_cache:
+        cached = _get_result_cache().get(
+            effective_query,
+            layers,
+            silo_id,
+            kv_for_cache,
+            top_k,
+            filters,
+            include_superseded,
+            search_mode,
+        )
+        if cached is not None:
+            cached_results, cached_at_ts = cached
+            # Honour max_age_seconds if caller specified a freshness constraint
+            if max_age_seconds is not None and (time.time() - cached_at_ts) > max_age_seconds:
+                pass  # Treat as a miss; fall through to the query path
+            else:
+                await _emit_access_events(redis, silo_id, cached_results)
+                elapsed_s = time.perf_counter() - start
+                record_mcp_tool("context_query", elapsed_s * 1000)
+                elapsed_ms = int(elapsed_s * 1000)
+                cache_meta: dict[str, Any] = {
+                    "embedding_cached": None,
+                    "result_cached": True,
+                    "cached_at": datetime.fromtimestamp(cached_at_ts, tz=UTC).isoformat(),
+                    "layer_ttls": layer_ttls,
+                    "knowledge_version": kv_for_cache,
+                }
+                return {
+                    "results": cached_results,
+                    "total_candidates": len(cached_results),
+                    "search_time_ms": elapsed_ms,
+                    "search_mode": search_mode,
+                    "reflection_suggested": compute_reflection_suggested(cached_results),
+                    "cache_meta": cache_meta,
+                }
+
     results = await ctx_svc.query(
         scope=scope,
         query=effective_query,
@@ -248,18 +339,7 @@ async def _context_query(
 
     results, rerank_fallback = await _apply_reranking(effective_query, results, settings)
 
-    if redis is not None and results:
-        try:
-            await asyncio.wait_for(
-                asyncio.gather(
-                    *(emit_access_event(redis, silo_id, str(r.node_id)) for r in results)
-                ),
-                timeout=2.0,
-            )
-        except TimeoutError:
-            logger.warning("access_event_emit_timeout", silo_id=silo_id, result_count=len(results))
-        except Exception as exc:
-            logger.warning("access_event_emit_failed", silo_id=silo_id, error=str(exc))
+    await _emit_access_events(redis, silo_id, results)
 
     metadata: dict[str, Any] = {
         "causal_edges_enabled": settings.causal.query_enabled,
@@ -300,6 +380,29 @@ async def _context_query(
         result_dicts, below_threshold, fallback_used=rerank_fallback
     )
 
+    # Store results in cache (intelligence layer is silently skipped by ResultCacheStore)
+    # Skip cache write when bypass_cache=True to comply with spec
+    if not bypass_cache:
+        _get_result_cache().set(
+            effective_query,
+            layers,
+            silo_id,
+            kv_for_cache,
+            top_k,
+            filters,
+            include_superseded,
+            search_mode,
+            result_dicts,
+        )
+
+    cache_meta = {
+        "embedding_cached": None,
+        "result_cached": False,
+        "cached_at": None,
+        "layer_ttls": layer_ttls,
+        "knowledge_version": kv_for_cache,
+    }
+
     return {
         "results": result_dicts,
         "total_candidates": len(raw_result_dicts),
@@ -310,4 +413,5 @@ async def _context_query(
         "below_threshold": below_threshold,
         "suggestion": suggestion,
         "metadata": metadata,
+        "cache_meta": cache_meta,
     }

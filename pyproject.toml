@@ -52,7 +52,9 @@ dependencies = [
     "json-repair>=0.28",
     # Numeric
     "numpy>=1.26",
-    "dtaidistance>=2.3.0",  # DTW for reasoning chain matching
+    "dtaidistance>=2.3.0", # DTW for reasoning chain matching
+    # In-process caching
+    "cachetools>=5.3",
     # LLM providers (unified)
     "litellm>=1.40",
 ]
@@ -65,6 +67,7 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.10",
     "types-pyyaml>=6.0.12.20260408",
+    "types-cachetools>=7.0.0.20260518",
 ]
 embeddings = [
     "google-cloud-aiplatform>=1.50",  # Vertex AI
