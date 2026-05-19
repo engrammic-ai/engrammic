@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
+
 def _parse_datetime(value: Any) -> datetime | None:
     """Parse a datetime from Memgraph -- handles str, native datetime, neo4j DateTime, and epoch-us int."""
     if value is None:
