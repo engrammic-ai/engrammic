@@ -57,6 +57,12 @@ DAGSTER_SERVICES = '''
       - POSTGRES_USER=context
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DATABASE=engrammic
+      - VERTEX_PROJECT_ID=engrammic
+      - VERTEX_LOCATION=europe-north1
+      - EMBEDDING_PROVIDER=vertex
+      - LLM_PROVIDER=vertex_gemini
+      - DEFAULT_LLM_MODEL=gemini-2.5-flash
+      - CUSTODIAN__ENABLED=true
     depends_on:
       - memgraph
       - qdrant
@@ -78,6 +84,12 @@ DAGSTER_SERVICES = '''
       - POSTGRES_USER=context
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DATABASE=engrammic
+      - VERTEX_PROJECT_ID=engrammic
+      - VERTEX_LOCATION=europe-north1
+      - EMBEDDING_PROVIDER=vertex
+      - LLM_PROVIDER=vertex_gemini
+      - DEFAULT_LLM_MODEL=gemini-2.5-flash
+      - CUSTODIAN__ENABLED=true
     depends_on:
       - dagster-code-server
     restart: unless-stopped
@@ -95,6 +107,12 @@ DAGSTER_SERVICES = '''
       - POSTGRES_USER=context
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DATABASE=engrammic
+      - VERTEX_PROJECT_ID=engrammic
+      - VERTEX_LOCATION=europe-north1
+      - EMBEDDING_PROVIDER=vertex
+      - LLM_PROVIDER=vertex_gemini
+      - DEFAULT_LLM_MODEL=gemini-2.5-flash
+      - CUSTODIAN__ENABLED=true
     depends_on:
       - dagster-code-server
     restart: unless-stopped
@@ -125,6 +143,7 @@ class StatefulHost(pulumi.ComponentResource):
         network: compute.Network,
         subnet: compute.Subnetwork,
         service_account_email: str,
+        postgres_host: pulumi.Input[str] | None = None,
         opts: pulumi.ResourceOptions | None = None,
     ):
         super().__init__("engrammic:compute:StatefulHost", name, None, opts)
@@ -140,6 +159,8 @@ class StatefulHost(pulumi.ComponentResource):
         disk_size_postgres = int(config.get("disk_size_postgres") or "50")
         use_cloudsql = config.get_bool("use_cloudsql") or False
         zone = gcp_config.require("zone")
+
+        self._postgres_host = postgres_host
 
         # Persistent disks
         self.memgraph_disk = compute.Disk(
@@ -276,12 +297,8 @@ export POSTGRES_PASSWORD=$(gcloud secrets versions access latest --secret="engra
 
 # Set POSTGRES_HOST based on Cloud SQL config
 if [ "$USE_CLOUDSQL" = "true" ]; then
-    # Fetch Cloud SQL private IP from Secret Manager
-    export POSTGRES_HOST=$(gcloud secrets versions access latest --secret="engrammic-$ENV-postgres-host" --project="$PROJECT" 2>/dev/null || echo "")
-    if [ -z "$POSTGRES_HOST" ]; then
-        echo "ERROR: POSTGRES_HOST secret not found for Cloud SQL deployment"
-        exit 1
-    fi
+    # Read Cloud SQL IP from instance metadata (set by Pulumi)
+    export POSTGRES_HOST=$(curl -s "http://metadata.google.internal/computeMetadata/v1/instance/attributes/postgres-host" -H "Metadata-Flavor: Google")
 else
     export POSTGRES_HOST=postgres
 fi
@@ -358,6 +375,9 @@ echo "Stateful host ready"
             ),
             metadata_startup_script=startup_script,
             tags=["stateful-host"],
+            metadata={
+                "postgres-host": self._postgres_host or "postgres",
+            },
             allow_stopping_for_update=True,
             opts=pulumi.ResourceOptions(parent=self),
         )
