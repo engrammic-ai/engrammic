@@ -88,6 +88,7 @@ context_service = ContextServiceRun(
         "AUTH_ENABLED": "true",
         "CUSTODIAN__ENABLED": "true",
         "LOG_LEVEL": "INFO",
+        "OAUTH__ISSUER": "https://api.engrammic.ai" if config.require("environment") == "prod" else f"https://{config.require('environment')}.engrammic.ai",
     },
     secrets={
         "POSTGRES_PASSWORD": secrets.secrets["postgres-password"].id,
