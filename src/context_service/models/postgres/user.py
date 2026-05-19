@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
-from sqlalchemy import String, func
+from sqlalchemy import DateTime, String, func
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,8 +27,12 @@ class User(Base):
     silo_id: Mapped[str] = mapped_column(String(255), index=True)
     email: Mapped[str] = mapped_column(String(255))
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
-    last_active_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    last_active_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     oauth_tokens: Mapped[list[OAuthToken]] = relationship(back_populates="user")
     authorization_codes: Mapped[list[OAuthAuthorizationCode]] = relationship(back_populates="user")

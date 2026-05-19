@@ -1,6 +1,10 @@
 # Embedding service configuration
 provider: litellm
 model: vertex_ai/text-embedding-005
+# IMPORTANT: Switching to Matryoshka 512-dim (Phase 1 of recall optimization)
+# requires changing dimensions to 512 AND recreating all Qdrant collections with
+# size=512 AND re-embedding all existing documents. See:
+# context/specs/2026-05-19-recall-optimization.md
 dimensions: 768
 model_version: text-embedding-005
 

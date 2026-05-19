@@ -6,6 +6,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
+from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.server import get_mcp_auth_context, track_tool_usage
 from context_service.mcp.tools.context_crystallize import _context_crystallize
 from context_service.mcp.tools.registry import get_tool_description
@@ -38,6 +39,7 @@ def register(mcp: FastMCP) -> None:
         name="commit",
         description=get_tool_description("commit"),
     )
+    @mcp_error_boundary
     async def commit(
         belief_ids: list[str],
         reason: str | None = None,

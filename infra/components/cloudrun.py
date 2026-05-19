@@ -1,7 +1,7 @@
 """Cloud Run v2 service for Engrammic API."""
 
 import pulumi
-from pulumi_gcp import cloudrunv2, vpcaccess
+from pulumi_gcp import cloudrunv2
 
 
 class ContextServiceRun(pulumi.ComponentResource):
@@ -25,18 +25,6 @@ class ContextServiceRun(pulumi.ComponentResource):
         env = config.require("environment")
         region = gcp_config.require("region")
         min_instances = int(config.get("min_cloudrun_instances") or "0")
-
-        # VPC Access Connector
-        self.connector = vpcaccess.Connector(
-            f"{name}-connector",
-            name=f"engrammic-{env}-connector",
-            region=region,
-            subnet=vpcaccess.ConnectorSubnetArgs(name=connector_subnet_id),
-            machine_type="e2-micro",
-            min_instances=2,
-            max_instances=3,
-            opts=pulumi.ResourceOptions(parent=self),
-        )
 
         # Build environment variables
         env_list = []
@@ -72,7 +60,12 @@ class ContextServiceRun(pulumi.ComponentResource):
                     max_instance_count=10,
                 ),
                 vpc_access=cloudrunv2.ServiceTemplateVpcAccessArgs(
-                    connector=self.connector.id,
+                    network_interfaces=[
+                        cloudrunv2.ServiceTemplateVpcAccessNetworkInterfaceArgs(
+                            network=vpc_id,
+                            subnetwork=connector_subnet_id,
+                        )
+                    ],
                     egress="ALL_TRAFFIC",
                 ),
                 containers=[

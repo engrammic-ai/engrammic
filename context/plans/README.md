@@ -2,9 +2,13 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-16)
+## Current state (2026-05-19)
 
 **Shipped:**
+- v2.14 Recall Optimization Phase 4 (similarity cache for semantic near-matches)
+- v2.13 Recall Optimization Phase 3 (Qdrant scalar quantization, Matryoshka 512-dim validation)
+- v2.12 Recall Optimization Phase 2 (tiered result cache, version-based invalidation, bypass_cache/max_age_seconds params)
+- v2.11 Recall Optimization Phase 1 (embedding cache + TEI backend, 500ms -> 50ms)
 - v2.10 GCP Deployment (Pulumi infra, Cloud Run API, GCE stateful host)
 - v2.9 Review Followup (P0 security/reliability fixes, N+1 batching, LLM timeout/retry)
 - v2.8 Content-Hash Dedup (full SHA256 hashes, dedup index, claim dedup tests)
@@ -30,11 +34,9 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Status | Description |
 |------|--------|-------------|
+| [2026-05-19-mcp-connection-stability.md](./2026-05-19-mcp-connection-stability.md) | Ready | Error boundaries + Direct VPC Egress for MCP resilience |
 | [2026-05-19-supersession-head-pointer.md](./2026-05-19-supersession-head-pointer.md) | Ready | O(1) chain lookups via linked-list pointers (tail_id/head_id) |
-| [2026-05-19-recall-optimization-phase1.md](./2026-05-19-recall-optimization-phase1.md) | Planning | Embedding cache + TEI backend (500ms -> 50ms) |
-| [2026-05-19-recall-optimization-phase2.md](./2026-05-19-recall-optimization-phase2.md) | Planning | Tiered result cache with layer-dependent TTLs |
-| [2026-05-19-recall-optimization-phase3.md](./2026-05-19-recall-optimization-phase3.md) | Planning | Qdrant scalar quantization + Matryoshka validation |
-| [2026-05-19-recall-optimization-phase4.md](./2026-05-19-recall-optimization-phase4.md) | Planning | Similarity cache for semantic near-matches (optional) |
+| [2026-05-19-wire-unpopulated-fields.md](./2026-05-19-wire-unpopulated-fields.md) | Ready | Wire unpopulated optional fields in recall responses |
 
 ## Future work
 
@@ -45,8 +47,6 @@ Specced or checkpointed for later implementation:
 | **Concepts** | [concepts-design.md](../../docs/superpowers/specs/2026-05-18-concepts-design.md) | Post-closed-beta, when retrieval quality degrades at scale |
 
 **Concepts:** Emergent abstract nodes (Wisdom layer) that organize knowledge without asserting conclusions. Includes Weaver SAGE persona, weighted edges, 5-phase incremental impl plan.
-
-**Supersession head pointer:** Denormalized `current_head` field on superseded nodes for O(1) lookup to chain head instead of walking SUPERSEDES edges at query time.
 
 ## Spikes / drafts
 
@@ -75,6 +75,10 @@ Specced or checkpointed for later implementation:
 ## Archive
 
 Completed plans in `archive/`:
+- Recall Optimization Phase 4 (2026-05-19) - similarity cache for semantic near-matches
+- Recall Optimization Phase 3 (2026-05-19) - Qdrant scalar quantization, Matryoshka validation
+- Recall Optimization Phase 2 (2026-05-19) - tiered result cache, version-based invalidation
+- Recall Optimization Phase 1 (2026-05-19) - embedding cache + TEI backend
 - Source Tier Classification (2026-05-19) - source tier resolution for confidence scoring
 - Epistemic Layer Fixes (2026-05-17) - belief architecture, flow compliance, evidence discipline
 - Architectural Decisions (2026-05-16) - 9 decisions on enforcement, reliability, integration

@@ -6,6 +6,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
+from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.server import get_mcp_auth_context, get_preset_resolver, track_tool_usage
 from context_service.mcp.tools.context_recall import _context_recall
 from context_service.mcp.tools.registry import get_tool_description
@@ -23,6 +24,8 @@ async def _recall_impl(
     layers: list[str] | None = None,
     top_k: int | None = None,
     include_hypotheses: bool = False,
+    bypass_cache: bool = False,
+    max_age_seconds: int | None = None,
 ) -> dict[str, Any]:
     """Implementation for recall tool."""
     auth = await get_mcp_auth_context()
@@ -47,6 +50,8 @@ async def _recall_impl(
         depth=depth,
         layers=layers,
         top_k=effective_top_k,
+        bypass_cache=bypass_cache,
+        max_age_seconds=max_age_seconds,
     )
 
     # Track node access for evidence accessibility (Layer 3 chain reuse)
@@ -127,6 +132,7 @@ def register(mcp: FastMCP) -> None:
         name="recall",
         description=get_tool_description("recall"),
     )
+    @mcp_error_boundary
     async def recall(
         query: str | None = None,
         node_ids: list[str] | None = None,
@@ -134,6 +140,8 @@ def register(mcp: FastMCP) -> None:
         layers: list[str] | None = None,
         top_k: int | None = None,
         include_hypotheses: bool = False,
+        bypass_cache: bool = False,
+        max_age_seconds: int | None = None,
     ) -> dict[str, Any]:
         """Retrieve knowledge.
 
@@ -144,6 +152,11 @@ def register(mcp: FastMCP) -> None:
             layers: Filter: memory|knowledge|wisdom|intelligence.
             top_k: Max results for search (default 10, or preset value).
             include_hypotheses: Include tentative beliefs from current session.
+            bypass_cache: When True, skip the result cache and force a fresh
+                search. Only applies to query + depth=0 mode.
+            max_age_seconds: Maximum acceptable cache age in seconds. If the
+                cached result is older than this, a fresh search is performed.
+                Only applies to query + depth=0 mode.
 
         Returns:
             {results|nodes, hypotheses?, ...}
@@ -151,7 +164,9 @@ def register(mcp: FastMCP) -> None:
         start = time.perf_counter()
         success = True
         try:
-            return await _recall_impl(query, node_ids, depth, layers, top_k, include_hypotheses)
+            return await _recall_impl(
+                query, node_ids, depth, layers, top_k, include_hypotheses, bypass_cache, max_age_seconds
+            )
         except Exception:
             success = False
             raise

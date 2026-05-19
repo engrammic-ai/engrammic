@@ -20,6 +20,7 @@ from context_service.api.routes.source_rules import router as source_rules_route
 from context_service.config.logging import configure_logging, get_logger
 from context_service.config.settings import get_settings
 from context_service.core.service_registry import ServiceRegistry
+from context_service.mcp.session_recovery import MCPSessionRecoveryMiddleware
 from context_service.stores import (
     MemgraphClient,
     QdrantClient,
@@ -136,19 +137,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         embedding_cache = EmbeddingCache(redis_client)
         embedding_service: EmbeddingService | None = None
         try:
-            from context_service.config.config_loader import load_config
+            from context_service.config.config_loader import CONFIG_DIR, load_config
             from context_service.embeddings import build_embedding_service
 
+            logger.info("embedding_config_loading", config_dir=str(CONFIG_DIR))
             embed_config = load_config("embeddings")
+            logger.info("embedding_config_loaded", config=embed_config)
             embedding_service = build_embedding_service(embedding_cache)
             logger.info(
                 "embedding_service_configured",
                 provider="LiteLLMEmbeddingService",
                 model=embed_config["model"],
             )
-        except FileNotFoundError:
+        except Exception as exc:
             logger.warning(
                 "embedding_service_unconfigured",
+                error_type=type(exc).__name__,
+                error_message=str(exc),
                 hint="create config/embeddings.yaml to enable semantic search",
             )
 
@@ -321,6 +326,6 @@ def create_app() -> ASGIApp:
             return {"status": "ok", "server": mcp_server.name}
 
         logger.info("mcp_server_mounted", path="/mcp", transport="sse")
-        return _MCPDispatcher(app, mcp_app, prefix="/mcp")
+        return _MCPDispatcher(app, MCPSessionRecoveryMiddleware(mcp_app), prefix="/mcp")
 
     return app

@@ -6,6 +6,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any, Literal
 
+from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.server import get_mcp_auth_context, get_preset_resolver, get_skill_service
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.services.models import derive_silo_id
@@ -94,6 +95,7 @@ def register(mcp: FastMCP) -> None:
         name="patterns",
         description=get_tool_description("patterns"),
     )
+    @mcp_error_boundary
     async def patterns(
         action: Literal["list", "get", "search"],
         name: str | None = None,

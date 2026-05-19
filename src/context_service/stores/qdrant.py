@@ -11,6 +11,7 @@ from opentelemetry import trace
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.http import models
 from qdrant_client.http.exceptions import UnexpectedResponse
+from qdrant_client.models import ScalarQuantization, ScalarQuantizationConfig, ScalarType
 
 from context_service.config.logging import get_logger
 from context_service.engine.storage_circuit import STORE_QDRANT, guard_hard_fail
@@ -58,6 +59,8 @@ class QdrantClient:
         url: str = "http://localhost:6333",
         api_key: str | None = None,
         collection_name: str = "context_vectors",
+        scalar_quantization: bool = False,
+        always_ram: bool = True,
     ) -> None:
         """Initialize the Qdrant client.
 
@@ -67,11 +70,17 @@ class QdrantClient:
             url: Qdrant server URL.
             api_key: Optional API key for authentication.
             collection_name: Qdrant collection name.
+            scalar_quantization: When True, enables INT8 scalar quantization on
+                new collections to reduce search latency.
+            always_ram: When True, keeps quantized vectors in RAM for fastest
+                access. Only relevant when scalar_quantization is True.
         """
         self._url = url
         self._api_key = api_key
         self._vector_size = vector_size
         self._collection_name = collection_name
+        self._scalar_quantization = scalar_quantization
+        self._always_ram = always_ram
         self._client: AsyncQdrantClient | None = None
         self._init_lock: asyncio.Lock = asyncio.Lock()
 
@@ -95,6 +104,8 @@ class QdrantClient:
             api_key=api_key,
             vector_size=embed_config["dimensions"],
             collection_name=collection_name,
+            scalar_quantization=settings.qdrant_scalar_quantization_enabled,
+            always_ram=settings.qdrant_quantization_always_ram,
         )
 
     async def _get_client(self) -> AsyncQdrantClient:
@@ -107,6 +118,17 @@ class QdrantClient:
                         api_key=self._api_key,
                     )
         return self._client
+
+    def get_quantization_config(self) -> ScalarQuantization | None:
+        """Return the quantization config for collection creation, or None if disabled."""
+        if not self._scalar_quantization:
+            return None
+        return ScalarQuantization(
+            scalar=ScalarQuantizationConfig(
+                type=ScalarType.INT8,
+                always_ram=self._always_ram,
+            )
+        )
 
     async def ensure_collection(self, *, hybrid: bool = False) -> None:
         """Create the collection if it doesn't exist.
@@ -123,6 +145,16 @@ class QdrantClient:
             collection_names = [c.name for c in collections.collections]
 
             if self._collection_name not in collection_names:
+                quant_config = (
+                    ScalarQuantization(
+                        scalar=ScalarQuantizationConfig(
+                            type=ScalarType.INT8,
+                            always_ram=self._always_ram,
+                        )
+                    )
+                    if self._scalar_quantization
+                    else None
+                )
                 if hybrid:
                     await client.create_collection(
                         collection_name=self._collection_name,
@@ -135,6 +167,7 @@ class QdrantClient:
                         sparse_vectors_config={
                             SPARSE_VECTOR_NAME: models.SparseVectorParams(),
                         },
+                        quantization_config=quant_config,
                     )
                 else:
                     await client.create_collection(
@@ -143,6 +176,7 @@ class QdrantClient:
                             size=self._vector_size,
                             distance=models.Distance.COSINE,
                         ),
+                        quantization_config=quant_config,
                     )
                 logger.info(
                     "qdrant_collection_created",
@@ -161,12 +195,48 @@ class QdrantClient:
                     )
                 else:
                     logger.debug("qdrant_collection_exists", collection=self._collection_name)
+                await self._check_dimension_mismatch(client)
         except Exception as e:
             self._client = None
             logger.error("qdrant_ensure_collection_failed", error=str(e))
             raise QdrantOperationError(f"Failed to ensure collection: {e}") from e
         finally:
             record_db_query("qdrant.ensure_collection", (time.perf_counter() - start) * 1000)
+
+    async def _check_dimension_mismatch(self, client: AsyncQdrantClient) -> None:
+        """Warn if the configured vector size differs from the existing collection's size.
+
+        For hybrid collections, ``vectors`` is a dict of named VectorParams; for
+        non-hybrid collections it is a single VectorParams object.  Both cases
+        are handled.  Any failure to retrieve or parse collection info is logged
+        and silently ignored so that normal startup is never blocked.
+        """
+        try:
+            collection_info = await client.get_collection(self._collection_name)
+            vectors_config = collection_info.config.params.vectors
+
+            if isinstance(vectors_config, dict):
+                # Hybrid collection — check the dense vector config.
+                dense = vectors_config.get(DENSE_VECTOR_NAME)
+                existing_size: int | None = dense.size if dense is not None else None
+            else:
+                existing_size = vectors_config.size if vectors_config is not None else None
+
+            if existing_size is not None and existing_size != self._vector_size:
+                logger.warning(
+                    "qdrant_dimension_mismatch",
+                    configured=self._vector_size,
+                    existing=existing_size,
+                    hint=(
+                        "Re-embed all documents before switching Matryoshka dimensions. "
+                        "See context/specs/2026-05-19-recall-optimization.md Task 4."
+                    ),
+                )
+        except Exception as exc:
+            logger.debug(
+                "qdrant_dimension_check_skipped",
+                error=str(exc),
+            )
 
     async def health_check(self) -> bool:
         """Check if Qdrant is reachable.

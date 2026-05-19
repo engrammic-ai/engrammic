@@ -42,7 +42,7 @@ async def get_authorization_url(redirect_uri: str, state: str) -> str:
         url: str = client.user_management.get_authorization_url(
             redirect_uri=redirect_uri,
             state=state,
-            provider=None,  # Let WorkOS choose (magic link or SSO)
+            provider="authkit",
         )
     except Exception as exc:
         raise ValueError(f"WorkOS get_authorization_url failed: {exc}") from exc

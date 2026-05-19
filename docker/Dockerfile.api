@@ -9,8 +9,8 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # Copy dependency files
 COPY pyproject.toml uv.lock README.md ./
 
-# Install production dependencies
-RUN uv sync --frozen --no-dev --no-install-project
+# Install production dependencies with auth group
+RUN uv sync --frozen --no-dev --no-install-project --group auth
 
 # Stage 2: Runtime
 FROM python:3.13-slim
@@ -29,12 +29,16 @@ COPY config/ /app/config/
 COPY src/ /app/src/
 COPY alembic.ini /app/alembic.ini
 COPY alembic/ /app/alembic/
+COPY scripts/validate_imports.py /app/scripts/
 
 # Set environment
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app/src"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
+
+# Validate critical imports at build time
+RUN python /app/scripts/validate_imports.py
 
 USER engrammic
 

@@ -10,6 +10,7 @@ import structlog
 from primitives.eag.transitions import MissingEvidenceError, validate_evidence_non_empty
 
 from context_service.config.settings import get_settings
+from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.server import get_mcp_auth_context, track_tool_usage
 from context_service.mcp.tools.context_store import _context_assert
 from context_service.mcp.tools.registry import get_tool_description
@@ -67,6 +68,7 @@ def register(mcp: FastMCP) -> None:
         name="learn",
         description=get_tool_description("learn"),
     )
+    @mcp_error_boundary
     async def learn(
         claim: str,
         evidence: list[str],

@@ -199,6 +199,8 @@ class QdrantConfig(BaseModel):
     port: int = 6333
     grpc_port: int = 6334
     api_key: SecretStr | None = None
+    scalar_quantization_enabled: bool = False
+    quantization_always_ram: bool = True
 
 
 class RedisConfig(BaseModel):
@@ -352,7 +354,7 @@ class VertexConfig(BaseModel):
 class SpladeConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
-    model: str = "prithivida/Splade_PP_en_v1"
+    model: str = "prithivida/Splade_PP_en_v1"  # verified 2026-05-19
 
 
 class EmbeddingConfig(BaseModel):
@@ -520,6 +522,44 @@ class CacheConfig(BaseModel):
     node_ttl: int = 3600
     embedding_ttl: int = 604800
     lookup_ttl: int = 300
+
+
+class ResultCacheConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    enabled: bool = Field(default=True, description="Enable in-process tiered result cache")
+    memory_ttl: int = Field(default=300, description="Memory layer TTL in seconds (5 min)")
+    knowledge_ttl: int = Field(default=3600, description="Knowledge layer TTL in seconds (1 hour)")
+    wisdom_ttl: int = Field(default=1800, description="Wisdom layer TTL in seconds (30 min)")
+    maxsize: int = Field(default=10000, description="Max entries per layer cache")
+
+
+class SimilarityCacheConfig(BaseModel):
+    """Configuration for Phase 4 similarity embedding cache."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable similarity-based embedding reuse on exact-match miss.",
+    )
+    threshold: float = Field(
+        default=0.95,
+        ge=0.0,
+        le=1.0,
+        description="Minimum cosine similarity to reuse a cached embedding.",
+    )
+    max_entries: int = Field(
+        default=500,
+        ge=10,
+        le=5000,
+        description="Maximum number of recent query embeddings kept in the similarity index.",
+    )
+    index_ttl: int = Field(
+        default=86400,
+        ge=60,
+        description="TTL in seconds applied to the similarity index key on each write.",
+    )
 
 
 class ClusteringConfig(BaseModel):
@@ -757,6 +797,8 @@ class Settings(BaseSettings):
     prompts: PromptsConfig = Field(default_factory=PromptsConfig)
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
     cache: CacheConfig = Field(default_factory=CacheConfig)
+    result_cache: ResultCacheConfig = Field(default_factory=ResultCacheConfig)
+    similarity_cache: SimilarityCacheConfig = Field(default_factory=SimilarityCacheConfig)
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     clustering: ClusteringConfig = Field(default_factory=ClusteringConfig)
     extraction: ExtractionConfig = Field(default_factory=ExtractionConfig)
@@ -848,6 +890,8 @@ class Settings(BaseSettings):
     qdrant_port: int = Field(default=6333)
     qdrant_grpc_port: int = Field(default=6334)
     qdrant_api_key: SecretStr | None = Field(default=None)
+    qdrant_scalar_quantization_enabled: bool = Field(default=False)
+    qdrant_quantization_always_ram: bool = Field(default=True)
 
     @property
     def qdrant_url(self) -> str:

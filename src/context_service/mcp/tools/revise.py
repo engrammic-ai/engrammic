@@ -6,6 +6,7 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
+from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.server import get_mcp_auth_context, track_tool_usage
 from context_service.mcp.tools.context_update_belief import _context_update_belief
 from context_service.mcp.tools.registry import get_tool_description
@@ -42,6 +43,7 @@ def register(mcp: FastMCP) -> None:
         name="revise",
         description=get_tool_description("revise"),
     )
+    @mcp_error_boundary
     async def revise(
         belief_id: str,
         confidence: float,

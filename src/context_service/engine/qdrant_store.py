@@ -110,6 +110,7 @@ class EngineQdrantStore:
                             sparse_vectors_config={
                                 self.SPARSE_VECTOR_NAME: SparseVectorParams(),
                             },
+                            quantization_config=self._qdrant.get_quantization_config(),
                         )
                     else:
                         await client.create_collection(
@@ -118,6 +119,7 @@ class EngineQdrantStore:
                                 size=self._qdrant._vector_size,
                                 distance=Distance.COSINE,
                             ),
+                            quantization_config=self._qdrant.get_quantization_config(),
                         )
                     try:
                         await client.create_payload_index(
@@ -443,6 +445,7 @@ class EngineQdrantStore:
                             size=self._qdrant._vector_size,
                             distance=Distance.COSINE,
                         ),
+                        quantization_config=self._qdrant.get_quantization_config(),
                     )
                     logger.info(f"Created cluster Qdrant collection: {name}")
                 self._ensured_collections.add(name)
