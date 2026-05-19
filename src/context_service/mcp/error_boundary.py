@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Awaitable, Callable
-from typing import ParamSpec, TypeVar
 
 import structlog
 from mcp.shared.exceptions import McpError
@@ -14,9 +13,6 @@ from mcp.types import ErrorData
 _SERVER_ERROR_CODE = -32000
 
 logger = structlog.get_logger(__name__)
-
-P = ParamSpec("P")
-R = TypeVar("R")
 
 
 def _classify_backend(e: Exception) -> str:
@@ -36,7 +32,7 @@ def _classify_backend(e: Exception) -> str:
 
 def _is_retriable(e: Exception) -> bool:
     """Determine if error is transient and retriable."""
-    error_str = str(e).lower()
+    error_str = (str(type(e).__module__) + str(type(e).__name__) + str(e)).lower()
     transient_patterns = ["timeout", "connection", "unavailable", "temporary", "refused"]
     return any(p in error_str for p in transient_patterns)
 
@@ -66,7 +62,7 @@ class MCPBackendError(McpError):
         return self.message
 
 
-def mcp_error_boundary(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+def mcp_error_boundary[**P, R](func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
     """Wrap MCP tool handlers to catch backend errors cleanly."""
 
     @functools.wraps(func)
