@@ -83,6 +83,8 @@ class QdrantClient:
         self._always_ram = always_ram
         self._client: AsyncQdrantClient | None = None
         self._init_lock: asyncio.Lock = asyncio.Lock()
+        self._hybrid_mode: bool = False
+        self._collection_ensured: bool = False
 
     @classmethod
     def from_settings(cls, settings: Settings) -> QdrantClient:
@@ -138,6 +140,7 @@ class QdrantClient:
                 configs (Qdrant 1.10+). Existing collections are left as-is
                 with a warning if the mode differs.
         """
+        self._hybrid_mode = hybrid
         client = await self._get_client()
         start = time.perf_counter()
         try:
@@ -196,6 +199,7 @@ class QdrantClient:
                 else:
                     logger.debug("qdrant_collection_exists", collection=self._collection_name)
                 await self._check_dimension_mismatch(client)
+            self._collection_ensured = True
         except Exception as e:
             self._client = None
             logger.error("qdrant_ensure_collection_failed", error=str(e))
@@ -522,6 +526,14 @@ class QdrantClient:
                 )
                 return results
             except UnexpectedResponse as e:
+                if e.status_code == 404 and "Not found" in str(e):
+                    logger.warning(
+                        "qdrant_collection_not_found_recreating",
+                        collection=self._collection_name,
+                        hybrid=self._hybrid_mode,
+                    )
+                    await self.ensure_collection(hybrid=self._hybrid_mode)
+                    return []
                 logger.error("qdrant_search_error", error=str(e))
                 raise QdrantOperationError(f"Failed to search vectors: {e}") from e
             except Exception as e:
