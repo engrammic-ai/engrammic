@@ -6,9 +6,11 @@ from typing import Literal
 
 from fastapi import APIRouter, Query, Request
 from pydantic import BaseModel
+from sqlalchemy import text
 
 from context_service import __version__
 from context_service.config.logging import get_logger
+from context_service.db.postgres import get_session
 
 logger = get_logger(__name__)
 
@@ -21,6 +23,7 @@ class ServiceStatus(BaseModel):
     memgraph: Literal["connected", "disconnected"]
     redis: Literal["connected", "disconnected"]
     qdrant: Literal["connected", "disconnected"]
+    postgres: Literal["connected", "disconnected"]
 
 
 class ServiceLatency(BaseModel):
@@ -29,6 +32,7 @@ class ServiceLatency(BaseModel):
     memgraph_ms: float
     redis_ms: float
     qdrant_ms: float
+    postgres_ms: float
 
 
 class HealthResponse(BaseModel):
@@ -47,6 +51,17 @@ async def _timed_check(coro: Awaitable[bool]) -> tuple[bool, float]:
     result = await coro
     elapsed_ms = (time.monotonic() - start) * 1000
     return result, elapsed_ms
+
+
+async def _postgres_health_check() -> bool:
+    """Check postgres connection by running a simple query."""
+    try:
+        async with get_session() as session:
+            await session.execute(text("SELECT 1"))
+        return True
+    except Exception as e:
+        logger.warning("postgres_health_check_failed", error=str(e))
+        return False
 
 
 @router.get(
@@ -69,6 +84,7 @@ async def health_check(
                 memgraph="disconnected",
                 redis="disconnected",
                 qdrant="disconnected",
+                postgres="disconnected",
             ),
         )
 
@@ -78,15 +94,17 @@ async def health_check(
         )
         redis_healthy, redis_ms = await _timed_check(request.app.state.redis.health_check())
         qdrant_healthy, qdrant_ms = await _timed_check(request.app.state.qdrant.health_check())
+        postgres_healthy, postgres_ms = await _timed_check(_postgres_health_check())
     else:
         memgraph_healthy = await request.app.state.memgraph.health_check()
         redis_healthy = await request.app.state.redis.health_check()
         qdrant_healthy = await request.app.state.qdrant.health_check()
-        memgraph_ms = redis_ms = qdrant_ms = 0.0
+        postgres_healthy = await _postgres_health_check()
+        memgraph_ms = redis_ms = qdrant_ms = postgres_ms = 0.0
 
-    healthy_count = sum([memgraph_healthy, redis_healthy, qdrant_healthy])
+    healthy_count = sum([memgraph_healthy, redis_healthy, qdrant_healthy, postgres_healthy])
 
-    if healthy_count == 3:
+    if healthy_count == 4:
         status: Literal["healthy", "degraded", "unhealthy"] = "healthy"
     elif healthy_count > 0:
         status = "degraded"
@@ -100,6 +118,7 @@ async def health_check(
             memgraph="connected" if memgraph_healthy else "disconnected",
             redis="connected" if redis_healthy else "disconnected",
             qdrant="connected" if qdrant_healthy else "disconnected",
+            postgres="connected" if postgres_healthy else "disconnected",
         ),
     )
 
@@ -108,6 +127,7 @@ async def health_check(
             memgraph_ms=round(memgraph_ms, 2),
             redis_ms=round(redis_ms, 2),
             qdrant_ms=round(qdrant_ms, 2),
+            postgres_ms=round(postgres_ms, 2),
         )
         start_time = getattr(request.app.state, "start_time", None)
         if start_time is not None:
@@ -141,7 +161,8 @@ async def readiness_check(request: Request) -> dict[str, str]:
     memgraph_ok = await request.app.state.memgraph.health_check()
     redis_ok = await request.app.state.redis.health_check()
     qdrant_ok = await request.app.state.qdrant.health_check()
+    postgres_ok = await _postgres_health_check()
 
-    if all([memgraph_ok, redis_ok, qdrant_ok]):
+    if all([memgraph_ok, redis_ok, qdrant_ok, postgres_ok]):
         return {"status": "ready"}
     return {"status": "not_ready"}

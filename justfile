@@ -142,6 +142,18 @@ secrets-sync:
 secrets-sync-beta:
     ENVIRONMENT=beta GCP_PROJECT={{project}} uv run python scripts/sync_secrets.py
 
-# Run migrations on beta Cloud SQL (via stateful host)
+# Run migrations on beta Cloud SQL (via API container on stateful host)
 db-migrate-beta:
-    gcloud compute ssh engrammic-beta-stateful --project={{project}} --zone={{zone}} --tunnel-through-iap --command="docker run --rm postgres:16-alpine psql 'postgresql://context:\$(gcloud secrets versions access latest --secret=engrammic-beta-postgres-password --project={{project}})@10.162.0.3:5432/engrammic?sslmode=disable' -c '\dt'"
+    gcloud compute ssh engrammic-beta-stateful --project={{project}} --zone={{zone}} --tunnel-through-iap --command='export PGPASSWORD=$$(gcloud secrets versions access latest --secret=engrammic-beta-postgres-password --project={{project}}) && docker run --rm -e POSTGRES_HOST=10.162.0.3 -e POSTGRES_PORT=5432 -e POSTGRES_USER=context -e POSTGRES_PASSWORD="$$PGPASSWORD" -e POSTGRES_DATABASE=engrammic {{registry}}/engrammic-api:latest alembic upgrade head'
+
+# Check beta database tables
+db-tables-beta:
+    gcloud compute ssh engrammic-beta-stateful --project={{project}} --zone={{zone}} --tunnel-through-iap --command='export PGPASSWORD=$$(gcloud secrets versions access latest --secret=engrammic-beta-postgres-password --project={{project}}) && docker run --rm -e PGPASSWORD="$$PGPASSWORD" postgres:16-alpine psql "postgresql://context@10.162.0.3:5432/engrammic" -c "\dt"'
+
+# Check alembic version on beta
+db-version-beta:
+    gcloud compute ssh engrammic-beta-stateful --project={{project}} --zone={{zone}} --tunnel-through-iap --command='export PGPASSWORD=$$(gcloud secrets versions access latest --secret=engrammic-beta-postgres-password --project={{project}}) && docker run --rm -e PGPASSWORD="$$PGPASSWORD" postgres:16-alpine psql "postgresql://context@10.162.0.3:5432/engrammic" -c "SELECT * FROM alembic_version;"'
+
+# Interactive psql on beta (via stateful host)
+db-psql-beta:
+    gcloud compute ssh engrammic-beta-stateful --project={{project}} --zone={{zone}} --tunnel-through-iap --command='export PGPASSWORD=$$(gcloud secrets versions access latest --secret=engrammic-beta-postgres-password --project={{project}}) && docker run -it --rm -e PGPASSWORD="$$PGPASSWORD" postgres:16-alpine psql "postgresql://context@10.162.0.3:5432/engrammic"'
