@@ -27,17 +27,8 @@ storage = StorageStack("engrammic-storage", stateful_host_email=iam.stateful_hos
 # Secrets - Secret Manager resources
 secrets = SecretsStack("engrammic-secrets")
 
-# Stateful host - GCE instance for Memgraph, Qdrant, Redis (+ Postgres if not using Cloud SQL)
-stateful_host = StatefulHost(
-    "engrammic-stateful",
-    network=network.vpc,
-    subnet=network.private_subnet,
-    service_account_email=iam.stateful_host.email,
-)
-
-# Cloud SQL (if enabled)
+# Cloud SQL (if enabled) - define postgres_host early for StatefulHost
 cloudsql = None
-postgres_host = stateful_host.instance.network_interfaces[0].network_ip
 if use_cloudsql:
     cloudsql = CloudSQLPostgres(
         "engrammic-cloudsql",
@@ -45,6 +36,21 @@ if use_cloudsql:
         private_connection=network.private_connection,
     )
     postgres_host = cloudsql.instance.private_ip_address
+else:
+    postgres_host = None  # Will be set after StatefulHost
+
+# Stateful host - GCE instance for Memgraph, Qdrant, Redis (+ Postgres if not using Cloud SQL)
+stateful_host = StatefulHost(
+    "engrammic-stateful",
+    network=network.vpc,
+    subnet=network.private_subnet,
+    service_account_email=iam.stateful_host.email,
+    postgres_host=postgres_host,
+)
+
+# Set postgres_host from StatefulHost if not using Cloud SQL
+if not use_cloudsql:
+    postgres_host = stateful_host.instance.network_interfaces[0].network_ip
 
 # Cloud Run API deployment
 context_service = ContextServiceRun(
@@ -55,19 +61,38 @@ context_service = ContextServiceRun(
     image="europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-api:latest",
     env_vars={
         "ENVIRONMENT": config.require("environment"),
+        "HOST": "0.0.0.0",
+        "PORT": "8000",
         "MEMGRAPH_HOST": stateful_host.instance.network_interfaces[0].network_ip,
+        "MEMGRAPH_URI": stateful_host.instance.network_interfaces[0].network_ip.apply(
+            lambda ip: f"bolt://{ip}:7687"
+        ),
         "QDRANT_HOST": stateful_host.instance.network_interfaces[0].network_ip,
+        "QDRANT_URL": stateful_host.instance.network_interfaces[0].network_ip.apply(
+            lambda ip: f"http://{ip}:6333"
+        ),
         "REDIS_HOST": stateful_host.instance.network_interfaces[0].network_ip,
+        "REDIS_URL": stateful_host.instance.network_interfaces[0].network_ip.apply(
+            lambda ip: f"redis://{ip}:6379"
+        ),
         "POSTGRES_HOST": postgres_host,
         "POSTGRES_USER": "context",
         "POSTGRES_DATABASE": "engrammic",
         "VERTEX_PROJECT_ID": "engrammic",
         "VERTEX_LOCATION": "europe-north1",
+        "EMBEDDING_PROVIDER": "vertex",
+        "LLM_PROVIDER": "vertex_gemini",
+        "DEFAULT_LLM_MODEL": "gemini-2.5-flash",
+        "AUTH_ENABLED": "true",
+        "CUSTODIAN__ENABLED": "true",
+        "LOG_LEVEL": "INFO",
     },
     secrets={
         "POSTGRES_PASSWORD": secrets.secrets["postgres-password"].id,
         "MEMGRAPH_PASSWORD": secrets.secrets["memgraph-password"].id,
         "WORKOS_API_KEY": secrets.secrets["workos-api-key"].id,
+        "WORKOS_CLIENT_ID": secrets.secrets["workos-client-id"].id,
+        "WORKOS_COOKIE_PASSWORD": secrets.secrets["workos-cookie-password"].id,
     },
 )
 
