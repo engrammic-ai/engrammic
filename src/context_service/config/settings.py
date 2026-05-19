@@ -534,6 +534,34 @@ class ResultCacheConfig(BaseModel):
     maxsize: int = Field(default=10000, description="Max entries per layer cache")
 
 
+class SimilarityCacheConfig(BaseModel):
+    """Configuration for Phase 4 similarity embedding cache."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    enabled: bool = Field(
+        default=False,
+        description="Enable similarity-based embedding reuse on exact-match miss.",
+    )
+    threshold: float = Field(
+        default=0.95,
+        ge=0.0,
+        le=1.0,
+        description="Minimum cosine similarity to reuse a cached embedding.",
+    )
+    max_entries: int = Field(
+        default=500,
+        ge=10,
+        le=5000,
+        description="Maximum number of recent query embeddings kept in the similarity index.",
+    )
+    index_ttl: int = Field(
+        default=86400,
+        ge=60,
+        description="TTL in seconds applied to the similarity index key on each write.",
+    )
+
+
 class ClusteringConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -770,6 +798,7 @@ class Settings(BaseSettings):
     features: FeaturesConfig = Field(default_factory=FeaturesConfig)
     cache: CacheConfig = Field(default_factory=CacheConfig)
     result_cache: ResultCacheConfig = Field(default_factory=ResultCacheConfig)
+    similarity_cache: SimilarityCacheConfig = Field(default_factory=SimilarityCacheConfig)
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     clustering: ClusteringConfig = Field(default_factory=ClusteringConfig)
     extraction: ExtractionConfig = Field(default_factory=ExtractionConfig)
