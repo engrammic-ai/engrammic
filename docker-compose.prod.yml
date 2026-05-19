@@ -44,7 +44,7 @@ services:
     restart: unless-stopped
 
   memgraph:
-    image: memgraph/memgraph-mage:3.10.0
+    image: memgraph/memgraph-mage:3.10.1
     container_name: engrammic-memgraph
     ports:
       - "7687:7687"
@@ -67,7 +67,7 @@ services:
     restart: unless-stopped
 
   qdrant:
-    image: qdrant/qdrant:v1.9.0
+    image: qdrant/qdrant:v1.18.0
     container_name: engrammic-qdrant
     ports:
       - "6333:6333"
@@ -231,7 +231,7 @@ services:
     restart: unless-stopped
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.100.0
+    image: otel/opentelemetry-collector-contrib:0.152.0
     container_name: engrammic-otel
     ports:
       - "4317:4317"

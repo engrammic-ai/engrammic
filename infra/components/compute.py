@@ -6,7 +6,7 @@ from pulumi_gcp import compute
 DOCKER_COMPOSE_TEMPLATE = '''
 services:
   memgraph:
-    image: memgraph/memgraph:2.18.1
+    image: memgraph/memgraph:3.10.1
     container_name: memgraph
     ports:
       - "7687:7687"
@@ -16,7 +16,7 @@ services:
     restart: unless-stopped
 
   qdrant:
-    image: qdrant/qdrant:v1.9.0
+    image: qdrant/qdrant:v1.18.0
     container_name: qdrant
     ports:
       - "6333:6333"

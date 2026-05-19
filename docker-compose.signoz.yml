@@ -1,4 +1,4 @@
-# SigNoz Observability Stack (v0.122.0)
+# SigNoz Observability Stack (v0.124.0)
 # Run with: docker compose -f docker-compose.signoz.yml up -d
 # Access UI at: http://localhost:3301
 
@@ -112,7 +112,7 @@ services:
 
   signoz:
     <<: *common
-    image: signoz/signoz:v0.122.0
+    image: signoz/signoz:v0.124.0
     container_name: signoz
     ports:
       - "3301:8080"
