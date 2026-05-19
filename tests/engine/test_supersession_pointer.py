@@ -167,3 +167,116 @@ async def test_chain_extension_updates_tail_head_pointer(
     second_call_params = mock_client.execute_write.call_args_list[1][0][1]
     assert second_call_params["from_id"] == str(node_c_id)
     assert second_call_params["to_id"] == str(node_b_id)
+
+
+@pytest.mark.asyncio
+async def test_crystallize_commitment_sets_pointers(
+    memgraph_store: MemgraphStore,
+    silo_id: str,
+    now: datetime,
+) -> None:
+    """Crystallizing a hypothesis that supersedes existing commitment sets pointers."""
+    wb_id = uuid.uuid4()
+    cm_id = uuid.uuid4()
+    existing_cm_id = uuid.uuid4()
+    shared_node_id = uuid.uuid4()
+
+    # Create shared node, existing commitment, and working hypothesis
+    await memgraph_store._client.execute_write(
+        """
+        CREATE (shared:Node:Fact {id: $shared_id, silo_id: $silo_id, content: 'shared'})
+        CREATE (existing:Node:Commitment {id: $existing_id, silo_id: $silo_id, layer: 'wisdom', content: 'old', valid_from: $vf})
+        CREATE (wb:WorkingHypothesis {id: $wb_id, silo_id: $silo_id, content: 'new', confidence: 0.9})
+        CREATE (existing)-[:ABOUT]->(shared)
+        CREATE (wb)-[:ABOUT]->(shared)
+        """,
+        {
+            "shared_id": str(shared_node_id),
+            "existing_id": str(existing_cm_id),
+            "wb_id": str(wb_id),
+            "silo_id": silo_id,
+            "vf": now.isoformat(),
+        },
+    )
+
+    # Crystallize
+    from context_service.db import queries as db_queries
+
+    await memgraph_store._client.execute_write(
+        db_queries.CRYSTALLIZE_TO_COMMITMENT,
+        {
+            "belief_id": str(wb_id),
+            "commitment_id": str(cm_id),
+            "silo_id": silo_id,
+            "created_at": now.isoformat(),
+            "valid_from": now.isoformat(),
+            "reason": "crystallization",
+            "rationale_chain_id": None,
+        },
+    )
+
+    # Verify pointers: existing is tail with head_id, cm is head with tail_id
+    result = await memgraph_store._client.execute_query(
+        """
+        MATCH (existing:Commitment {id: $existing_id, silo_id: $silo_id})
+        MATCH (cm:Commitment {id: $cm_id, silo_id: $silo_id})
+        RETURN existing.head_id AS existing_head, cm.tail_id AS cm_tail
+        """,
+        {"existing_id": str(existing_cm_id), "cm_id": str(cm_id), "silo_id": silo_id},
+    )
+    row = result[0]
+    assert row["existing_head"] == str(cm_id)
+    assert row["cm_tail"] == str(existing_cm_id)
+
+
+@pytest.mark.asyncio
+async def test_resolve_current_head_via_pointers(
+    memgraph_store: MemgraphStore,
+    mock_client: MagicMock,
+    silo_id: str,
+) -> None:
+    """resolve_current_head returns chain head in O(1) via pointers."""
+    node_a_id = uuid.uuid4()
+    node_c_id = uuid.uuid4()
+
+    # Mock: query returns C as head when looking up A
+    mock_client.execute_query.return_value = [{"head_id": str(node_c_id)}]
+
+    head = await memgraph_store.resolve_current_head(node_a_id, silo_id)
+
+    assert head == node_c_id
+    mock_client.execute_query.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_resolve_current_head_single_node(
+    memgraph_store: MemgraphStore,
+    mock_client: MagicMock,
+    silo_id: str,
+) -> None:
+    """Single node with no supersession returns itself."""
+    node_id = uuid.uuid4()
+
+    # Mock: standalone node returns itself as head
+    mock_client.execute_query.return_value = [{"head_id": str(node_id)}]
+
+    head = await memgraph_store.resolve_current_head(node_id, silo_id)
+
+    assert head == node_id
+
+
+@pytest.mark.asyncio
+async def test_resolve_current_head_nonexistent_node(
+    memgraph_store: MemgraphStore,
+    mock_client: MagicMock,
+    silo_id: str,
+) -> None:
+    """Nonexistent node returns None."""
+    node_id = uuid.uuid4()
+
+    # Mock: no result for nonexistent node
+    mock_client.execute_query.return_value = []
+
+    head = await memgraph_store.resolve_current_head(node_id, silo_id)
+
+    assert head is None

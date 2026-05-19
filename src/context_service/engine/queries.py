@@ -371,6 +371,21 @@ WITH input_id, collect(tip)[0] AS chosen
 RETURN input_id, chosen.id AS valid_id
 """
 
+# Fast-path O(1) lookup for current chain head via pointers.
+# Returns head_id for any node in a supersession chain.
+# For nodes without pointers (not yet backfilled), returns null.
+RESOLVE_CURRENT_HEAD = f"""
+MATCH (input) WHERE {content_union_predicate("input")} AND input.id = $id AND input.silo_id = $silo_id
+// Derive tail: input's tail_id if set, else input might be the tail itself
+WITH input, COALESCE(input.tail_id, input.id) AS tail_id
+// If input has no tail_id, check if input IS a tail (has head_id)
+// or is a standalone node (no pointers at all)
+OPTIONAL MATCH (tail) WHERE {content_union_predicate("tail")} AND tail.id = tail_id AND tail.silo_id = $silo_id
+WITH input, tail
+// Return: tail's head_id if tail exists and has head_id, else input.id (standalone or is head)
+RETURN COALESCE(tail.head_id, input.id) AS head_id
+"""
+
 # O-14 + CLAUDE.md invariant: :Finding nodes are filtered at retrieval
 # unless the caller is explicitly requesting drafts. A finding passes
 # when either (a) it is extraction-sourced or (b) its status is
