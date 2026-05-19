@@ -2,9 +2,11 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-16)
+## Current state (2026-05-19)
 
 **Shipped:**
+- v2.12 Recall Optimization Phase 2 (tiered result cache, version-based invalidation, bypass_cache/max_age_seconds params)
+- v2.11 Recall Optimization Phase 1 (embedding cache + TEI backend, 500ms -> 50ms)
 - v2.10 GCP Deployment (Pulumi infra, Cloud Run API, GCE stateful host)
 - v2.9 Review Followup (P0 security/reliability fixes, N+1 batching, LLM timeout/retry)
 - v2.8 Content-Hash Dedup (full SHA256 hashes, dedup index, claim dedup tests)
@@ -31,7 +33,6 @@ Active implementation plans for context-service. Completed plans are moved to `a
 | Plan | Status | Description |
 |------|--------|-------------|
 | [2026-05-19-supersession-head-pointer.md](./2026-05-19-supersession-head-pointer.md) | Ready | O(1) chain lookups via linked-list pointers (tail_id/head_id) |
-| [2026-05-19-recall-optimization-phase2.md](./2026-05-19-recall-optimization-phase2.md) | Ready | Tiered result cache with layer-dependent TTLs |
 | [2026-05-19-recall-optimization-phase3.md](./2026-05-19-recall-optimization-phase3.md) | Ready | Qdrant scalar quantization + Matryoshka validation |
 | [2026-05-19-recall-optimization-phase4.md](./2026-05-19-recall-optimization-phase4.md) | Ready | Similarity cache for semantic near-matches (optional) |
 
@@ -74,6 +75,8 @@ Specced or checkpointed for later implementation:
 ## Archive
 
 Completed plans in `archive/`:
+- Recall Optimization Phase 2 (2026-05-19) - tiered result cache, version-based invalidation
+- Recall Optimization Phase 1 (2026-05-19) - embedding cache + TEI backend
 - Source Tier Classification (2026-05-19) - source tier resolution for confidence scoring
 - Epistemic Layer Fixes (2026-05-17) - belief architecture, flow compliance, evidence discipline
 - Architectural Decisions (2026-05-16) - 9 decisions on enforcement, reliability, integration

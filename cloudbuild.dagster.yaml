@@ -7,7 +7,7 @@ steps:
       - '-t'
       - '${_IMAGE}:${SHORT_SHA}'
       - '-f'
-      - 'context-service/Dockerfile.dagster'
+      - 'docker/Dockerfile.dagster'
       - '.'
 images:
   - '${_IMAGE}:latest'
