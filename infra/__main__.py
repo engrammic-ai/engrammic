@@ -6,6 +6,7 @@ from components import (
     CloudSQLPostgres,
     ContextServiceRun,
     IAMStack,
+    MigrationJob,
     NetworkStack,
     SecretsStack,
     StatefulHost,
@@ -95,13 +96,22 @@ context_service = ContextServiceRun(
     },
 )
 
-# Beacon service (if Cloud SQL enabled - beta/prod only)
+# Migration job and Beacon service (if Cloud SQL enabled - beta/prod only)
+migration_job = None
 beacon_service = None
 if use_cloudsql:
     database_url = pulumi.Output.all(
         postgres_host,
         config.require_secret("postgres_password"),
-    ).apply(lambda args: f"postgresql://context:{args[1]}@{args[0]}:5432/engrammic")
+    ).apply(lambda args: f"postgresql+asyncpg://context:{args[1]}@{args[0]}:5432/engrammic")
+
+    migration_job = MigrationJob(
+        "engrammic-migrate",
+        vpc_connector_id=context_service.connector.id,
+        service_account_email=iam.context_service_run.email,
+        image="europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-api:latest",
+        database_url=database_url,
+    )
 
     beacon_service = BeaconServiceRun(
         "engrammic-beacon",
@@ -127,6 +137,9 @@ pulumi.export("api_url", context_service.service.uri)
 if cloudsql:
     pulumi.export("cloudsql_connection_name", cloudsql.instance.connection_name)
     pulumi.export("cloudsql_private_ip", cloudsql.instance.private_ip_address)
+
+if migration_job:
+    pulumi.export("migration_job_name", migration_job.job.name)
 
 if beacon_service:
     pulumi.export("beacon_url", beacon_service.service.uri)

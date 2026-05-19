@@ -5,6 +5,7 @@ delegating identity to WorkOS AuthKit.
 
 Endpoints:
   GET  /.well-known/oauth-authorization-server  - RFC 8414 server metadata
+  POST /oauth/register                           - RFC 7591 dynamic client registration
   GET  /oauth/authorize                          - Start flow, redirect to WorkOS
   GET  /oauth/callback                           - Handle WorkOS callback
   POST /oauth/token                              - Exchange code or refresh tokens
@@ -14,6 +15,8 @@ Endpoints:
 from __future__ import annotations
 
 import secrets
+import uuid
+from typing import Any
 from urllib.parse import urlencode, urlparse
 
 import structlog
@@ -47,11 +50,41 @@ async def oauth_metadata() -> dict[str, str | list[str]]:
         "authorization_endpoint": f"{issuer}/oauth/authorize",
         "token_endpoint": f"{issuer}/oauth/token",
         "revocation_endpoint": f"{issuer}/oauth/revoke",
+        "registration_endpoint": f"{issuer}/oauth/register",
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],
         "token_endpoint_auth_methods_supported": ["none"],
         "scopes_supported": ["read", "write"],
+    }
+
+
+@router.post(
+    "/oauth/register",
+    operation_id="oauth_register",
+    summary="RFC 7591 dynamic client registration",
+)
+async def register_client(request_body: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Register a new OAuth client dynamically (RFC 7591).
+
+    Since we use PKCE for all clients, we don't require client secrets.
+    Any client can register and receive a client_id.
+    """
+    client_id = f"client_{uuid.uuid4().hex[:16]}"
+    redirect_uris = []
+    client_name = "Unknown Client"
+
+    if request_body:
+        redirect_uris = request_body.get("redirect_uris", [])
+        client_name = request_body.get("client_name", client_name)
+
+    return {
+        "client_id": client_id,
+        "client_name": client_name,
+        "redirect_uris": redirect_uris,
+        "token_endpoint_auth_method": "none",
+        "grant_types": ["authorization_code", "refresh_token"],
+        "response_types": ["code"],
     }
 
 

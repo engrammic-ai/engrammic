@@ -5,6 +5,7 @@ from components.cloudrun import ContextServiceRun
 from components.cloudsql import CloudSQLPostgres
 from components.compute import StatefulHost
 from components.iam import IAMStack
+from components.migration_job import MigrationJob
 from components.network import NetworkStack
 from components.secrets import SecretsStack
 from components.storage import StorageStack
@@ -14,6 +15,7 @@ __all__ = [
     "CloudSQLPostgres",
     "ContextServiceRun",
     "IAMStack",
+    "MigrationJob",
     "NetworkStack",
     "SecretsStack",
     "StatefulHost",

@@ -2,8 +2,7 @@
   "mcpServers": {
     "engrammic": {
       "type": "sse",
-      "url": "http://strata-finance:8000/mcp/",
-      "auth": "none"
+      "url": "https://beta.engrammic.ai/mcp/"
     }
   }
 }
