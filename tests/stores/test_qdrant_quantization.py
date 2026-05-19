@@ -199,6 +199,42 @@ async def test_matryoshka_dimension_mismatch_not_logged_when_matching() -> None:
 
 
 @pytest.mark.asyncio
+async def test_hybrid_search_with_quantization() -> None:
+    """ensure_collection passes both sparse_vectors_config and quantization_config when hybrid=True and scalar_quantization=True."""
+    client = QdrantClient(
+        vector_size=768,
+        url="http://localhost:6333",
+        collection_name="test_hybrid_search_quant",
+        scalar_quantization=True,
+        always_ram=True,
+    )
+
+    mock_async_client = AsyncMock()
+    mock_collections = MagicMock()
+    mock_collections.collections = []
+    mock_async_client.get_collections.return_value = mock_collections
+    mock_async_client.create_collection = AsyncMock()
+
+    with patch.object(client, "_get_client", return_value=mock_async_client):
+        await client.ensure_collection(hybrid=True)
+
+    mock_async_client.create_collection.assert_called_once()
+    call_kwargs = mock_async_client.create_collection.call_args.kwargs
+
+    # Verify sparse_vectors_config is present and contains the sparse vector name.
+    assert "sparse_vectors_config" in call_kwargs, "sparse_vectors_config must be present for hybrid collections"
+    sparse_config = call_kwargs["sparse_vectors_config"]
+    assert sparse_config is not None
+    assert "sparse" in sparse_config, "sparse_vectors_config must contain 'sparse' key"
+
+    # Verify quantization_config is INT8 scalar quantization.
+    quant = call_kwargs["quantization_config"]
+    assert isinstance(quant, ScalarQuantization), "quantization_config must be ScalarQuantization"
+    assert quant.scalar.type == ScalarType.INT8
+    assert quant.scalar.always_ram is True
+
+
+@pytest.mark.asyncio
 async def test_migration_script_skips_already_quantized() -> None:
     """Migration skips collections that already have INT8 scalar quantization."""
     from scripts.migrate_qdrant_quantization import run_migration

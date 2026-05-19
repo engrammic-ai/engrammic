@@ -354,7 +354,7 @@ class VertexConfig(BaseModel):
 class SpladeConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
-    model: str = "prithivida/Splade_PP_en_v1"
+    model: str = "prithivida/Splade_PP_en_v1"  # verified 2026-05-19
 
 
 class EmbeddingConfig(BaseModel):
