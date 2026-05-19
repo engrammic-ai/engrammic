@@ -110,6 +110,7 @@ async def compact_reasoning_chain(
     agent_id: str = chain.get("agent_id") or ""
 
     summarization_pending = False
+    compacted_by_model: str | None = None
     if raw_steps:
         # Hot form: steps is a list of dicts (serialised from ChainStep)
         # Memgraph may return steps as a JSON string rather than a list.
@@ -123,6 +124,7 @@ async def compact_reasoning_chain(
             llm_client = build_llm_provider(model_spec.provider, model_spec.model)
             content = await summarize_reasoning_steps(steps, llm_client=llm_client)
             summarization_pending = False
+            compacted_by_model = model_spec.model
         except Exception as exc:
             logger.warning("summarization_failed", chain_id=chain_id, error=str(exc))
             content = inline_summary(steps)
@@ -161,6 +163,7 @@ async def compact_reasoning_chain(
                 "silo_id": silo_id,
                 "event_id": event_id,
                 "compacted_at": now.isoformat(),
+                "compacted_by_model": compacted_by_model,
             },
         )
 

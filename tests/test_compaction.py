@@ -195,6 +195,70 @@ async def test_compact_chain_no_steps_no_summary_raises() -> None:
 
 
 # ---------------------------------------------------------------------------
+# compacted_by_model propagation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_compact_hot_chain_passes_compacted_by_model_to_tombstone() -> None:
+    """TOMBSTONE_REASONING_CHAIN must receive compacted_by_model (may be None on LLM failure)."""
+    store = FakeGraphStore()
+    steps = _make_steps(2)
+    store.seed_query_result(
+        [
+            {
+                "id": "chain-m",
+                "steps": steps,
+                "compact_summary": None,
+                "agent_id": "agent-m",
+                "tier": "hot",
+                "status": "published",
+                "compacted": False,
+            }
+        ]
+    )
+    store.seed_write_result([{"event_id": "ev-m"}])
+    store.seed_write_result([{"chain_id": "chain-m"}])
+
+    await compact_reasoning_chain(store, "chain-m", "silo-1", "committed")
+
+    # Second write is the tombstone
+    second_write_cypher, second_write_params = store.write_log[1]
+    assert "compacted_by_model" in second_write_cypher
+    assert "compacted_by_model" in second_write_params
+    # The value is either a model string or None (when LLM is unavailable in test env)
+    model_val = second_write_params["compacted_by_model"]
+    assert model_val is None or isinstance(model_val, str)
+
+
+@pytest.mark.asyncio
+async def test_compact_cold_chain_passes_compacted_by_model_none() -> None:
+    """Cold-form compaction has no LLM call, so compacted_by_model must be None."""
+    store = FakeGraphStore()
+    store.seed_query_result(
+        [
+            {
+                "id": "chain-cold-m",
+                "steps": None,
+                "compact_summary": "Existing summary",
+                "agent_id": "agent-z",
+                "tier": "cold",
+                "status": "abandoned",
+                "compacted": False,
+            }
+        ]
+    )
+    store.seed_write_result([])
+    store.seed_write_result([])
+
+    await compact_reasoning_chain(store, "chain-cold-m", "silo-1", "abandoned")
+
+    second_write_cypher, second_write_params = store.write_log[1]
+    assert "compacted_by_model" in second_write_cypher
+    assert second_write_params["compacted_by_model"] is None
+
+
+# ---------------------------------------------------------------------------
 # batch_compact_chains
 # ---------------------------------------------------------------------------
 

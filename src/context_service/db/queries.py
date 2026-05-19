@@ -656,7 +656,8 @@ TOMBSTONE_REASONING_CHAIN = """
 MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})
 SET chain.compacted = true,
     chain.compacted_at = $compacted_at,
-    chain.compact_event_id = $event_id
+    chain.compact_event_id = $event_id,
+    chain.compacted_by_model = $compacted_by_model
 RETURN chain.id AS chain_id
 """
 
