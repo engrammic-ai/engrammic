@@ -1,5 +1,7 @@
 """Engrammic infrastructure entrypoint."""
 
+from urllib.parse import quote
+
 import pulumi
 from components import (
     BeaconServiceRun,
@@ -100,10 +102,17 @@ context_service = ContextServiceRun(
 migration_job = None
 beacon_service = None
 if use_cloudsql:
-    database_url = pulumi.Output.all(
+    # SQLAlchemy format for migration job (uses asyncpg driver)
+    database_url_sqlalchemy = pulumi.Output.all(
         postgres_host,
         config.require_secret("postgres_password"),
-    ).apply(lambda args: f"postgresql+asyncpg://context:{args[1]}@{args[0]}:5432/engrammic")
+    ).apply(lambda args: f"postgresql+asyncpg://context:{quote(args[1], safe='')}@{args[0]}:5432/engrammic")
+
+    # Plain asyncpg format for beacon (uses asyncpg directly)
+    database_url_asyncpg = pulumi.Output.all(
+        postgres_host,
+        config.require_secret("postgres_password"),
+    ).apply(lambda args: f"postgresql://context:{quote(args[1], safe='')}@{args[0]}:5432/engrammic")
 
     migration_job = MigrationJob(
         "engrammic-migrate",
@@ -111,7 +120,7 @@ if use_cloudsql:
         subnet_id=network.private_subnet.name,
         service_account_email=iam.context_service_run.email,
         image="europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-api:latest",
-        database_url=database_url,
+        database_url=database_url_sqlalchemy,
     )
 
     beacon_service = BeaconServiceRun(
@@ -120,7 +129,7 @@ if use_cloudsql:
         subnet_id=network.private_subnet.name,
         service_account_email=iam.context_service_run.email,
         image="europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-beacon:latest",
-        database_url=database_url,
+        database_url=database_url_asyncpg,
     )
 
 # Exports
