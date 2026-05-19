@@ -42,13 +42,22 @@ class TestContextQueryReranking:
         mock_settings.causal = MagicMock()
         mock_settings.causal.query_enabled = False
 
+        mock_silo = MagicMock()
+        mock_silo.freshness_decay_lambda = 0.01
+        mock_silo.default_recall_threshold = 0.5
+        mock_silo_service = MagicMock()
+        mock_silo_service.get_by_id = AsyncMock(return_value=mock_silo)
+
         with (
             patch(
                 "context_service.mcp.tools.context_query.get_mcp_auth_context",
                 return_value=mock_auth,
             ),
             patch("context_service.mcp.tools.context_query.get_context_service") as mock_svc,
-            patch("context_service.mcp.tools.context_query.get_silo_service"),
+            patch(
+                "context_service.mcp.tools.context_query.get_silo_service",
+                return_value=mock_silo_service,
+            ),
             patch(
                 "context_service.mcp.tools.context_query.validate_silo_ownership", return_value=None
             ),
@@ -94,13 +103,22 @@ class TestContextQueryReranking:
         mock_settings.causal = MagicMock()
         mock_settings.causal.query_enabled = False
 
+        mock_silo = MagicMock()
+        mock_silo.freshness_decay_lambda = 0.01
+        mock_silo.default_recall_threshold = 0.5
+        mock_silo_service = MagicMock()
+        mock_silo_service.get_by_id = AsyncMock(return_value=mock_silo)
+
         with (
             patch(
                 "context_service.mcp.tools.context_query.get_mcp_auth_context",
                 return_value=mock_auth,
             ),
             patch("context_service.mcp.tools.context_query.get_context_service") as mock_svc,
-            patch("context_service.mcp.tools.context_query.get_silo_service"),
+            patch(
+                "context_service.mcp.tools.context_query.get_silo_service",
+                return_value=mock_silo_service,
+            ),
             patch(
                 "context_service.mcp.tools.context_query.validate_silo_ownership", return_value=None
             ),
@@ -131,8 +149,9 @@ class TestContextQueryReranking:
 
         from context_service.mcp.tools.context_query import _apply_reranking
 
-        output = await _apply_reranking("query", [mock_result], mock_settings)
+        output, fallback_used = await _apply_reranking("query", [mock_result], mock_settings)
         assert output == [mock_result]
+        assert fallback_used is False
 
     @pytest.mark.asyncio
     async def test_hard_query_triggers_expansion(self) -> None:
@@ -162,5 +181,6 @@ class TestContextQueryReranking:
         ):
             from context_service.mcp.tools.context_query import _apply_reranking
 
-            output = await _apply_reranking("query", mock_results, mock_settings)
+            output, fallback_used = await _apply_reranking("query", mock_results, mock_settings)
             assert output == mock_results
+            assert fallback_used is False

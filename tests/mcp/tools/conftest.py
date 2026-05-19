@@ -45,6 +45,14 @@ def mock_mcp_context(mock_mcp_auth_context):
             "context_service.mcp.tools.trace.get_mcp_auth_context",
             new=AsyncMock(return_value=mock_mcp_auth_context),
         ),
+        patch(
+            "context_service.mcp.tools.learn.get_mcp_auth_context",
+            new=AsyncMock(return_value=mock_mcp_auth_context),
+        ),
+        patch(
+            "context_service.mcp.tools.learn.track_tool_usage",
+            new=AsyncMock(),
+        ),
     ):
         yield mock_mcp_auth_context
 
@@ -52,6 +60,8 @@ def mock_mcp_context(mock_mcp_auth_context):
 @pytest.fixture
 def mock_context_service():
     """Mock context service with common methods."""
+    from context_service.services.source_tier_resolver import SourceTier
+
     node = MagicMock()
     node.id = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
@@ -70,6 +80,10 @@ def mock_context_service():
     with (
         patch("context_service.mcp.tools.context_store.get_context_service", return_value=svc),
         patch("context_service.mcp.tools.trace.get_context_service", return_value=svc),
+        patch(
+            "context_service.mcp.tools.context_store.resolve_source_tier",
+            new=AsyncMock(return_value=(SourceTier.VALIDATED, "mock")),
+        ),
     ):
         yield svc
 
