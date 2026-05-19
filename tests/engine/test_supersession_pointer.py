@@ -123,3 +123,47 @@ async def test_belief_supersession_query_sets_pointers() -> None:
     assert "tail_id" in query, "Query should set tail_id on newer belief"
     assert "head_id" in query, "Query should set head_id on tail belief"
     assert "COALESCE" in query, "Query should derive tail_id from existing chain"
+
+
+@pytest.mark.asyncio
+async def test_chain_extension_updates_tail_head_pointer(
+    memgraph_store: MemgraphStore,
+    mock_client: MagicMock,
+    silo_id: str,
+    now: datetime,
+) -> None:
+    """When C supersedes B (which superseded A), tail A's head_id updates to C.
+
+    The query uses COALESCE(old.tail_id, old.id) to derive the tail_id for
+    the new node. When B already has tail_id=A, C gets tail_id=A (from B).
+    The query then updates tail.head_id = new.id, so A.head_id becomes C.
+    """
+    node_a_id, node_b_id, node_c_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+
+    # Mock successful edge creation for both supersession calls
+    mock_client.execute_write.return_value = [{"created": 1}]
+
+    # B supersedes A
+    await memgraph_store.create_supersedes_edge(
+        from_id=node_b_id, to_id=node_a_id, silo_id=silo_id, valid_from=now
+    )
+
+    # C supersedes B
+    await memgraph_store.create_supersedes_edge(
+        from_id=node_c_id, to_id=node_b_id, silo_id=silo_id, valid_from=now
+    )
+
+    # Verify both calls were made
+    assert mock_client.execute_write.call_count == 2
+
+    # Verify both calls use the same query with pointer updates
+    for call in mock_client.execute_write.call_args_list:
+        query = call[0][0]
+        # Query should derive tail_id from chain and update head pointer
+        assert "COALESCE" in query, "Query should derive tail_id from chain"
+        assert "tail.head_id" in query, "Query should update tail's head_id"
+
+    # Verify parameters for second call (C supersedes B)
+    second_call_params = mock_client.execute_write.call_args_list[1][0][1]
+    assert second_call_params["from_id"] == str(node_c_id)
+    assert second_call_params["to_id"] == str(node_b_id)
