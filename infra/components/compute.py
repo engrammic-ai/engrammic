@@ -36,9 +36,68 @@ services:
       - redis-data:/data
     command: ["redis-server", "--appendonly", "yes"]
     restart: unless-stopped
-{postgres_service}
+{postgres_service}{dagster_services}
 volumes:
   redis-data:
+'''
+
+DAGSTER_SERVICES = '''
+  dagster-code-server:
+    image: europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-dagster:latest
+    container_name: engrammic-dagster-code
+    command: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-m", "context_service.pipelines.definitions"]
+    ports:
+      - "4000:4000"
+    environment:
+      - DAGSTER_HOME=/app
+      - MEMGRAPH_URI=bolt://memgraph:7687
+      - QDRANT_URL=http://qdrant:6333
+      - REDIS_URL=redis://redis:6379
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_USER=context
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DATABASE=engrammic
+    depends_on:
+      - memgraph
+      - qdrant
+      - redis
+    restart: unless-stopped
+
+  dagster-webserver:
+    image: europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-dagster:latest
+    container_name: engrammic-dagster-web
+    command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "workspace.yaml"]
+    ports:
+      - "3000:3000"
+    environment:
+      - DAGSTER_HOME=/app
+      - MEMGRAPH_URI=bolt://memgraph:7687
+      - QDRANT_URL=http://qdrant:6333
+      - REDIS_URL=redis://redis:6379
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_USER=context
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DATABASE=engrammic
+    depends_on:
+      - dagster-code-server
+    restart: unless-stopped
+
+  dagster-daemon:
+    image: europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-dagster:latest
+    container_name: engrammic-dagster-daemon
+    command: ["dagster-daemon", "run"]
+    environment:
+      - DAGSTER_HOME=/app
+      - MEMGRAPH_URI=bolt://memgraph:7687
+      - QDRANT_URL=http://qdrant:6333
+      - REDIS_URL=redis://redis:6379
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_USER=context
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DATABASE=engrammic
+    depends_on:
+      - dagster-code-server
+    restart: unless-stopped
 '''
 
 POSTGRES_SERVICE = '''
@@ -52,7 +111,7 @@ POSTGRES_SERVICE = '''
     environment:
       - POSTGRES_USER=context
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=context_service
+      - POSTGRES_DB=engrammic
     restart: unless-stopped
 '''
 
@@ -137,7 +196,11 @@ class StatefulHost(pulumi.ComponentResource):
 
         # Build compose content
         postgres_service = "" if use_cloudsql else POSTGRES_SERVICE
-        compose_content = DOCKER_COMPOSE_TEMPLATE.format(postgres_service=postgres_service)
+        dagster_services = DAGSTER_SERVICES
+        compose_content = DOCKER_COMPOSE_TEMPLATE.format(
+            postgres_service=postgres_service,
+            dagster_services=dagster_services,
+        )
 
         # Startup script - formats disks if needed, mounts with nofail
         startup_script = """#!/bin/bash
@@ -207,10 +270,20 @@ for DISK in $DISKS; do
     fi
 done
 
-# Fetch secrets from Secret Manager (only if not using Cloud SQL)
-if [ "$USE_CLOUDSQL" != "true" ]; then
-    echo "Fetching Postgres password from Secret Manager..."
-    export POSTGRES_PASSWORD=$(gcloud secrets versions access latest --secret="engrammic-$ENV-postgres-password" --project="$PROJECT" 2>/dev/null || echo "devpassword")
+# Fetch secrets from Secret Manager
+echo "Fetching Postgres password from Secret Manager..."
+export POSTGRES_PASSWORD=$(gcloud secrets versions access latest --secret="engrammic-$ENV-postgres-password" --project="$PROJECT" 2>/dev/null || echo "devpassword")
+
+# Set POSTGRES_HOST based on Cloud SQL config
+if [ "$USE_CLOUDSQL" = "true" ]; then
+    # Fetch Cloud SQL private IP from Secret Manager
+    export POSTGRES_HOST=$(gcloud secrets versions access latest --secret="engrammic-$ENV-postgres-host" --project="$PROJECT" 2>/dev/null || echo "")
+    if [ -z "$POSTGRES_HOST" ]; then
+        echo "ERROR: POSTGRES_HOST secret not found for Cloud SQL deployment"
+        exit 1
+    fi
+else
+    export POSTGRES_HOST=postgres
 fi
 
 mkdir -p /opt/engrammic
@@ -218,6 +291,7 @@ mkdir -p /opt/engrammic
 # Write .env file for docker-compose
 cat > /opt/engrammic/.env << ENV_EOF
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+POSTGRES_HOST=${POSTGRES_HOST}
 ENV_EOF
 chmod 600 /opt/engrammic/.env
 

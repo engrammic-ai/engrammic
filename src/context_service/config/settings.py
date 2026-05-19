@@ -1078,7 +1078,7 @@ class Settings(BaseSettings):
     postgres_port: int = Field(default=5432)
     postgres_user: str = Field(default="context")
     postgres_password: SecretStr = Field(default=SecretStr("context"))
-    postgres_database: str = Field(default="context_service")
+    postgres_database: str = Field(default="engrammic")
 
     @property
     def postgres_dsn(self) -> str:
