@@ -3,6 +3,7 @@ name: Deploy Beta
 on:
   push:
     branches: [beta]
+  workflow_dispatch:
 
 env:
   REGION: europe-north1
