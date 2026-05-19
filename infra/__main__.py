@@ -57,7 +57,7 @@ if not use_cloudsql:
 context_service = ContextServiceRun(
     "engrammic-context-service",
     vpc_id=network.vpc.id,
-    connector_subnet_id=network.vpc_connector.name,
+    connector_subnet_id=network.private_subnet.name,
     service_account_email=iam.context_service_run.email,
     image="europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-api:latest",
     env_vars={
@@ -107,7 +107,8 @@ if use_cloudsql:
 
     migration_job = MigrationJob(
         "engrammic-migrate",
-        vpc_connector_id=context_service.connector.id,
+        vpc_id=network.vpc.id,
+        subnet_id=network.private_subnet.name,
         service_account_email=iam.context_service_run.email,
         image="europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-api:latest",
         database_url=database_url,
@@ -115,7 +116,8 @@ if use_cloudsql:
 
     beacon_service = BeaconServiceRun(
         "engrammic-beacon",
-        vpc_connector_id=context_service.connector.id,
+        vpc_id=network.vpc.id,
+        subnet_id=network.private_subnet.name,
         service_account_email=iam.context_service_run.email,
         image="europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-beacon:latest",
         database_url=database_url,

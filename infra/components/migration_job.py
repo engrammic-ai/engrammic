@@ -10,7 +10,8 @@ class MigrationJob(pulumi.ComponentResource):
     def __init__(
         self,
         name: str,
-        vpc_connector_id: pulumi.Input[str],
+        vpc_id: pulumi.Input[str],
+        subnet_id: pulumi.Input[str],
         service_account_email: pulumi.Input[str],
         image: str,
         database_url: pulumi.Input[str],
@@ -31,7 +32,12 @@ class MigrationJob(pulumi.ComponentResource):
                 template=cloudrunv2.JobTemplateTemplateArgs(
                     service_account=service_account_email,
                     vpc_access=cloudrunv2.JobTemplateTemplateVpcAccessArgs(
-                        connector=vpc_connector_id,
+                        network_interfaces=[
+                            cloudrunv2.JobTemplateTemplateVpcAccessNetworkInterfaceArgs(
+                                network=vpc_id,
+                                subnetwork=subnet_id,
+                            )
+                        ],
                         egress="PRIVATE_RANGES_ONLY",
                     ),
                     containers=[

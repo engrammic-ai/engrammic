@@ -10,7 +10,8 @@ class BeaconServiceRun(pulumi.ComponentResource):
     def __init__(
         self,
         name: str,
-        vpc_connector_id: pulumi.Input[str],
+        vpc_id: pulumi.Input[str],
+        subnet_id: pulumi.Input[str],
         service_account_email: pulumi.Input[str],
         image: str,
         database_url: pulumi.Input[str],
@@ -34,7 +35,12 @@ class BeaconServiceRun(pulumi.ComponentResource):
                     max_instance_count=2,
                 ),
                 vpc_access=cloudrunv2.ServiceTemplateVpcAccessArgs(
-                    connector=vpc_connector_id,
+                    network_interfaces=[
+                        cloudrunv2.ServiceTemplateVpcAccessNetworkInterfaceArgs(
+                            network=vpc_id,
+                            subnetwork=subnet_id,
+                        )
+                    ],
                     egress="ALL_TRAFFIC",
                 ),
                 containers=[
