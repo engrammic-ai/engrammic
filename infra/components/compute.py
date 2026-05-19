@@ -36,6 +36,18 @@ services:
       - redis-data:/data
     command: ["redis-server", "--appendonly", "yes"]
     restart: unless-stopped
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/.docker/config.json:/config.json:ro
+    environment:
+      - WATCHTOWER_POLL_INTERVAL=300
+      - WATCHTOWER_CLEANUP=true
+      - DOCKER_CONFIG=/
+    restart: unless-stopped
 {postgres_service}{dagster_services}
 volumes:
   redis-data:
