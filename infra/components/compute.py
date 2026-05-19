@@ -244,6 +244,9 @@ if ! command -v docker-compose &> /dev/null; then
     chmod +x /usr/local/bin/docker-compose
 fi
 
+# Configure Docker to authenticate with Artifact Registry
+gcloud auth configure-docker europe-north1-docker.pkg.dev --quiet
+
 # Memgraph requires higher vm.max_map_count
 sysctl -w vm.max_map_count=262144
 echo "vm.max_map_count=262144" >> /etc/sysctl.conf

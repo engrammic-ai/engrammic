@@ -62,7 +62,6 @@ context_service = ContextServiceRun(
     env_vars={
         "ENVIRONMENT": config.require("environment"),
         "HOST": "0.0.0.0",
-        "PORT": "8000",
         "MEMGRAPH_HOST": stateful_host.instance.network_interfaces[0].network_ip,
         "MEMGRAPH_URI": stateful_host.instance.network_interfaces[0].network_ip.apply(
             lambda ip: f"bolt://{ip}:7687"
