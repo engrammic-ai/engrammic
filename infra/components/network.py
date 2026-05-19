@@ -86,6 +86,20 @@ class NetworkStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self),
         )
 
+        # Firewall: allow Cloud Run Direct VPC Egress to StatefulHost
+        # Cloud Run uses IPs from the private subnet, not network tags
+        self.fw_cloudrun_egress = compute.Firewall(
+            f"{name}-fw-cloudrun-egress",
+            name=f"engrammic-{env}-allow-cloudrun-egress",
+            network=self.vpc.id,
+            allows=[
+                compute.FirewallAllowArgs(protocol="tcp", ports=["6333", "6379", "7687"]),
+            ],
+            source_ranges=["10.0.2.0/24"],  # Private subnet CIDR
+            target_tags=["engrammic-stateful"],
+            opts=pulumi.ResourceOptions(parent=self),
+        )
+
         # VPC Connector for Cloud Run
         self.vpc_connector = compute.Subnetwork(
             f"{name}-connector-subnet",
