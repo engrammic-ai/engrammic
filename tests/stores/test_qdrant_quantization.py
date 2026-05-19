@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from qdrant_client.models import ScalarQuantization, ScalarType
+from qdrant_client.models import ScalarQuantization, ScalarQuantizationConfig, ScalarType
 
 from context_service.config.settings import QdrantConfig, Settings
 from context_service.stores.qdrant import QdrantClient
@@ -107,3 +107,38 @@ async def test_create_collection_hybrid_with_quantization() -> None:
     assert isinstance(quant, ScalarQuantization)
     assert quant.scalar.type == ScalarType.INT8
     assert quant.scalar.always_ram is False
+
+
+@pytest.mark.asyncio
+async def test_migration_script_skips_already_quantized() -> None:
+    """Migration skips collections that already have INT8 scalar quantization."""
+    from scripts.migrate_qdrant_quantization import run_migration
+
+    # Build a mock collection info that already has INT8 quantization.
+    existing_quant = ScalarQuantization(
+        scalar=ScalarQuantizationConfig(type=ScalarType.INT8, always_ram=True)
+    )
+    mock_config = MagicMock()
+    mock_config.quantization_config = existing_quant
+
+    mock_collection_info = MagicMock()
+    mock_collection_info.config = mock_config
+
+    # Build a mock collection list entry.
+    mock_collection_entry = MagicMock()
+    mock_collection_entry.name = "ctx_test_silo"
+
+    mock_collections_response = MagicMock()
+    mock_collections_response.collections = [mock_collection_entry]
+
+    mock_client = AsyncMock()
+    mock_client.get_collections.return_value = mock_collections_response
+    mock_client.get_collection.return_value = mock_collection_info
+    mock_client.update_collection = AsyncMock()
+
+    with patch("scripts.migrate_qdrant_quantization.AsyncQdrantClient", return_value=mock_client):
+        result = await run_migration(dry_run=False)
+
+    # Should return 0 (no updates needed) and never call update_collection.
+    assert result == 0
+    mock_client.update_collection.assert_not_called()
