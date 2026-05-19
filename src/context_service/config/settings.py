@@ -199,6 +199,8 @@ class QdrantConfig(BaseModel):
     port: int = 6333
     grpc_port: int = 6334
     api_key: SecretStr | None = None
+    scalar_quantization_enabled: bool = False
+    quantization_always_ram: bool = True
 
 
 class RedisConfig(BaseModel):
@@ -859,6 +861,8 @@ class Settings(BaseSettings):
     qdrant_port: int = Field(default=6333)
     qdrant_grpc_port: int = Field(default=6334)
     qdrant_api_key: SecretStr | None = Field(default=None)
+    qdrant_scalar_quantization_enabled: bool = Field(default=False)
+    qdrant_quantization_always_ram: bool = Field(default=True)
 
     @property
     def qdrant_url(self) -> str:
