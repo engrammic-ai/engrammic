@@ -818,6 +818,7 @@ RETURN b.id AS belief_id
 """
 
 # Create :SUPERSEDES edge between Beliefs with pointer updates for O(1) lookups.
+# Only sets tail_id if not already set (first supersession defines chain).
 # Parameters: new_belief_id, old_belief_id, silo_id, reason (str), created_at (ISO datetime str).
 CREATE_BELIEF_SUPERSEDES = """
 MATCH (newer:Belief {id: $new_belief_id, silo_id: $silo_id})
@@ -826,10 +827,12 @@ MERGE (newer)-[r:SUPERSEDES {
     reason: $reason,
     created_at: $created_at
 }]->(older)
-// Set pointers: newer gets tail_id, tail gets head_id
-WITH newer, older, COALESCE(older.tail_id, older.id) AS tail_id
-SET newer.tail_id = tail_id
-WITH newer, tail_id
+WITH newer, older, COALESCE(older.tail_id, older.id) AS derived_tail_id
+// Only set tail_id if not already set (first supersession defines chain)
+FOREACH (_ IN CASE WHEN newer.tail_id IS NULL THEN [1] ELSE [] END |
+  SET newer.tail_id = derived_tail_id
+)
+WITH newer, COALESCE(newer.tail_id, derived_tail_id) AS tail_id
 MATCH (tail:Belief {id: tail_id, silo_id: $silo_id})
 SET tail.head_id = newer.id
 RETURN tail.id AS tail_id
@@ -1309,6 +1312,7 @@ LIMIT 10
 # Existing commitments are considered active when no other Commitment
 # SUPERSEDES them. Their valid_to is set to $valid_from on supersession.
 # Sets tail_id/head_id pointers for O(1) chain lookups.
+# Only sets tail_id on first supersession (first chain wins for multi-supersession).
 CRYSTALLIZE_TO_COMMITMENT = """
 MATCH (wb:WorkingHypothesis {id: $belief_id, silo_id: $silo_id})
 CREATE (cm:Node:Commitment {
@@ -1336,12 +1340,14 @@ WITH cm, existing WHERE existing IS NOT NULL
 // Only supersede if existing is not already superseded
 OPTIONAL MATCH (superseding:Commitment)-[:SUPERSEDES]->(existing)
 WITH cm, existing, superseding WHERE superseding IS NULL
-// Create supersession with pointers
-WITH cm, existing, COALESCE(existing.tail_id, existing.id) AS tail_id
-SET cm.tail_id = tail_id
+// Create supersession with pointers (first chain wins)
+WITH cm, existing, COALESCE(existing.tail_id, existing.id) AS derived_tail_id
+FOREACH (_ IN CASE WHEN cm.tail_id IS NULL THEN [1] ELSE [] END |
+  SET cm.tail_id = derived_tail_id
+)
 CREATE (cm)-[:SUPERSEDES {reason: $reason, created_at: $created_at}]->(existing)
 SET existing.valid_to = $valid_from
-WITH cm, tail_id
+WITH cm, COALESCE(cm.tail_id, derived_tail_id) AS tail_id
 MATCH (tail:Commitment {id: tail_id, silo_id: $silo_id})
 SET tail.head_id = cm.id
 RETURN cm.id AS commitment_id

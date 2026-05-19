@@ -27,12 +27,14 @@ RETURN DISTINCT tail.id AS tail_id
 LIMIT $batch_size
 """
 
-# For a given tail, walk chain to find head and set pointers
+# For a given tail, walk chain to find head and set pointers.
+# Verifies all nodes in chain belong to the same silo.
 BACKFILL_CHAIN = """
 MATCH (tail) WHERE tail.id = $tail_id AND tail.silo_id = $silo_id
 // Walk chain to find head (node with no incoming SUPERSEDES)
 MATCH path = (head)-[:SUPERSEDES*0..]->(tail)
 WHERE NOT ()-[:SUPERSEDES]->(head) AND head.silo_id = $silo_id
+  AND all(n IN nodes(path) WHERE n.silo_id = $silo_id)
 WITH tail, head, nodes(path) AS chain_nodes
 // Set tail's head_id
 SET tail.head_id = head.id

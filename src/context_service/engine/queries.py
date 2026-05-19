@@ -330,8 +330,15 @@ CREATE (n)-[:SUPERSEDES {{reason: $reason}}]->(old)
 RETURN n
 """
 
+# Supersession chain pointers for O(1) head resolution.
+# Recommended indexes for pointer lookups (run once per database):
+#   CREATE INDEX ON :Node(tail_id);
+#   CREATE INDEX ON :Node(head_id);
+# Without these indexes, the O(1) claim for RESOLVE_CURRENT_HEAD is misleading.
+
 # Cross-node SUPERSEDES for Custodian-detected semantic supersession.
-# Sets tail_id on new node, head_id on tail node for O(1) chain lookups.
+# Sets tail_id on new node (if not already set), head_id on tail node for O(1) chain lookups.
+# If new node already has tail_id (multi-supersession), first chain wins to avoid inconsistent state.
 CREATE_CROSS_NODE_SUPERSEDES = f"""
 MATCH (new) WHERE {content_union_predicate("new")} AND new.id = $from_id AND new.silo_id = $silo_id
 MATCH (old) WHERE {content_union_predicate("old")} AND old.id = $to_id AND old.silo_id = $silo_id
@@ -345,9 +352,13 @@ FOREACH (_ IN CASE WHEN old.valid_to IS NULL THEN [1] ELSE [] END |
 )
 WITH old, new
 // Derive tail_id: old's tail_id if it exists (old was head of a chain), else old is the tail
-WITH old, new, COALESCE(old.tail_id, old.id) AS tail_id
-SET new.tail_id = tail_id
-WITH new, tail_id
+WITH old, new, COALESCE(old.tail_id, old.id) AS derived_tail_id
+// Only set tail_id if not already set (first supersession defines chain)
+FOREACH (_ IN CASE WHEN new.tail_id IS NULL THEN [1] ELSE [] END |
+  SET new.tail_id = derived_tail_id
+)
+// Use the effective tail (existing or newly set)
+WITH new, COALESCE(new.tail_id, derived_tail_id) AS tail_id
 // Update tail's head_id to point to new head
 MATCH (tail) WHERE {content_union_predicate("tail")} AND tail.id = tail_id AND tail.silo_id = $silo_id
 SET tail.head_id = new.id
@@ -356,61 +367,59 @@ RETURN count(*) AS created
 
 # Batch version-check with O(1) pointer fast-path for live-tip lookups.
 # Falls back to chain walk for historical as_of or missing pointers.
+# Uses single-query COALESCE pattern to avoid UNION fallback gaps.
 FILTER_SUPERSEDED_AT = f"""
 UNWIND $ids AS input_id
 MATCH (input) WHERE {content_union_predicate("input")} AND input.id = input_id AND input.silo_id = $silo_id
 
-// Fast path: use pointers if available
+// Fast path: try pointer lookup first
 WITH input_id, input, COALESCE(input.tail_id, input.id) AS tail_id
 OPTIONAL MATCH (tail) WHERE {content_union_predicate("tail")} AND tail.id = tail_id AND tail.silo_id = $silo_id
-WITH input_id, input, tail, COALESCE(tail.head_id, input.id) AS pointer_head_id
+WITH input_id, input, COALESCE(tail.head_id, input.id) AS pointer_head_id
 
 // Check if pointer head is valid at as_of
-OPTIONAL MATCH (head) WHERE {content_union_predicate("head")} AND head.id = pointer_head_id AND head.silo_id = $silo_id
-  AND coalesce(head.valid_from, head.created_at) <= $as_of
-  AND (head.valid_to IS NULL OR head.valid_to > $as_of)
+OPTIONAL MATCH (pointer_head) WHERE {content_union_predicate("pointer_head")}
+  AND pointer_head.id = pointer_head_id AND pointer_head.silo_id = $silo_id
+  AND coalesce(pointer_head.valid_from, pointer_head.created_at) <= $as_of
+  AND (pointer_head.valid_to IS NULL OR pointer_head.valid_to > $as_of)
 
-// If pointer head is valid, use it; otherwise fall back to chain walk
-WITH input_id, input, head
-WHERE head IS NOT NULL
-RETURN input_id, head.id AS valid_id
-
-UNION
-
-// Fallback: chain walk for historical queries or missing pointers
-UNWIND $ids AS input_id
-MATCH (input) WHERE {content_union_predicate("input")} AND input.id = input_id AND input.silo_id = $silo_id
-
-// Only fall back if pointer path didn't return a result
-WITH input_id, input
-WHERE input.tail_id IS NULL AND input.head_id IS NULL
-
-OPTIONAL MATCH path = (tip)-[:SUPERSEDES*0..]->(input)
-WHERE {content_union_predicate("tip")}
-  AND tip.silo_id = $silo_id
-  AND coalesce(tip.valid_from, tip.created_at) <= $as_of
-  AND (tip.valid_to IS NULL OR tip.valid_to > $as_of)
-WITH input_id, tip
-WHERE tip IS NOT NULL
-WITH input_id, tip
-ORDER BY coalesce(tip.valid_from, tip.created_at) DESC
-WITH input_id, collect(tip)[0] AS chosen
-RETURN input_id, chosen.id AS valid_id
+// If fast path succeeded, use it; otherwise chain walk
+WITH input_id, input, pointer_head
+CALL {{
+  WITH input_id, input, pointer_head
+  WITH input_id, pointer_head WHERE pointer_head IS NOT NULL
+  RETURN pointer_head.id AS valid_id
+  UNION
+  WITH input_id, input, pointer_head
+  WITH input_id, input WHERE pointer_head IS NULL
+  OPTIONAL MATCH path = (tip)-[:SUPERSEDES*0..]->(input)
+  WHERE {content_union_predicate("tip")}
+    AND tip.silo_id = $silo_id
+    AND coalesce(tip.valid_from, tip.created_at) <= $as_of
+    AND (tip.valid_to IS NULL OR tip.valid_to > $as_of)
+  WITH input_id, tip WHERE tip IS NOT NULL
+  ORDER BY coalesce(tip.valid_from, tip.created_at) DESC
+  WITH input_id, collect(tip)[0] AS chosen
+  RETURN chosen.id AS valid_id
+}}
+RETURN input_id, valid_id
 """
 
-# Fast-path O(1) lookup for current chain head via pointers.
-# Returns head_id for any node in a supersession chain.
-# For nodes without pointers (not yet backfilled), returns null.
+# Fast-path O(1) lookup for current (live) chain head via pointers.
+# Returns head_id for any node in a supersession chain, verifying the head
+# is still valid (not superseded). Returns null if node doesn't exist or
+# if the pointer head has been superseded (caller should fall back to chain walk).
 RESOLVE_CURRENT_HEAD = f"""
 MATCH (input) WHERE {content_union_predicate("input")} AND input.id = $id AND input.silo_id = $silo_id
 // Derive tail: input's tail_id if set, else input might be the tail itself
 WITH input, COALESCE(input.tail_id, input.id) AS tail_id
-// If input has no tail_id, check if input IS a tail (has head_id)
-// or is a standalone node (no pointers at all)
 OPTIONAL MATCH (tail) WHERE {content_union_predicate("tail")} AND tail.id = tail_id AND tail.silo_id = $silo_id
-WITH input, tail
-// Return: tail's head_id if tail exists and has head_id, else input.id (standalone or is head)
-RETURN COALESCE(tail.head_id, input.id) AS head_id
+WITH input, COALESCE(tail.head_id, input.id) AS pointer_head_id
+// Verify head is still valid (not superseded)
+OPTIONAL MATCH (head) WHERE {content_union_predicate("head")}
+  AND head.id = pointer_head_id AND head.silo_id = $silo_id
+  AND head.valid_to IS NULL
+RETURN head.id AS head_id
 """
 
 # O-14 + CLAUDE.md invariant: :Finding nodes are filtered at retrieval
