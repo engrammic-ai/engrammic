@@ -10,7 +10,7 @@ from opentelemetry import trace
 
 from context_service.config.config_loader import load_config
 from context_service.config.logging import get_logger
-from context_service.telemetry.metrics import record_embedding
+from context_service.telemetry.metrics import record_embedding, record_embedding_cache_miss
 
 if TYPE_CHECKING:
     from context_service.cache.embedding_cache import EmbeddingCache
@@ -113,6 +113,10 @@ class LiteLLMEmbeddingService:
                 assert len(result) == len(texts), "Cache/batch length mismatch"
                 return result
 
+            # Record cache misses
+            for _ in uncached_texts:
+                record_embedding_cache_miss(task)
+
             # Embed uncached texts
             embeddings = await self._embed_batch(uncached_texts)
 
@@ -188,6 +192,7 @@ class LiteLLMEmbeddingService:
             cached = await self._embedding_cache.get(query, "query")
             if cached is not None:
                 return cached
+            record_embedding_cache_miss("query")
             vector = (await self._embed_batch([query]))[0]
             await self._embedding_cache.set(query, "query", vector)
             return vector
