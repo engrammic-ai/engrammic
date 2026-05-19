@@ -5,19 +5,17 @@ steps:
       - '-f'
       - 'docker/Dockerfile.api'
       - '-t'
-      - '${_IMAGE}'
+      - '${_IMAGE}:latest'
+      - '-t'
+      - '${_IMAGE}:${SHORT_SHA}'
       - '.'
 
-  - name: 'gcr.io/cloud-builders/docker'
-    args:
-      - 'push'
-      - '${_IMAGE}'
-
 images:
-  - '${_IMAGE}'
+  - '${_IMAGE}:latest'
+  - '${_IMAGE}:${SHORT_SHA}'
 
 substitutions:
-  _IMAGE: 'europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-api:latest'
+  _IMAGE: 'europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-api'
 
 options:
   logging: CLOUD_LOGGING_ONLY

@@ -31,22 +31,22 @@ jobs:
       - name: Build API image with Cloud Build
         run: |
           gcloud builds submit --config cloudbuild.api.yaml --timeout 600s \
-            --substitutions _IMAGE=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-api:${{ github.sha }}
+            --substitutions SHORT_SHA=${{ github.sha }}
 
       - name: Build Beacon image with Cloud Build
         run: |
           gcloud builds submit --config cloudbuild.beacon.yaml --timeout 300s \
-            --substitutions _IMAGE=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-beacon:${{ github.sha }}
+            --substitutions SHORT_SHA=${{ github.sha }}
 
       - name: Build Dagster image with Cloud Build
         run: |
           gcloud builds submit --config cloudbuild.dagster.yaml --timeout 600s \
-            --substitutions _IMAGE=${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-dagster:${{ github.sha }}
+            --substitutions SHORT_SHA=${{ github.sha }}
 
       - name: Deploy API to Cloud Run
         run: |
           gcloud run deploy engrammic-beta-api \
-            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-api:${{ github.sha }} \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-api:latest \
             --region ${{ env.REGION }} \
             --no-traffic
 
