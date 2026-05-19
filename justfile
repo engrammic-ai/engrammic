@@ -134,6 +134,17 @@ build tag="latest":
 build-beacon tag="latest":
     gcloud builds submit --config=cloudbuild.beacon.yaml --substitutions=_IMAGE={{registry}}/engrammic-beacon:{{tag}} --region={{region}} .
 
+# Build and push dagster image
+build-dagster tag="latest":
+    gcloud builds submit --tag {{registry}}/engrammic-dagster:{{tag}} --dockerfile docker/Dockerfile.dagster --timeout 600s .
+    gcloud artifacts docker tags add {{registry}}/engrammic-dagster:{{tag}} {{registry}}/engrammic-dagster:latest
+
+# Build all images
+build-all tag="latest":
+    just build {{tag}}
+    just build-beacon {{tag}}
+    just build-dagster {{tag}}
+
 # Sync secrets to GCP Secret Manager (dev)
 secrets-sync:
     ENVIRONMENT=dev GCP_PROJECT={{project}} uv run python scripts/sync_secrets.py
