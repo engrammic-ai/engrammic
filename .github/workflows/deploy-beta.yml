@@ -57,27 +57,21 @@ jobs:
             ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-dagster:${{ github.sha }} \
             ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-dagster:latest
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Setup Pulumi
-        uses: pulumi/actions@v5
-
-      - name: Deploy infrastructure
+      - name: Deploy API to Cloud Run
         run: |
-          cd infra
-          uv sync
-          uv run pulumi up --stack beta --yes
-        env:
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          gcloud run deploy engrammic-beta-api \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-api:${{ github.sha }} \
+            --region ${{ env.REGION }} \
+            --no-traffic
 
-      - name: Run database migrations
+      - name: Run migrations via Cloud Run Job
         run: |
-          wget -q https://dl.google.com/cloudsql/cloud_sql_proxy.linux.amd64 -O cloud_sql_proxy
-          chmod +x cloud_sql_proxy
-          ./cloud_sql_proxy -instances=${{ env.PROJECT_ID }}:${{ env.REGION }}:engrammic-beta=tcp:5432 &
-          sleep 5
-          uv sync
-          uv run alembic upgrade head
-        env:
-          DATABASE_URL: postgresql://context:${{ secrets.POSTGRES_PASSWORD }}@localhost:5432/engrammic
+          gcloud run jobs execute engrammic-migrate-beta \
+            --region ${{ env.REGION }} \
+            --wait
+
+      - name: Route traffic to new revision
+        run: |
+          gcloud run services update-traffic engrammic-beta-api \
+            --region ${{ env.REGION }} \
+            --to-latest
