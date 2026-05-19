@@ -298,8 +298,8 @@ Typical rules:
 
 ## Done criteria
 
-- [ ] Claims citing `.gov` URIs automatically get `authoritative` tier
-- [ ] Claims citing nodes with `source_tier` inherit that tier
-- [ ] Partners can configure custom rules via admin API
-- [ ] Metrics show distribution of resolution layers
-- [ ] At least one R1 or R2 promotion fires in test suite
+- [x] Claims citing `.gov` URIs automatically get `authoritative` tier
+- [x] Claims citing nodes with `source_tier` inherit that tier
+- [x] Partners can configure custom rules via admin API
+- [x] Metrics show distribution of resolution layers
+- [x] At least one R1 or R2 promotion fires in test suite

@@ -22,9 +22,8 @@ Promote one or more WorkingHypotheses to Commitments in the wisdom layer. Use th
 
 ```
 commit(
-  session_id: "{session_id}",
-  node_ids: ["{hypothesis_node_ids}"],
-  reasoning: "Why these hypotheses are now commitments"
+  belief_ids: ["{hypothesis_node_ids}"],
+  reason: "Why these hypotheses are now commitments"  # optional
 )
 ```
 
@@ -41,4 +40,4 @@ After crystallizing, you might:
 
 1. `belief-state(query: "auth strategy")` - surface active hypotheses on the topic
 2. `reason(steps: [...], evidence_used: [...])` - validate the strongest hypothesis
-3. `crystallize(session_id: "...", node_ids: ["..."], reasoning: "Validated against load tests; selecting JWT with Redis revocation")` - commit the decision
+3. `commit(belief_ids: ["{hypothesis_id}"], reason: "Validated against load tests; selecting JWT with Redis revocation")` - commit the decision

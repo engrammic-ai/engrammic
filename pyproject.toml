@@ -112,6 +112,16 @@ module = ["context_service.pipelines.sensors.*", "context_service.pipelines.jobs
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
 
+# fastmcp lacks py.typed marker (upstream issue)
+[[tool.mypy.overrides]]
+module = ["fastmcp", "fastmcp.*"]
+ignore_missing_imports = true
+
+# MCP tools use untyped @mcp.tool decorator from fastmcp
+[[tool.mypy.overrides]]
+module = ["context_service.mcp.tools.*", "context_service.mcp.server"]
+disallow_untyped_decorators = false
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

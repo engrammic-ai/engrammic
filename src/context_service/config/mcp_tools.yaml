@@ -15,6 +15,7 @@ mcp_instructions: |
 
   Guidelines:
   - Always provide evidence when using learn
+  - Hint source_tier on learn when you know the source quality (authoritative for .gov/.edu, validated for curated data)
   - Reference existing nodes when forming beliefs
   - Use recall before storing to avoid duplicates
 
@@ -51,7 +52,7 @@ tools:
     maps_to: memory
 
   learn:
-    description: "Record something you learned with evidence. Evidence is required."
+    description: "Record something you learned with evidence. Evidence is required. Optionally hint source_tier (authoritative|validated|community) for confidence scoring."
     maps_to: knowledge
 
   believe:

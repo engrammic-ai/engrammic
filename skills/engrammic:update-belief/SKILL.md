@@ -1,6 +1,6 @@
 ---
 name: engrammic:update-belief
-description: Mutate a working hypothesis. Use for "revise hypothesis", "update confidence", "add evidence".
+description: Mutate a working hypothesis. Use for "revise hypothesis", "update confidence".
 allowed-tools:
   - mcp__engrammic__revise
 ---
@@ -11,7 +11,7 @@ Update an existing WorkingHypothesis in place. Use this when new evidence or rea
 
 ## When to use
 
-- "Revise hypothesis..." / "update confidence on..." / "add evidence to..."
+- "Revise hypothesis..." / "update confidence on..."
 - New information arrived that strengthens or weakens an existing hypothesis
 - You want to refine a hypothesis content without discarding and recreating it
 - After `belief-state` surfaces a hypothesis that needs a correction
@@ -20,14 +20,14 @@ Update an existing WorkingHypothesis in place. Use this when new evidence or rea
 
 ```
 revise(
-  node_id: "{hypothesis_node_id}",
-  content: "{revised_content}",       # optional
-  confidence: 0.85,                   # optional
-  add_evidence: ["{new_evidence_node_ids}"]  # optional
+  belief_id: "{hypothesis_node_id}",
+  confidence: 0.85,
+  reason: "Why this revision is being made",
+  content: "{revised_content}"  # optional
 )
 ```
 
-All fields except `node_id` are optional. Only provided fields are updated.
+`belief_id`, `confidence`, and `reason` are required. `content` is optional (only provided if updating the hypothesis text).
 
 ## What comes next
 

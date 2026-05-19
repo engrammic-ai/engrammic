@@ -30,7 +30,6 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Status | Description |
 |------|--------|-------------|
-| [source-tier-classification.md](./source-tier-classification.md) | In progress | Source tier classification for confidence scoring |
 | [2026-05-19-supersession-head-pointer.md](./2026-05-19-supersession-head-pointer.md) | Ready | O(1) chain lookups via linked-list pointers (tail_id/head_id) |
 
 ## Future work
@@ -72,6 +71,7 @@ Specced or checkpointed for later implementation:
 ## Archive
 
 Completed plans in `archive/`:
+- Source Tier Classification (2026-05-19) - source tier resolution for confidence scoring
 - Epistemic Layer Fixes (2026-05-17) - belief architecture, flow compliance, evidence discipline
 - Architectural Decisions (2026-05-16) - 9 decisions on enforcement, reliability, integration
 - Cognitive Runtime Pivot (2026-05-07) - deferred pivot notes

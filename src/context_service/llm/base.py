@@ -51,7 +51,7 @@ def robust_json_loads(text: str) -> dict[str, Any]:
     try:
         result = loads(text)
     except (JSONDecodeError, ValueError):
-        import json_repair  # type: ignore[import-not-found]
+        import json_repair
 
         logger.debug("Standard JSON parse failed, attempting repair")
         result = json_repair.loads(text)
