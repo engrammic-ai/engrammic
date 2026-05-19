@@ -110,6 +110,95 @@ async def test_create_collection_hybrid_with_quantization() -> None:
 
 
 @pytest.mark.asyncio
+async def test_matryoshka_dimension_mismatch_is_detected() -> None:
+    """ensure_collection logs a warning when configured dimensions differ from existing collection."""
+    client = QdrantClient(
+        vector_size=512,
+        url="http://localhost:6333",
+        collection_name="test_dim_mismatch",
+        scalar_quantization=False,
+    )
+
+    mock_async_client = AsyncMock()
+
+    # Collection already exists (non-empty list).
+    mock_collection_entry = MagicMock()
+    mock_collection_entry.name = "test_dim_mismatch"
+    mock_collections = MagicMock()
+    mock_collections.collections = [mock_collection_entry]
+    mock_async_client.get_collections.return_value = mock_collections
+
+    # Existing collection was created with 768 dimensions.
+    mock_vector_params = MagicMock()
+    mock_vector_params.size = 768
+    mock_params = MagicMock()
+    mock_params.vectors = mock_vector_params
+    mock_config = MagicMock()
+    mock_config.params = mock_params
+    mock_collection_info = MagicMock()
+    mock_collection_info.config = mock_config
+    mock_async_client.get_collection = AsyncMock(return_value=mock_collection_info)
+
+    with (
+        patch.object(client, "_get_client", return_value=mock_async_client),
+        patch("context_service.stores.qdrant.logger") as mock_logger,
+    ):
+        await client.ensure_collection(hybrid=False)
+
+    # Warning must have been issued with the correct keys.
+    warning_calls = [
+        call for call in mock_logger.warning.call_args_list
+        if call.args and call.args[0] == "qdrant_dimension_mismatch"
+    ]
+    assert len(warning_calls) == 1, "Expected exactly one qdrant_dimension_mismatch warning"
+    kwargs = warning_calls[0].kwargs
+    assert kwargs["configured"] == 512
+    assert kwargs["existing"] == 768
+
+
+@pytest.mark.asyncio
+async def test_matryoshka_dimension_mismatch_not_logged_when_matching() -> None:
+    """ensure_collection does NOT warn when configured dimensions match existing collection."""
+    client = QdrantClient(
+        vector_size=768,
+        url="http://localhost:6333",
+        collection_name="test_dim_match",
+        scalar_quantization=False,
+    )
+
+    mock_async_client = AsyncMock()
+
+    mock_collection_entry = MagicMock()
+    mock_collection_entry.name = "test_dim_match"
+    mock_collections = MagicMock()
+    mock_collections.collections = [mock_collection_entry]
+    mock_async_client.get_collections.return_value = mock_collections
+
+    # Existing collection has the same 768 dimensions.
+    mock_vector_params = MagicMock()
+    mock_vector_params.size = 768
+    mock_params = MagicMock()
+    mock_params.vectors = mock_vector_params
+    mock_config = MagicMock()
+    mock_config.params = mock_params
+    mock_collection_info = MagicMock()
+    mock_collection_info.config = mock_config
+    mock_async_client.get_collection = AsyncMock(return_value=mock_collection_info)
+
+    with (
+        patch.object(client, "_get_client", return_value=mock_async_client),
+        patch("context_service.stores.qdrant.logger") as mock_logger,
+    ):
+        await client.ensure_collection(hybrid=False)
+
+    warning_calls = [
+        call for call in mock_logger.warning.call_args_list
+        if call.args and call.args[0] == "qdrant_dimension_mismatch"
+    ]
+    assert len(warning_calls) == 0, "No dimension mismatch warning expected when sizes match"
+
+
+@pytest.mark.asyncio
 async def test_migration_script_skips_already_quantized() -> None:
     """Migration skips collections that already have INT8 scalar quantization."""
     from scripts.migrate_qdrant_quantization import run_migration

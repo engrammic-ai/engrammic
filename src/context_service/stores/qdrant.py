@@ -184,12 +184,48 @@ class QdrantClient:
                     )
                 else:
                     logger.debug("qdrant_collection_exists", collection=self._collection_name)
+                await self._check_dimension_mismatch(client)
         except Exception as e:
             self._client = None
             logger.error("qdrant_ensure_collection_failed", error=str(e))
             raise QdrantOperationError(f"Failed to ensure collection: {e}") from e
         finally:
             record_db_query("qdrant.ensure_collection", (time.perf_counter() - start) * 1000)
+
+    async def _check_dimension_mismatch(self, client: AsyncQdrantClient) -> None:
+        """Warn if the configured vector size differs from the existing collection's size.
+
+        For hybrid collections, ``vectors`` is a dict of named VectorParams; for
+        non-hybrid collections it is a single VectorParams object.  Both cases
+        are handled.  Any failure to retrieve or parse collection info is logged
+        and silently ignored so that normal startup is never blocked.
+        """
+        try:
+            collection_info = await client.get_collection(self._collection_name)
+            vectors_config = collection_info.config.params.vectors
+
+            if isinstance(vectors_config, dict):
+                # Hybrid collection — check the dense vector config.
+                dense = vectors_config.get(DENSE_VECTOR_NAME)
+                existing_size: int | None = dense.size if dense is not None else None
+            else:
+                existing_size = vectors_config.size if vectors_config is not None else None
+
+            if existing_size is not None and existing_size != self._vector_size:
+                logger.warning(
+                    "qdrant_dimension_mismatch",
+                    configured=self._vector_size,
+                    existing=existing_size,
+                    hint=(
+                        "Re-embed all documents before switching Matryoshka dimensions. "
+                        "See context/specs/2026-05-19-recall-optimization.md Task 4."
+                    ),
+                )
+        except Exception as exc:
+            logger.debug(
+                "qdrant_dimension_check_skipped",
+                error=str(exc),
+            )
 
     async def health_check(self) -> bool:
         """Check if Qdrant is reachable.
