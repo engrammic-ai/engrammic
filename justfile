@@ -136,8 +136,7 @@ build-beacon tag="latest":
 
 # Build and push dagster image
 build-dagster tag="latest":
-    gcloud builds submit --tag {{registry}}/engrammic-dagster:{{tag}} --dockerfile docker/Dockerfile.dagster --timeout 600s .
-    gcloud artifacts docker tags add {{registry}}/engrammic-dagster:{{tag}} {{registry}}/engrammic-dagster:latest
+    gcloud builds submit --config=cloudbuild.dagster.yaml --substitutions=_IMAGE={{registry}}/engrammic-dagster,SHORT_SHA={{tag}} --region={{region}} .
 
 # Build all images
 build-all tag="latest":
