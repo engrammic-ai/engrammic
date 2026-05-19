@@ -105,3 +105,21 @@ async def test_supersession_query_derives_tail_from_chain(
     # Verify the query uses COALESCE to derive tail_id
     query = mock_client.execute_write.call_args[0][0]
     assert "COALESCE" in query, "Query should use COALESCE to derive tail_id from chain"
+
+
+@pytest.mark.asyncio
+async def test_belief_supersession_query_sets_pointers() -> None:
+    """Verify CREATE_BELIEF_SUPERSEDES query includes pointer updates.
+
+    The query should:
+    - Set tail_id on the newer belief (to track chain origin)
+    - Set head_id on the tail belief (to track current head)
+    """
+    from context_service.db import queries as db_queries
+
+    query = db_queries.CREATE_BELIEF_SUPERSEDES
+
+    # Query should set pointers for O(1) chain resolution
+    assert "tail_id" in query, "Query should set tail_id on newer belief"
+    assert "head_id" in query, "Query should set head_id on tail belief"
+    assert "COALESCE" in query, "Query should derive tail_id from existing chain"

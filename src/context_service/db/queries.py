@@ -817,9 +817,8 @@ SET b.centroid_embedding = $centroid_embedding,
 RETURN b.id AS belief_id
 """
 
-# Create a :SUPERSEDES edge from a new :Belief to the one it replaces.
-# Parameters: new_belief_id, old_belief_id, silo_id, reason (str),
-#             created_at (ISO datetime str).
+# Create :SUPERSEDES edge between Beliefs with pointer updates for O(1) lookups.
+# Parameters: new_belief_id, old_belief_id, silo_id, reason (str), created_at (ISO datetime str).
 CREATE_BELIEF_SUPERSEDES = """
 MATCH (newer:Belief {id: $new_belief_id, silo_id: $silo_id})
 MATCH (older:Belief {id: $old_belief_id, silo_id: $silo_id})
@@ -827,7 +826,13 @@ MERGE (newer)-[r:SUPERSEDES {
     reason: $reason,
     created_at: $created_at
 }]->(older)
-RETURN r.reason AS reason
+// Set pointers: newer gets tail_id, tail gets head_id
+WITH newer, older, COALESCE(older.tail_id, older.id) AS tail_id
+SET newer.tail_id = tail_id
+WITH newer, tail_id
+MATCH (tail:Belief {id: tail_id, silo_id: $silo_id})
+SET tail.head_id = newer.id
+RETURN tail.id AS tail_id
 """
 
 # Mark a :Belief as stale after it has been superseded.
