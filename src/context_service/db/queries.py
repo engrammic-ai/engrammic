@@ -1312,7 +1312,8 @@ CREATE (cm:Node:Commitment {
     confidence: wb.confidence,
     created_at: $created_at,
     valid_from: $valid_from,
-    crystallized_from: wb.id
+    crystallized_from: wb.id,
+    rationale_chain_id: $rationale_chain_id
 })
 WITH wb, cm
 MATCH (wb)-[:ABOUT]->(n)

@@ -114,6 +114,41 @@ class TestContextCrystallizePartialFailure:
         assert set(result["not_found"]) == {_BELIEF_A, _BELIEF_B}
 
 
+class TestContextCrystallizeRationaleChain:
+    async def test_rationale_chain_id_passed_to_write(self, fake_store):
+        chain_id = str(uuid.uuid4())
+        fake_store.seed_write_result([{"commitment_id": "x"}])
+
+        await _context_crystallize(
+            belief_ids=[_BELIEF_A], silo_id=_SILO_ID, chain_id=chain_id
+        )
+
+        _cypher, params = fake_store.write_log[0]
+        assert params["rationale_chain_id"] == chain_id
+
+    async def test_rationale_chain_id_none_by_default(self, fake_store):
+        fake_store.seed_write_result([{"commitment_id": "x"}])
+
+        await _context_crystallize(belief_ids=[_BELIEF_A], silo_id=_SILO_ID)
+
+        _cypher, params = fake_store.write_log[0]
+        assert params["rationale_chain_id"] is None
+
+    async def test_commitment_links_to_reasoning_chain(self, fake_store):
+        """Commitment records the rationale_chain_id that motivated it."""
+        chain_id = str(uuid.uuid4())
+        fake_store.seed_write_result([{"commitment_id": "x"}])
+
+        result = await _context_crystallize(
+            belief_ids=[_BELIEF_A], silo_id=_SILO_ID, chain_id=chain_id
+        )
+
+        assert len(result["commitment_ids"]) == 1
+        _cypher, params = fake_store.write_log[0]
+        assert params["rationale_chain_id"] == chain_id
+        assert params["belief_id"] == _BELIEF_A
+
+
 class TestContextCrystallizeGuards:
     async def test_empty_belief_ids_returns_error(self, fake_store):
         result = await _context_crystallize(belief_ids=[], silo_id=_SILO_ID)

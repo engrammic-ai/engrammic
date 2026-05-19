@@ -21,6 +21,7 @@ async def _crystallize_one(
     silo_id: str,
     reason: str,
     created_at: str,
+    rationale_chain_id: str | None = None,
 ) -> str | None:
     """Crystallize a single WorkingHypothesis; returns commitment_id or None on miss."""
     from context_service.db import queries as q
@@ -35,6 +36,7 @@ async def _crystallize_one(
             "reason": reason,
             "created_at": created_at,
             "valid_from": created_at,
+            "rationale_chain_id": rationale_chain_id,
         },
     )
     if not rows:
@@ -46,6 +48,7 @@ async def _context_crystallize(
     belief_ids: list[str],
     silo_id: str,
     reason: str | None = None,
+    chain_id: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     import structlog
@@ -93,7 +96,10 @@ async def _context_crystallize(
     effective_reason = reason or "crystallized"
 
     results = await asyncio.gather(
-        *[_crystallize_one(store, bid, silo_id, effective_reason, now) for bid in belief_ids]
+        *[
+            _crystallize_one(store, bid, silo_id, effective_reason, now, chain_id)
+            for bid in belief_ids
+        ]
     )
 
     commitment_ids = [r for r in results if r is not None]
