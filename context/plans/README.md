@@ -5,6 +5,8 @@ Active implementation plans for context-service. Completed plans are moved to `a
 ## Current state (2026-05-19)
 
 **Shipped:**
+- v2.14 Recall Optimization Phase 4 (similarity cache for semantic near-matches)
+- v2.13 Recall Optimization Phase 3 (Qdrant scalar quantization, Matryoshka 512-dim validation)
 - v2.12 Recall Optimization Phase 2 (tiered result cache, version-based invalidation, bypass_cache/max_age_seconds params)
 - v2.11 Recall Optimization Phase 1 (embedding cache + TEI backend, 500ms -> 50ms)
 - v2.10 GCP Deployment (Pulumi infra, Cloud Run API, GCE stateful host)
@@ -32,9 +34,9 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Status | Description |
 |------|--------|-------------|
+| [2026-05-19-mcp-connection-stability.md](./2026-05-19-mcp-connection-stability.md) | Ready | Error boundaries + Direct VPC Egress for MCP resilience |
 | [2026-05-19-supersession-head-pointer.md](./2026-05-19-supersession-head-pointer.md) | Ready | O(1) chain lookups via linked-list pointers (tail_id/head_id) |
-| [2026-05-19-recall-optimization-phase3.md](./2026-05-19-recall-optimization-phase3.md) | Ready | Qdrant scalar quantization + Matryoshka validation |
-| [2026-05-19-recall-optimization-phase4.md](./2026-05-19-recall-optimization-phase4.md) | Ready | Similarity cache for semantic near-matches (optional) |
+| [2026-05-19-wire-unpopulated-fields.md](./2026-05-19-wire-unpopulated-fields.md) | Ready | Wire unpopulated optional fields in recall responses |
 
 ## Future work
 
@@ -45,8 +47,6 @@ Specced or checkpointed for later implementation:
 | **Concepts** | [concepts-design.md](../../docs/superpowers/specs/2026-05-18-concepts-design.md) | Post-closed-beta, when retrieval quality degrades at scale |
 
 **Concepts:** Emergent abstract nodes (Wisdom layer) that organize knowledge without asserting conclusions. Includes Weaver SAGE persona, weighted edges, 5-phase incremental impl plan.
-
-**Supersession head pointer:** Denormalized `current_head` field on superseded nodes for O(1) lookup to chain head instead of walking SUPERSEDES edges at query time.
 
 ## Spikes / drafts
 
@@ -75,6 +75,8 @@ Specced or checkpointed for later implementation:
 ## Archive
 
 Completed plans in `archive/`:
+- Recall Optimization Phase 4 (2026-05-19) - similarity cache for semantic near-matches
+- Recall Optimization Phase 3 (2026-05-19) - Qdrant scalar quantization, Matryoshka validation
 - Recall Optimization Phase 2 (2026-05-19) - tiered result cache, version-based invalidation
 - Recall Optimization Phase 1 (2026-05-19) - embedding cache + TEI backend
 - Source Tier Classification (2026-05-19) - source tier resolution for confidence scoring
