@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 from context_service.config import get_settings
 from context_service.config.logging import get_logger
-from context_service.telemetry.metrics import record_store_error
+from context_service.telemetry.metrics import record_embedding_cache_hit, record_store_error
 from context_service.utils.json import dumps, loads
 
 if TYPE_CHECKING:
@@ -39,6 +39,7 @@ class EmbeddingCache:
             if data is None:
                 return None
             result: list[float] = loads(data)
+            record_embedding_cache_hit(task)
             return result
         except Exception as e:
             logger.debug("embedding_cache_get_error", error=str(e))

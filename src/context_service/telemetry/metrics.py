@@ -42,6 +42,8 @@ _circuit_breaker_trips: metrics.Counter | None = None
 _orphan_chains_exhausted: metrics.Counter | None = None
 _orphan_chains_recovered: metrics.Counter | None = None
 _source_tier_counter: metrics.Counter | None = None
+_embedding_cache_hit_counter: metrics.Counter | None = None
+_embedding_cache_miss_counter: metrics.Counter | None = None
 
 
 def setup_metrics(service_name: str = "context-service") -> None:
@@ -65,7 +67,9 @@ def setup_metrics(service_name: str = "context-service") -> None:
         _circuit_breaker_trips, \
         _orphan_chains_exhausted, \
         _orphan_chains_recovered, \
-        _source_tier_counter
+        _source_tier_counter, \
+        _embedding_cache_hit_counter, \
+        _embedding_cache_miss_counter
 
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     if not endpoint:
@@ -233,6 +237,18 @@ def setup_metrics(service_name: str = "context-service") -> None:
     _source_tier_counter = _meter.create_counter(
         name="source_tier_resolved",
         description="Count of source tier resolutions by tier and layer",
+        unit="1",
+    )
+
+    _embedding_cache_hit_counter = _meter.create_counter(
+        name="embedding.cache.hit",
+        description="Embedding cache hits",
+        unit="1",
+    )
+
+    _embedding_cache_miss_counter = _meter.create_counter(
+        name="embedding.cache.miss",
+        description="Embedding cache misses",
         unit="1",
     )
 
@@ -430,6 +446,20 @@ def record_source_tier_resolved(tier: str, layer: str, silo_id: str) -> None:
     if _source_tier_counter is None:
         return
     _source_tier_counter.add(1, {"tier": tier, "resolution_layer": layer, "silo_id": silo_id})
+
+
+def record_embedding_cache_hit(task: str) -> None:
+    """Record an embedding cache hit."""
+    if _embedding_cache_hit_counter is None:
+        return
+    _embedding_cache_hit_counter.add(1, {"task": task})
+
+
+def record_embedding_cache_miss(task: str) -> None:
+    """Record an embedding cache miss."""
+    if _embedding_cache_miss_counter is None:
+        return
+    _embedding_cache_miss_counter.add(1, {"task": task})
 
 
 # Public references used for import checks and direct access

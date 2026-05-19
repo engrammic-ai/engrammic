@@ -1013,6 +1013,7 @@ class Settings(BaseSettings):
     node_cache_ttl: int = Field(default=3600)
     embedding_cache_ttl: int = Field(default=604800)
     lookup_cache_ttl: int = Field(default=300)
+    tei_url: str | None = Field(default=None, description="TEI sidecar URL for local embeddings")
 
     # =========================================================================
     # Temporal Decay Settings (unified decay via heat asset)

@@ -1,15 +1,15 @@
-"""LiteLLM-based embedding service for unified provider access."""
+"""TEI (Text Embeddings Inference) embedding service."""
 
 from __future__ import annotations
 
 import time
 from typing import TYPE_CHECKING
 
-import litellm
+import httpx
 from opentelemetry import trace
 
-from context_service.config.config_loader import load_config
 from context_service.config.logging import get_logger
+from context_service.embeddings.base import EmbeddingService
 from context_service.telemetry.metrics import record_embedding, record_embedding_cache_miss
 
 if TYPE_CHECKING:
@@ -19,61 +19,34 @@ logger = get_logger(__name__)
 tracer = trace.get_tracer(__name__)
 
 
-class LiteLLMEmbeddingError(Exception):
-    """Raised when LiteLLM embedding operations fail."""
+class TEIEmbeddingError(Exception):
+    """Raised when TEI embedding operations fail."""
 
     pass
 
 
-class LiteLLMEmbeddingService:
-    """LiteLLM embedding client supporting multiple providers.
+class TEIEmbeddingService:
+    """TEI embedding client for local/sidecar inference.
 
-    Model format examples:
-        - "openai/text-embedding-3-small"
-        - "vertex_ai/text-embedding-005"
-        - "jina_ai/jina-embeddings-v3"
+    Calls the TEI /embed endpoint. See:
+    https://huggingface.github.io/text-embeddings-inference/
     """
 
     def __init__(
         self,
-        model: str,
+        base_url: str,
         dimensions: int = 768,
+        timeout: float = 30.0,
         _embedding_cache: EmbeddingCache | None = None,
     ) -> None:
-        """Initialize the LiteLLM embedding service.
-
-        Args:
-            model: LiteLLM model identifier (e.g., "openai/text-embedding-3-small").
-            dimensions: Output embedding dimensions.
-            _embedding_cache: Optional Redis-backed embedding cache.
-        """
-        self._model = model
+        self._base_url = base_url.rstrip("/")
         self._dimensions = dimensions
         self._embedding_cache = _embedding_cache
+        self._client = httpx.AsyncClient(base_url=self._base_url, timeout=timeout)
 
     @property
     def dimensions(self) -> int:
         return self._dimensions
-
-    @classmethod
-    def from_config(
-        cls,
-        _embedding_cache: EmbeddingCache | None = None,
-    ) -> LiteLLMEmbeddingService:
-        """Create a LiteLLMEmbeddingService from config/embeddings.yaml.
-
-        Args:
-            _embedding_cache: Optional Redis-backed embedding cache.
-
-        Returns:
-            Configured LiteLLMEmbeddingService.
-        """
-        config = load_config("embeddings")
-        return cls(
-            model=config["model"],
-            dimensions=config["dimensions"],
-            _embedding_cache=_embedding_cache,
-        )
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for multiple texts.
@@ -85,15 +58,13 @@ class LiteLLMEmbeddingService:
             List of embedding vectors.
 
         Raises:
-            LiteLLMEmbeddingError: If embedding generation fails.
+            TEIEmbeddingError: If embedding generation fails.
         """
         if not texts:
             return []
 
-        # LiteLLM doesn't distinguish tasks; use a constant for cache key
         task = "passage"
 
-        # Check cache first
         if self._embedding_cache:
             cached_results: list[list[float] | None] = []
             uncached_texts: list[str] = []
@@ -111,15 +82,14 @@ class LiteLLMEmbeddingService:
             if not uncached_texts:
                 return [r for r in cached_results if r is not None]
 
-            # Record cache misses
             for _ in uncached_texts:
                 record_embedding_cache_miss(task)
 
-            # Embed uncached texts
             embeddings = await self._embed_batch(uncached_texts)
 
-            # Store in cache and merge results
-            for idx, (text, embedding) in enumerate(zip(uncached_texts, embeddings, strict=True)):
+            for idx, (text, embedding) in enumerate(
+                zip(uncached_texts, embeddings, strict=True)
+            ):
                 await self._embedding_cache.set(text, task, embedding)
                 cached_results[uncached_indices[idx]] = embedding
 
@@ -128,7 +98,7 @@ class LiteLLMEmbeddingService:
         return await self._embed_batch(texts)
 
     async def _embed_batch(self, texts: list[str]) -> list[list[float]]:
-        """Embed a batch of texts via LiteLLM.
+        """Embed a batch of texts via TEI.
 
         Args:
             texts: List of texts to embed.
@@ -137,29 +107,31 @@ class LiteLLMEmbeddingService:
             List of embedding vectors.
 
         Raises:
-            LiteLLMEmbeddingError: If embedding generation fails.
+            TEIEmbeddingError: If embedding generation fails.
         """
         with tracer.start_as_current_span(
-            "embedding.litellm",
-            attributes={"model": self._model, "batch_size": len(texts)},
+            "embedding.tei",
+            attributes={"batch_size": len(texts)},
         ) as span:
             try:
-                from context_service.config.settings import get_settings
-
                 start = time.perf_counter()
-                timeout = get_settings().llm.default_timeout_seconds
-                response = await litellm.aembedding(
-                    model=self._model, input=texts, dimensions=self._dimensions, timeout=timeout
-                )
+                response = await self._client.post("/embed", json={"inputs": texts})
+                response.raise_for_status()
                 duration_ms = (time.perf_counter() - start) * 1000
                 span.set_attribute("duration_ms", duration_ms)
-                record_embedding(self._model, duration_ms)
-                return [item["embedding"] for item in response.data]
+                record_embedding("tei", duration_ms)
+                result: list[list[float]] = response.json()
+                return result
+            except httpx.HTTPStatusError as e:
+                span.set_attribute("error", True)
+                span.set_attribute("error.message", str(e))
+                logger.error("TEI embedding failed", error=str(e), status=e.response.status_code)
+                raise TEIEmbeddingError(f"TEI embedding failed: {e}") from e
             except Exception as e:
                 span.set_attribute("error", True)
                 span.set_attribute("error.message", str(e))
-                logger.error("LiteLLM embedding failed", error=str(e), model=self._model)
-                raise LiteLLMEmbeddingError(f"Embedding failed: {e}") from e
+                logger.error("TEI embedding failed", error=str(e))
+                raise TEIEmbeddingError(f"TEI embedding failed: {e}") from e
 
     async def embed_single(self, text: str) -> list[float]:
         """Generate embedding for a single text.
@@ -195,5 +167,54 @@ class LiteLLMEmbeddingService:
         return (await self._embed_batch([query]))[0]
 
     async def close(self) -> None:
-        """Close any resources (no-op for LiteLLM)."""
-        pass
+        """Close the HTTP client."""
+        await self._client.aclose()
+
+
+class TEIWithFallbackEmbeddingService:
+    """TEI embedding service with automatic fallback on failure.
+
+    Wraps a primary TEI service and falls back to another service
+    (typically LiteLLM) when TEI is unavailable or errors.
+    """
+
+    def __init__(
+        self,
+        primary: TEIEmbeddingService,
+        fallback: EmbeddingService,
+    ) -> None:
+        self._primary = primary
+        self._fallback = fallback
+
+    @property
+    def dimensions(self) -> int:
+        return self._primary.dimensions
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        """Generate embeddings, falling back on TEI error."""
+        try:
+            return await self._primary.embed(texts)
+        except TEIEmbeddingError:
+            logger.warning("tei_fallback_triggered", method="embed")
+            return await self._fallback.embed(texts)
+
+    async def embed_single(self, text: str) -> list[float]:
+        """Generate single embedding, falling back on TEI error."""
+        try:
+            return await self._primary.embed_single(text)
+        except TEIEmbeddingError:
+            logger.warning("tei_fallback_triggered", method="embed_single")
+            return await self._fallback.embed_single(text)
+
+    async def embed_query(self, query: str) -> list[float]:
+        """Generate query embedding, falling back on TEI error."""
+        try:
+            return await self._primary.embed_query(query)
+        except TEIEmbeddingError:
+            logger.warning("tei_fallback_triggered", method="embed_query")
+            return await self._fallback.embed_query(query)
+
+    async def close(self) -> None:
+        """Close both primary and fallback services."""
+        await self._primary.close()
+        await self._fallback.close()
