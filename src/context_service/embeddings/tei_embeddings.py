@@ -170,6 +170,12 @@ class TEIEmbeddingService:
         """Close the HTTP client."""
         await self._client.aclose()
 
+    async def __aenter__(self) -> TEIEmbeddingService:
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        await self.close()
+
 
 class TEIWithFallbackEmbeddingService:
     """TEI embedding service with automatic fallback on failure.
@@ -218,3 +224,9 @@ class TEIWithFallbackEmbeddingService:
         """Close both primary and fallback services."""
         await self._primary.close()
         await self._fallback.close()
+
+    async def __aenter__(self) -> TEIWithFallbackEmbeddingService:
+        return self
+
+    async def __aexit__(self, *args: object) -> None:
+        await self.close()
