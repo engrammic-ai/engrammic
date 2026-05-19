@@ -331,6 +331,7 @@ RETURN n
 """
 
 # Cross-node SUPERSEDES for Custodian-detected semantic supersession.
+# Sets tail_id on new node, head_id on tail node for O(1) chain lookups.
 CREATE_CROSS_NODE_SUPERSEDES = f"""
 MATCH (new) WHERE {content_union_predicate("new")} AND new.id = $from_id AND new.silo_id = $silo_id
 MATCH (old) WHERE {content_union_predicate("old")} AND old.id = $to_id AND old.silo_id = $silo_id
@@ -338,10 +339,19 @@ WHERE new <> old
 MERGE (new)-[r:SUPERSEDES {{source: $source, reason: $reason}}]->(old)
 ON CREATE SET r.created_at = $valid_from
 WITH old, new, r
+// Set valid_to on old if not already set
 FOREACH (_ IN CASE WHEN old.valid_to IS NULL THEN [1] ELSE [] END |
   SET old.valid_to = $valid_from
 )
-RETURN count(r) AS created
+WITH old, new
+// Derive tail_id: old's tail_id if it exists (old was head of a chain), else old is the tail
+WITH old, new, COALESCE(old.tail_id, old.id) AS tail_id
+SET new.tail_id = tail_id
+WITH new, tail_id
+// Update tail's head_id to point to new head
+MATCH (tail) WHERE {content_union_predicate("tail")} AND tail.id = tail_id AND tail.silo_id = $silo_id
+SET tail.head_id = new.id
+RETURN count(*) AS created
 """
 
 # Batch version-check — internal/maintenance, no committed filter needed.
