@@ -47,6 +47,7 @@ services:
       - WATCHTOWER_POLL_INTERVAL=300
       - WATCHTOWER_CLEANUP=true
       - DOCKER_CONFIG=/
+      - DOCKER_API_VERSION=1.45
     restart: unless-stopped
 {postgres_service}{dagster_services}
 volumes:
