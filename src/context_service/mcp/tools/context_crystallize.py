@@ -132,6 +132,7 @@ def register(mcp: FastMCP) -> None:
         belief_ids: list[str],
         reason: str | None = None,
         silo_id: str | None = None,
+        chain_id: str | None = None,
     ) -> dict[str, Any]:
         """Crystallize WorkingHypothesiss into Commitments.
 
@@ -140,6 +141,9 @@ def register(mcp: FastMCP) -> None:
             reason: Optional reason stored on SUPERSEDES edges.
             silo_id: UUID of the silo. Optional; defaults to the org's primary silo
                 derived from auth.
+            chain_id: Optional reasoning chain ID (ReasoningChain node) that motivated
+                this crystallization. Stored as rationale_chain_id on each resulting
+                Commitment node.
 
         Returns:
             {commitment_ids: list[str], crystallized_belief_ids: list[str], not_found?: list[str]}
@@ -162,6 +166,7 @@ def register(mcp: FastMCP) -> None:
                 belief_ids=belief_ids,
                 silo_id=resolved_silo_id,
                 reason=reason,
+                chain_id=chain_id,
             )
             return result
         except Exception:
