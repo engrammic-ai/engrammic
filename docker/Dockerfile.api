@@ -29,6 +29,7 @@ COPY config/ /app/config/
 COPY src/ /app/src/
 COPY alembic.ini /app/alembic.ini
 COPY alembic/ /app/alembic/
+COPY skills/ /app/skills/
 COPY scripts/validate_imports.py /app/scripts/
 
 # Set environment
