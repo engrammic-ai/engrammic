@@ -1308,6 +1308,7 @@ LIMIT 10
 # and SUPERSEDE any existing active Commitments that ABOUT the same node(s).
 # Existing commitments are considered active when no other Commitment
 # SUPERSEDES them. Their valid_to is set to $valid_from on supersession.
+# Sets tail_id/head_id pointers for O(1) chain lookups.
 CRYSTALLIZE_TO_COMMITMENT = """
 MATCH (wb:WorkingHypothesis {id: $belief_id, silo_id: $silo_id})
 CREATE (cm:Node:Commitment {
@@ -1327,16 +1328,22 @@ CREATE (cm)-[:ABOUT]->(n)
 WITH DISTINCT wb, cm
 OPTIONAL MATCH (cm)-[:ABOUT]->(shared_node)<-[:ABOUT]-(existing:Commitment {silo_id: $silo_id})
 WHERE existing.id <> cm.id
-WITH wb, cm, collect(DISTINCT existing.id) AS candidate_ids
+WITH wb, cm, collect(DISTINCT existing) AS candidates
 DETACH DELETE wb
-WITH cm, candidate_ids
-UNWIND (CASE WHEN size(candidate_ids) = 0 THEN [null] ELSE candidate_ids END) AS cid
-WITH cm, cid WHERE cid IS NOT NULL
-MATCH (existing:Commitment {id: cid, silo_id: $silo_id})
+WITH cm, candidates
+UNWIND (CASE WHEN size(candidates) = 0 THEN [null] ELSE candidates END) AS existing
+WITH cm, existing WHERE existing IS NOT NULL
+// Only supersede if existing is not already superseded
 OPTIONAL MATCH (superseding:Commitment)-[:SUPERSEDES]->(existing)
 WITH cm, existing, superseding WHERE superseding IS NULL
+// Create supersession with pointers
+WITH cm, existing, COALESCE(existing.tail_id, existing.id) AS tail_id
+SET cm.tail_id = tail_id
 CREATE (cm)-[:SUPERSEDES {reason: $reason, created_at: $created_at}]->(existing)
 SET existing.valid_to = $valid_from
+WITH cm, tail_id
+MATCH (tail:Commitment {id: tail_id, silo_id: $silo_id})
+SET tail.head_id = cm.id
 RETURN cm.id AS commitment_id
 """
 
