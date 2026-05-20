@@ -2,6 +2,7 @@
 
 import asyncio
 import concurrent.futures
+import json
 from typing import Any
 
 import dagster as dg
@@ -35,16 +36,39 @@ def retention_sweep(
     Reads silo_id from the partition key when running partitioned;
     callers that run this asset unpartitioned must supply a silo_id via
     run config (see RetentionSweepConfig).
+
+    Per-silo retention overrides are loaded from the Silo node's
+    ``silo_config`` property and resolved via SiloConfig.resolve() so that
+    each silo's settings take precedence over the global defaults.
     """
     silo_id: str = context.partition_key
 
     async def _run() -> dict[str, Any]:
         from context_service.config.settings import get_settings
+        from context_service.models.silo import SiloConfig
         from context_service.retention import RetentionPolicy, RetentionService
 
         store = await memgraph.store()
         settings = get_settings()
-        policy = RetentionPolicy.from_settings(settings)
+
+        # Fetch per-silo config from the Silo node (system-level query; no
+        # org_id needed because silo_id is a globally unique UUID).
+        rows: list[dict[str, Any]] = await store.execute_query(
+            "MATCH (s:Silo {id: $silo_id}) RETURN s.silo_config AS silo_config",
+            {"silo_id": silo_id},
+        )
+
+        silo_config: SiloConfig
+        if rows and rows[0].get("silo_config"):
+            raw = rows[0]["silo_config"]
+            data: dict[str, Any] = json.loads(raw) if isinstance(raw, str) else raw
+            silo_config = SiloConfig.from_metadata_dict(data)
+        else:
+            silo_config = SiloConfig()
+
+        resolved = silo_config.resolve(settings)
+        policy = RetentionPolicy.from_resolved(resolved)
+
         service = RetentionService(store=store, policy=policy)
         return await service.run_sweep(silo_id)
 

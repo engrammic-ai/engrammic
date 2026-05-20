@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 if TYPE_CHECKING:
     from context_service.config.settings import Settings
+    from context_service.models.silo import ResolvedSiloConfig
 
 
 class RetentionPolicy(BaseModel):
@@ -21,6 +22,14 @@ class RetentionPolicy(BaseModel):
     durable_heat_threshold: float = Field(default=0.2, ge=0.0, le=1.0)
     meta_observation_max_count: int = Field(default=100, ge=10)
     grace_period_days: int = Field(default=7, ge=1)
+    supersession_chain_max_length: int = Field(
+        default=20,
+        ge=3,
+        description=(
+            "Maximum nodes in a supersession chain before pruning. "
+            "Used by the chain_pruning asset (not yet implemented)."
+        ),
+    )
 
     def is_eligible_for_tombstone(
         self,
@@ -57,7 +66,11 @@ class RetentionPolicy(BaseModel):
 
     @classmethod
     def from_settings(cls, settings: Settings) -> RetentionPolicy:
-        """Create RetentionPolicy from application settings."""
+        """Create RetentionPolicy from application settings (global defaults only).
+
+        Prefer from_resolved() when a per-silo ResolvedSiloConfig is available
+        so that per-silo overrides are applied.
+        """
         return cls(
             ephemeral_max_age_hours=settings.retention_ephemeral_max_age_hours,
             standard_max_age_days=settings.retention_standard_max_age_days,
@@ -66,4 +79,23 @@ class RetentionPolicy(BaseModel):
             durable_heat_threshold=settings.retention_durable_heat_threshold,
             meta_observation_max_count=settings.retention_meta_observation_max_count,
             grace_period_days=settings.retention_grace_period_days,
+            supersession_chain_max_length=settings.retention_supersession_chain_max_length,
+        )
+
+    @classmethod
+    def from_resolved(cls, resolved: ResolvedSiloConfig) -> RetentionPolicy:
+        """Create RetentionPolicy from a fully-resolved per-silo config.
+
+        Use this in the retention Dagster asset so that per-silo overrides
+        (stored on the Silo node) take effect instead of global defaults.
+        """
+        return cls(
+            ephemeral_max_age_hours=resolved.ephemeral_max_age_hours,
+            standard_max_age_days=resolved.standard_max_age_days,
+            standard_heat_threshold=resolved.standard_heat_threshold,
+            durable_max_age_days=resolved.durable_max_age_days,
+            durable_heat_threshold=resolved.durable_heat_threshold,
+            meta_observation_max_count=resolved.meta_observation_max_count,
+            grace_period_days=resolved.grace_period_days,
+            supersession_chain_max_length=resolved.supersession_chain_max_length,
         )
