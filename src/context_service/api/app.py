@@ -268,10 +268,18 @@ def create_app() -> ASGIApp:
     if settings.mcp_enabled:
         from contextlib import asynccontextmanager
 
+        from context_service.mcp.auth import MCPOAuthChallengeMiddleware
         from context_service.mcp.server import create_mcp_server
 
         mcp_server = create_mcp_server()
         mcp_app = mcp_server.http_app(path="/", transport="http", stateless_http=True)
+
+        # Add OAuth challenge middleware to return 401 with WWW-Authenticate header
+        # when no token is present. This triggers OAuth flow in MCP clients (Cursor, etc.)
+        # Token validation happens in the tool layer via get_mcp_auth_context()
+        if settings.auth_enabled:
+            mcp_app.add_middleware(MCPOAuthChallengeMiddleware)
+            logger.info("mcp_oauth_challenge_middleware_enabled")
 
         # Store original lifespan and wrap it to include MCP lifespan
         original_lifespan = app.router.lifespan_context

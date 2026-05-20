@@ -1,19 +1,18 @@
 # context_service/mcp/auth.py
-"""MCP authentication -- simplified API key auth.
+"""MCP authentication middleware and helpers.
 
-Known limitation: ``MCPAuthMiddleware`` is not mounted.
-FastMCP does not expose a standard Starlette ``app`` object at construction
-time, so there is no stable hook to attach this middleware.  As a result the
-``ContextVar`` ``_mcp_auth_context`` is never populated, and calling
-``get_mcp_auth()`` from tool code will always raise ``RuntimeError``.
+Two middleware classes:
+- ``MCPAuthMiddleware``: Legacy API key validation via MCP_API_KEY env var.
+- ``MCPOAuthChallengeMiddleware``: Returns 401 with WWW-Authenticate header when
+  no token is present, triggering OAuth flow in MCP clients (Cursor, Claude Code).
 
-Tool callsites must use
-``context_service.mcp.server.get_mcp_auth_context()`` instead, which reads
-the Authorization header via FastMCP's ``get_http_headers`` dependency on
-every tool invocation (genuine per-request resolution).
+The OAuth challenge middleware is mounted in ``api/app.py`` when ``auth_enabled=true``.
+Actual token validation (OAuth, WorkOS, API keys) happens in the tool layer via
+``context_service.mcp.server.get_mcp_auth_context()``.
 
-This module is kept in place for the future version that will wire the
-middleware path once a stable Starlette mount point is available.
+Note: ``MCPAuthMiddleware`` uses a ContextVar that requires the middleware to be
+mounted. For per-request auth in tools, use ``get_mcp_auth_context()`` instead
+of ``get_mcp_auth()``.
 """
 
 from __future__ import annotations
@@ -131,7 +130,7 @@ async def validate_mcp_request(authorization: str | None) -> MCPAuthContext:
 
 
 class MCPAuthMiddleware(BaseHTTPMiddleware):
-    """Starlette middleware for MCP authentication."""
+    """Starlette middleware for MCP authentication (legacy API key auth)."""
 
     def __init__(self, app: Any) -> None:
         super().__init__(app)
@@ -171,3 +170,40 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
 
         finally:
             clear_mcp_auth()
+
+
+class MCPOAuthChallengeMiddleware(BaseHTTPMiddleware):
+    """Starlette middleware that returns 401 with OAuth discovery header when no token.
+
+    This middleware triggers the OAuth flow in MCP clients (Cursor, Claude Code, etc.)
+    by returning a 401 with WWW-Authenticate header pointing to the OAuth metadata.
+    It does NOT validate the token - that happens in the tool layer via
+    get_mcp_auth_context() which supports OAuth tokens, WorkOS sessions, and API keys.
+    """
+
+    def __init__(self, app: Any) -> None:
+        super().__init__(app)
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        """Return 401 challenge if no Authorization header, else pass through."""
+        authorization = request.headers.get("authorization")
+
+        if not authorization:
+            logger.debug("mcp.oauth_challenge", path=request.url.path)
+            scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+            host = request.headers.get("host", request.url.netloc)
+            resource_metadata_url = f"{scheme}://{host}/.well-known/oauth-protected-resource"
+
+            return JSONResponse(
+                status_code=401,
+                content={"error": "Authorization required"},
+                headers={
+                    "WWW-Authenticate": f'Bearer resource_metadata="{resource_metadata_url}"',
+                },
+            )
+
+        return await call_next(request)
