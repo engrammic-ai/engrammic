@@ -9,6 +9,7 @@ from context_service.pipelines.assets.cascade_review import cascade_review_asset
 from context_service.pipelines.assets.causal import causal_transitivity
 from context_service.pipelines.assets.causal_tombstone import causal_tombstone
 from context_service.pipelines.assets.chain_feedback import chain_usefulness_signals
+from context_service.pipelines.assets.chain_pruning import chain_pruning
 from context_service.pipelines.assets.chain_stitch import chain_stitch
 from context_service.pipelines.assets.clustering import clustering
 from context_service.pipelines.assets.compaction import reasoning_compaction
@@ -68,6 +69,7 @@ all_assets: list[Any] = [
     proposal_detection,
     proposal_cleanup,
     chain_usefulness_signals,
+    chain_pruning,
     step_embedding_backfill,
     session_step_embedding,
     prewarm_sweep_asset,
