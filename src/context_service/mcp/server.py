@@ -179,32 +179,35 @@ async def _resolve_oauth_token(token: str) -> AuthContext | None:
 
 
 async def _resolve_api_key_auth(token: str) -> AuthContext | None:
-    """Resolve auth context from API key."""
-    from context_service.db.postgres import get_session
-    from context_service.models.postgres.user import User
-    from context_service.services.api_key import APIKeyService
+    """Resolve auth context from WorkOS API key."""
+    from context_service.config.settings import get_settings
+
+    settings = get_settings()
+    api_key = settings.workos_api_key.get_secret_value() if settings.workos_api_key else None
+    if api_key is None:
+        return None
 
     try:
-        async with get_session() as session:
-            api_key_svc = APIKeyService(session)
-            api_key = await api_key_svc.verify_key(token)
-            if api_key is None:
-                return None
+        import workos
 
-            # Lookup user directly by ID
-            user = await session.get(User, api_key.user_id)
-            if user is None:
-                return None
+        client = workos.WorkOSClient(api_key=api_key, client_id=settings.workos_client_id)
+        response = client.api_keys.create_validation(value=token)
 
-            return AuthContext(
-                org_id=user.org_id,
-                user_id=user.workos_user_id,
-                email=user.email,
-                is_dev=False,
-                agent_id=f"apikey:{api_key.id}",
-                session_id=None,
-                db_user_id=user.id,
-            )
+        if response.api_key is None:
+            return None
+
+        owner = response.api_key.owner
+        org_id = getattr(owner, "organization_id", None) or owner.id
+
+        return AuthContext(
+            org_id=org_id,
+            user_id=f"apikey:{response.api_key.id}",
+            email=None,
+            is_dev=False,
+            agent_id=f"apikey:{response.api_key.id}",
+            session_id=None,
+            db_user_id=None,
+        )
     except Exception:
         return None
 
@@ -263,8 +266,8 @@ async def get_mcp_auth_context() -> AuthContext:
     if auth_header:
         token = auth_header.removeprefix("Bearer ").strip()
 
-        # Try API key first (tokens prefixed with eng_).
-        if token.startswith("eng_"):
+        # Try API key first (WorkOS keys prefixed with sk_).
+        if token.startswith("sk_"):
             api_key_context = await _resolve_api_key_auth(token)
             if api_key_context is not None:
                 return api_key_context

@@ -27,7 +27,7 @@ async def get_authorization_url(redirect_uri: str, state: str) -> str:
 
     Raises ValueError if required settings are missing.
     """
-    import workos  # type: ignore[import-not-found]  # lazy: optional dep
+    import workos
 
     settings = get_settings()
     api_key = settings.workos_api_key.get_secret_value() if settings.workos_api_key else None

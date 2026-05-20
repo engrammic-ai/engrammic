@@ -13,7 +13,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from context_service.db.postgres import Base
 
 if TYPE_CHECKING:
-    from context_service.models.postgres.api_key import APIKey
     from context_service.models.postgres.oauth import OAuthAuthorizationCode, OAuthToken
 
 
@@ -35,7 +34,6 @@ class User(Base):
 
     oauth_tokens: Mapped[list[OAuthToken]] = relationship(back_populates="user")
     authorization_codes: Mapped[list[OAuthAuthorizationCode]] = relationship(back_populates="user")
-    api_keys: Mapped[list[APIKey]] = relationship(back_populates="user")
 
     def __init__(
         self,
