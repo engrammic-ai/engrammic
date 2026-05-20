@@ -2,7 +2,7 @@ name: Deploy Beta
 
 on:
   push:
-    branches: [beta]
+    branches: [main]
   workflow_dispatch:
 
 env:
@@ -19,6 +19,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
@@ -31,17 +34,17 @@ jobs:
       - name: Build API image with Cloud Build
         run: |
           gcloud builds submit --config cloudbuild.api.yaml --timeout 600s \
-            --substitutions SHORT_SHA=${{ github.sha }}
+            --substitutions SHORT_SHA=${{ env.SHORT_SHA }}
 
       - name: Build Beacon image with Cloud Build
         run: |
           gcloud builds submit --config cloudbuild.beacon.yaml --timeout 300s \
-            --substitutions SHORT_SHA=${{ github.sha }}
+            --substitutions SHORT_SHA=${{ env.SHORT_SHA }}
 
       - name: Build Dagster image with Cloud Build
         run: |
           gcloud builds submit --config cloudbuild.dagster.yaml --timeout 600s \
-            --substitutions SHORT_SHA=${{ github.sha }}
+            --substitutions SHORT_SHA=${{ env.SHORT_SHA }}
 
       - name: Deploy API to Cloud Run
         run: |
@@ -56,7 +59,7 @@ jobs:
 
       - name: Run migrations via Cloud Run Job
         run: |
-          gcloud run jobs execute engrammic-migrate-beta \
+          gcloud run jobs execute engrammic-beta-migrate \
             --region ${{ env.REGION }} \
             --wait
 
