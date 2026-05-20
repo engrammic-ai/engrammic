@@ -14,7 +14,9 @@ from qdrant_client.models import (
     FieldCondition,
     Fusion,
     FusionQuery,
+    IsNullCondition,
     MatchValue,
+    PayloadField,
     PayloadSchemaType,
     PointStruct,
     Prefetch,
@@ -301,7 +303,10 @@ class EngineQdrantStore:
         collection = await self._ensure_collection(silo_id)
         client = await self._qdrant._get_client()
 
-        must: list[Any] = [FieldCondition(key="silo_id", match=MatchValue(value=silo_id))]
+        must: list[Any] = [
+            FieldCondition(key="silo_id", match=MatchValue(value=silo_id)),
+            IsNullCondition(is_null=PayloadField(key="tombstoned_at")),
+        ]
         query_filter = QdrantFilter(must=must)
 
         has_sparse = sparse_indices is not None and sparse_values is not None
@@ -402,6 +407,35 @@ class EngineQdrantStore:
             raise QdrantOperationError(f"Failed to delete vector {node_id}: {e}") from e
         finally:
             record_db_query("qdrant_store.delete", (time.perf_counter() - start) * 1000)
+
+    async def set_payload(
+        self,
+        silo_id: str,
+        node_id: str,
+        payload: dict[str, Any],
+    ) -> None:
+        """Update payload fields on an existing point.
+
+        Used by ForgetService to sync tombstone timestamps from Memgraph to
+        Qdrant so that the tombstone filter in :meth:`query` takes effect.
+        """
+        collection = await self._ensure_collection(silo_id)
+        client = await self._qdrant._get_client()
+        start = time.perf_counter()
+        try:
+            await client.set_payload(
+                collection_name=collection,
+                payload=payload,
+                points=[node_id],
+                wait=True,
+            )
+        except Exception as e:
+            logger.error(
+                "Qdrant set_payload failed", node_id=node_id, silo_id=silo_id, error=str(e)
+            )
+            raise QdrantOperationError(f"Failed to set payload for {node_id}: {e}") from e
+        finally:
+            record_db_query("qdrant_store.set_payload", (time.perf_counter() - start) * 1000)
 
     async def delete_collection(self, silo_id: str) -> None:
         """Delete entire tenant collection (for GDPR erasure)."""
