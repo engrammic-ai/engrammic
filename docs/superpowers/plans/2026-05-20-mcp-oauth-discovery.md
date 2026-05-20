@@ -32,7 +32,7 @@ from sqlalchemy import DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from context_service.models.postgres.base import Base
+from context_service.db.postgres import Base
 
 
 class APIKey(Base):
@@ -352,8 +352,8 @@ async def get_mcp_auth_context() -> AuthContext:
 async def _resolve_api_key_auth(token: str) -> AuthContext | None:
     """Resolve auth context from API key."""
     from context_service.db.postgres import get_session
+    from context_service.models.postgres.user import User
     from context_service.services.api_key import APIKeyService
-    from context_service.services.user import UserService
 
     try:
         async with get_session() as session:
@@ -362,8 +362,8 @@ async def _resolve_api_key_auth(token: str) -> AuthContext | None:
             if api_key is None:
                 return None
 
-            user_svc = UserService(session)
-            user = await user_svc.get_user(api_key.user_id)
+            # Lookup user directly by ID
+            user = await session.get(User, api_key.user_id)
             if user is None:
                 return None
 
@@ -494,10 +494,49 @@ git commit -m "feat(mcp): add WWW-Authenticate header for OAuth discovery"
 ### Task 6: API Key Admin Endpoints
 
 **Files:**
+- Create: `src/context_service/api/deps.py`
 - Create: `src/context_service/api/routes/api_keys.py`
 - Modify: `src/context_service/api/app.py`
 
-- [ ] **Step 1: Create admin endpoints**
+- [ ] **Step 1: Create get_current_user dependency**
+
+```python
+# src/context_service/api/deps.py
+"""FastAPI dependencies for API routes."""
+
+from __future__ import annotations
+
+from fastapi import Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+
+from context_service.db.postgres import get_session
+from context_service.models.postgres.user import User
+from context_service.services.oauth import OAuthService
+
+security = HTTPBearer()
+
+
+async def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> User:
+    """Resolve current user from Bearer token (OAuth access token)."""
+    token = credentials.credentials
+    
+    async with get_session() as session:
+        oauth_svc = OAuthService(session)
+        oauth_token = await oauth_svc.validate_access_token(token)
+        
+        if oauth_token is None:
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
+        
+        user = await session.get(User, oauth_token.user_id)
+        if user is None:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        return user
+```
+
+- [ ] **Step 2: Create admin endpoints**
 
 ```python
 # src/context_service/api/routes/api_keys.py
@@ -597,7 +636,7 @@ async def revoke_api_key(
     return {"status": "revoked"}
 ```
 
-- [ ] **Step 2: Register router**
+- [ ] **Step 3: Register router**
 
 Add to `src/context_service/api/app.py`:
 
@@ -607,11 +646,11 @@ from context_service.api.routes.api_keys import router as api_keys_router
 app.include_router(api_keys_router)
 ```
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add src/context_service/api/routes/api_keys.py src/context_service/api/app.py
-git commit -m "feat(api): add API key management endpoints"
+git add src/context_service/api/deps.py src/context_service/api/routes/api_keys.py src/context_service/api/app.py
+git commit -m "feat(api): add API key management endpoints with auth dependency"
 ```
 
 ---
