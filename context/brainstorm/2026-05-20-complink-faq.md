@@ -110,8 +110,12 @@ Benefits:
 |---------|--------|--------|
 | Multi-silo isolation | Done | - |
 | Admin cross-silo read | Needs wiring | 2 days |
-| Federated query (customer + domain) | Needs implementation | 1 week |
+| Federated query (customer + domain) | Documented, not built | 0.5 day |
 | Write isolation (domain silo read-only for customers) | Needs policy layer | 2 days |
+
+**Implementation approach:** Add `linked_silos` field to silo config. Service layer fans out queries to `[silo_id, ...linked_silos]`, merges results. Expose via Admin API for platform operators to manage.
+
+**Status:** Documented pattern. Build when customer commits.
 
 ---
 
