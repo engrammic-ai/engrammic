@@ -130,19 +130,19 @@ infra-refresh:
 # Build and push API image
 build-api tag="latest":
     gcloud builds submit --config=cloudbuild.api.yaml \
-        --substitutions=_IMAGE={{registry}}/engrammic-api:{{tag}} \
+        --substitutions=_IMAGE={{registry}}/engrammic-api,SHORT_SHA={{tag}} \
         --region={{region}} .
 
 # Build and push Dagster image
 build-dagster tag="latest":
     gcloud builds submit --config=cloudbuild.dagster.yaml \
-        --substitutions=_IMAGE={{registry}}/engrammic-dagster:{{tag}} \
+        --substitutions=_IMAGE={{registry}}/engrammic-dagster,SHORT_SHA={{tag}} \
         --region={{region}} .
 
 # Build and push Beacon image
 build-beacon tag="latest":
     gcloud builds submit --config=cloudbuild.beacon.yaml \
-        --substitutions=_IMAGE={{registry}}/engrammic-beacon:{{tag}} \
+        --substitutions=_IMAGE={{registry}}/engrammic-beacon,SHORT_SHA={{tag}} \
         --region={{region}} .
 
 # Build all images
