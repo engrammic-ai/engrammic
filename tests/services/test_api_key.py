@@ -69,9 +69,7 @@ async def test_create_key_default_scopes(service: APIKeyService) -> None:
 
 @pytest.mark.asyncio
 async def test_create_key_custom_scopes(service: APIKeyService) -> None:
-    plaintext, api_key = await service.create_key(
-        user_id=USER_ID, name=KEY_NAME, scopes="read"
-    )
+    plaintext, api_key = await service.create_key(user_id=USER_ID, name=KEY_NAME, scopes="read")
 
     assert api_key.scopes == "read"
 
@@ -79,9 +77,7 @@ async def test_create_key_custom_scopes(service: APIKeyService) -> None:
 @pytest.mark.asyncio
 async def test_create_key_with_expiry(service: APIKeyService) -> None:
     expiry = datetime.now(UTC) + timedelta(days=30)
-    plaintext, api_key = await service.create_key(
-        user_id=USER_ID, name=KEY_NAME, expires_at=expiry
-    )
+    plaintext, api_key = await service.create_key(user_id=USER_ID, name=KEY_NAME, expires_at=expiry)
 
     assert api_key.expires_at == expiry
 
@@ -154,9 +150,7 @@ async def test_verify_key_returns_none_for_expired_key(
 
 
 @pytest.mark.asyncio
-async def test_verify_key_updates_last_used_at(
-    service: APIKeyService, session: AsyncMock
-) -> None:
+async def test_verify_key_updates_last_used_at(service: APIKeyService, session: AsyncMock) -> None:
     api_key = _make_api_key()
     mock_select_result = MagicMock()
     mock_select_result.scalar_one_or_none.return_value = api_key
@@ -207,9 +201,7 @@ async def test_revoke_key_returns_false_when_key_not_found(
 
 
 @pytest.mark.asyncio
-async def test_list_keys_returns_active_keys(
-    service: APIKeyService, session: AsyncMock
-) -> None:
+async def test_list_keys_returns_active_keys(service: APIKeyService, session: AsyncMock) -> None:
     key1 = _make_api_key(name="Cursor")
     key2 = _make_api_key(name="CI")
     mock_result = MagicMock()
@@ -243,9 +235,7 @@ async def test_list_keys_returns_empty_when_none(
 
 
 @pytest.mark.asyncio
-async def test_create_and_verify_api_key(
-    service: APIKeyService, session: AsyncMock
-) -> None:
+async def test_create_and_verify_api_key(service: APIKeyService, session: AsyncMock) -> None:
     """Create a key, then verify the returned plaintext works."""
     plaintext, created_key = await service.create_key(user_id=USER_ID, name=KEY_NAME)
 
@@ -264,9 +254,7 @@ async def test_create_and_verify_api_key(
 
 
 @pytest.mark.asyncio
-async def test_revoked_key_fails_verification(
-    service: APIKeyService, session: AsyncMock
-) -> None:
+async def test_revoked_key_fails_verification(service: APIKeyService, session: AsyncMock) -> None:
     """Revoked key (revoked_at set) should not be returned by verify_key."""
     # verify_key queries with revoked_at.is_(None), so a revoked key returns None from DB
     mock_result = MagicMock()

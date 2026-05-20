@@ -74,9 +74,7 @@ class APIKeyService:
 
         # Update last_used_at
         await self._session.execute(
-            update(APIKey)
-            .where(APIKey.id == api_key.id)
-            .values(last_used_at=now)
+            update(APIKey).where(APIKey.id == api_key.id).values(last_used_at=now)
         )
 
         return api_key

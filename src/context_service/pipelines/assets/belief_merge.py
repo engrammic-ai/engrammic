@@ -50,9 +50,7 @@ def _find_overlapping_pairs(
 @dg.asset(
     name="belief_merge",
     partitions_def=silo_partitions,
-    description=(
-        "Batch detect and merge overlapping :Belief nodes using embedding similarity."
-    ),
+    description=("Batch detect and merge overlapping :Belief nodes using embedding similarity."),
     retry_policy=dg.RetryPolicy(max_retries=1, delay=10.0),
     tags={"dagster/concurrency_key": "belief_merge"},
 )
@@ -96,16 +94,22 @@ def belief_merge_asset(
         ]
 
         if len(beliefs) < 2:
-            context.log.info(f"belief_merge: fewer than 2 beliefs with embeddings for silo={silo_id}")
+            context.log.info(
+                f"belief_merge: fewer than 2 beliefs with embeddings for silo={silo_id}"
+            )
             return {"merged_count": 0, "skipped_count": 0, "total": 0, "merged_ids": []}
 
         pairs = _find_overlapping_pairs(beliefs, threshold, max_pairs)
 
         if not pairs:
-            context.log.info(f"belief_merge: no overlapping pairs above threshold={threshold} for silo={silo_id}")
+            context.log.info(
+                f"belief_merge: no overlapping pairs above threshold={threshold} for silo={silo_id}"
+            )
             return {"merged_count": 0, "skipped_count": 0, "total": 0, "merged_ids": []}
 
-        context.log.info(f"belief_merge: processing {len(pairs)} overlapping pairs for silo={silo_id}")
+        context.log.info(
+            f"belief_merge: processing {len(pairs)} overlapping pairs for silo={silo_id}"
+        )
 
         beliefs_by_id = {b["belief_id"]: b for b in beliefs}
 
@@ -124,7 +128,9 @@ def belief_merge_asset(
                     f"merged_belief={merged_id}"
                 )
             except Exception as e:
-                context.log.error(f"belief_merge failed pair=({belief1_id}, {belief2_id}) error={e}")
+                context.log.error(
+                    f"belief_merge failed pair=({belief1_id}, {belief2_id}) error={e}"
+                )
                 skipped_count += 1
 
         return {

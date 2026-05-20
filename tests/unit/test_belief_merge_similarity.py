@@ -68,10 +68,7 @@ def test_find_overlapping_pairs_above_threshold():
 
 def test_find_overlapping_pairs_respects_max():
     """Max pairs limit is respected."""
-    beliefs = [
-        {"belief_id": f"b{i}", "embedding": [1.0, 0.01 * i, 0.0]}
-        for i in range(5)
-    ]
+    beliefs = [{"belief_id": f"b{i}", "embedding": [1.0, 0.01 * i, 0.0]} for i in range(5)]
     pairs = find_overlapping_pairs(beliefs, threshold=0.9, max_pairs=3)
 
     assert len(pairs) == 3
