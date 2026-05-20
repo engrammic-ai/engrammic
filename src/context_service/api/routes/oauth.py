@@ -59,6 +59,26 @@ async def oauth_metadata() -> dict[str, str | list[str]]:
     }
 
 
+@router.get(
+    "/.well-known/oauth-protected-resource",
+    operation_id="protected_resource_metadata",
+    summary="RFC 9728 OAuth protected resource metadata",
+)
+async def protected_resource_metadata() -> dict[str, str | list[str]]:
+    """Return OAuth 2.0 protected resource metadata per RFC 9728.
+
+    Tells MCP clients where to find the authorization server.
+    """
+    settings = get_settings()
+    issuer = settings.oauth.issuer
+    return {
+        "resource": f"{issuer}/mcp",
+        "authorization_servers": [issuer],
+        "scopes_supported": ["read", "write"],
+        "bearer_methods_supported": ["header"],
+    }
+
+
 @router.post(
     "/oauth/register",
     operation_id="oauth_register",

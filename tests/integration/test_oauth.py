@@ -165,6 +165,36 @@ class TestOAuthMetadata:
 
 
 # ---------------------------------------------------------------------------
+# /.well-known/oauth-protected-resource (RFC 9728)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestProtectedResourceMetadata:
+    """Tests for the RFC 9728 protected resource metadata endpoint."""
+
+    async def test_protected_resource_metadata_returns_200(self, client: AsyncClient) -> None:
+        resp = await client.get("/.well-known/oauth-protected-resource")
+        assert resp.status_code == 200
+
+    async def test_protected_resource_metadata_required_fields(self, client: AsyncClient) -> None:
+        resp = await client.get("/.well-known/oauth-protected-resource")
+        data = resp.json()
+        assert "resource" in data
+        assert "authorization_servers" in data
+        assert len(data["authorization_servers"]) >= 1
+
+    async def test_protected_resource_metadata_authorization_server_is_issuer(
+        self, client: AsyncClient
+    ) -> None:
+        resp = await client.get("/.well-known/oauth-protected-resource")
+        data = resp.json()
+        # The authorization_servers list must point back to the issuer
+        auth_server = data["authorization_servers"][0]
+        assert data["resource"].startswith(auth_server)
+
+
+# ---------------------------------------------------------------------------
 # /oauth/authorize
 # ---------------------------------------------------------------------------
 
