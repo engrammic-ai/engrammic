@@ -178,6 +178,37 @@ async def _resolve_oauth_token(token: str) -> AuthContext | None:
         )
 
 
+async def _resolve_api_key_auth(token: str) -> AuthContext | None:
+    """Resolve auth context from API key."""
+    from context_service.db.postgres import get_session
+    from context_service.models.postgres.user import User
+    from context_service.services.api_key import APIKeyService
+
+    try:
+        async with get_session() as session:
+            api_key_svc = APIKeyService(session)
+            api_key = await api_key_svc.verify_key(token)
+            if api_key is None:
+                return None
+
+            # Lookup user directly by ID
+            user = await session.get(User, api_key.user_id)
+            if user is None:
+                return None
+
+            return AuthContext(
+                org_id=user.org_id,
+                user_id=user.workos_user_id,
+                email=user.email,
+                is_dev=False,
+                agent_id=f"apikey:{api_key.id}",
+                session_id=None,
+                db_user_id=user.id,
+            )
+    except Exception:
+        return None
+
+
 async def get_mcp_auth_context() -> AuthContext:
     """Resolve the MCP auth context for the current request.
 
@@ -232,7 +263,16 @@ async def get_mcp_auth_context() -> AuthContext:
     if auth_header:
         token = auth_header.removeprefix("Bearer ").strip()
 
-        # Try OAuth token first (our issued tokens).
+        # Try API key first (tokens prefixed with eng_).
+        if token.startswith("eng_"):
+            api_key_context = await _resolve_api_key_auth(token)
+            if api_key_context is not None:
+                return api_key_context
+            settings = get_settings()
+            if settings.auth_enabled:
+                raise MCPAuthError("Invalid API key")
+
+        # Try OAuth token (our issued tokens).
         oauth_context = await _resolve_oauth_token(token)
         if oauth_context is not None:
             agent_id = headers.get("x-agent-id") or f"user:{oauth_context.user_id}"
