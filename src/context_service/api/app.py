@@ -272,7 +272,9 @@ def create_app() -> ASGIApp:
         from context_service.mcp.server import create_mcp_server
 
         mcp_server = create_mcp_server()
-        mcp_app = mcp_server.http_app(path="/", transport="http", stateless_http=True)
+        # Use streamable-http to support both SSE (GET) and stateless HTTP (POST)
+        # Claude Code uses SSE, Cursor uses stateless HTTP
+        mcp_app = mcp_server.http_app(path="/", transport="streamable-http")
 
         # Add OAuth challenge middleware to return 401 with WWW-Authenticate header
         # when no token is present. This triggers OAuth flow in MCP clients (Cursor, etc.)
