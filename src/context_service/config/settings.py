@@ -437,7 +437,7 @@ class OAuthConfig(BaseModel):
     refresh_token_ttl_days: int = 90
     authorization_code_ttl_seconds: int = 600  # 10 minutes
     allowed_redirect_hosts: list[str] = Field(
-        default_factory=lambda: ["localhost", "127.0.0.1"],
+        default_factory=lambda: ["localhost", "127.0.0.1", "anysphere.cursor-mcp"],
         description="Allowed hostnames for redirect_uri (not full URI validation)",
     )
 
