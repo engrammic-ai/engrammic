@@ -356,6 +356,11 @@ def create_mcp_server(profile: str | None = None) -> FastMCP:
     import os
 
     from context_service.config.settings import get_settings
+    from context_service.mcp.middleware import (
+        ErrorHandlingMiddleware,
+        LoggingMiddleware,
+        TimingMiddleware,
+    )
     from context_service.mcp.tools.registry import (
         get_mcp_instructions,
         register_profile_tools,
@@ -373,8 +378,15 @@ def create_mcp_server(profile: str | None = None) -> FastMCP:
         instructions=get_mcp_instructions(),
     )
 
+    # Add middleware (order matters: first added = outermost wrapper)
+    # Error handling wraps everything, then logging, then timing
+    is_production = settings.environment in ("production", "staging")
+    mcp.add_middleware(ErrorHandlingMiddleware(mask_errors=is_production))
+    mcp.add_middleware(LoggingMiddleware())
+    mcp.add_middleware(TimingMiddleware(slow_threshold_ms=500.0))
+
     # Register tools based on profile
     register_profile_tools(mcp, resolved_profile)
 
-    logger.info("mcp_server_created", profile=resolved_profile)
+    logger.info("mcp_server_created", profile=resolved_profile, middleware_count=3)
     return mcp
