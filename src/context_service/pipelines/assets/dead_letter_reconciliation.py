@@ -12,7 +12,7 @@ import structlog
 from dagster import AssetExecutionContext
 
 from context_service.pipelines.resources import QdrantResource
-from context_service.retention.dead_letter import dequeue_failed_deletes
+from context_service.retention.dead_letter import dequeue_failed_deletes, enqueue_failed_delete
 
 logger = structlog.get_logger(__name__)
 
@@ -34,20 +34,40 @@ async def _process_dead_letters(qdrant: QdrantResource) -> dict[str, int]:
     succeeded = 0
     failed = 0
 
-    for entry in entries:
-        try:
-            await qdrant_store.delete(
-                node_id=uuid.UUID(entry["node_id"]),
-                silo_id=entry["silo_id"],
-            )
-            succeeded += 1
-        except Exception as e:
-            logger.error(
-                "dead_letter_retry_failed",
-                node_id=entry["node_id"],
-                error=str(e),
-            )
-            failed += 1
+    try:
+        for entry in entries:
+            try:
+                node_uuid = uuid.UUID(entry["node_id"])
+            except (ValueError, KeyError) as e:
+                logger.warning(
+                    "dead_letter_invalid_entry",
+                    entry=entry,
+                    error=str(e),
+                )
+                failed += 1
+                continue
+
+            try:
+                await qdrant_store.delete(
+                    node_id=node_uuid,
+                    silo_id=entry["silo_id"],
+                )
+                succeeded += 1
+            except Exception as e:
+                logger.error(
+                    "dead_letter_retry_failed",
+                    node_id=entry["node_id"],
+                    error=str(e),
+                )
+                await enqueue_failed_delete(
+                    entry["silo_id"],
+                    entry["node_id"],
+                    str(e),
+                )
+                failed += 1
+    finally:
+        if hasattr(qdrant_store, "close"):
+            await qdrant_store.close()
 
     return {"succeeded": succeeded, "failed": failed}
 
