@@ -35,6 +35,7 @@ async def _trace_impl(node_id: str) -> dict[str, Any]:
                 "layer": step.layer,
                 "relationship": step.relationship,
                 "confidence": step.confidence,
+                "stub": step.stub,
             }
             for step in result.chain
         ],

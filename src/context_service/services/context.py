@@ -789,6 +789,7 @@ class ContextService:
                 layer=r.get("layer") or "unknown",
                 relationship=r.get("relationship") or "",
                 confidence=float(r.get("confidence") or 1.0),
+                stub=bool(r.get("stub") or False),
             )
             for r in chain_rows
         ]

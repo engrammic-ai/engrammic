@@ -422,8 +422,9 @@ WITH
     coalesce(ns[i].type, labels(ns[i])[0]) AS layer,
     CASE WHEN i < size(rs) THEN type(rs[i]) ELSE null END AS relationship,
     coalesce(ns[i].confidence, 1.0) AS confidence,
+    coalesce(ns[i].stub, false) AS stub,
     length(path) AS depth
-RETURN DISTINCT node_id, layer, relationship, confidence
+RETURN DISTINCT node_id, layer, relationship, confidence, stub
 ORDER BY depth
 """
 
