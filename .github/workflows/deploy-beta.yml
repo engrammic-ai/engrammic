@@ -48,6 +48,10 @@ jobs:
           gcloud run deploy engrammic-beta-api \
             --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-api:latest \
             --region ${{ env.REGION }} \
+            --min-instances 1 \
+            --cpu-always-allocated \
+            --session-affinity \
+            --timeout 3600 \
             --no-traffic
 
       - name: Run migrations via Cloud Run Job

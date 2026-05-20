@@ -4,11 +4,10 @@ import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from starlette.types import ASGIApp, Receive, Scope, Send
+from starlette.types import ASGIApp
 
 from context_service import __version__
 from context_service.api.metrics import REGISTRY, metrics_endpoint
@@ -21,7 +20,6 @@ from context_service.api.routes.source_rules import router as source_rules_route
 from context_service.config.logging import configure_logging, get_logger
 from context_service.config.settings import get_settings
 from context_service.core.service_registry import ServiceRegistry
-from context_service.mcp.session_recovery import MCPSessionRecoveryMiddleware
 from context_service.stores import (
     MemgraphClient,
     QdrantClient,
@@ -35,41 +33,6 @@ from context_service.telemetry.install_id import get_or_create_install_id
 from context_service.telemetry.tracing import instrument_fastapi, setup_tracing
 
 logger = get_logger(__name__)
-
-
-class _MCPDispatcher:
-    """Route /mcp/* directly to the MCP ASGI app, bypassing FastAPI middleware.
-
-    FastAPI's ServerErrorMiddleware buffers responses to catch errors and send
-    a 500 when something goes wrong. That buffering breaks SSE streaming: after
-    the SSE app sends http.response.start the error middleware tries to send its
-    own http.response.start on any exception, which Starlette rejects.
-
-    By intercepting /mcp/* here — before the request ever enters FastAPI — the
-    SSE transport runs outside that middleware stack entirely. The MCP app's
-    lifespan is still managed by FastAPI's combined_lifespan context.
-    """
-
-    def __init__(self, fastapi_app: ASGIApp, mcp_app: ASGIApp, prefix: str = "/mcp") -> None:
-        self.fastapi_app = fastapi_app
-        self.mcp_app = mcp_app
-        self.prefix = prefix
-
-    def __getattr__(self, name: str) -> object:
-        return getattr(self.fastapi_app, name)
-
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] == "lifespan":
-            await self.fastapi_app(scope, receive, send)
-            return
-        path = scope.get("path", "")
-        if scope["type"] == "http" and (path == self.prefix or path.startswith(self.prefix + "/")):
-            patched: dict[str, Any] = dict(scope)
-            patched["path"] = path[len(self.prefix) :] or "/"
-            patched["root_path"] = scope.get("root_path", "") + self.prefix
-            await self.mcp_app(patched, receive, send)
-            return
-        await self.fastapi_app(scope, receive, send)
 
 
 @asynccontextmanager
@@ -310,7 +273,7 @@ def create_app() -> ASGIApp:
         from context_service.mcp.server import create_mcp_server
 
         mcp_server = create_mcp_server()
-        mcp_app = mcp_server.http_app(path="/", transport="sse")
+        mcp_app = mcp_server.http_app(path="/", transport="http", stateless_http=True)
 
         # Store original lifespan and wrap it to include MCP lifespan
         original_lifespan = app.router.lifespan_context
@@ -327,7 +290,7 @@ def create_app() -> ASGIApp:
             """Health check for MCP server."""
             return {"status": "ok", "server": mcp_server.name}
 
-        logger.info("mcp_server_mounted", path="/mcp", transport="sse")
-        return _MCPDispatcher(app, MCPSessionRecoveryMiddleware(mcp_app), prefix="/mcp")
+        app.mount("/mcp", mcp_app)
+        logger.info("mcp_server_mounted", path="/mcp", transport="http")
 
     return app
