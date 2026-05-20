@@ -314,6 +314,7 @@ async def revise_belief(
     silo_id: str,
     llm_client: LLMProvider,
     embedding_client: EmbeddingService,
+    cosine_distance: float = 0.0,
 ) -> str:
     """Synthesise a replacement belief and supersede the old one.
 
@@ -449,7 +450,7 @@ async def revise_belief(
         # distance is not re-computed here; callers use check_belief_revision first.
         # We report 0.0 as a placeholder — the observation is still useful for
         # tracing that a revision occurred.
-        magnitude_pct = 0.0
+        magnitude_pct = cosine_distance * 100.0
         obs_content = make_revision_content(
             subject=old_content,
             magnitude_pct=magnitude_pct,

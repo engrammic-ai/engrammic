@@ -1,6 +1,6 @@
 """Test that revise_belief correctly threads cosine_distance to auto-reflection."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -14,19 +14,24 @@ async def test_revise_belief_passes_cosine_distance_to_reflection():
     mock_store.execute_query = AsyncMock(side_effect=[
         [{"belief_id": "old-belief", "content": "Old", "confidence": 0.9, "revision_count": 0}],
         [{"cluster_id": "cluster-1"}],
-        [{"fact_id": "f1", "content": "Fact 1", "confidence": 0.95, "valid_from": "2026-01-01"}],
+        [
+            {"fact_id": "f1", "content": "Fact 1", "confidence": 0.95, "valid_from": "2026-01-01"},
+            {"fact_id": "f2", "content": "Fact 2", "confidence": 0.90, "valid_from": "2026-01-02"},
+            {"fact_id": "f3", "content": "Fact 3", "confidence": 0.85, "valid_from": "2026-01-03"},
+        ],
     ])
-    mock_store.transaction = AsyncMock(return_value=AsyncMock(
-        __aenter__=AsyncMock(),
-        __aexit__=AsyncMock()
-    ))
+    # async with store.transaction(): requires an async context manager
+    tx_cm = MagicMock()
+    tx_cm.__aenter__ = AsyncMock(return_value=None)
+    tx_cm.__aexit__ = AsyncMock(return_value=False)
+    mock_store.transaction = MagicMock(return_value=tx_cm)
     mock_store.execute_write = AsyncMock()
 
     mock_llm = AsyncMock()
-    mock_llm.generate = AsyncMock(return_value="New belief content")
+    mock_llm.complete = AsyncMock(return_value=("New belief content", {}))
 
     mock_embedding = AsyncMock()
-    mock_embedding.embed = AsyncMock(return_value=[[0.1] * 768])
+    mock_embedding.embed = AsyncMock(return_value=[[0.1] * 768, [0.1] * 768, [0.1] * 768])
 
     with patch("context_service.engine.revision.create_auto_reflection") as mock_reflect, \
          patch("context_service.engine.revision.get_settings") as mock_settings, \

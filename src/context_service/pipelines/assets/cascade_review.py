@@ -60,7 +60,10 @@ def cascade_review_asset(
             try:
                 result = await check_belief_revision(store, belief_id, silo_id, embedding_client)
                 if result.needs_revision:
-                    await revise_belief(store, belief_id, silo_id, llm_client, embedding_client)
+                    await revise_belief(
+                        store, belief_id, silo_id, llm_client, embedding_client,
+                        cosine_distance=result.cosine_distance,
+                    )
                     revised += 1
                     context.log.info(
                         f"cascade_review silo={silo_id} belief={belief_id} revised "
