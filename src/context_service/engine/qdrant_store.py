@@ -128,6 +128,12 @@ class EngineQdrantStore:
                             field_name="expansion",
                             field_schema=PayloadSchemaType.TEXT,
                         )
+                        await client.create_payload_index(
+                            collection_name=name,
+                            field_name="tombstoned_at",
+                            field_schema=PayloadSchemaType.INTEGER,
+                            wait=True,
+                        )
                     except (UnexpectedResponse, ConnectionError) as e:
                         logger.error(
                             "Failed to create payload index; deleting collection to avoid partial state",
