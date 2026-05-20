@@ -422,9 +422,12 @@ class OAuthConfig(BaseModel):
     """OAuth 2.0 configuration for MCP client authentication.
 
     The allowed_redirect_hosts setting validates only the hostname portion of
-    redirect URIs, not the full URI. This is intentional for MCP clients (e.g.,
-    Claude Desktop) which use localhost callbacks with varying ports and paths.
+    redirect URIs, not the full URI. This is intentional for MCP clients which
+    use custom URL schemes (cursor://, claude://, etc.) with varying paths.
     PKCE provides code injection protection regardless of exact redirect path.
+
+    Default allowlist includes known MCP clients: Claude Desktop/Code, Cursor,
+    VS Code, Windsurf, Zed, and localhost for local development.
 
     To allow additional hosts, set OAUTH__ALLOWED_REDIRECT_HOSTS as a
     JSON-encoded list: '["localhost", "127.0.0.1", "myapp.local"]'
@@ -437,7 +440,22 @@ class OAuthConfig(BaseModel):
     refresh_token_ttl_days: int = 90
     authorization_code_ttl_seconds: int = 600  # 10 minutes
     allowed_redirect_hosts: list[str] = Field(
-        default_factory=lambda: ["localhost", "127.0.0.1", "anysphere.cursor-mcp"],
+        default_factory=lambda: [
+            "localhost",
+            "127.0.0.1",
+            # Cursor
+            "anysphere.cursor-mcp",
+            # Claude Desktop / Claude Code
+            "claude.ai",
+            "anthropic.claude-code",
+            # VS Code
+            "vscode.dev",
+            "vscode-redirect.azurewebsites.net",
+            # Windsurf
+            "codeium.windsurf-mcp",
+            # Zed
+            "zed.dev",
+        ],
         description="Allowed hostnames for redirect_uri (not full URI validation)",
     )
 
