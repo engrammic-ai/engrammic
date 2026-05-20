@@ -1177,6 +1177,42 @@ class MemgraphStore(EAGKnowledgeStore):
         ]
         await self._client.execute_write(queries.BATCH_UPSERT_BINARY_EDGES, {"rows": rows})
 
+    async def find_stale_chain_interior(
+        self,
+        silo_id: str,
+        max_length: int,
+        batch_size: int = 100,
+    ) -> list[str]:
+        """Find interior chain nodes beyond max_length hops from the chain head.
+
+        Interior nodes are those with at least one predecessor (head side) and
+        at least one successor (tail side) in a SUPERSEDES chain. Returns node
+        ids for nodes that are not yet stubbed and sit more than max_length
+        hops from the head, so the Custodian can prune them in batches.
+        """
+        result = await self._client.execute_query(
+            queries.FIND_STALE_CHAIN_INTERIOR,
+            {"silo_id": silo_id, "max_length": max_length, "batch_size": batch_size},
+        )
+        return [row["node_id"] for row in result]
+
+    async def convert_to_stub(self, node_id: str, silo_id: str) -> bool:
+        """Convert a node to a stub by clearing content fields while preserving edges.
+
+        Sets ``stub=true`` and nulls out ``content``, ``content_hash``, and
+        ``embedding`` so the storage footprint for deep chain interiors is
+        bounded. The SUPERSEDES edges and all metadata (valid_from, heat_score,
+        etc.) are left intact for provenance and time-travel queries.
+
+        Returns True if the node was found and updated, False otherwise.
+        """
+        now_micros = int(datetime.now(UTC).timestamp() * 1_000_000)
+        result = await self._client.execute_write(
+            queries.CONVERT_TO_STUB,
+            {"id": node_id, "silo_id": silo_id, "stubbed_at": now_micros},
+        )
+        return bool(result)
+
     async def batch_touch_accessed(self, node_ids: list[uuid.UUID], silo_id: str) -> int:
         """Update last_accessed_at for a batch of nodes."""
         if not node_ids:

@@ -1277,3 +1277,38 @@ EPISTEMIC_MARK_BELIEF_STALE = """
 MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
 SET b.stale = true, b.stale_reason = $reason, b.stale_at = timestamp()
 """
+
+# ---------------------------------------------------------------------------
+# Stub-retention queries (data lifecycle management)
+# ---------------------------------------------------------------------------
+
+# Find interior chain nodes beyond max_length from head.
+# Interior nodes are those with at least one SUPERSEDES predecessor (head) and
+# at least one SUPERSEDES successor (tail) in the chain. The query matches
+# paths from the head through interior nodes to the tail and filters for
+# nodes that are not already stubbed and whose position in the chain exceeds
+# max_length hops from the head.
+FIND_STALE_CHAIN_INTERIOR = """
+MATCH (head:Node {silo_id: $silo_id})
+WHERE head.head_id = head.id
+WITH head
+MATCH path = (head)-[:SUPERSEDES*]->(interior)-[:SUPERSEDES*]->(tail)
+WHERE tail.tail_id = tail.id
+  AND interior.stub IS NULL
+  AND length(path) > $max_length
+RETURN DISTINCT interior.id AS node_id
+LIMIT $batch_size
+"""
+
+# Convert a node to a stub: clear content fields but preserve all edges so the
+# chain structure and provenance remain intact.
+CONVERT_TO_STUB = """
+MATCH (n:Node {id: $id, silo_id: $silo_id})
+SET n.stub = true,
+    n.content = NULL,
+    n.content_hash = NULL,
+    n.embedding = NULL,
+    n.stubbed_at = $stubbed_at,
+    n.heat_dirty = true
+RETURN n.id AS id
+"""
