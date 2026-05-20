@@ -121,6 +121,31 @@ Each tool page follows consistent structure:
 | Guides | Write fresh + adapt | Practical; agent-usage adapted from primitives/docs/07-agent-usage.md |
 | MCP Tools | Adapt from CLAUDE.md | Consistent format per tool |
 
+## Visual Design
+
+### Theme
+- Starlight "maple" template (green accent colors)
+- Dark mode default, light mode available
+- Clean, dev-tool aesthetic
+
+### Colors (maple defaults)
+- Primary: #16A34A (green-600)
+- Light accent: #07C983
+- Dark accent: #15803D
+
+### Logo
+- Light mode: logo-light.png (banner, transparent)
+- Dark mode: logo-dark.png (banner, transparent)
+- Located in src/assets/
+
+### Typography
+- Starlight defaults (system fonts, clean hierarchy)
+- Code blocks: syntax highlighting enabled
+
+### Code Examples
+- JSON-focused (MCP tool calls)
+- Consistent formatting across all tool pages
+
 ## Tech Stack
 
 - Starlight (Astro)
