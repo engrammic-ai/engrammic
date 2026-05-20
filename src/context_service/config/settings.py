@@ -95,6 +95,16 @@ class SynthesizerIdentityConfig(BaseModel):
     proposal_confidence_threshold: float = 0.6
     max_facts_per_synthesis: int = 10
     min_facts_for_synthesis: int = 3
+    belief_merge_similarity_threshold: float = Field(
+        default=0.85,
+        ge=0.0,
+        le=1.0,
+        description="Minimum cosine similarity between belief embeddings to consider merge",
+    )
+    belief_merge_max_pairs: int = Field(
+        default=50,
+        description="Maximum belief pairs to process per merge run",
+    )
 
 
 class EvidenceEnforcementConfig(BaseModel):
