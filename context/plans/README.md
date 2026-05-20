@@ -35,7 +35,11 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 ## Active plans
 
-No active implementation plans. All current work is shipped.
+| Plan | Description | Status |
+|------|-------------|--------|
+| [2026-05-20-rate-limiting.md](./2026-05-20-rate-limiting.md) | Tiered rate limiting for MCP tools and REST routes | Ready to execute |
+| [2026-05-20-documentation-site.md](./2026-05-20-documentation-site.md) | Documentation site implementation | Planned |
+| [2026-05-18-closed-beta-deployment.md](./2026-05-18-closed-beta-deployment.md) | Closed beta infrastructure deployment | In progress |
 
 ## Future work
 
