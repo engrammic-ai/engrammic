@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import uuid
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import structlog
 
@@ -142,11 +141,17 @@ class RetentionService:
 
         # 2. Qdrant (retry 3x, dead-letter on exhaustion)
         if self._qdrant_store is not None:
+            try:
+                node_uuid = UUID(node_id)
+            except ValueError:
+                logger.error("invalid_node_id", node_id=node_id)
+                return False
+
             last_error: str = ""
             for attempt in range(3):
                 try:
                     await self._qdrant_store.delete(
-                        node_id=uuid.UUID(node_id),
+                        node_id=node_uuid,
                         silo_id=silo_id,
                     )
                     last_error = ""
