@@ -755,6 +755,9 @@ LIMIT $limit
 # Phase-3: engine layer owns only HyperEdge, Silo, and EDGE indexes.
 # Document/Passage/Claim/Entity indexes are owned by context_service.db.indexes
 # and applied via MemgraphClient.ensure_indexes. Removing :Node entries (retired).
+CREATE_TAIL_ID_INDEX = "CREATE INDEX ON :Node(tail_id);"
+CREATE_HEAD_ID_INDEX = "CREATE INDEX ON :Node(head_id);"
+
 INDEX_QUERIES = [
     "CREATE INDEX ON :HyperEdge(id);",
     "CREATE INDEX ON :HyperEdge(silo_id);",
@@ -763,6 +766,8 @@ INDEX_QUERIES = [
     "CREATE INDEX ON :Silo(org_id);",
     "CREATE INDEX ON :EDGE(type);",
     "CREATE INDEX ON :EDGE(silo_id);",
+    CREATE_TAIL_ID_INDEX,
+    CREATE_HEAD_ID_INDEX,
 ]
 
 # --- Sync Queries ---
