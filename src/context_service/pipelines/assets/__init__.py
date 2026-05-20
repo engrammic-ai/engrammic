@@ -14,6 +14,9 @@ from context_service.pipelines.assets.clustering import clustering
 from context_service.pipelines.assets.compaction import reasoning_compaction
 from context_service.pipelines.assets.custodian_finalize import custodian_finalize
 from context_service.pipelines.assets.custodian_visit import custodian_visit
+from context_service.pipelines.assets.dead_letter_reconciliation import (
+    dead_letter_reconciliation,
+)
 from context_service.pipelines.assets.edge_heat import edge_heat_asset
 from context_service.pipelines.assets.embedding import embedding_asset as embedding
 from context_service.pipelines.assets.extraction import extraction
@@ -60,6 +63,7 @@ all_assets: list[Any] = [
     weak_link_review_asset,
     auto_tagging,
     tag_maintenance,
+    dead_letter_reconciliation,
     reconciliation_gc,
     proposal_detection,
     proposal_cleanup,
