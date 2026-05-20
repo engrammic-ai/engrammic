@@ -3,30 +3,34 @@ name: Deploy Production
 on:
   workflow_dispatch:
     inputs:
+      sha:
+        description: 'SHA to promote (7 chars, from beta deploy)'
+        required: true
+        type: string
       confirm_deploy:
-        description: 'Type "deploy" to confirm production deployment'
+        description: 'Type "deploy" to confirm'
         required: true
         type: string
 
 env:
   REGION: europe-north1
   PROJECT_ID: engrammic
+  REGISTRY: europe-north1-docker.pkg.dev/engrammic/engrammic
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - name: Validate deployment confirmation
+      - name: Validate confirmation
         if: ${{ github.event.inputs.confirm_deploy != 'deploy' }}
         run: |
-          echo "Deployment not confirmed. You must type 'deploy' to proceed."
+          echo "Must type 'deploy' to confirm"
           exit 1
 
-  build-and-deploy:
+  deploy:
     needs: validate
     runs-on: ubuntu-latest
-    environment: production  # Real security gate: required reviewers + branch protection rules on this environment
-    timeout-minutes: 30
+    environment: production
     permissions:
       contents: read
       id-token: write
@@ -43,53 +47,41 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Set short SHA
-        run: echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
-
-      - name: Build and scan API image
+      - name: Verify images exist
         run: |
-          gcloud builds submit \
-            --config=cloudbuild.api.yaml \
-            --substitutions=SHORT_SHA=${{ env.SHORT_SHA }}
+          gcloud artifacts docker images describe ${{ env.REGISTRY }}/engrammic-api:${{ github.event.inputs.sha }} --quiet
+          gcloud artifacts docker images describe ${{ env.REGISTRY }}/engrammic-beacon:${{ github.event.inputs.sha }} --quiet
 
-      - name: Build Beacon image
+      - name: Deploy API (no traffic)
         run: |
-          gcloud builds submit \
-            --tag ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-beacon:${{ github.sha }} \
-            --dockerfile docker/Dockerfile.beacon \
-            --timeout 300s
-          gcloud artifacts docker tags add \
-            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-beacon:${{ github.sha }} \
-            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-beacon:latest
+          gcloud run services update engrammic-prod-api \
+            --image ${{ env.REGISTRY }}/engrammic-api:${{ github.event.inputs.sha }} \
+            --region ${{ env.REGION }} \
+            --no-traffic
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-
-      - name: Setup Pulumi
-        uses: pulumi/actions@v5
-
-      - name: Deploy infrastructure
+      - name: Deploy Beacon (no traffic)
         run: |
-          cd infra
-          uv sync
-          uv run pulumi up --stack prod --yes
-        env:
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          gcloud run services update engrammic-prod-beacon \
+            --image ${{ env.REGISTRY }}/engrammic-beacon:${{ github.event.inputs.sha }} \
+            --region ${{ env.REGION }} \
+            --no-traffic
 
-      - name: Run database migrations
+      - name: Run migrations
         run: |
-          # TODO(production-hardening): verify sha256 checksum after pinning a specific version
-          wget -q https://storage.googleapis.com/cloud-sql-connectors/cloud-sql-proxy/v2.14.3/cloud-sql-proxy.linux.amd64 -O cloud_sql_proxy
-          chmod +x cloud_sql_proxy
-          ./cloud_sql_proxy -instances=${{ env.PROJECT_ID }}:${{ env.REGION }}:engrammic-prod=tcp:5432 &
-          sleep 5
-          uv sync
-          uv run alembic upgrade head
-        env:
-          DATABASE_URL: postgresql://context:${{ secrets.POSTGRES_PASSWORD_PROD }}@localhost:5432/engrammic
+          gcloud run jobs execute engrammic-prod-migrate \
+            --region ${{ env.REGION }} \
+            --wait
 
-      - name: Notify deployment complete
+      - name: Route traffic
         run: |
-          echo "Production deployment complete"
-          echo "API: https://context.engrammic.io/"
-          echo "Commit: ${{ github.sha }}"
+          gcloud run services update-traffic engrammic-prod-api \
+            --region ${{ env.REGION }} \
+            --to-latest
+          gcloud run services update-traffic engrammic-prod-beacon \
+            --region ${{ env.REGION }} \
+            --to-latest
+
+      - name: Summary
+        run: |
+          echo "Deployed SHA ${{ github.event.inputs.sha }} to production"
+          echo "API: https://api.engrammic.ai"
