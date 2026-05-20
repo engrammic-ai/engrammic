@@ -43,6 +43,18 @@ def _make_revised_belief_id(
 
 No migration required - new IDs will differ from any existing IDs.
 
+### One-Time Audit
+
+Run after deployment to detect any existing collisions (beliefs that may have been silently overwritten):
+
+```cypher
+MATCH (b:Belief)-[r:REVISED_FROM]->(parent:Belief)
+WHERE b.id = parent.id
+RETURN b.id, b.silo_id, b.created_at
+```
+
+If results found, manual review needed - the overwritten data is unrecoverable.
+
 ### Files
 
 - `src/context_service/engine/revision.py`
@@ -75,7 +87,7 @@ async def revise_belief(
 ### Files
 
 - `src/context_service/engine/revision.py` - signature change
-- `src/context_service/custodian/identities/synthesizer.py` - pass distance from check result
+- `src/context_service/pipelines/assets/cascade_review.py` - pass `result.cosine_distance` to `revise_belief()`
 
 ## Bug 3: Naive Word Overlap
 
@@ -93,25 +105,45 @@ Any word longer than 4 characters appearing in 2+ beliefs triggers overlap detec
 
 Replace word co-occurrence with embedding cosine similarity. Beliefs already have `centroid_embedding` stored.
 
+**Approach:** Fetch beliefs with embeddings via Cypher, compute cosine similarity in Python (matches existing codebase pattern - see `_cosine_distance` in `revision.py:146`). Memgraph MAGE doesn't have `gds.similarity.cosine`.
+
+**Step 1:** Fetch all active beliefs with embeddings:
+
 ```cypher
-MATCH (b1:Belief {silo_id: $silo_id}), (b2:Belief {silo_id: $silo_id})
-WHERE b1.id < b2.id 
-  AND (b1.status IS NULL OR b1.status <> 'stale')
-  AND (b2.status IS NULL OR b2.status <> 'stale')
-  AND b1.centroid_embedding IS NOT NULL 
-  AND b2.centroid_embedding IS NOT NULL
-WITH b1, b2, gds.similarity.cosine(b1.centroid_embedding, b2.centroid_embedding) AS sim
-WHERE sim > $threshold
-RETURN b1.id AS belief1, b2.id AS belief2, sim AS similarity
-ORDER BY similarity DESC
-LIMIT $max_pairs
+MATCH (b:Belief {silo_id: $silo_id})
+WHERE (b.status IS NULL OR b.status <> 'stale')
+  AND b.centroid_embedding IS NOT NULL
+RETURN b.id AS belief_id, b.content AS content, b.centroid_embedding AS embedding
+```
+
+**Step 2:** Compute pairwise cosine similarity in Python:
+
+```python
+from itertools import combinations
+
+def find_overlapping_pairs(
+    beliefs: list[dict], 
+    threshold: float = 0.85,
+    max_pairs: int = 50,
+) -> list[tuple[str, str, float]]:
+    """Return (belief1_id, belief2_id, similarity) for pairs above threshold."""
+    pairs = []
+    for b1, b2 in combinations(beliefs, 2):
+        sim = cosine_similarity(b1["embedding"], b2["embedding"])
+        if sim >= threshold:
+            pairs.append((b1["belief_id"], b2["belief_id"], sim))
+    # Sort by similarity descending, limit
+    pairs.sort(key=lambda x: x[2], reverse=True)
+    return pairs[:max_pairs]
 ```
 
 Configuration:
 - `threshold`: 0.85 default, configurable via `Settings.custodian.belief_merge_threshold`
 - `max_pairs`: 50 per run
 
-Fallback: Beliefs without embeddings are skipped (not merged).
+Fallback: Beliefs without embeddings are not fetched (filtered in Cypher).
+
+**Note:** 0.85 threshold is conservative. May need tuning based on observed similarity distribution in production data.
 
 ### Files
 
