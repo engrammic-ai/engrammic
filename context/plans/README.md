@@ -2,9 +2,11 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-19)
+## Current state (2026-05-20)
 
 **Shipped:**
+- v2.17 Wire Unpopulated Fields (optional schema fields in recall responses)
+- v2.16 MCP Connection Stability (error boundaries + Direct VPC Egress)
 - v2.15 Supersession Head Pointer (O(1) chain lookups via tail_id/head_id pointers)
 - v2.14 Recall Optimization Phase 4 (similarity cache for semantic near-matches)
 - v2.13 Recall Optimization Phase 3 (Qdrant scalar quantization, Matryoshka 512-dim validation)
@@ -33,10 +35,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 ## Active plans
 
-| Plan | Status | Description |
-|------|--------|-------------|
-| [2026-05-19-mcp-connection-stability.md](./2026-05-19-mcp-connection-stability.md) | Ready | Error boundaries + Direct VPC Egress for MCP resilience |
-| [2026-05-19-wire-unpopulated-fields.md](./2026-05-19-wire-unpopulated-fields.md) | Ready | Wire unpopulated optional fields in recall responses |
+No active implementation plans. All current work is shipped.
 
 ## Future work
 
@@ -75,6 +74,8 @@ Specced or checkpointed for later implementation:
 ## Archive
 
 Completed plans in `archive/`:
+- Wire Unpopulated Fields (2026-05-19) - optional schema fields in recall responses
+- MCP Connection Stability (2026-05-19) - error boundaries + Direct VPC Egress
 - Supersession Head Pointer (2026-05-19) - O(1) chain lookups via tail_id/head_id pointers
 - Recall Optimization Phase 4 (2026-05-19) - similarity cache for semantic near-matches
 - Recall Optimization Phase 3 (2026-05-19) - Qdrant scalar quantization, Matryoshka validation
