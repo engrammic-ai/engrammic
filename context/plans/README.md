@@ -5,6 +5,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 ## Current state (2026-05-20)
 
 **Shipped:**
+- v2.18 MCP OAuth + Middleware (OAuth flow for Cursor/Claude Code, FastMCP error/logging/timing middleware, 20+ client allowlist)
 - v2.17 Wire Unpopulated Fields (optional schema fields in recall responses)
 - v2.16 MCP Connection Stability (error boundaries + Direct VPC Egress)
 - v2.15 Supersession Head Pointer (O(1) chain lookups via tail_id/head_id pointers)
@@ -78,6 +79,7 @@ Specced or checkpointed for later implementation:
 ## Archive
 
 Completed plans in `archive/`:
+- MCP OAuth + Middleware (2026-05-20) - OAuth flow, FastMCP middleware, client allowlist
 - Wire Unpopulated Fields (2026-05-19) - optional schema fields in recall responses
 - MCP Connection Stability (2026-05-19) - error boundaries + Direct VPC Egress
 - Supersession Head Pointer (2026-05-19) - O(1) chain lookups via tail_id/head_id pointers
