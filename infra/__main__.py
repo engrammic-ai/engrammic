@@ -18,6 +18,24 @@ from components import (
 config = pulumi.Config()
 use_cloudsql = config.get_bool("use_cloudsql") or False
 
+env = config.require("environment")
+
+# Feature flags per environment
+feature_flags = {
+    "beta": {
+        "ENABLE_EXPERIMENTAL_RECALL": "true",
+        "ENABLE_DEBUG_ENDPOINTS": "true",
+    },
+    "prod": {
+        "ENABLE_EXPERIMENTAL_RECALL": "false",
+        "ENABLE_DEBUG_ENDPOINTS": "false",
+    },
+    "dev": {
+        "ENABLE_EXPERIMENTAL_RECALL": "true",
+        "ENABLE_DEBUG_ENDPOINTS": "true",
+    },
+}
+
 # IAM first - service accounts needed by other resources
 iam = IAMStack("engrammic-iam")
 
@@ -63,7 +81,7 @@ context_service = ContextServiceRun(
     service_account_email=iam.context_service_run.email,
     image="europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-api:latest",
     env_vars={
-        "ENVIRONMENT": config.require("environment"),
+        "ENVIRONMENT": env,
         "HOST": "0.0.0.0",
         "MEMGRAPH_HOST": stateful_host.instance.network_interfaces[0].network_ip,
         "MEMGRAPH_URI": stateful_host.instance.network_interfaces[0].network_ip.apply(
@@ -88,7 +106,9 @@ context_service = ContextServiceRun(
         "AUTH_ENABLED": "true",
         "CUSTODIAN__ENABLED": "true",
         "LOG_LEVEL": "INFO",
-        "OAUTH__ISSUER": "https://api.engrammic.ai" if config.require("environment") == "prod" else f"https://{config.require('environment')}.engrammic.ai",
+        "OAUTH__ISSUER": "https://api.engrammic.ai" if env == "prod" else f"https://{env}.engrammic.ai",
+        # Feature flags
+        **feature_flags.get(env, {}),
     },
     secrets={
         "POSTGRES_PASSWORD": secrets.secrets["postgres-password"].id,
