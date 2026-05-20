@@ -1,5 +1,6 @@
 """Postgres SQLAlchemy models for hybrid storage."""
 
+from context_service.models.postgres.api_key import APIKey
 from context_service.models.postgres.audit import AuditEvents, Events
 from context_service.models.postgres.chain_feedback import (
     ChainDelivery,
@@ -18,6 +19,7 @@ from context_service.models.postgres.usage import ToolUsage, ToolUsageSummary
 from context_service.models.postgres.user import User
 
 __all__ = [
+    "APIKey",
     "AuditEvents",
     "ChainDelivery",
     "ChainFeedback",
