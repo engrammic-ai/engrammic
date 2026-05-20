@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 import structlog
 
+from context_service.retention.dead_letter import enqueue_failed_delete
 from context_service.retention.policy import RetentionPolicy
 from context_service.retention.queries import (
     FIND_EXCESS_META_OBSERVATIONS,
@@ -21,6 +23,7 @@ from context_service.retention.queries import (
 
 if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
+    from context_service.engine.qdrant_store import EngineQdrantStore
 
 logger = structlog.get_logger(__name__)
 
@@ -32,9 +35,11 @@ class RetentionService:
         self,
         store: HyperGraphStore,
         policy: RetentionPolicy | None = None,
+        qdrant_store: EngineQdrantStore | None = None,
     ) -> None:
         self._store = store
         self._policy = policy or RetentionPolicy()
+        self._qdrant_store = qdrant_store
 
     async def find_tombstone_candidates(
         self,
@@ -116,15 +121,56 @@ class RetentionService:
 
         return [row["id"] for row in rows]
 
+    async def hard_delete_node(self, node_id: str, silo_id: str) -> bool:
+        """Delete a single node from all stores.
+
+        Memgraph is the authoritative store and must succeed first. Qdrant
+        deletion is retried up to three times; failures are enqueued to the
+        dead-letter queue for later reconciliation. Postgres is not yet
+        implemented (acceptable gap).
+
+        Returns True if the Memgraph delete succeeded, False if the node was
+        not found or the query returned no results.
+        """
+        # 1. Memgraph (must succeed or abort)
+        result = await self._store.execute_query(
+            HARD_DELETE_NODE,
+            {"id": node_id, "silo_id": silo_id},
+        )
+        if not result:
+            return False
+
+        # 2. Qdrant (retry 3x, dead-letter on exhaustion)
+        if self._qdrant_store is not None:
+            last_error: str = ""
+            for attempt in range(3):
+                try:
+                    await self._qdrant_store.delete(
+                        node_id=uuid.UUID(node_id),
+                        silo_id=silo_id,
+                    )
+                    last_error = ""
+                    break
+                except Exception as exc:
+                    last_error = str(exc)
+                    logger.warning(
+                        "qdrant_delete_failed",
+                        node_id=node_id,
+                        silo_id=silo_id,
+                        attempt=attempt + 1,
+                        error=last_error,
+                    )
+            if last_error:
+                await enqueue_failed_delete(silo_id, node_id, last_error)
+
+        return True
+
     async def hard_delete_nodes(self, node_ids: list[str], silo_id: str) -> int:
         """Permanently delete tombstoned nodes."""
         count = 0
         for node_id in node_ids:
-            result = await self._store.execute_query(
-                HARD_DELETE_NODE,
-                {"id": node_id, "silo_id": silo_id},
-            )
-            if result:
+            deleted = await self.hard_delete_node(node_id, silo_id)
+            if deleted:
                 count += 1
 
         logger.info("hard_deleted_nodes", silo_id=silo_id, count=count)

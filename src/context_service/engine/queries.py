@@ -752,9 +752,12 @@ LIMIT $limit
 """
 
 # --- Index Queries ---
-# Phase-3: engine layer owns only HyperEdge, Silo, and EDGE indexes.
+# Phase-3: engine layer owns HyperEdge, Silo, and EDGE indexes.
 # Document/Passage/Claim/Entity indexes are owned by context_service.db.indexes
-# and applied via MemgraphClient.ensure_indexes. Removing :Node entries (retired).
+# and applied via MemgraphClient.ensure_indexes.
+# Exception: tail_id and head_id are :Node indexes retained here because they
+# support chain pointer lookups (supersession linked-list traversal), which is
+# an engine-layer concern independent of node type.
 CREATE_TAIL_ID_INDEX = "CREATE INDEX ON :Node(tail_id);"
 CREATE_HEAD_ID_INDEX = "CREATE INDEX ON :Node(head_id);"
 
