@@ -62,7 +62,10 @@ class MigrationJob(pulumi.ComponentResource):
                     max_retries=1,
                 ),
             ),
-            opts=pulumi.ResourceOptions(parent=self),
+            opts=pulumi.ResourceOptions(
+                parent=self,
+                ignore_changes=["template"],  # CI owns image updates
+            ),
         )
 
         self.register_outputs({

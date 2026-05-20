@@ -93,7 +93,10 @@ class ContextServiceRun(pulumi.ComponentResource):
                     )
                 ],
             ),
-            opts=pulumi.ResourceOptions(parent=self),
+            opts=pulumi.ResourceOptions(
+                parent=self,
+                ignore_changes=["template"],  # CI owns image updates
+            ),
         )
 
         # Note: Public access (allUsers) blocked by org policy. Access via identity token.
