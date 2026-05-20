@@ -513,7 +513,7 @@ class QdrantClient:
                 results = [
                     SearchResult(
                         node_id=str(r.id),
-                        score=r.score,
+                        score=r.score if r.score is not None else 0.0,
                         payload=r.payload or {},
                     )
                     for r in response.points

@@ -83,7 +83,6 @@ class TestMemoryLayer:
         )
         assert result.get("layer") == "memory"
 
-    @pytest.mark.xfail(reason="Server bug: float() argument NoneType")
     async def test_semantic_search(self, mcp_client: Any) -> None:
         await store(mcp_client, "memory", "Project deadline is end of Q2 2026")
         await store(mcp_client, "memory", "Budget allocated for cloud infrastructure")
