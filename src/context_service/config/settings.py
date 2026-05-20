@@ -1190,6 +1190,21 @@ class Settings(BaseSettings):
     retention_durable_heat_threshold: float = Field(default=0.2, ge=0.0, le=1.0)
     retention_meta_observation_max_count: int = Field(default=100, ge=10)
     retention_grace_period_days: int = Field(default=7, ge=1)
+    retention_supersession_chain_max_length: int = Field(
+        default=20,
+        ge=3,
+        description="Max nodes in a supersession chain before pruning",
+    )
+    forget_cancel_window_hours: int = Field(
+        default=1,
+        ge=1,
+        description="Hours within which a forget can be cancelled",
+    )
+    forget_rate_limit_per_hour: int = Field(
+        default=100,
+        ge=1,
+        description="Max forget operations per hour per silo",
+    )
 
     # =========================================================================
     # Summarization Settings

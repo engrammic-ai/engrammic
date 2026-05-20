@@ -57,6 +57,11 @@ class RetentionOverrides(BaseModel):
         ge=1,
         description="Days a pruning-eligible node is kept in a grace period.",
     )
+    supersession_chain_max_length: int | None = Field(
+        default=None,
+        ge=3,
+        description="Max nodes in a supersession chain before pruning.",
+    )
 
 
 class HeatDecayOverrides(BaseModel):
@@ -128,6 +133,27 @@ class ValidatorOverrides(BaseModel):
     )
 
 
+class ForgetPolicyOverrides(BaseModel):
+    """Per-silo forget policy overrides."""
+
+    model_config = {"extra": "ignore"}
+
+    cancel_window_hours: int | None = Field(
+        default=None,
+        ge=1,
+        description="Hours within which a forget can be cancelled.",
+    )
+    rate_limit_per_hour: int | None = Field(
+        default=None,
+        ge=1,
+        description="Max forget operations per hour.",
+    )
+    enabled: bool | None = Field(
+        default=None,
+        description="Whether forget is enabled for this silo.",
+    )
+
+
 class SiloConfig(BaseModel):
     """Per-silo configuration overrides stored in the Silo node's metadata.
 
@@ -140,6 +166,7 @@ class SiloConfig(BaseModel):
     retention: RetentionOverrides = Field(default_factory=RetentionOverrides)
     heat_decay: HeatDecayOverrides = Field(default_factory=HeatDecayOverrides)
     validators: ValidatorOverrides = Field(default_factory=ValidatorOverrides)
+    forget: ForgetPolicyOverrides = Field(default_factory=ForgetPolicyOverrides)
 
     def resolve(self, settings: Settings) -> ResolvedSiloConfig:
         """Merge per-silo overrides with global settings defaults.
@@ -149,6 +176,7 @@ class SiloConfig(BaseModel):
         r = self.retention
         h = self.heat_decay
         v = self.validators
+        f = self.forget
 
         return ResolvedSiloConfig(
             # Retention
@@ -233,6 +261,24 @@ class SiloConfig(BaseModel):
                 if v.proposal_threshold is not None
                 else settings.validator_proposal_threshold
             ),
+            supersession_chain_max_length=(
+                r.supersession_chain_max_length
+                if r.supersession_chain_max_length is not None
+                else settings.retention_supersession_chain_max_length
+            ),
+            forget_cancel_window_hours=(
+                f.cancel_window_hours
+                if f.cancel_window_hours is not None
+                else settings.forget_cancel_window_hours
+            ),
+            forget_rate_limit_per_hour=(
+                f.rate_limit_per_hour
+                if f.rate_limit_per_hour is not None
+                else settings.forget_rate_limit_per_hour
+            ),
+            forget_enabled=(
+                f.enabled if f.enabled is not None else True
+            ),
         )
 
     def to_metadata_dict(self) -> dict[str, Any]:
@@ -276,3 +322,11 @@ class ResolvedSiloConfig(BaseModel):
     revision_cosine_threshold: float
     auto_synthesis_threshold: float
     proposal_threshold: float
+
+    # Retention chain pruning
+    supersession_chain_max_length: int
+
+    # Forget policy
+    forget_cancel_window_hours: int
+    forget_rate_limit_per_hour: int
+    forget_enabled: bool
