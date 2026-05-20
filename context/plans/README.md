@@ -38,6 +38,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
+| [2026-05-20-self-hosted-rest-api-phase1.md](./2026-05-20-self-hosted-rest-api-phase1.md) | Self-hosted REST API: auth + Memory/Knowledge endpoints | Ready to execute |
 | [2026-05-20-rate-limiting.md](./2026-05-20-rate-limiting.md) | Tiered rate limiting for MCP tools and REST routes | Ready to execute |
 | [2026-05-20-documentation-site.md](./2026-05-20-documentation-site.md) | Documentation site implementation | Planned |
 | [2026-05-18-closed-beta-deployment.md](./2026-05-18-closed-beta-deployment.md) | Closed beta infrastructure deployment | In progress |
@@ -48,7 +49,10 @@ Specced or checkpointed for later implementation:
 
 | Item | Spec/Note | Trigger |
 |------|-----------|---------|
+| **Self-Hosted REST API Phase 2+** | [self-hosted-rest-api-design.md](../../docs/superpowers/specs/2026-05-20-self-hosted-rest-api-design.md) | After Phase 1 ships; Wisdom/Intelligence/Graph/Admin endpoints |
 | **Concepts** | [concepts-design.md](../../docs/superpowers/specs/2026-05-18-concepts-design.md) | Post-closed-beta, when retrieval quality degrades at scale |
+
+**Self-Hosted REST API:** Layer-aligned REST surface for self-hosted deployments. Phase 1 covers auth (proxy/JWT/API key) + Memory/Knowledge. Phase 2+ covers Wisdom, Intelligence, Graph, Search, Admin API.
 
 **Concepts:** Emergent abstract nodes (Wisdom layer) that organize knowledge without asserting conclusions. Includes Weaver SAGE persona, weighted edges, 5-phase incremental impl plan.
 
