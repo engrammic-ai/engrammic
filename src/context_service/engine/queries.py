@@ -1285,25 +1285,44 @@ SET b.stale = true, b.stale_reason = $reason, b.stale_at = timestamp()
 # Find interior chain nodes beyond max_length from head.
 # Interior nodes are those with at least one SUPERSEDES predecessor (head) and
 # at least one SUPERSEDES successor (tail) in the chain. The query matches
-# paths from the head through interior nodes to the tail and filters for
-# nodes that are not already stubbed and whose position in the chain exceeds
-# max_length hops from the head.
-FIND_STALE_CHAIN_INTERIOR = """
-MATCH (head:Node {silo_id: $silo_id})
-WHERE head.head_id = head.id
+# paths from the head to interior nodes and then checks that each interior has
+# a successor (tail). Only nodes beyond max_length hops from the head and not
+# already stubbed are returned.
+#
+# Head detection: a chain head has head_id IS NULL (never been superseded itself)
+# or head_id = head.id (self-referential pointer). A fresh chain head has no
+# pointer set at all, so the IS NULL case must be included.
+#
+# Path length: p1 is the head-to-interior segment; length(p1) is the number of
+# SUPERSEDES hops from head to interior. The full head-through-interior-to-tail
+# path length would conflate interior depth with tail distance and produce wrong
+# cutoff comparisons.
+FIND_STALE_CHAIN_INTERIOR = f"""
+MATCH (head)
+WHERE {content_union_predicate("head")}
+  AND head.silo_id = $silo_id
+  AND (head.head_id IS NULL OR head.head_id = head.id)
 WITH head
-MATCH path = (head)-[:SUPERSEDES*]->(interior)-[:SUPERSEDES*]->(tail)
-WHERE tail.tail_id = tail.id
+MATCH p1 = (head)-[:SUPERSEDES*]->(interior)
+WHERE {content_union_predicate("interior")}
+  AND interior.silo_id = $silo_id
   AND interior.stub IS NULL
-  AND length(path) > $max_length
+  AND length(p1) > $max_length
+WITH interior
+MATCH (interior)-[:SUPERSEDES+]->(tail)
+WHERE {content_union_predicate("tail")}
+  AND tail.silo_id = $silo_id
+  AND NOT EXISTS((tail)-[:SUPERSEDES]->())
 RETURN DISTINCT interior.id AS node_id
 LIMIT $batch_size
 """
 
 # Convert a node to a stub: clear content fields but preserve all edges so the
 # chain structure and provenance remain intact.
-CONVERT_TO_STUB = """
-MATCH (n:Node {id: $id, silo_id: $silo_id})
+CONVERT_TO_STUB = f"""
+MATCH (n)
+WHERE {content_union_predicate("n")}
+  AND n.id = $id AND n.silo_id = $silo_id
 SET n.stub = true,
     n.content = NULL,
     n.content_hash = NULL,
