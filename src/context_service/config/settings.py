@@ -441,6 +441,7 @@ class OAuthConfig(BaseModel):
     authorization_code_ttl_seconds: int = 600  # 10 minutes
     allowed_redirect_hosts: list[str] = Field(
         default_factory=lambda: [
+            # Local development
             "localhost",
             "127.0.0.1",
             # Cursor
@@ -448,13 +449,34 @@ class OAuthConfig(BaseModel):
             # Claude Desktop / Claude Code
             "claude.ai",
             "anthropic.claude-code",
-            # VS Code
+            # VS Code / GitHub Copilot
             "vscode.dev",
             "vscode-redirect.azurewebsites.net",
-            # Windsurf
+            "github.dev",
+            # Windsurf (Codeium)
             "codeium.windsurf-mcp",
             # Zed
             "zed.dev",
+            # JetBrains IDEs
+            "jetbrains.com",
+            # Kiro (AWS)
+            "kiro.dev",
+            # Cline
+            "cline.bot",
+            # Continue.dev
+            "continue.dev",
+            # Replit
+            "replit.com",
+            # Dust.tt (agentic OS)
+            "dust.tt",
+            "eu.dust.tt",
+            # Sourcegraph Cody
+            "sourcegraph.com",
+            # Tabnine
+            "tabnine.com",
+            # Amazon Q
+            "amazon.com",
+            "aws.amazon.com",
         ],
         description="Allowed hostnames for redirect_uri (not full URI validation)",
     )
