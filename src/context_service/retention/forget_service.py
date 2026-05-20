@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 import structlog
 
@@ -37,6 +38,11 @@ SET n.tombstoned_at = NULL,
 RETURN n.id AS id
 """
 
+CHECK_NODE_EXISTS = """
+MATCH (n {id: $id, silo_id: $silo_id})
+RETURN n.forget_requested_at AS requested_at
+"""
+
 
 class ForgetService:
     """Handle agent-driven forget operations."""
@@ -61,7 +67,7 @@ class ForgetService:
         now = datetime.now(UTC)
         now_micros = int(now.timestamp() * 1_000_000)
 
-        result = await self._store.execute_query(
+        result = await self._store.execute_write(
             FORGET_NODE,
             {
                 "id": node_id,
@@ -74,10 +80,10 @@ class ForgetService:
         if not result:
             return {"status": "not_found", "node_id": node_id}
 
+        downstream = result[0].get("downstream_count", 0)
+
         # Sync tombstone to Qdrant payload
         if self._qdrant_store:
-            from uuid import UUID
-
             try:
                 await self._qdrant_store.set_payload(
                     silo_id=silo_id,
@@ -89,8 +95,16 @@ class ForgetService:
                     "qdrant_sync_skipped_invalid_uuid",
                     node_id=node_id,
                 )
+            except Exception as e:
+                logger.error("qdrant_sync_failed", node_id=node_id, error=str(e))
+                return {
+                    "status": "tombstoned_graph_only",
+                    "node_id": node_id,
+                    "downstream_references": downstream,
+                    "tombstoned_at": now.isoformat(),
+                    "qdrant_sync_failed": True,
+                }
 
-        downstream = result[0].get("downstream_count", 0)
         logger.info(
             "node_forgotten",
             node_id=node_id,
@@ -116,7 +130,15 @@ class ForgetService:
         now_micros = int(now.timestamp() * 1_000_000)
         cancel_cutoff = now_micros - (self._cancel_window_hours * 3600 * 1_000_000)
 
-        result = await self._store.execute_query(
+        # First check if node exists at all
+        check_result = await self._store.execute_query(
+            CHECK_NODE_EXISTS,
+            {"id": node_id, "silo_id": silo_id},
+        )
+        if not check_result:
+            return {"status": "not_found", "node_id": node_id}
+
+        result = await self._store.execute_write(
             CANCEL_FORGET,
             {
                 "id": node_id,
@@ -130,8 +152,6 @@ class ForgetService:
 
         # Clear tombstone from Qdrant
         if self._qdrant_store:
-            from uuid import UUID
-
             try:
                 await self._qdrant_store.set_payload(
                     silo_id=silo_id,
@@ -142,6 +162,10 @@ class ForgetService:
                 logger.warning(
                     "qdrant_sync_skipped_invalid_uuid",
                     node_id=node_id,
+                )
+            except Exception as e:
+                logger.error(
+                    "qdrant_sync_failed_on_cancel", node_id=node_id, error=str(e)
                 )
 
         logger.info("forget_cancelled", node_id=node_id, silo_id=silo_id)
