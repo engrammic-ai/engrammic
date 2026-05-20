@@ -52,7 +52,7 @@ jobs:
             --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-api:latest \
             --region ${{ env.REGION }} \
             --min-instances 1 \
-            --cpu-always-allocated \
+            --no-cpu-throttling \
             --session-affinity \
             --timeout 3600 \
             --no-traffic
