@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
+import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -31,8 +32,6 @@ from context_service.stores.qdrant import QdrantOperationError
 from context_service.telemetry.metrics import record_db_query
 
 if TYPE_CHECKING:
-    import uuid
-
     from context_service.stores.qdrant import QdrantClient
 
 logger = get_logger(__name__)
@@ -368,6 +367,7 @@ class EngineQdrantStore:
                         ),
                     ],
                     query=FusionQuery(fusion=Fusion.RRF),
+                    query_filter=query_filter,
                     limit=limit,
                     score_threshold=score_threshold,
                 )
@@ -411,7 +411,7 @@ class EngineQdrantStore:
     async def set_payload(
         self,
         silo_id: str,
-        node_id: str,
+        node_id: uuid.UUID,
         payload: dict[str, Any],
     ) -> None:
         """Update payload fields on an existing point.
@@ -426,12 +426,12 @@ class EngineQdrantStore:
             await client.set_payload(
                 collection_name=collection,
                 payload=payload,
-                points=[node_id],
+                points=[str(node_id)],
                 wait=True,
             )
         except Exception as e:
             logger.error(
-                "Qdrant set_payload failed", node_id=node_id, silo_id=silo_id, error=str(e)
+                "Qdrant set_payload failed", node_id=str(node_id), silo_id=silo_id, error=str(e)
             )
             raise QdrantOperationError(f"Failed to set payload for {node_id}: {e}") from e
         finally:

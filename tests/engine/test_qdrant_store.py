@@ -63,9 +63,10 @@ async def test_search_excludes_tombstoned_nodes() -> None:
         )
 
         # Tombstone it via set_payload
+        # tombstoned_at is an integer microsecond timestamp matching the Memgraph property format
         await store.set_payload(
             silo_id=silo_id,
-            node_id=node_id,
+            node_id=uuid.UUID(node_id),
             payload={"tombstoned_at": 1716249600000000},
         )
 
@@ -110,17 +111,19 @@ async def test_set_payload_updates_point() -> None:
 
     mock_async_client = _make_mock_async_client(existing_collections=[collection_name])
 
+    node_uuid = uuid.UUID(node_id)
     with patch.object(qdrant_client, "_get_client", return_value=mock_async_client):
+        # tombstoned_at is an integer microsecond timestamp matching the Memgraph property format
         await store.set_payload(
             silo_id=silo_id,
-            node_id=node_id,
+            node_id=node_uuid,
             payload={"tombstoned_at": 9999999999},
         )
 
     mock_async_client.set_payload.assert_called_once_with(
         collection_name=collection_name,
         payload={"tombstoned_at": 9999999999},
-        points=[node_id],
+        points=[str(node_uuid)],
         wait=True,
     )
 

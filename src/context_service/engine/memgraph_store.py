@@ -29,6 +29,8 @@ from context_service.telemetry.metrics import record_db_query
 from context_service.utils.json import dumps, loads
 
 if TYPE_CHECKING:
+    from redis.asyncio import Redis
+
     from context_service.stores.memgraph import MemgraphClient
 
 logger = get_logger(__name__)
@@ -97,8 +99,13 @@ class MemgraphStore(EAGKnowledgeStore):
     retrieval pipeline) before the EAG protocol can be used end-to-end.
     """
 
-    def __init__(self, client: MemgraphClient) -> None:
+    def __init__(
+        self,
+        client: MemgraphClient,
+        redis_client: Redis[bytes] | None = None,  # type: ignore[type-arg]
+    ) -> None:
         self._client = client
+        self._redis = redis_client
 
     # --- EAGKnowledgeStore protocol adapters (not yet wired) ---
 
@@ -440,21 +447,38 @@ class MemgraphStore(EAGKnowledgeStore):
         Returns True if the lock was acquired, False if another writer holds it.
         The lock expires automatically after _SUPERSESSION_LOCK_TTL_SECONDS to
         prevent deadlocks from crashed callers.
-        """
-        from context_service.stores.redis import create_redis_pool
 
-        redis = await create_redis_pool()
+        If no Redis client is configured, returns True (graceful degradation).
+        """
+        if self._redis is None:
+            return True
         lock_key = f"{_SUPERSESSION_LOCK_PREFIX}{predecessor_id}"
-        result = await redis.set(lock_key, "1", nx=True, ex=_SUPERSESSION_LOCK_TTL_SECONDS)
-        return bool(result)
+        try:
+            result = await self._redis.set(lock_key, "1", nx=True, ex=_SUPERSESSION_LOCK_TTL_SECONDS)
+            return bool(result)
+        except Exception:
+            logger.error(
+                "supersession_lock_acquire_error",
+                predecessor_id=predecessor_id,
+                exc_info=True,
+            )
+            # Fail open: allow the write rather than blocking all supersessions
+            # when Redis is unavailable.
+            return True
 
     async def _release_supersession_lock(self, predecessor_id: str) -> None:
         """Release the supersession lock for the given predecessor node."""
-        from context_service.stores.redis import create_redis_pool
-
-        redis = await create_redis_pool()
+        if self._redis is None:
+            return
         lock_key = f"{_SUPERSESSION_LOCK_PREFIX}{predecessor_id}"
-        await redis.delete(lock_key)
+        try:
+            await self._redis.delete(lock_key)
+        except Exception:
+            logger.error(
+                "supersession_lock_release_error",
+                predecessor_id=predecessor_id,
+                exc_info=True,
+            )
 
     async def create_supersedes_edge(
         self,
@@ -482,6 +506,7 @@ class MemgraphStore(EAGKnowledgeStore):
         """
         predecessor_id = str(to_id)
         if not await self._acquire_supersession_lock(predecessor_id):
+            logger.warning("supersession_lock_contention", predecessor_id=predecessor_id)
             raise ConflictError(f"Concurrent supersession of {predecessor_id}")
         try:
             result = await self._client.execute_write(
