@@ -25,7 +25,7 @@ import hashlib
 import math
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 
@@ -166,10 +166,20 @@ def _centroid(embeddings: list[list[float]]) -> list[float]:
     return [v / n for v in total]
 
 
-def _make_revised_belief_id(old_belief_id: str, revision_count: int) -> str:
-    """Deterministic id for the revised belief derived from its predecessor."""
+def _make_revised_belief_id(
+    old_belief_id: str,
+    counter: int,
+    operation: Literal["revision", "split"] = "revision",
+) -> str:
+    """Deterministic id for revised/split belief derived from its predecessor.
+
+    Args:
+        old_belief_id: Parent belief ID.
+        counter: Revision count or split child index.
+        operation: "revision" for revise_belief, "split" for split_belief.
+    """
     return hashlib.blake2b(
-        f"revision:{old_belief_id}:{revision_count}".encode(), digest_size=32
+        f"{operation}:{old_belief_id}:{counter}".encode(), digest_size=32
     ).hexdigest()
 
 
@@ -540,7 +550,7 @@ async def split_belief(
     child_belief_ids: list[str] = []
 
     for i, child_text in enumerate(children_text):
-        child_id = _make_revised_belief_id(belief_id, i + 1)
+        child_id = _make_revised_belief_id(belief_id, i + 1, operation="split")
         child_embedding = await embedding_client.embed([child_text])
         child_centroid = child_embedding[0] if child_embedding else []
 
