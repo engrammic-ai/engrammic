@@ -127,45 +127,35 @@ infra-refresh:
 # Build & Deploy
 # =============================================================================
 
-# Build and push API image
-build-api tag="latest":
+# Build all images (tags :latest + :SHORT_SHA)
+build sha="latest":
     gcloud builds submit --config=cloudbuild.api.yaml \
-        --substitutions=_IMAGE={{registry}}/engrammic-api,SHORT_SHA={{tag}} \
-        --region={{region}} .
-
-# Build and push Dagster image
-build-dagster tag="latest":
-    gcloud builds submit --config=cloudbuild.dagster.yaml \
-        --substitutions=_IMAGE={{registry}}/engrammic-dagster,SHORT_SHA={{tag}} \
-        --region={{region}} .
-
-# Build and push Beacon image
-build-beacon tag="latest":
+        --substitutions=SHORT_SHA={{sha}} --region={{region}} .
     gcloud builds submit --config=cloudbuild.beacon.yaml \
-        --substitutions=_IMAGE={{registry}}/engrammic-beacon,SHORT_SHA={{tag}} \
-        --region={{region}} .
+        --substitutions=SHORT_SHA={{sha}} --region={{region}} .
+    gcloud builds submit --config=cloudbuild.dagster.yaml \
+        --substitutions=SHORT_SHA={{sha}} --region={{region}} .
 
-# Build all images
-build-all tag="latest":
-    just build-api {{tag}}
-    just build-dagster {{tag}}
-    just build-beacon {{tag}}
-
-# Deploy API to Cloud Run (beta)
-deploy-api-beta:
+# Deploy specific SHA to beta
+deploy-beta sha="latest":
     gcloud run services update engrammic-beta-api \
-        --image={{registry}}/engrammic-api:latest \
-        --region={{region}} --project={{project}}
+        --image={{registry}}/engrammic-api:{{sha}} --region={{region}} --project={{project}}
+    gcloud run services update engrammic-beta-beacon \
+        --image={{registry}}/engrammic-beacon:{{sha}} --region={{region}} --project={{project}}
+    gcloud run jobs execute engrammic-beta-migrate --region={{region}} --project={{project}} --wait
 
-# Deploy API to Cloud Run (prod)
-deploy-api-prod:
+# Promote SHA to prod
+deploy-prod sha:
     gcloud run services update engrammic-prod-api \
-        --image={{registry}}/engrammic-api:latest \
-        --region={{region}} --project={{project}}
+        --image={{registry}}/engrammic-api:{{sha}} --region={{region}} --project={{project}}
+    gcloud run services update engrammic-prod-beacon \
+        --image={{registry}}/engrammic-beacon:{{sha}} --region={{region}} --project={{project}}
+    gcloud run jobs execute engrammic-prod-migrate --region={{region}} --project={{project}} --wait
 
-# Build and deploy API (beta)
-ship-beta: (build-api "latest") deploy-api-beta migrate-beta
-    @echo "Shipped to beta"
+# Build + deploy to beta (convenience)
+ship-beta sha="latest":
+    just build {{sha}}
+    just deploy-beta {{sha}}
 
 # =============================================================================
 # Database (Remote)
