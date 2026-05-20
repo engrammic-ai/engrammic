@@ -277,7 +277,7 @@ class SiloConfig(BaseModel):
                 else settings.forget_rate_limit_per_hour
             ),
             forget_enabled=(
-                f.enabled if f.enabled is not None else True
+                f.enabled if f.enabled is not None else settings.forget_enabled
             ),
         )
 
@@ -308,6 +308,7 @@ class ResolvedSiloConfig(BaseModel):
     durable_heat_threshold: float
     meta_observation_max_count: int
     grace_period_days: int
+    supersession_chain_max_length: int
 
     # Heat decay
     heat_half_life_days: int
@@ -323,10 +324,7 @@ class ResolvedSiloConfig(BaseModel):
     auto_synthesis_threshold: float
     proposal_threshold: float
 
-    # Retention chain pruning
-    supersession_chain_max_length: int
-
     # Forget policy
+    forget_enabled: bool
     forget_cancel_window_hours: int
     forget_rate_limit_per_hour: int
-    forget_enabled: bool
