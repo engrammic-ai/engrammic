@@ -32,9 +32,12 @@ def mock_client() -> MagicMock:
 
 @pytest.fixture
 def memgraph_store(mock_client: MagicMock) -> MemgraphStore:
-    """Create MemgraphStore with mocked client."""
+    """Create MemgraphStore with mocked client and no-op Redis lock helpers."""
     store = MemgraphStore.__new__(MemgraphStore)
     store._client = mock_client
+    # Patch lock helpers so tests don't require a live Redis instance.
+    store._acquire_supersession_lock = AsyncMock(return_value=True)  # type: ignore[method-assign]
+    store._release_supersession_lock = AsyncMock()  # type: ignore[method-assign]
     return store
 
 

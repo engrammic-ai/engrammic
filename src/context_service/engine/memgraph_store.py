@@ -22,7 +22,7 @@ from context_service.db.schema import (
     content_union_predicate,
 )
 from context_service.engine import queries
-from context_service.engine.exceptions import StaleVersionError
+from context_service.engine.exceptions import ConflictError, StaleVersionError
 from context_service.engine.models import BinaryEdge, HyperEdge, Node, Participant, Silo, SubGraph
 from context_service.services.models import ScopeContext  # noqa: TC001
 from context_service.telemetry.metrics import record_db_query
@@ -38,6 +38,9 @@ _CONTENT_LABEL_SET: frozenset[str] = frozenset(
     {LABEL_DOCUMENT, LABEL_PASSAGE, LABEL_CLAIM, LABEL_ENTITY}
 )
 _PATH_LABEL_SET: frozenset[str] = _CONTENT_LABEL_SET
+
+_SUPERSESSION_LOCK_PREFIX = "lock:supersession:"
+_SUPERSESSION_LOCK_TTL_SECONDS = 30
 
 
 def _node_to_knowledge_node(node: Node) -> KnowledgeNode:
@@ -431,6 +434,28 @@ class MemgraphStore(EAGKnowledgeStore):
                 result[input_id] = valid_id
         return result
 
+    async def _acquire_supersession_lock(self, predecessor_id: str) -> bool:
+        """Acquire a Redis lock before superseding a node.
+
+        Returns True if the lock was acquired, False if another writer holds it.
+        The lock expires automatically after _SUPERSESSION_LOCK_TTL_SECONDS to
+        prevent deadlocks from crashed callers.
+        """
+        from context_service.stores.redis import create_redis_pool
+
+        redis = await create_redis_pool()
+        lock_key = f"{_SUPERSESSION_LOCK_PREFIX}{predecessor_id}"
+        result = await redis.set(lock_key, "1", nx=True, ex=_SUPERSESSION_LOCK_TTL_SECONDS)
+        return bool(result)
+
+    async def _release_supersession_lock(self, predecessor_id: str) -> None:
+        """Release the supersession lock for the given predecessor node."""
+        from context_service.stores.redis import create_redis_pool
+
+        redis = await create_redis_pool()
+        lock_key = f"{_SUPERSESSION_LOCK_PREFIX}{predecessor_id}"
+        await redis.delete(lock_key)
+
     async def create_supersedes_edge(
         self,
         from_id: uuid.UUID,
@@ -449,19 +474,30 @@ class MemgraphStore(EAGKnowledgeStore):
         downstream attribution can distinguish per-cluster from cross-cluster
         detections. ``reason`` must be one of: contradiction, evidence_shift,
         author_update, evidence_erased (I5).
+
+        Acquires a Redis lock on ``to_id`` before writing to prevent a race
+        condition where two concurrent transactions both read the same tail_id
+        and overwrite each other's head_id pointer (last-write-wins orphan).
+        Raises ConflictError if the lock cannot be acquired.
         """
-        result = await self._client.execute_write(
-            queries.CREATE_CROSS_NODE_SUPERSEDES,
-            {
-                "from_id": str(from_id),
-                "to_id": str(to_id),
-                "silo_id": silo_id,
-                "valid_from": valid_from.isoformat(),
-                "source": source,
-                "reason": reason,
-            },
-        )
-        return bool(result and result[0].get("created", 0) > 0)
+        predecessor_id = str(to_id)
+        if not await self._acquire_supersession_lock(predecessor_id):
+            raise ConflictError(f"Concurrent supersession of {predecessor_id}")
+        try:
+            result = await self._client.execute_write(
+                queries.CREATE_CROSS_NODE_SUPERSEDES,
+                {
+                    "from_id": str(from_id),
+                    "to_id": str(to_id),
+                    "silo_id": silo_id,
+                    "valid_from": valid_from.isoformat(),
+                    "source": source,
+                    "reason": reason,
+                },
+            )
+            return bool(result and result[0].get("created", 0) > 0)
+        finally:
+            await self._release_supersession_lock(predecessor_id)
 
     async def resolve_current_head(
         self,
