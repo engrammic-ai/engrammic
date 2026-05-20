@@ -156,9 +156,17 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
 
         except ValueError as e:
             logger.warning("MCP auth failed", error=str(e))
+            # Build resource_metadata URL for OAuth discovery
+            scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+            host = request.headers.get("host", request.url.netloc)
+            resource_metadata_url = f"{scheme}://{host}/.well-known/oauth-protected-resource"
+
             return JSONResponse(
                 status_code=401,
                 content={"error": str(e)},
+                headers={
+                    "WWW-Authenticate": f'Bearer resource_metadata="{resource_metadata_url}"',
+                },
             )
 
         finally:
