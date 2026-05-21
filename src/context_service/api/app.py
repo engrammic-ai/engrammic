@@ -11,7 +11,7 @@ from starlette.types import ASGIApp
 
 from context_service import __version__
 from context_service.api.metrics import REGISTRY, metrics_endpoint
-from context_service.api.middleware import PrometheusTimingMiddleware
+from context_service.api.middleware import PrometheusTimingMiddleware, RateLimitMiddleware
 from context_service.api.routes import admin, health
 from context_service.api.routes.gdpr import router as gdpr_router
 from context_service.api.routes.oauth import router as oauth_router
@@ -257,6 +257,7 @@ def create_app() -> ASGIApp:
         )
 
     app.add_middleware(PrometheusTimingMiddleware)
+    app.add_middleware(RateLimitMiddleware, redis=None)  # Redis injected at startup
     instrument_fastapi(app)
 
     app.include_router(health.router)
