@@ -96,7 +96,13 @@ class ForgetService:
                     node_id=node_id,
                 )
             except Exception as e:
-                logger.error("qdrant_sync_failed", node_id=node_id, error=str(e))
+                logger.error(
+                    "qdrant_sync_failed",
+                    node_id=node_id,
+                    silo_id=silo_id,
+                    error=str(e),
+                    error_type=type(e).__name__,
+                )
                 return {
                     "status": "tombstoned_graph_only",
                     "node_id": node_id,

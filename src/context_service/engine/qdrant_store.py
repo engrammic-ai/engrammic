@@ -427,6 +427,12 @@ class EngineQdrantStore:
         """
         collection = await self._ensure_collection(silo_id)
         client = await self._qdrant._get_client()
+        logger.debug(
+            "qdrant_set_payload_attempt",
+            node_id=str(node_id),
+            silo_id=silo_id,
+            collection=collection,
+        )
         start = time.perf_counter()
         try:
             await client.set_payload(
@@ -437,7 +443,12 @@ class EngineQdrantStore:
             )
         except Exception as e:
             logger.error(
-                "Qdrant set_payload failed", node_id=str(node_id), silo_id=silo_id, error=str(e)
+                "Qdrant set_payload failed",
+                node_id=str(node_id),
+                silo_id=silo_id,
+                collection=collection,
+                error=str(e),
+                error_type=type(e).__name__,
             )
             raise QdrantOperationError(f"Failed to set payload for {node_id}: {e}") from e
         finally:
