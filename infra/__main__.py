@@ -107,6 +107,8 @@ context_service = ContextServiceRun(
         "CUSTODIAN__ENABLED": "true",
         "LOG_LEVEL": "INFO",
         "OAUTH__ISSUER": "https://api.engrammic.ai" if env == "prod" else f"https://{env}.engrammic.ai",
+        # Observability
+        "OTEL_ENABLED": "true",
         # Feature flags
         **feature_flags.get(env, {}),
     },
