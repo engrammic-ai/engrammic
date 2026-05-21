@@ -38,6 +38,7 @@ dependencies = [
     "opentelemetry-instrumentation-fastapi>=0.46b0",
     "opentelemetry-instrumentation-httpx>=0.46b0",
     "opentelemetry-instrumentation-redis>=0.46b0",
+    "opentelemetry-exporter-gcp-trace>=1.6",
     # Redis
     "redis>=5.0",
     # Postgres (tag config)
