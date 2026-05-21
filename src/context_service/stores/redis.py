@@ -478,6 +478,50 @@ class RedisClient:
         finally:
             record_db_query("redis.list_push_trim_expire", (time.perf_counter() - t) * 1000)
 
+    # Lua script for atomic INCR + EXPIRE (works on Redis 6.2+)
+    # Sets TTL only on first creation (when count == 1)
+    _INCR_EXPIRE_SCRIPT = """
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+"""
+
+    async def incr_with_expire(self, key: str, ttl_seconds: int) -> int:
+        """Atomically increment a counter and set TTL on first creation.
+
+        Uses a Lua script for true atomicity (no race between INCR and EXPIRE).
+        TTL is only set when count == 1 (first increment).
+
+        Args:
+            key: Redis key to increment.
+            ttl_seconds: TTL for the key (only applied on first creation).
+
+        Returns:
+            New counter value, or 0 if circuit is open (fail-open).
+        """
+        return await guard_degrade(
+            STORE_REDIS, self._incr_with_expire_impl(key, ttl_seconds), 0
+        )
+
+    async def _incr_with_expire_impl(self, key: str, ttl_seconds: int) -> int:
+        """Implementation for atomic INCR + EXPIRE via Lua."""
+        start = time.perf_counter()
+        try:
+            result = await self._redis.eval(  # type: ignore[misc]
+                self._INCR_EXPIRE_SCRIPT,
+                1,  # number of keys
+                key,
+                ttl_seconds,
+            )
+            return int(result)
+        except (RedisConnectionError, RedisError) as e:
+            logger.warning("redis_incr_with_expire_failed", key=key, error=str(e))
+            raise
+        finally:
+            record_db_query("redis.incr_with_expire", (time.perf_counter() - start) * 1000)
+
     async def close(self) -> None:
         """Close the Redis connection pool."""
         try:

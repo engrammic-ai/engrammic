@@ -521,6 +521,46 @@ class TestXadd:
 
 
 # ---------------------------------------------------------------------------
+# RedisClient.incr_with_expire
+# ---------------------------------------------------------------------------
+
+
+class TestIncrWithExpire:
+    async def test_increments_and_returns_count(self) -> None:
+        mock_redis = _make_redis_mock()
+        mock_redis.eval = AsyncMock(return_value=5)
+
+        client = RedisClient(mock_redis)
+        result = await client.incr_with_expire("test:key", 60)
+
+        assert result == 5
+        mock_redis.eval.assert_called_once()
+        call_args = mock_redis.eval.call_args
+        assert call_args[0][1] == 1  # number of keys
+        assert call_args[0][2] == "test:key"
+        assert call_args[0][3] == 60  # ttl
+
+    async def test_returns_zero_on_circuit_open(self) -> None:
+        mock_redis = _make_redis_mock()
+        mock_redis.eval = AsyncMock(side_effect=RedisConnectionError("connection refused"))
+
+        client = RedisClient(mock_redis)
+        # The guard_degrade should catch and return 0
+        result = await client.incr_with_expire("test:key", 60)
+        assert result == 0
+
+    async def test_first_increment_sets_ttl(self) -> None:
+        mock_redis = _make_redis_mock()
+        mock_redis.eval = AsyncMock(return_value=1)
+
+        client = RedisClient(mock_redis)
+        result = await client.incr_with_expire("test:key", 3600)
+
+        assert result == 1
+        assert mock_redis.eval.called
+
+
+# ---------------------------------------------------------------------------
 # RedisClient.close
 # ---------------------------------------------------------------------------
 
