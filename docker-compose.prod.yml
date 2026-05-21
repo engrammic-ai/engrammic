@@ -12,7 +12,7 @@ services:
       - QDRANT_HOST=qdrant
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz-otel-collector:4317
+      - OTEL_ENABLED=${OTEL_ENABLED:-true}
       - OTEL_SERVICE_NAME=engrammic
     volumes:
       - ~/.config/gcloud:/mnt/gcloud:ro
@@ -236,7 +236,6 @@ services:
         limits:
           memory: 256M
     restart: unless-stopped
-    # Note: SigNoz deployed separately on strata-finance box
 
 volumes:
   memgraph-data:

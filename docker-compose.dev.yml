@@ -15,7 +15,7 @@ services:
       - QDRANT_HOST=qdrant
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
-      - OTEL_EXPORTER_OTLP_ENDPOINT=http://signoz-otel-collector:4317
+      - OTEL_ENABLED=${OTEL_ENABLED:-true}
       - OTEL_SERVICE_NAME=engrammic
       # LiteLLM Vertex AI (reranker, embeddings)
       - VERTEX_PROJECT=${VERTEX_PROJECT:-}
