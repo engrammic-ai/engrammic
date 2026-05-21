@@ -38,6 +38,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
+| [2026-05-20-data-lifecycle-management.md](./2026-05-20-data-lifecycle-management.md) | Data lifecycle: forget tool, three-store delete, GDPR erasure, chain pruning | Complete |
 | [2026-05-20-self-hosted-rest-api-phase1.md](./2026-05-20-self-hosted-rest-api-phase1.md) | Self-hosted REST API: auth + Memory/Knowledge endpoints | Ready to execute |
 | [2026-05-20-rate-limiting.md](./2026-05-20-rate-limiting.md) | Tiered rate limiting for MCP tools and REST routes | Ready to execute |
 | [2026-05-20-documentation-site.md](./2026-05-20-documentation-site.md) | Documentation site implementation | Planned |
