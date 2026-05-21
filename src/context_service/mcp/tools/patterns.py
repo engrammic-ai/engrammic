@@ -7,6 +7,7 @@ import time
 from typing import TYPE_CHECKING, Any, Literal
 
 from context_service.mcp.error_boundary import mcp_error_boundary
+from context_service.mcp.rate_limit import rate_limited
 from context_service.mcp.server import get_mcp_auth_context, get_preset_resolver, get_skill_service
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.services.models import derive_silo_id
@@ -16,6 +17,7 @@ if TYPE_CHECKING:
     from fastmcp import FastMCP
 
 
+@rate_limited("patterns")
 async def _patterns_impl(
     action: Literal["list", "get", "search"],
     name: str | None = None,

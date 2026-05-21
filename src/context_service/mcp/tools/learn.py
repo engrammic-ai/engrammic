@@ -11,6 +11,7 @@ from primitives.eag.transitions import MissingEvidenceError, validate_evidence_n
 
 from context_service.config.settings import get_settings
 from context_service.mcp.error_boundary import mcp_error_boundary
+from context_service.mcp.rate_limit import rate_limited
 from context_service.mcp.server import get_mcp_auth_context, track_tool_usage
 from context_service.mcp.tools.context_store import _context_assert
 from context_service.mcp.tools.registry import get_tool_description
@@ -22,6 +23,7 @@ if TYPE_CHECKING:
 log = structlog.get_logger(__name__)
 
 
+@rate_limited("learn")
 async def _learn_impl(
     claim: str,
     evidence: list[str],
