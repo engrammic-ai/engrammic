@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from context_service.engine.exceptions import ConflictError
 from context_service.engine.memgraph_store import MemgraphStore
 
 
@@ -32,9 +33,12 @@ def mock_client() -> MagicMock:
 
 @pytest.fixture
 def memgraph_store(mock_client: MagicMock) -> MemgraphStore:
-    """Create MemgraphStore with mocked client."""
+    """Create MemgraphStore with mocked client and no-op Redis lock helpers."""
     store = MemgraphStore.__new__(MemgraphStore)
     store._client = mock_client
+    # Patch lock helpers so tests don't require a live Redis instance.
+    store._acquire_supersession_lock = AsyncMock(return_value=True)  # type: ignore[method-assign]
+    store._release_supersession_lock = AsyncMock()  # type: ignore[method-assign]
     return store
 
 
@@ -279,3 +283,32 @@ async def test_filter_superseded_at_uses_pointers(
     query = mock_client.execute_query.call_args[0][0]
     assert "tail_id" in query, "Query should use tail_id for fast-path"
     assert "head_id" in query, "Query should use head_id for fast-path"
+
+
+@pytest.mark.asyncio
+async def test_create_supersedes_edge_raises_conflict_when_lock_denied(
+    mock_client: MagicMock,
+    silo_id: str,
+    now: datetime,
+) -> None:
+    """ConflictError is raised when the supersession lock cannot be acquired."""
+    store = MemgraphStore.__new__(MemgraphStore)
+    store._client = mock_client
+    store._acquire_supersession_lock = AsyncMock(return_value=False)  # type: ignore[method-assign]
+    store._release_supersession_lock = AsyncMock()  # type: ignore[method-assign]
+
+    node_a_id = uuid.uuid4()
+    node_b_id = uuid.uuid4()
+
+    with pytest.raises(ConflictError):
+        await store.create_supersedes_edge(
+            from_id=node_b_id,
+            to_id=node_a_id,
+            silo_id=silo_id,
+            valid_from=now,
+        )
+
+    # The lock was attempted but not released (no write occurred)
+    store._acquire_supersession_lock.assert_awaited_once_with(str(node_a_id))
+    mock_client.execute_write.assert_not_called()
+    store._release_supersession_lock.assert_not_awaited()

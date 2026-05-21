@@ -83,6 +83,7 @@ def register_profile_tools(mcp: FastMCP, profile: str = "standard") -> None:
     from context_service.mcp.tools import (
         believe,
         commit,
+        forget,
         hypothesize,
         learn,
         link,
@@ -108,6 +109,7 @@ def register_profile_tools(mcp: FastMCP, profile: str = "standard") -> None:
         "revise": revise.register,
         "commit": commit.register,
         "patterns": patterns.register,
+        "forget": forget.register,
     }
 
     tool_names = get_profile_tools(profile)

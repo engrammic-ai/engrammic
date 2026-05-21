@@ -30,3 +30,11 @@ class StorageCircuitOpenError(EngineError):
         super().__init__(
             f"Storage circuit open for {store!r}; retry after {retry_after_seconds:.1f}s"
         )
+
+
+class ConflictError(EngineError):
+    """Raised when a concurrent write conflicts with an ongoing operation.
+
+    For example, two simultaneous supersession attempts on the same predecessor
+    node will raise this on the second acquire.
+    """

@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import time
+import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -14,7 +15,9 @@ from qdrant_client.models import (
     FieldCondition,
     Fusion,
     FusionQuery,
+    IsNullCondition,
     MatchValue,
+    PayloadField,
     PayloadSchemaType,
     PointStruct,
     Prefetch,
@@ -29,8 +32,6 @@ from context_service.stores.qdrant import QdrantOperationError
 from context_service.telemetry.metrics import record_db_query
 
 if TYPE_CHECKING:
-    import uuid
-
     from context_service.stores.qdrant import QdrantClient
 
 logger = get_logger(__name__)
@@ -126,6 +127,12 @@ class EngineQdrantStore:
                             collection_name=name,
                             field_name="expansion",
                             field_schema=PayloadSchemaType.TEXT,
+                        )
+                        await client.create_payload_index(
+                            collection_name=name,
+                            field_name="tombstoned_at",
+                            field_schema=PayloadSchemaType.INTEGER,
+                            wait=True,
                         )
                     except (UnexpectedResponse, ConnectionError) as e:
                         logger.error(
@@ -301,7 +308,10 @@ class EngineQdrantStore:
         collection = await self._ensure_collection(silo_id)
         client = await self._qdrant._get_client()
 
-        must: list[Any] = [FieldCondition(key="silo_id", match=MatchValue(value=silo_id))]
+        must: list[Any] = [
+            FieldCondition(key="silo_id", match=MatchValue(value=silo_id)),
+            IsNullCondition(is_null=PayloadField(key="tombstoned_at")),
+        ]
         query_filter = QdrantFilter(must=must)
 
         has_sparse = sparse_indices is not None and sparse_values is not None
@@ -363,6 +373,7 @@ class EngineQdrantStore:
                         ),
                     ],
                     query=FusionQuery(fusion=Fusion.RRF),
+                    query_filter=query_filter,
                     limit=limit,
                     score_threshold=score_threshold,
                 )
@@ -402,6 +413,35 @@ class EngineQdrantStore:
             raise QdrantOperationError(f"Failed to delete vector {node_id}: {e}") from e
         finally:
             record_db_query("qdrant_store.delete", (time.perf_counter() - start) * 1000)
+
+    async def set_payload(
+        self,
+        silo_id: str,
+        node_id: uuid.UUID,
+        payload: dict[str, Any],
+    ) -> None:
+        """Update payload fields on an existing point.
+
+        Used by ForgetService to sync tombstone timestamps from Memgraph to
+        Qdrant so that the tombstone filter in :meth:`query` takes effect.
+        """
+        collection = await self._ensure_collection(silo_id)
+        client = await self._qdrant._get_client()
+        start = time.perf_counter()
+        try:
+            await client.set_payload(
+                collection_name=collection,
+                payload=payload,
+                points=[str(node_id)],
+                wait=True,
+            )
+        except Exception as e:
+            logger.error(
+                "Qdrant set_payload failed", node_id=str(node_id), silo_id=silo_id, error=str(e)
+            )
+            raise QdrantOperationError(f"Failed to set payload for {node_id}: {e}") from e
+        finally:
+            record_db_query("qdrant_store.set_payload", (time.perf_counter() - start) * 1000)
 
     async def delete_collection(self, silo_id: str) -> None:
         """Delete entire tenant collection (for GDPR erasure)."""

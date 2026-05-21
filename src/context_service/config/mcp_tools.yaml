@@ -45,6 +45,7 @@ profiles:
     - hypothesize
     - revise
     - commit
+    - forget
 
 tools:
   remember:
@@ -90,6 +91,10 @@ tools:
   commit:
     description: "Promote tentative hypotheses to permanent commitments."
     maps_to: crystallize
+
+  forget:
+    description: "Request deletion of a node. The node enters a cancel window before permanent deletion."
+    maps_to: forget
 
   patterns:
     description: "Discover workflow templates for common tasks."

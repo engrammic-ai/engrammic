@@ -15,6 +15,7 @@ class ProvenanceStep:
     layer: str
     relationship: str
     confidence: float
+    stub: bool = False
 
 
 @dataclass

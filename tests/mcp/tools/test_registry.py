@@ -22,9 +22,10 @@ def test_standard_profile_has_six_tools():
     assert "link" in config["profiles"]["standard"]
 
 
-def test_reasoning_profile_has_eleven_tools():
+def test_reasoning_profile_has_twelve_tools():
     config = load_tool_config()
-    assert len(config["profiles"]["reasoning"]) == 11
+    assert len(config["profiles"]["reasoning"]) == 12
+    assert "forget" in config["profiles"]["reasoning"]
 
 
 def test_get_profile_tools_standard():

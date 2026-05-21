@@ -22,13 +22,15 @@ from context_service.db.schema import (
     content_union_predicate,
 )
 from context_service.engine import queries
-from context_service.engine.exceptions import StaleVersionError
+from context_service.engine.exceptions import ConflictError, StaleVersionError
 from context_service.engine.models import BinaryEdge, HyperEdge, Node, Participant, Silo, SubGraph
 from context_service.services.models import ScopeContext  # noqa: TC001
 from context_service.telemetry.metrics import record_db_query
 from context_service.utils.json import dumps, loads
 
 if TYPE_CHECKING:
+    from redis.asyncio import Redis
+
     from context_service.stores.memgraph import MemgraphClient
 
 logger = get_logger(__name__)
@@ -38,6 +40,9 @@ _CONTENT_LABEL_SET: frozenset[str] = frozenset(
     {LABEL_DOCUMENT, LABEL_PASSAGE, LABEL_CLAIM, LABEL_ENTITY}
 )
 _PATH_LABEL_SET: frozenset[str] = _CONTENT_LABEL_SET
+
+_SUPERSESSION_LOCK_PREFIX = "lock:supersession:"
+_SUPERSESSION_LOCK_TTL_SECONDS = 30
 
 
 def _node_to_knowledge_node(node: Node) -> KnowledgeNode:
@@ -94,8 +99,13 @@ class MemgraphStore(EAGKnowledgeStore):
     retrieval pipeline) before the EAG protocol can be used end-to-end.
     """
 
-    def __init__(self, client: MemgraphClient) -> None:
+    def __init__(
+        self,
+        client: MemgraphClient,
+        redis_client: Redis[bytes] | None = None,  # type: ignore[type-arg]
+    ) -> None:
         self._client = client
+        self._redis = redis_client
 
     # --- EAGKnowledgeStore protocol adapters (not yet wired) ---
 
@@ -431,6 +441,45 @@ class MemgraphStore(EAGKnowledgeStore):
                 result[input_id] = valid_id
         return result
 
+    async def _acquire_supersession_lock(self, predecessor_id: str) -> bool:
+        """Acquire a Redis lock before superseding a node.
+
+        Returns True if the lock was acquired, False if another writer holds it.
+        The lock expires automatically after _SUPERSESSION_LOCK_TTL_SECONDS to
+        prevent deadlocks from crashed callers.
+
+        If no Redis client is configured, returns True (graceful degradation).
+        """
+        if self._redis is None:
+            return True
+        lock_key = f"{_SUPERSESSION_LOCK_PREFIX}{predecessor_id}"
+        try:
+            result = await self._redis.set(lock_key, "1", nx=True, ex=_SUPERSESSION_LOCK_TTL_SECONDS)
+            return bool(result)
+        except Exception:
+            logger.error(
+                "supersession_lock_acquire_error",
+                predecessor_id=predecessor_id,
+                exc_info=True,
+            )
+            # Fail open: allow the write rather than blocking all supersessions
+            # when Redis is unavailable.
+            return True
+
+    async def _release_supersession_lock(self, predecessor_id: str) -> None:
+        """Release the supersession lock for the given predecessor node."""
+        if self._redis is None:
+            return
+        lock_key = f"{_SUPERSESSION_LOCK_PREFIX}{predecessor_id}"
+        try:
+            await self._redis.delete(lock_key)
+        except Exception:
+            logger.error(
+                "supersession_lock_release_error",
+                predecessor_id=predecessor_id,
+                exc_info=True,
+            )
+
     async def create_supersedes_edge(
         self,
         from_id: uuid.UUID,
@@ -449,19 +498,31 @@ class MemgraphStore(EAGKnowledgeStore):
         downstream attribution can distinguish per-cluster from cross-cluster
         detections. ``reason`` must be one of: contradiction, evidence_shift,
         author_update, evidence_erased (I5).
+
+        Acquires a Redis lock on ``to_id`` before writing to prevent a race
+        condition where two concurrent transactions both read the same tail_id
+        and overwrite each other's head_id pointer (last-write-wins orphan).
+        Raises ConflictError if the lock cannot be acquired.
         """
-        result = await self._client.execute_write(
-            queries.CREATE_CROSS_NODE_SUPERSEDES,
-            {
-                "from_id": str(from_id),
-                "to_id": str(to_id),
-                "silo_id": silo_id,
-                "valid_from": valid_from.isoformat(),
-                "source": source,
-                "reason": reason,
-            },
-        )
-        return bool(result and result[0].get("created", 0) > 0)
+        predecessor_id = str(to_id)
+        if not await self._acquire_supersession_lock(predecessor_id):
+            logger.warning("supersession_lock_contention", predecessor_id=predecessor_id)
+            raise ConflictError(f"Concurrent supersession of {predecessor_id}")
+        try:
+            result = await self._client.execute_write(
+                queries.CREATE_CROSS_NODE_SUPERSEDES,
+                {
+                    "from_id": str(from_id),
+                    "to_id": str(to_id),
+                    "silo_id": silo_id,
+                    "valid_from": valid_from.isoformat(),
+                    "source": source,
+                    "reason": reason,
+                },
+            )
+            return bool(result and result[0].get("created", 0) > 0)
+        finally:
+            await self._release_supersession_lock(predecessor_id)
 
     async def resolve_current_head(
         self,
@@ -1115,6 +1176,42 @@ class MemgraphStore(EAGKnowledgeStore):
             for edge in edges
         ]
         await self._client.execute_write(queries.BATCH_UPSERT_BINARY_EDGES, {"rows": rows})
+
+    async def find_stale_chain_interior(
+        self,
+        silo_id: str,
+        max_length: int,
+        batch_size: int = 100,
+    ) -> list[str]:
+        """Find interior chain nodes beyond max_length hops from the chain head.
+
+        Interior nodes are those with at least one predecessor (head side) and
+        at least one successor (tail side) in a SUPERSEDES chain. Returns node
+        ids for nodes that are not yet stubbed and sit more than max_length
+        hops from the head, so the Custodian can prune them in batches.
+        """
+        result = await self._client.execute_query(
+            queries.FIND_STALE_CHAIN_INTERIOR,
+            {"silo_id": silo_id, "max_length": max_length, "batch_size": batch_size},
+        )
+        return [row["node_id"] for row in result]
+
+    async def convert_to_stub(self, node_id: str, silo_id: str) -> bool:
+        """Convert a node to a stub by clearing content fields while preserving edges.
+
+        Sets ``stub=true`` and nulls out ``content``, ``content_hash``, and
+        ``embedding`` so the storage footprint for deep chain interiors is
+        bounded. The SUPERSEDES edges and all metadata (valid_from, heat_score,
+        etc.) are left intact for provenance and time-travel queries.
+
+        Returns True if the node was found and updated, False otherwise.
+        """
+        now_micros = int(datetime.now(UTC).timestamp() * 1_000_000)
+        result = await self._client.execute_write(
+            queries.CONVERT_TO_STUB,
+            {"id": node_id, "silo_id": silo_id, "stubbed_at": now_micros},
+        )
+        return bool(result)
 
     async def batch_touch_accessed(self, node_ids: list[uuid.UUID], silo_id: str) -> int:
         """Update last_accessed_at for a batch of nodes."""

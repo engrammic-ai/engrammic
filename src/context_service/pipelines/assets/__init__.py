@@ -9,11 +9,15 @@ from context_service.pipelines.assets.cascade_review import cascade_review_asset
 from context_service.pipelines.assets.causal import causal_transitivity
 from context_service.pipelines.assets.causal_tombstone import causal_tombstone
 from context_service.pipelines.assets.chain_feedback import chain_usefulness_signals
+from context_service.pipelines.assets.chain_pruning import chain_pruning
 from context_service.pipelines.assets.chain_stitch import chain_stitch
 from context_service.pipelines.assets.clustering import clustering
 from context_service.pipelines.assets.compaction import reasoning_compaction
 from context_service.pipelines.assets.custodian_finalize import custodian_finalize
 from context_service.pipelines.assets.custodian_visit import custodian_visit
+from context_service.pipelines.assets.dead_letter_reconciliation import (
+    dead_letter_reconciliation,
+)
 from context_service.pipelines.assets.edge_heat import edge_heat_asset
 from context_service.pipelines.assets.embedding import embedding_asset as embedding
 from context_service.pipelines.assets.extraction import extraction
@@ -60,10 +64,12 @@ all_assets: list[Any] = [
     weak_link_review_asset,
     auto_tagging,
     tag_maintenance,
+    dead_letter_reconciliation,
     reconciliation_gc,
     proposal_detection,
     proposal_cleanup,
     chain_usefulness_signals,
+    chain_pruning,
     step_embedding_backfill,
     session_step_embedding,
     prewarm_sweep_asset,

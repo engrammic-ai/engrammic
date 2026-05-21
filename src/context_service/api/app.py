@@ -13,6 +13,7 @@ from context_service import __version__
 from context_service.api.metrics import REGISTRY, metrics_endpoint
 from context_service.api.middleware import PrometheusTimingMiddleware
 from context_service.api.routes import admin, health
+from context_service.api.routes.gdpr import router as gdpr_router
 from context_service.api.routes.oauth import router as oauth_router
 from context_service.api.routes.skills import router as skills_router
 from context_service.api.routes.source_rules import router as source_rules_router
@@ -260,6 +261,7 @@ def create_app() -> ASGIApp:
 
     app.include_router(health.router)
     app.include_router(admin.router)
+    app.include_router(gdpr_router)
     app.include_router(oauth_router)
     app.include_router(skills_router)
     app.include_router(source_rules_router)
@@ -299,6 +301,27 @@ def create_app() -> ASGIApp:
             """Health check for MCP server."""
             return {"status": "ok", "server": mcp_server.name}
 
+        from collections.abc import Awaitable, Callable
+
+        from starlette.middleware.base import BaseHTTPMiddleware
+        from starlette.responses import Response
+
+        class MCPTrailingSlashMiddleware(BaseHTTPMiddleware):
+            """Normalize /mcp to /mcp/ internally for clients that omit trailing slash."""
+
+            async def dispatch(
+                self,
+                request: Request,
+                call_next: Callable[[Request], Awaitable[Response]],
+            ) -> Response:
+                if request.url.path == "/mcp":
+                    # Rewrite scope path to include trailing slash
+                    scope = dict(request.scope)
+                    scope["path"] = "/mcp/"
+                    request = Request(scope, request.receive)
+                return await call_next(request)
+
+        app.add_middleware(MCPTrailingSlashMiddleware)
         app.mount("/mcp", mcp_app)
         logger.info("mcp_server_mounted", path="/mcp", transport="http")
 

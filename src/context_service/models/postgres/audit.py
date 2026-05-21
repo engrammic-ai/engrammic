@@ -13,6 +13,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from context_service.db.postgres import Base
 
+# list[str] stored as JSONB array
+_StrList = list[str]
+# dict stored as JSONB object
+_JsonDict = dict[str, Any]
+
 
 class Events(Base):
     """Agent and pipeline events with optional TTL for ephemeral entries."""
@@ -101,3 +106,58 @@ class AuditEvents(Base):
         self.actor_id = actor_id
         self.actor_type = actor_type
         self.payload = payload if payload is not None else {}
+
+
+class ErasureAuditLog(Base):
+    """Immutable GDPR erasure audit log recording every right-to-erasure request."""
+
+    __tablename__ = "erasure_audit_log"
+
+    id: Mapped[UUID] = mapped_column(PG_UUID(as_uuid=True), primary_key=True, default=uuid4)
+    silo_id: Mapped[str] = mapped_column(Text, nullable=False)
+    request_id: Mapped[str] = mapped_column(Text, nullable=False)
+    # 'user', 'admin', 'system'
+    requester_type: Mapped[str] = mapped_column(Text, nullable=False)
+    requester_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # array of erased node IDs stored as JSONB
+    node_ids: Mapped[_StrList] = mapped_column(JSONB, nullable=False)
+    cascade_count: Mapped[int] = mapped_column(Integer, server_default=text("0"), nullable=False)
+    # 'completed', 'partial', 'failed'
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    error_details: Mapped[_JsonDict | None] = mapped_column(JSONB, nullable=True)
+    requested_at: Mapped[datetime] = mapped_column(nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+    __table_args__ = (
+        Index("ix_erasure_audit_log_silo_id", "silo_id"),
+        Index("ix_erasure_audit_log_request_id", "request_id"),
+        Index("ix_erasure_audit_log_requested_at", "requested_at"),
+    )
+
+    def __init__(
+        self,
+        silo_id: str,
+        request_id: str,
+        requester_type: str,
+        node_ids: list[str],
+        status: str,
+        requested_at: datetime,
+        requester_id: str | None = None,
+        cascade_count: int = 0,
+        error_details: dict[str, Any] | None = None,
+        completed_at: datetime | None = None,
+        **kw: Any,
+    ) -> None:
+        super().__init__(**kw)
+        self.id = uuid4()
+        self.silo_id = silo_id
+        self.request_id = request_id
+        self.requester_type = requester_type
+        self.requester_id = requester_id
+        self.node_ids = node_ids
+        self.cascade_count = cascade_count
+        self.status = status
+        self.error_details = error_details
+        self.requested_at = requested_at
+        self.completed_at = completed_at
