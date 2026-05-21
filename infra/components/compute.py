@@ -50,9 +50,9 @@ DAGSTER_SERVICES = '''
       - "4000:4000"
     environment:
       - DAGSTER_HOME=/app
-      - MEMGRAPH_URI=bolt://memgraph:7687
-      - QDRANT_URL=http://qdrant:6333
-      - REDIS_URL=redis://redis:6379
+      - MEMGRAPH_HOST=memgraph
+      - QDRANT_HOST=qdrant
+      - REDIS_HOST=redis
       - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_USER=context
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -77,9 +77,9 @@ DAGSTER_SERVICES = '''
       - "3000:3000"
     environment:
       - DAGSTER_HOME=/app
-      - MEMGRAPH_URI=bolt://memgraph:7687
-      - QDRANT_URL=http://qdrant:6333
-      - REDIS_URL=redis://redis:6379
+      - MEMGRAPH_HOST=memgraph
+      - QDRANT_HOST=qdrant
+      - REDIS_HOST=redis
       - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_USER=context
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -100,9 +100,9 @@ DAGSTER_SERVICES = '''
     command: ["dagster-daemon", "run"]
     environment:
       - DAGSTER_HOME=/app
-      - MEMGRAPH_URI=bolt://memgraph:7687
-      - QDRANT_URL=http://qdrant:6333
-      - REDIS_URL=redis://redis:6379
+      - MEMGRAPH_HOST=memgraph
+      - QDRANT_HOST=qdrant
+      - REDIS_HOST=redis
       - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_USER=context
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}

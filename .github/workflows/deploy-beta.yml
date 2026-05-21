@@ -68,3 +68,10 @@ jobs:
           gcloud run services update-traffic engrammic-beta-api \
             --region ${{ env.REGION }} \
             --to-latest
+
+      - name: Deploy to VM (Dagster + infra)
+        run: |
+          gcloud compute ssh engrammic-beta-stateful \
+            --zone ${{ env.REGION }}-a \
+            --tunnel-through-iap \
+            --command "cd /opt/engrammic && sudo docker compose pull && sudo docker compose up -d"
