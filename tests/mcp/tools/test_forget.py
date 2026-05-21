@@ -145,7 +145,6 @@ async def test_forget_cascade_follows_downstream_references(mock_auth, mock_grap
             "context_service.mcp.tools.forget.get_context_service",
             return_value=ctx_svc,
         ),
-        patch("context_service.mcp.tools.forget.EngineQdrantStore"),
     ):
         from context_service.mcp.tools.forget import _forget_impl
 

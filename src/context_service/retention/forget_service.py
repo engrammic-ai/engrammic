@@ -4,13 +4,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
-from uuid import UUID
 
 import structlog
 
 if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
-    from context_service.engine.qdrant_store import EngineQdrantStore
 
 logger = structlog.get_logger(__name__)
 
@@ -45,16 +43,19 @@ RETURN n.forget_requested_at AS requested_at
 
 
 class ForgetService:
-    """Handle agent-driven forget operations."""
+    """Handle agent-driven forget operations.
+
+    Tombstones are set in the graph (Memgraph) which is the source of truth.
+    Qdrant sync is NOT done here - tombstoned nodes are filtered at query time
+    and eventually hard-deleted by the retention GC job.
+    """
 
     def __init__(
         self,
         store: HyperGraphStore,
-        qdrant_store: EngineQdrantStore | None = None,
         cancel_window_hours: int = 1,
     ) -> None:
         self._store = store
-        self._qdrant_store = qdrant_store
         self._cancel_window_hours = cancel_window_hours
 
     async def forget(
@@ -81,35 +82,6 @@ class ForgetService:
             return {"status": "not_found", "node_id": node_id}
 
         downstream = result[0].get("downstream_count", 0)
-
-        # Sync tombstone to Qdrant payload
-        if self._qdrant_store:
-            try:
-                await self._qdrant_store.set_payload(
-                    silo_id=silo_id,
-                    node_id=UUID(node_id),
-                    payload={"tombstoned_at": now_micros},
-                )
-            except ValueError:
-                logger.warning(
-                    "qdrant_sync_skipped_invalid_uuid",
-                    node_id=node_id,
-                )
-            except Exception as e:
-                logger.error(
-                    "qdrant_sync_failed",
-                    node_id=node_id,
-                    silo_id=silo_id,
-                    error=str(e),
-                    error_type=type(e).__name__,
-                )
-                return {
-                    "status": "tombstoned_graph_only",
-                    "node_id": node_id,
-                    "downstream_references": downstream,
-                    "tombstoned_at": now.isoformat(),
-                    "qdrant_sync_failed": True,
-                }
 
         logger.info(
             "node_forgotten",
@@ -155,24 +127,6 @@ class ForgetService:
 
         if not result:
             return {"status": "cancel_window_expired", "node_id": node_id}
-
-        # Clear tombstone from Qdrant
-        if self._qdrant_store:
-            try:
-                await self._qdrant_store.set_payload(
-                    silo_id=silo_id,
-                    node_id=UUID(node_id),
-                    payload={"tombstoned_at": None},
-                )
-            except ValueError:
-                logger.warning(
-                    "qdrant_sync_skipped_invalid_uuid",
-                    node_id=node_id,
-                )
-            except Exception as e:
-                logger.error(
-                    "qdrant_sync_failed_on_cancel", node_id=node_id, error=str(e)
-                )
 
         logger.info("forget_cancelled", node_id=node_id, silo_id=silo_id)
 

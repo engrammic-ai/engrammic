@@ -616,6 +616,7 @@ class ContextService:
                 """
                 UNWIND $ids AS id
                 MATCH (n:Node {id: id, silo_id: $silo_id})
+                WHERE n.tombstoned_at IS NULL
                 RETURN n.id AS id, n.type AS type, n.content AS content,
                        n.silo_id AS silo_id, n.source_uri AS source_uri,
                        n.content_hash AS content_hash, n.created_at AS created_at,

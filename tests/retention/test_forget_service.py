@@ -17,7 +17,7 @@ def mock_store():
 async def test_forget_tombstones_node(mock_store):
     from context_service.retention.forget_service import ForgetService
 
-    service = ForgetService(store=mock_store, qdrant_store=AsyncMock())
+    service = ForgetService(store=mock_store)
     result = await service.forget("node-1", "silo-1")
 
     assert result["status"] == "tombstoned"
@@ -32,7 +32,7 @@ async def test_forget_returns_not_found_when_node_missing(mock_store):
 
     mock_store.execute_write.return_value = []
 
-    service = ForgetService(store=mock_store, qdrant_store=None)
+    service = ForgetService(store=mock_store)
     result = await service.forget("missing-node", "silo-1")
 
     assert result["status"] == "not_found"
@@ -47,7 +47,7 @@ async def test_cancel_forget_within_window(mock_store):
     mock_store.execute_query.return_value = [{"requested_at": 12345}]
     mock_store.execute_write.return_value = [{"id": "node-1"}]
 
-    service = ForgetService(store=mock_store, qdrant_store=AsyncMock())
+    service = ForgetService(store=mock_store)
     result = await service.cancel_forget("node-1", "silo-1")
 
     assert result["status"] == "cancelled"
@@ -60,7 +60,7 @@ async def test_cancel_forget_node_not_found(mock_store):
     # Node does not exist at all
     mock_store.execute_query.return_value = []
 
-    service = ForgetService(store=mock_store, qdrant_store=None)
+    service = ForgetService(store=mock_store)
     result = await service.cancel_forget("missing-node", "silo-1")
 
     assert result["status"] == "not_found"
@@ -75,7 +75,7 @@ async def test_cancel_forget_expired_window(mock_store):
     mock_store.execute_query.return_value = [{"requested_at": 12345}]
     mock_store.execute_write.return_value = []
 
-    service = ForgetService(store=mock_store, qdrant_store=None)
+    service = ForgetService(store=mock_store)
     result = await service.cancel_forget("node-1", "silo-1")
 
     assert result["status"] == "cancel_window_expired"

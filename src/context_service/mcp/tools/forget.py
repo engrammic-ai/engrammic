@@ -6,7 +6,6 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
-from context_service.engine.qdrant_store import EngineQdrantStore
 from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.server import get_context_service, get_mcp_auth_context, track_tool_usage
 from context_service.mcp.tools.registry import get_tool_description
@@ -38,13 +37,7 @@ async def _forget_impl(
     ctx_svc = get_context_service()
     graph_store = ctx_svc.graph_store
 
-    # Wrap the qdrant client in EngineQdrantStore for payload sync
-    qdrant_store: EngineQdrantStore | None = None
-    qdrant_client = getattr(ctx_svc, "_qdrant", None)
-    if qdrant_client is not None:
-        qdrant_store = EngineQdrantStore(qdrant_client)
-
-    forget_svc = ForgetService(store=graph_store, qdrant_store=qdrant_store)
+    forget_svc = ForgetService(store=graph_store)
     result = await forget_svc.forget(node_id, silo_id, reason)
 
     if result["status"] != "tombstoned" or not cascade:
