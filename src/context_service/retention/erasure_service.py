@@ -33,7 +33,7 @@ class ErasureService:
     def __init__(
         self,
         store: HyperGraphStore,
-        qdrant_store: EngineQdrantStore,
+        qdrant_store: EngineQdrantStore | None,
         db_session: AsyncSession,
     ) -> None:
         self._store = store

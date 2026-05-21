@@ -247,6 +247,21 @@ class HyperGraphStore(Protocol):
         """
         ...
 
+    # --- Chain Pruning ---
+
+    async def find_stale_chain_interior(
+        self,
+        silo_id: str,
+        max_length: int,
+        batch_size: int = 100,
+    ) -> list[str]:
+        """Find interior chain nodes beyond max_length hops from the chain head."""
+        ...
+
+    async def convert_to_stub(self, node_id: str, silo_id: str) -> bool:
+        """Convert a node to a stub by clearing content fields while preserving edges."""
+        ...
+
     # --- Bulk Operations ---
 
     async def batch_upsert_nodes(self, nodes: list[Node]) -> None: ...

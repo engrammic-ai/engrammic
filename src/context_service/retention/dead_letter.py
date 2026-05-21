@@ -14,10 +14,10 @@ logger = structlog.get_logger(__name__)
 
 DEAD_LETTER_KEY = "dead_letter:qdrant_delete"
 
-_redis_pool: Redis | None = None  # type: ignore[type-arg]
+_redis_pool: Redis | None = None
 
 
-async def _get_redis() -> Redis:  # type: ignore[type-arg]
+async def _get_redis() -> Redis:
     """Return a cached Redis connection pool."""
     global _redis_pool
     if _redis_pool is None:
