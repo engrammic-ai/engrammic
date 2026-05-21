@@ -7,6 +7,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 from context_service.mcp.error_boundary import mcp_error_boundary
+from context_service.mcp.rate_limit import rate_limited
 from context_service.mcp.server import get_mcp_auth_context, track_tool_usage
 from context_service.mcp.tools.context_crystallize import _context_crystallize
 from context_service.mcp.tools.registry import get_tool_description
@@ -17,6 +18,7 @@ if TYPE_CHECKING:
     from fastmcp import FastMCP
 
 
+@rate_limited("commit")
 async def _commit_impl(
     belief_ids: list[str],
     reason: str | None = None,

@@ -9,6 +9,8 @@ import structlog
 from mcp.shared.exceptions import McpError
 from mcp.types import ErrorData
 
+from context_service.api.rate_limit import RateLimitExceeded
+
 # JSON-RPC server error code (-32000 to -32099 are reserved for implementation-defined server errors)
 _SERVER_ERROR_CODE = -32000
 
@@ -71,6 +73,18 @@ def mcp_error_boundary[**P, R](func: Callable[P, Awaitable[R]]) -> Callable[P, A
             return await func(*args, **kwargs)
         except MCPBackendError:
             raise
+        except RateLimitExceeded as exc:
+            logger.info(
+                "mcp_rate_limit_exceeded",
+                tool=func.__name__,
+                retry_after=exc.retry_after,
+            )
+            return {  # type: ignore[return-value]
+                "error": "rate_limit_exceeded",
+                "message": str(exc),
+                "retry_after": exc.retry_after,
+                "limit": exc.limit,
+            }
         except Exception as e:
             backend = _classify_backend(e)
             retriable = _is_retriable(e)

@@ -626,10 +626,69 @@ class ExtractionConfig(BaseModel):
     batch_concurrency: int = 8
 
 
-class RateLimitConfig(BaseModel):
+class EndpointLimits(BaseModel):
+    """Rate limits for a single endpoint category."""
+
     model_config = ConfigDict(frozen=True, extra="ignore")
 
-    requests_per_minute: int = 1000
+    requests_per_minute: int = 60
+    requests_per_hour: int = 600
+
+
+class TierLimits(BaseModel):
+    """Rate limits for all endpoint categories within a tier."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    mcp_write: EndpointLimits = Field(default_factory=EndpointLimits)
+    mcp_read: EndpointLimits = Field(default_factory=EndpointLimits)
+    admin: EndpointLimits = Field(default_factory=EndpointLimits)
+    rest: EndpointLimits = Field(default_factory=EndpointLimits)
+
+
+def _default_tiers() -> dict[str, TierLimits]:
+    """Default tier configurations matching pricing model."""
+    return {
+        "free": TierLimits(
+            mcp_write=EndpointLimits(requests_per_minute=20, requests_per_hour=200),
+            mcp_read=EndpointLimits(requests_per_minute=60, requests_per_hour=600),
+            admin=EndpointLimits(requests_per_minute=10, requests_per_hour=60),
+            rest=EndpointLimits(requests_per_minute=30, requests_per_hour=300),
+        ),
+        "starter": TierLimits(
+            mcp_write=EndpointLimits(requests_per_minute=60, requests_per_hour=600),
+            mcp_read=EndpointLimits(requests_per_minute=200, requests_per_hour=2000),
+            admin=EndpointLimits(requests_per_minute=30, requests_per_hour=300),
+            rest=EndpointLimits(requests_per_minute=100, requests_per_hour=1000),
+        ),
+        "pro": TierLimits(
+            mcp_write=EndpointLimits(requests_per_minute=200, requests_per_hour=2000),
+            mcp_read=EndpointLimits(requests_per_minute=600, requests_per_hour=6000),
+            admin=EndpointLimits(requests_per_minute=60, requests_per_hour=600),
+            rest=EndpointLimits(requests_per_minute=300, requests_per_hour=3000),
+        ),
+        "enterprise": TierLimits(
+            mcp_write=EndpointLimits(requests_per_minute=1000, requests_per_hour=10000),
+            mcp_read=EndpointLimits(requests_per_minute=3000, requests_per_hour=30000),
+            admin=EndpointLimits(requests_per_minute=200, requests_per_hour=2000),
+            rest=EndpointLimits(requests_per_minute=1000, requests_per_hour=10000),
+        ),
+    }
+
+
+class RateLimitConfig(BaseModel):
+    """Tiered rate limiting configuration."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    enabled: bool = False
+    tiers: dict[str, TierLimits] = Field(default_factory=_default_tiers)
+    default_tier: str = "free"
+    tier_cache_ttl_seconds: int = 300
+
+    def get_limits(self, tier: str) -> TierLimits:
+        """Get limits for a tier, falling back to default if unknown."""
+        return self.tiers.get(tier, self.tiers[self.default_tier])
 
 
 class SecurityConfig(BaseModel):
