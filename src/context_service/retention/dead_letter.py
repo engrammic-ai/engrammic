@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime
 
@@ -15,13 +16,23 @@ logger = structlog.get_logger(__name__)
 DEAD_LETTER_KEY = "dead_letter:qdrant_delete"
 
 _redis_pool: Redis | None = None
+_init_lock: asyncio.Lock | None = None
+
+
+def _get_init_lock() -> asyncio.Lock:
+    global _init_lock
+    if _init_lock is None:
+        _init_lock = asyncio.Lock()
+    return _init_lock
 
 
 async def _get_redis() -> Redis:
     """Return a cached Redis connection pool."""
     global _redis_pool
     if _redis_pool is None:
-        _redis_pool = await create_redis_pool()
+        async with _get_init_lock():
+            if _redis_pool is None:
+                _redis_pool = await create_redis_pool()
     return _redis_pool
 
 

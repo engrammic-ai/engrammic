@@ -81,7 +81,10 @@ class TEIEmbeddingService:
 
             if not uncached_texts:
                 result = [r for r in cached_results if r is not None]
-                assert len(result) == len(texts), "Cache/batch length mismatch"
+                if len(result) != len(texts):
+                    raise AssertionError(
+                        f"Cache/batch length mismatch: {len(result)} vs {len(texts)}"
+                    )
                 return result
 
             for _ in uncached_texts:
@@ -94,7 +97,8 @@ class TEIEmbeddingService:
                 cached_results[uncached_indices[idx]] = embedding
 
             result = [r for r in cached_results if r is not None]
-            assert len(result) == len(texts), "Cache/batch length mismatch"
+            if len(result) != len(texts):
+                raise AssertionError(f"Cache/batch length mismatch: {len(result)} vs {len(texts)}")
             return result
 
         return await self._embed_batch(texts)

@@ -43,7 +43,8 @@ def groundskeeper_gc_op(context) -> dict[str, Any]:
             gk = GroundskeeperIdentity(store=store, silo_id=silo_id, decay_config=decay_config)
             result = await gk.run_gc()
             deleted = result["deleted"]
-            assert isinstance(deleted, int)
+            if not isinstance(deleted, int):
+                raise TypeError(f"Expected int from delete, got {type(deleted).__name__}")
             total_deleted += deleted
             context.log.info(f"groundskeeper.gc: silo={silo_id} deleted={deleted}")
 
