@@ -14,7 +14,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 
+from context_service.api.deps import get_redis
+from context_service.api.rate_limit import RateLimiter
 from context_service.config.settings import get_settings
+from context_service.stores import RedisClient
 
 logger = structlog.get_logger(__name__)
 
@@ -177,6 +180,70 @@ async def admin_tombstone(body: TombstoneRequest, request: Request) -> Tombstone
         direct_tombstoned=counts["direct"],
         derived_tombstoned=counts["derived"],
     )
+
+
+# ---------------------------------------------------------------------------
+# Tier management endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/silos/{silo_id}/tier",
+    operation_id="admin_get_silo_tier",
+    summary="Get the current rate limit tier for a silo",
+    dependencies=[Depends(_require_admin_key)],
+)
+async def get_silo_tier(
+    silo_id: str,
+    redis: RedisClient = Depends(get_redis),  # noqa: B008
+) -> dict[str, Any]:
+    """Get the current rate limit tier for a silo."""
+    settings = get_settings()
+    cache_key = f"{RateLimiter.TIER_CACHE_PREFIX}{silo_id}"
+
+    cached = await redis._redis.get(cache_key)
+    tier = cached.decode() if cached else settings.security.rate_limit.default_tier
+
+    return {
+        "silo_id": silo_id,
+        "tier": tier,
+        "is_cached": cached is not None,
+    }
+
+
+@router.patch(
+    "/silos/{silo_id}/tier",
+    operation_id="admin_set_silo_tier",
+    summary="Set the rate limit tier for a silo",
+    dependencies=[Depends(_require_admin_key)],
+)
+async def set_silo_tier(
+    silo_id: str,
+    tier: str,
+    redis: RedisClient = Depends(get_redis),  # noqa: B008
+) -> dict[str, Any]:
+    """Set the rate limit tier for a silo.
+
+    Updates Redis cache for fast lookup.
+    """
+    settings = get_settings()
+    valid_tiers = set(settings.security.rate_limit.tiers.keys())
+
+    if tier not in valid_tiers:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid tier '{tier}'. Valid tiers: {sorted(valid_tiers)}",
+        )
+
+    cache_key = f"{RateLimiter.TIER_CACHE_PREFIX}{silo_id}"
+    ttl = settings.security.rate_limit.tier_cache_ttl_seconds
+    await redis._redis.set(cache_key, tier.encode(), ex=ttl)
+
+    return {
+        "silo_id": silo_id,
+        "tier": tier,
+        "cache_ttl_seconds": ttl,
+    }
 
 
 # ---------------------------------------------------------------------------
