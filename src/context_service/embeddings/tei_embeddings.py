@@ -202,29 +202,90 @@ class TEIWithFallbackEmbeddingService:
     def dimensions(self) -> int:
         return self._primary.dimensions
 
+    def _log_fallback(self, method: str, tei_error: Exception) -> None:
+        """Log and trace fallback trigger."""
+        span = trace.get_current_span()
+        span.add_event(
+            "tei_fallback_triggered",
+            attributes={
+                "method": method,
+                "tei_error": str(tei_error),
+                "fallback_provider": "litellm",
+            },
+        )
+        span.set_attribute("embedding.fallback_used", True)
+        span.set_attribute("embedding.tei_error", str(tei_error))
+        logger.warning(
+            "tei_fallback_triggered",
+            method=method,
+            tei_error=str(tei_error),
+            fallback_provider="litellm",
+        )
+
+    def _log_fallback_result(self, method: str, success: bool, error: Exception | None = None) -> None:
+        """Log fallback outcome."""
+        span = trace.get_current_span()
+        span.set_attribute("embedding.fallback_success", success)
+        if success:
+            span.set_attribute("embedding.provider", "litellm")
+            logger.info("tei_fallback_succeeded", method=method)
+        else:
+            span.set_attribute("embedding.fallback_error", str(error))
+            logger.error("tei_fallback_failed", method=method, fallback_error=str(error))
+
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings, falling back on TEI error."""
+        span = trace.get_current_span()
         try:
-            return await self._primary.embed(texts)
-        except TEIEmbeddingError:
-            logger.warning("tei_fallback_triggered", method="embed")
-            return await self._fallback.embed(texts)
+            result = await self._primary.embed(texts)
+            span.set_attribute("embedding.provider", "tei")
+            span.set_attribute("embedding.fallback_used", False)
+            return result
+        except TEIEmbeddingError as e:
+            self._log_fallback("embed", e)
+            try:
+                result = await self._fallback.embed(texts)
+                self._log_fallback_result("embed", success=True)
+                return result
+            except Exception as fallback_err:
+                self._log_fallback_result("embed", success=False, error=fallback_err)
+                raise
 
     async def embed_single(self, text: str) -> list[float]:
         """Generate single embedding, falling back on TEI error."""
+        span = trace.get_current_span()
         try:
-            return await self._primary.embed_single(text)
-        except TEIEmbeddingError:
-            logger.warning("tei_fallback_triggered", method="embed_single")
-            return await self._fallback.embed_single(text)
+            result = await self._primary.embed_single(text)
+            span.set_attribute("embedding.provider", "tei")
+            span.set_attribute("embedding.fallback_used", False)
+            return result
+        except TEIEmbeddingError as e:
+            self._log_fallback("embed_single", e)
+            try:
+                result = await self._fallback.embed_single(text)
+                self._log_fallback_result("embed_single", success=True)
+                return result
+            except Exception as fallback_err:
+                self._log_fallback_result("embed_single", success=False, error=fallback_err)
+                raise
 
     async def embed_query(self, query: str) -> list[float]:
         """Generate query embedding, falling back on TEI error."""
+        span = trace.get_current_span()
         try:
-            return await self._primary.embed_query(query)
-        except TEIEmbeddingError:
-            logger.warning("tei_fallback_triggered", method="embed_query")
-            return await self._fallback.embed_query(query)
+            result = await self._primary.embed_query(query)
+            span.set_attribute("embedding.provider", "tei")
+            span.set_attribute("embedding.fallback_used", False)
+            return result
+        except TEIEmbeddingError as e:
+            self._log_fallback("embed_query", e)
+            try:
+                result = await self._fallback.embed_query(query)
+                self._log_fallback_result("embed_query", success=True)
+                return result
+            except Exception as fallback_err:
+                self._log_fallback_result("embed_query", success=False, error=fallback_err)
+                raise
 
     async def close(self) -> None:
         """Close both primary and fallback services."""
