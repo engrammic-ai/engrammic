@@ -1,8 +1,6 @@
 services:
   app:
-    build:
-      context: ..
-      dockerfile: context-service/Dockerfile
+    image: europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-api:latest
     container_name: engrammic-app
     ports:
       - "8000:8000"
@@ -129,9 +127,7 @@ services:
     restart: unless-stopped
 
   dagster-code-server:
-    build:
-      context: ..
-      dockerfile: context-service/Dockerfile.dagster
+    image: europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-dagster:latest
     container_name: engrammic-dagster-code
     command: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-m", "context_service.pipelines.definitions"]
     env_file:
@@ -163,9 +159,7 @@ services:
       start_period: 30s
 
   dagster-webserver:
-    build:
-      context: ..
-      dockerfile: context-service/Dockerfile.dagster
+    image: europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-dagster:latest
     container_name: engrammic-dagster-web
     command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "workspace.yaml"]
     ports:
@@ -196,9 +190,7 @@ services:
     restart: unless-stopped
 
   dagster-daemon:
-    build:
-      context: ..
-      dockerfile: context-service/Dockerfile.dagster
+    image: europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-dagster:latest
     container_name: engrammic-dagster-daemon
     command: ["dagster-daemon", "run"]
     env_file:
