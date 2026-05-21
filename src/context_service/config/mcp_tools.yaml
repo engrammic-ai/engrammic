@@ -13,11 +13,23 @@ mcp_instructions: |
   - trace: understand why you believe something
   - link: connect related knowledge
 
+  Supersession pattern (important):
+  Before storing, recall to check if you're updating existing knowledge.
+  If found, pass supersedes:<node_id> to chain the update.
+
+  Example:
+    1. recall("API authentication method")
+    2. Found node abc123: "The API uses OAuth2"
+    3. learn("The API uses OAuth2 with PKCE", evidence=[...], supersedes="abc123")
+
+  This creates a version chain - old node stays for history, new node becomes current.
+  If you skip recall, duplicates may exist (Custodian catches these later, but explicit is better).
+
   Guidelines:
   - Always provide evidence when using learn
   - Hint source_tier on learn when you know the source quality (authoritative for .gov/.edu, validated for curated data)
   - Reference existing nodes when forming beliefs
-  - Use recall before storing to avoid duplicates
+  - Recall before storing to check for supersession opportunities
 
   Onboarding:
   - At session start, call patterns(action='get', name='onboarding') for your workflow guide
@@ -49,15 +61,15 @@ profiles:
 
 tools:
   remember:
-    description: "Store an observation. No evidence required - use for raw information you may need later."
+    description: "Store an observation. No evidence required. Consider recall first - if updating existing knowledge, pass supersedes:<node_id>."
     maps_to: memory
 
   learn:
-    description: "Record something you learned with evidence. Evidence is required. Optionally hint source_tier (authoritative|validated|community) for confidence scoring."
+    description: "Record a claim with evidence. Recall first to check for existing claims - pass supersedes:<node_id> to update. Optionally hint source_tier."
     maps_to: knowledge
 
   believe:
-    description: "Declare a belief as a commitment. Requires 'about' nodes that led to this belief."
+    description: "Declare a commitment. Requires 'about' nodes. Recall first - pass supersedes:<node_id> if updating a prior belief."
     maps_to: wisdom
 
   recall:
