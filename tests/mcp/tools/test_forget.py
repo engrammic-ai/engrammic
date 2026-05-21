@@ -28,6 +28,7 @@ def mock_ctx_svc(mock_graph_store):
     svc = MagicMock()
     svc.graph_store = mock_graph_store
     svc._qdrant = None
+    svc._cache = AsyncMock()
     return svc
 
 
@@ -131,6 +132,7 @@ async def test_forget_cascade_follows_downstream_references(mock_auth, mock_grap
     ctx_svc = MagicMock()
     ctx_svc.graph_store = mock_graph_store
     ctx_svc._qdrant = None
+    ctx_svc._cache = AsyncMock()
 
     with (
         patch(

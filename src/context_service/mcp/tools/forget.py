@@ -40,6 +40,12 @@ async def _forget_impl(
     forget_svc = ForgetService(store=graph_store)
     result = await forget_svc.forget(node_id, silo_id, reason)
 
+    # Invalidate cache on successful tombstone
+    if result["status"] == "tombstoned":
+        cache = getattr(ctx_svc, "_cache", None)
+        if cache:
+            await cache.delete(f"node:{silo_id}:{node_id}")
+
     if result["status"] != "tombstoned" or not cascade:
         return result
 
@@ -51,9 +57,13 @@ async def _forget_impl(
     downstream_ids = [row["id"] for row in downstream_rows if row.get("id")]
 
     cascade_results: list[dict[str, Any]] = []
+    cache = getattr(ctx_svc, "_cache", None)
     for downstream_id in downstream_ids:
         r = await forget_svc.forget(downstream_id, silo_id, reason)
         cascade_results.append(r)
+        # Invalidate cache for cascade-forgotten nodes
+        if r.get("status") == "tombstoned" and cache:
+            await cache.delete(f"node:{silo_id}:{downstream_id}")
 
     result["cascade_forgotten"] = [
         r["node_id"] for r in cascade_results if r.get("status") == "tombstoned"
