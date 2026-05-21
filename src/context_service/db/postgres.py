@@ -87,7 +87,8 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
             if _session_factory is None:
                 await init_postgres()
 
-    assert _session_factory is not None
+    if _session_factory is None:
+        raise RuntimeError("Session factory not initialized after init_postgres()")
     async with _session_factory() as session:
         try:
             yield session

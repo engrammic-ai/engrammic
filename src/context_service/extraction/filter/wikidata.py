@@ -134,7 +134,8 @@ class WikidataRule:
     async def _get_cb(self) -> CircuitBreaker:
         if self._local_cb is not None:
             return self._local_cb
-        assert self._silo_id is not None
+        if self._silo_id is None:
+            raise RuntimeError("silo_id required - filter not properly initialized")
         return await cb_module.get_or_create(
             self._silo_id,
             "wikidata",

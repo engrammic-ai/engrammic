@@ -62,7 +62,6 @@ DEFAULT_DETECTION_LIMIT: int = 50
 # because they are module-level typed constants, never user input.
 CAUSAL_CHAIN_MIN_HOPS: int = 2  # means A->B->C (3 nodes, 2 edges)
 CAUSAL_CHAIN_MAX_HOPS: int = 6
-assert isinstance(CAUSAL_CHAIN_MIN_HOPS, int) and isinstance(CAUSAL_CHAIN_MAX_HOPS, int)
 
 # Decay factor applied per scheduled period (exponential: confidence *= 0.9).
 DEFAULT_DECAY_FACTOR: float = 0.9
