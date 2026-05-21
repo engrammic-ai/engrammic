@@ -21,6 +21,7 @@ async def _believe_impl(
     about: list[str],
     confidence: float = 0.8,
     reasoning: str | None = None,
+    supersedes: str | None = None,
 ) -> dict[str, Any]:
     """Implementation for believe tool."""
     auth = await get_mcp_auth_context()
@@ -34,6 +35,7 @@ async def _believe_impl(
         about=about,
         confidence=confidence,
         reasoning=reasoning,
+        supersedes=supersedes,
     )
 
 
@@ -50,6 +52,7 @@ def register(mcp: FastMCP) -> None:
         about: list[str],
         confidence: float = 0.8,
         reasoning: str | None = None,
+        supersedes: str | None = None,
     ) -> dict[str, Any]:
         """Declare a belief as a commitment.
 
@@ -58,14 +61,15 @@ def register(mcp: FastMCP) -> None:
             about: REQUIRED. Node IDs this belief concerns.
             confidence: 0.0-1.0 (default 0.8).
             reasoning: Why you believe this.
+            supersedes: Node ID this belief replaces. Use recall first to find existing beliefs.
 
         Returns:
-            {node_id, created_at}
+            {node_id, created_at, supersedes?}
         """
         start = time.perf_counter()
         success = True
         try:
-            return await _believe_impl(belief, about, confidence, reasoning)
+            return await _believe_impl(belief, about, confidence, reasoning, supersedes)
         except Exception:
             success = False
             raise

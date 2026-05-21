@@ -42,6 +42,60 @@ logger = structlog.get_logger(__name__)
 REASONING_CHAINS_COLLECTION = "reasoning_chains"
 
 
+async def validate_supersession_target(
+    silo_id: str,
+    supersedes_id: str,
+) -> dict[str, Any] | None:
+    """Validate that a supersession target is the current head of its chain.
+
+    Returns None if valid, or an error dict if the target is already superseded.
+    The error dict includes head_id so the caller can retry with the correct target.
+    """
+    ctx_svc = get_context_service()
+    try:
+        target_uuid = uuid.UUID(supersedes_id)
+    except ValueError:
+        return {
+            "error": "invalid_supersedes_id",
+            "message": f"supersedes must be a valid UUID, got: {supersedes_id}",
+        }
+
+    head_id = await ctx_svc.graph_store.resolve_current_head(target_uuid, silo_id)
+    if head_id is None:
+        return {
+            "error": "supersedes_not_found",
+            "message": f"Node {supersedes_id} not found in silo",
+        }
+
+    if head_id != target_uuid:
+        return {
+            "error": "already_superseded",
+            "message": f"Node {supersedes_id} was already superseded",
+            "head_id": str(head_id),
+            "hint": "Supersede the head node instead",
+        }
+
+    return None
+
+
+async def create_supersession(
+    new_node_id: uuid.UUID,
+    supersedes_id: str,
+    silo_id: str,
+    reason: str = "author_update",
+) -> bool:
+    """Create a SUPERSEDES edge from new_node to supersedes_id."""
+    ctx_svc = get_context_service()
+    return await ctx_svc.graph_store.create_supersedes_edge(
+        from_id=new_node_id,
+        to_id=uuid.UUID(supersedes_id),
+        silo_id=silo_id,
+        valid_from=datetime.now(UTC),
+        source="agent",
+        reason=reason,
+    )
+
+
 async def embed(text: str) -> list[float]:
     """Embed text using the configured embedding service."""
     from context_service.embeddings import build_embedding_service
@@ -154,6 +208,7 @@ async def _context_remember(
     tags: list[str] | None = None,
     decay_class: str = "standard",
     observed_from: str | None = None,
+    supersedes: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     auth = await get_mcp_auth_context()
@@ -164,6 +219,11 @@ async def _context_remember(
             return err
 
     validated_silo_id = derive_silo_id(auth.org_id)
+
+    if supersedes is not None:
+        err = await validate_supersession_target(str(validated_silo_id), supersedes)
+        if err is not None:
+            return err
 
     try:
         decay = DecayClass(decay_class)
@@ -190,12 +250,18 @@ async def _context_remember(
         time.perf_counter() - _start
     )
 
-    return {
+    if supersedes is not None:
+        await create_supersession(node.id, supersedes, str(validated_silo_id))
+
+    result: dict[str, Any] = {
         "node_id": str(node.id),
         "layer": "memory",
         "decay_class": decay_class,
         "created_at": datetime.now(UTC).isoformat(),
     }
+    if supersedes is not None:
+        result["supersedes"] = supersedes
+    return result
 
 
 async def _context_assert(
@@ -208,6 +274,7 @@ async def _context_assert(
     tags: list[str] | None = None,
     evidence_mode: str = "sync",
     source_tier: str | None = None,
+    supersedes: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation."""
     auth = await get_mcp_auth_context()
@@ -220,6 +287,11 @@ async def _context_assert(
             return err
 
     expected_silo_id = derive_silo_id(auth.org_id)
+
+    if supersedes is not None:
+        err = await validate_supersession_target(str(expected_silo_id), supersedes)
+        if err is not None:
+            return err
 
     try:
         src_type = SourceType(source_type)
@@ -315,6 +387,9 @@ async def _context_assert(
                 claim_id=str(node.id),
             )
 
+    if supersedes is not None:
+        await create_supersession(node.id, supersedes, str(expected_silo_id))
+
     response: dict[str, Any] = {
         "node_id": str(node.id),
         "layer": "knowledge",
@@ -326,6 +401,8 @@ async def _context_assert(
     }
     if promoted_error is not None:
         response["promoted_error"] = promoted_error
+    if supersedes is not None:
+        response["supersedes"] = supersedes
     return response
 
 
@@ -338,6 +415,7 @@ async def _context_commit(
     metadata: dict[str, Any] | None = None,
     tags: list[str] | None = None,
     chain_id: str | None = None,
+    supersedes: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation."""
     auth = await get_mcp_auth_context()
@@ -349,6 +427,11 @@ async def _context_commit(
             return err
 
     expected_silo_id = derive_silo_id(auth.org_id)
+
+    if supersedes is not None:
+        err = await validate_supersession_target(str(expected_silo_id), supersedes)
+        if err is not None:
+            return err
 
     if not about:
         return {"error": "missing_about", "message": "about must reference at least one node"}
@@ -397,6 +480,10 @@ async def _context_commit(
                 chain_id=chain_id,
                 reason=str(exc),
             )
+
+    if supersedes is not None:
+        await create_supersession(node.id, supersedes, str(expected_silo_id))
+        result["supersedes"] = supersedes
 
     return result
 

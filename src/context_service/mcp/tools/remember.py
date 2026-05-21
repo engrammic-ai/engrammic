@@ -20,6 +20,7 @@ async def _remember_impl(
     content: str,
     tags: list[str] | None = None,
     decay: str = "standard",
+    supersedes: str | None = None,
 ) -> dict[str, Any]:
     """Implementation for remember tool."""
     auth = await get_mcp_auth_context()
@@ -29,6 +30,7 @@ async def _remember_impl(
         content=content,
         tags=tags,
         decay_class=decay,
+        supersedes=supersedes,
     )
 
 
@@ -44,6 +46,7 @@ def register(mcp: FastMCP) -> None:
         content: str,
         tags: list[str] | None = None,
         decay: str = "standard",
+        supersedes: str | None = None,
     ) -> dict[str, Any]:
         """Store an observation.
 
@@ -51,14 +54,15 @@ def register(mcp: FastMCP) -> None:
             content: What to remember.
             tags: Optional categorization tags.
             decay: How long to keep: ephemeral|standard|durable|permanent.
+            supersedes: Node ID this observation replaces. Use recall first to find existing nodes.
 
         Returns:
-            {node_id, created_at}
+            {node_id, created_at, supersedes?}
         """
         start = time.perf_counter()
         success = True
         try:
-            return await _remember_impl(content, tags, decay)
+            return await _remember_impl(content, tags, decay, supersedes)
         except Exception:
             success = False
             raise
