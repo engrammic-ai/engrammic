@@ -301,6 +301,27 @@ def create_app() -> ASGIApp:
             """Health check for MCP server."""
             return {"status": "ok", "server": mcp_server.name}
 
+        from collections.abc import Awaitable, Callable
+
+        from starlette.middleware.base import BaseHTTPMiddleware
+        from starlette.responses import Response
+
+        class MCPTrailingSlashMiddleware(BaseHTTPMiddleware):
+            """Normalize /mcp to /mcp/ internally for clients that omit trailing slash."""
+
+            async def dispatch(
+                self,
+                request: Request,
+                call_next: Callable[[Request], Awaitable[Response]],
+            ) -> Response:
+                if request.url.path == "/mcp":
+                    # Rewrite scope path to include trailing slash
+                    scope = dict(request.scope)
+                    scope["path"] = "/mcp/"
+                    request = Request(scope, request.receive)
+                return await call_next(request)
+
+        app.add_middleware(MCPTrailingSlashMiddleware)
         app.mount("/mcp", mcp_app)
         logger.info("mcp_server_mounted", path="/mcp", transport="http")
 
