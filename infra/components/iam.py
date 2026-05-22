@@ -56,6 +56,7 @@ class IAMStack(pulumi.ComponentResource):
             "roles/logging.logWriter",
             "roles/monitoring.metricWriter",
             "roles/artifactregistry.reader",  # Pull images from AR
+            "roles/aiplatform.user",  # Dagster LLM calls via Vertex AI
         ]
         for role in gce_roles:
             role_suffix = role.split("/")[1].replace(".", "-")
