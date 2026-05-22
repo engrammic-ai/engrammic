@@ -11,6 +11,7 @@ from opentelemetry import trace
 from context_service.config.config_loader import load_config
 from context_service.config.logging import get_logger
 from context_service.telemetry.metrics import record_embedding, record_embedding_cache_miss
+from context_service.telemetry.tracing import traced
 
 if TYPE_CHECKING:
     from context_service.cache.embedding_cache import EmbeddingCache
@@ -75,6 +76,7 @@ class LiteLLMEmbeddingService:
             _embedding_cache=_embedding_cache,
         )
 
+    @traced(capture_args=["texts"])
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for multiple texts.
 
