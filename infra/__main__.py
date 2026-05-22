@@ -8,6 +8,7 @@ from components import (
     CloudSQLPostgres,
     ContextServiceRun,
     IAMStack,
+    InternalDNS,
     MigrationJob,
     NetworkStack,
     SecretsStack,
@@ -76,6 +77,14 @@ stateful_host = StatefulHost(
 if not use_cloudsql:
     postgres_host = stateful_host.instance.network_interfaces[0].network_ip
 
+# Internal DNS - stable hostnames for StatefulHost services
+internal_dns = InternalDNS(
+    "engrammic-dns",
+    vpc_id=network.vpc.id,
+    stateful_host_ip=stateful_host.instance.network_interfaces[0].network_ip,
+)
+stateful_hostname = internal_dns.hostname
+
 # Cloud Run API deployment
 context_service = ContextServiceRun(
     "engrammic-context-service",
@@ -86,18 +95,12 @@ context_service = ContextServiceRun(
     env_vars={
         "ENVIRONMENT": env,
         "HOST": "0.0.0.0",
-        "MEMGRAPH_HOST": stateful_host.instance.network_interfaces[0].network_ip,
-        "MEMGRAPH_URI": stateful_host.instance.network_interfaces[0].network_ip.apply(
-            lambda ip: f"bolt://{ip}:7687"
-        ),
-        "QDRANT_HOST": stateful_host.instance.network_interfaces[0].network_ip,
-        "QDRANT_URL": stateful_host.instance.network_interfaces[0].network_ip.apply(
-            lambda ip: f"http://{ip}:6333"
-        ),
-        "REDIS_HOST": stateful_host.instance.network_interfaces[0].network_ip,
-        "REDIS_URL": stateful_host.instance.network_interfaces[0].network_ip.apply(
-            lambda ip: f"redis://{ip}:6379"
-        ),
+        "MEMGRAPH_HOST": stateful_hostname,
+        "MEMGRAPH_URI": f"bolt://{stateful_hostname}:7687",
+        "QDRANT_HOST": stateful_hostname,
+        "QDRANT_URL": f"http://{stateful_hostname}:6333",
+        "REDIS_HOST": stateful_hostname,
+        "REDIS_URL": f"redis://{stateful_hostname}:6379",
         "POSTGRES_HOST": postgres_host,
         "POSTGRES_USER": "context",
         "POSTGRES_DATABASE": "engrammic",
@@ -161,6 +164,7 @@ if use_cloudsql:
 # Exports
 pulumi.export("vpc_id", network.vpc.id)
 pulumi.export("stateful_host_ip", stateful_host.instance.network_interfaces[0].network_ip)
+pulumi.export("stateful_hostname", stateful_hostname)
 pulumi.export("backup_bucket_name", storage.backup_bucket.name)
 pulumi.export(
     "service_account_emails",

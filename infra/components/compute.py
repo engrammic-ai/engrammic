@@ -289,8 +289,9 @@ for DISK in $DISKS; do
     fi
 
     # Fix permissions for service data directories
+    # Memgraph 3.10+ runs as uid=101(memgraph) gid=103(memgraph)
     if [ "$DISK" = "memgraph" ]; then
-        chown -R 100:101 "$MOUNT"
+        chown -R 101:103 "$MOUNT"
     fi
 done
 
