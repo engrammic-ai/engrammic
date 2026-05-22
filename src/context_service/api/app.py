@@ -1,5 +1,6 @@
 """FastAPI application factory with lifespan management."""
 
+import asyncio
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -51,12 +52,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         memgraph_client = MemgraphClient(memgraph_driver)
         logger.info("memgraph_connected")
 
-        from context_service.db.custodian_queries import bootstrap_custodian_schema
-        from context_service.db.indexes import apply_all_indexes
+        async def _apply_schema_background() -> None:
+            """Apply indexes and schema in background to avoid blocking startup."""
+            try:
+                from context_service.db.custodian_queries import bootstrap_custodian_schema
+                from context_service.db.indexes import apply_all_indexes
 
-        await apply_all_indexes(memgraph_client)  # type: ignore[arg-type]  # composition root passes concrete client
-        await bootstrap_custodian_schema(memgraph_client)  # type: ignore[arg-type]  # composition root passes concrete client
-        logger.info("memgraph_schema_applied")
+                await apply_all_indexes(memgraph_client)  # type: ignore[arg-type]
+                await bootstrap_custodian_schema(memgraph_client)  # type: ignore[arg-type]
+                logger.info("memgraph_schema_applied")
+            except Exception as exc:
+                logger.error("memgraph_schema_failed", error=str(exc))
+
+        asyncio.create_task(_apply_schema_background())
 
         redis_pool = await create_redis_pool(settings)
         redis_client = RedisClient(redis_pool)
