@@ -336,6 +336,17 @@ RETURN n
 #   CREATE INDEX ON :Node(head_id);
 # Without these indexes, the O(1) claim for RESOLVE_CURRENT_HEAD is misleading.
 
+# Cycle detection: check if new_node is reachable from target via SUPERSEDES.
+# Used to prevent content-hash dedup from creating cycles when the deduped node
+# is already downstream in the supersession chain being extended.
+CHECK_SUPERSESSION_CYCLE = f"""
+MATCH (target) WHERE {content_union_predicate("target")}
+  AND target.id = $target_id AND target.silo_id = $silo_id
+OPTIONAL MATCH path = (target)-[:SUPERSEDES*1..20]->(candidate)
+WHERE {content_union_predicate("candidate")} AND candidate.id = $new_id
+RETURN path IS NOT NULL AS would_cycle
+"""
+
 # Cross-node SUPERSEDES for Custodian-detected semantic supersession.
 # Sets tail_id on new node (if not already set), head_id on tail node for O(1) chain lookups.
 # If new node already has tail_id (multi-supersession), first chain wins to avoid inconsistent state.
