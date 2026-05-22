@@ -341,8 +341,7 @@ RETURN n
 # If new node already has tail_id (multi-supersession), first chain wins to avoid inconsistent state.
 CREATE_CROSS_NODE_SUPERSEDES = f"""
 MATCH (new) WHERE {content_union_predicate("new")} AND new.id = $from_id AND new.silo_id = $silo_id
-MATCH (old) WHERE {content_union_predicate("old")} AND old.id = $to_id AND old.silo_id = $silo_id
-WHERE new <> old
+MATCH (old) WHERE {content_union_predicate("old")} AND old.id = $to_id AND old.silo_id = $silo_id AND new <> old
 MERGE (new)-[r:SUPERSEDES {{source: $source, reason: $reason}}]->(old)
 ON CREATE SET r.created_at = $valid_from
 WITH old, new, r
