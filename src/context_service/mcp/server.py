@@ -185,8 +185,10 @@ async def _resolve_api_key_auth(token: str) -> AuthContext | None:
     settings = get_settings()
     api_key = settings.workos_api_key.get_secret_value() if settings.workos_api_key else None
     if api_key is None:
+        logger.debug("api_key_auth_skipped", reason="no_workos_api_key_configured")
         return None
 
+    key_prefix = token[:12] if len(token) >= 12 else token[:8]
     try:
         import workos
 
@@ -194,6 +196,7 @@ async def _resolve_api_key_auth(token: str) -> AuthContext | None:
         response = client.api_keys.create_validation(value=token)
 
         if response.api_key is None:
+            logger.debug("api_key_auth_failed", reason="validation_returned_none", key_prefix=key_prefix)
             return None
 
         owner = response.api_key.owner
@@ -208,7 +211,8 @@ async def _resolve_api_key_auth(token: str) -> AuthContext | None:
             session_id=None,
             db_user_id=None,
         )
-    except Exception:
+    except Exception as exc:
+        logger.debug("api_key_auth_failed", reason="exception", key_prefix=key_prefix, error=str(exc))
         return None
 
 
@@ -273,6 +277,10 @@ async def get_mcp_auth_context() -> AuthContext:
                 return api_key_context
             settings = get_settings()
             if settings.auth_enabled:
+                logger.warning(
+                    "api_key_validation_failed",
+                    key_prefix=token[:12] if len(token) >= 12 else token[:8],
+                )
                 raise MCPAuthError("Invalid API key")
 
         # Try OAuth token (our issued tokens).
