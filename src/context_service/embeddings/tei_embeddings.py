@@ -11,6 +11,7 @@ from opentelemetry import trace
 from context_service.config.logging import get_logger
 from context_service.embeddings.base import EmbeddingService
 from context_service.telemetry.metrics import record_embedding, record_embedding_cache_miss
+from context_service.telemetry.tracing import traced
 
 if TYPE_CHECKING:
     from context_service.cache.embedding_cache import EmbeddingCache
@@ -48,6 +49,7 @@ class TEIEmbeddingService:
     def dimensions(self) -> int:
         return self._dimensions
 
+    @traced(capture_args=["texts"])
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings for multiple texts.
 
@@ -233,6 +235,7 @@ class TEIWithFallbackEmbeddingService:
             span.set_attribute("embedding.fallback_error", str(error))
             logger.error("tei_fallback_failed", method=method, fallback_error=str(error))
 
+    @traced(capture_args=["texts"])
     async def embed(self, texts: list[str]) -> list[list[float]]:
         """Generate embeddings, falling back on TEI error."""
         span = trace.get_current_span()

@@ -25,14 +25,17 @@ feature_flags = {
     "beta": {
         "ENABLE_EXPERIMENTAL_RECALL": "true",
         "ENABLE_DEBUG_ENDPOINTS": "true",
+        "SECURITY__RATE_LIMIT__ENABLED": "true",
     },
     "prod": {
         "ENABLE_EXPERIMENTAL_RECALL": "false",
         "ENABLE_DEBUG_ENDPOINTS": "false",
+        "SECURITY__RATE_LIMIT__ENABLED": "true",
     },
     "dev": {
         "ENABLE_EXPERIMENTAL_RECALL": "true",
         "ENABLE_DEBUG_ENDPOINTS": "true",
+        "SECURITY__RATE_LIMIT__ENABLED": "false",
     },
 }
 

@@ -6,6 +6,7 @@ import asyncio
 from typing import Any
 
 from context_service.config.logging import get_logger
+from context_service.telemetry.tracing import traced
 
 logger = get_logger(__name__)
 
@@ -127,6 +128,7 @@ class SpladeEncoder:
     # Public async API
     # ------------------------------------------------------------------
 
+    @traced(capture_args=["texts"])
     async def encode_batch(self, texts: list[str]) -> list[dict[int, float]]:
         """Encode a batch of texts to sparse vectors.
 
