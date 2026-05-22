@@ -38,3 +38,11 @@ class ConflictError(EngineError):
     For example, two simultaneous supersession attempts on the same predecessor
     node will raise this on the second acquire.
     """
+
+
+class SupersessionCycleError(EngineError):
+    """Raised when creating a supersession edge would form a cycle.
+
+    This can occur when content-hash deduplication returns an existing node
+    that is already downstream in the target's supersession chain.
+    """

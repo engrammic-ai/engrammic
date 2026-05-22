@@ -12,6 +12,7 @@ import structlog
 
 from context_service.api.metrics import CONTEXT_STORE_LATENCY
 from context_service.config.settings import get_settings
+from context_service.engine.exceptions import SupersessionCycleError
 from context_service.mcp.server import (
     get_context_service,
     get_evidence_validator,
@@ -84,8 +85,35 @@ async def create_supersession(
     silo_id: str,
     reason: str = "author_update",
 ) -> bool:
-    """Create a SUPERSEDES edge from new_node to supersedes_id."""
+    """Create a SUPERSEDES edge from new_node to supersedes_id.
+
+    Raises SupersessionCycleError if new_node is already downstream in the
+    target's supersession chain (which can happen when content-hash dedup
+    returns an existing node that's already in the chain).
+    """
+    from context_service.engine.queries import CHECK_SUPERSESSION_CYCLE
+
     ctx_svc = get_context_service()
+
+    if str(new_node_id) == supersedes_id:
+        raise SupersessionCycleError(
+            f"Cannot supersede self: {new_node_id}"
+        )
+
+    result = await ctx_svc.graph_store.execute_query(
+        CHECK_SUPERSESSION_CYCLE,
+        {
+            "target_id": supersedes_id,
+            "new_id": str(new_node_id),
+            "silo_id": silo_id,
+        },
+    )
+    if result and result[0].get("would_cycle"):
+        raise SupersessionCycleError(
+            f"Supersession would create cycle: {new_node_id} is already "
+            f"downstream of {supersedes_id} in the supersession chain"
+        )
+
     return await ctx_svc.graph_store.create_supersedes_edge(
         from_id=new_node_id,
         to_id=uuid.UUID(supersedes_id),
@@ -251,7 +279,17 @@ async def _context_remember(
     )
 
     if supersedes is not None:
-        await create_supersession(node.id, supersedes, str(validated_silo_id))
+        try:
+            await create_supersession(node.id, supersedes, str(validated_silo_id))
+        except SupersessionCycleError as e:
+            return {
+                "error": "supersession_cycle",
+                "message": str(e),
+                "node_id": str(node.id),
+                "supersedes": supersedes,
+                "hint": "Content-hash dedup returned a node already in the chain. "
+                "Use a different claim text or omit supersedes.",
+            }
 
     result: dict[str, Any] = {
         "node_id": str(node.id),
@@ -388,7 +426,17 @@ async def _context_assert(
             )
 
     if supersedes is not None:
-        await create_supersession(node.id, supersedes, str(expected_silo_id))
+        try:
+            await create_supersession(node.id, supersedes, str(expected_silo_id))
+        except SupersessionCycleError as e:
+            return {
+                "error": "supersession_cycle",
+                "message": str(e),
+                "node_id": str(node.id),
+                "supersedes": supersedes,
+                "hint": "Content-hash dedup returned a node already in the chain. "
+                "Use a different claim text or omit supersedes.",
+            }
 
     response: dict[str, Any] = {
         "node_id": str(node.id),
@@ -482,8 +530,18 @@ async def _context_commit(
             )
 
     if supersedes is not None:
-        await create_supersession(node.id, supersedes, str(expected_silo_id))
-        result["supersedes"] = supersedes
+        try:
+            await create_supersession(node.id, supersedes, str(expected_silo_id))
+            result["supersedes"] = supersedes
+        except SupersessionCycleError as e:
+            return {
+                "error": "supersession_cycle",
+                "message": str(e),
+                "node_id": str(node.id),
+                "supersedes": supersedes,
+                "hint": "Content-hash dedup returned a node already in the chain. "
+                "Use a different claim text or omit supersedes.",
+            }
 
     return result
 

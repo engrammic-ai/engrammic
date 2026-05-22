@@ -312,3 +312,24 @@ async def test_create_supersedes_edge_raises_conflict_when_lock_denied(
     store._acquire_supersession_lock.assert_awaited_once_with(str(node_a_id))
     mock_client.execute_write.assert_not_called()
     store._release_supersession_lock.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_cycle_detection_query_exists() -> None:
+    """Verify CHECK_SUPERSESSION_CYCLE query exists and has correct structure."""
+    from context_service.engine.queries import CHECK_SUPERSESSION_CYCLE
+
+    assert "SUPERSEDES*" in CHECK_SUPERSESSION_CYCLE, "Should traverse SUPERSEDES edges"
+    assert "$target_id" in CHECK_SUPERSESSION_CYCLE, "Should accept target_id parameter"
+    assert "$new_id" in CHECK_SUPERSESSION_CYCLE, "Should accept new_id parameter"
+    assert "would_cycle" in CHECK_SUPERSESSION_CYCLE, "Should return would_cycle boolean"
+
+
+@pytest.mark.asyncio
+async def test_supersession_cycle_error_exists() -> None:
+    """Verify SupersessionCycleError is defined and inherits from EngineError."""
+    from context_service.engine.exceptions import EngineError, SupersessionCycleError
+
+    assert issubclass(SupersessionCycleError, EngineError)
+    err = SupersessionCycleError("test message")
+    assert "test message" in str(err)
