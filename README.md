@@ -1,65 +1,64 @@
-# Engrammic
+# Engrammic Context Service
 
-Cognitive substrate for AI agents. Context infrastructure that understands, not just stores.
+Production backend for Engrammic. Exposes MCP server (agent surface) and FastAPI (admin).
 
-Private repo.
+## Quick Start
+
+```bash
+uv sync --all-extras    # Install deps
+just up                 # Start local stack (Memgraph, Qdrant, Redis)
+just dev                # Run FastAPI with reload
+```
+
+## Commands
+
+| Command | What it does |
+|---------|--------------|
+| `just check` | Lint + typecheck (must pass before merge) |
+| `just test` | Run pytest (takes args: `just test -k name`) |
+| `just ci` | check + test (pre-push) |
+| `just db-migrate` | Run migrations |
+| `just dagster-web` | Dagster UI for Custodian jobs |
 
 ## Structure
 
 ```
 src/context_service/
-├── config/        # Settings, logging (ported from prototype)
-├── signals/       # Heat, freshness, priority (proprietary)
-├── embeddings/    # Jina, Vertex, SPLADE clients
-├── stores/        # Memgraph, Qdrant, Redis clients
-├── mcp/           # MCP server + tools
+├── mcp/           # MCP server + tools (primary agent surface)
 ├── api/           # FastAPI admin routes
-├── auth/          # WorkOS + OAuth tokens
+├── auth/          # WorkOS + OAuth
+├── config/        # Settings, logging
+├── signals/       # Heat, freshness, priority
+├── embeddings/    # Jina, Vertex, SPLADE clients
+├── stores/        # Memgraph, Qdrant, Redis
+├── engine/        # Storage protocols (depend on this, not stores)
 └── pipelines/     # Dagster assets, sensors, jobs
 ```
 
-## Features
+## Key Paths
 
-- **MCP Server**: Intent-based tools (remember, learn, believe, recall, etc.)
-- **Tiered Rate Limiting**: Per-org RPM limits by pricing tier (free/starter/pro/enterprise)
-- **Custodian Pipeline**: Background synthesis, fact promotion, belief merging
-- **Heat Diffusion**: Relevance signals via graph-based heat propagation
-- **Multi-tenancy**: Silo isolation per org
+- `config/mcp_tools.yaml` - MCP tool surface (source of truth for names/descriptions)
+- `engine/protocols.py` - storage interfaces (depend on this, not concrete stores)
+- `context/plans/` - active implementation plans
+- `context/architecture.md` - full architecture doc
 
-## Rate Limiting
+## Dependencies
 
-Tiered rate limiting protects against abuse and enforces pricing tiers.
+| Service | Purpose |
+|---------|---------|
+| Memgraph | Graph store |
+| Qdrant | Vector store |
+| Redis | Cache, queues, heat scores, rate limits |
+| Dagster | Pipeline orchestration |
+| primitives | Schema library (editable from `../primitives`) |
 
-| Tier | MCP Write RPM | MCP Read RPM |
-|------|---------------|--------------|
+## Rate Limits
+
+| Tier | Write RPM | Read RPM |
+|------|-----------|----------|
 | Free | 20 | 60 |
 | Starter | 60 | 200 |
 | Pro | 200 | 600 |
 | Enterprise | 1000 | 3000 |
 
 Enable: `SECURITY__RATE_LIMIT__ENABLED=true`
-
-Set tier: `PATCH /admin/silos/{silo_id}/tier` with `{"tier": "pro"}`
-
-## Dependencies
-
-- **primitives**: Open-source lib (submodule during dev, PyPI once stable)
-- **Memgraph**: Graph store
-- **Qdrant**: Vector store
-- **Redis**: Cache, queues, heat scores, rate limit counters
-- **Dagster**: Pipeline orchestration
-
-## Development
-
-```bash
-# Install
-uv sync --all-extras
-
-# Run
-just dev
-
-# Test
-just test
-```
-
-
