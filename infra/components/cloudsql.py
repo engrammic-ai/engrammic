@@ -24,6 +24,7 @@ class CloudSQLPostgres(pulumi.ComponentResource):
         tier = config.get("cloudsql_tier") or "db-f1-micro"
         disk_size = int(config.get("cloudsql_disk_size") or "20")
         ha_enabled = config.get_bool("cloudsql_ha") or False
+        max_connections = int(config.get("cloudsql_max_connections") or "100")
 
         self.instance = sql.DatabaseInstance(
             f"{name}-instance",
@@ -56,6 +57,12 @@ class CloudSQLPostgres(pulumi.ComponentResource):
                     day=7,
                     hour=4,
                 ),
+                database_flags=[
+                    sql.DatabaseInstanceSettingsDatabaseFlagArgs(
+                        name="max_connections",
+                        value=str(max_connections),
+                    ),
+                ],
             ),
             opts=pulumi.ResourceOptions(
                 parent=self,
