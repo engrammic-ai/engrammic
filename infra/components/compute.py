@@ -247,9 +247,9 @@ fi
 # Configure Docker to authenticate with Artifact Registry
 gcloud auth configure-docker europe-north1-docker.pkg.dev --quiet
 
-# Memgraph requires higher vm.max_map_count
-sysctl -w vm.max_map_count=262144
-echo "vm.max_map_count=262144" >> /etc/sysctl.conf
+# Memgraph requires higher vm.max_map_count (minimum 524288)
+sysctl -w vm.max_map_count=524288
+echo "vm.max_map_count=524288" >> /etc/sysctl.conf
 
 # Format and mount persistent disks
 for DISK in $DISKS; do
@@ -289,8 +289,9 @@ for DISK in $DISKS; do
     fi
 
     # Fix permissions for service data directories
+    # Memgraph 3.10+ runs as uid=101(memgraph) gid=103(memgraph)
     if [ "$DISK" = "memgraph" ]; then
-        chown -R 100:101 "$MOUNT"
+        chown -R 101:103 "$MOUNT"
     fi
 done
 

@@ -4,6 +4,7 @@ from components.beacon import BeaconServiceRun
 from components.cloudrun import ContextServiceRun
 from components.cloudsql import CloudSQLPostgres
 from components.compute import StatefulHost
+from components.dns import InternalDNS
 from components.iam import IAMStack
 from components.migration_job import MigrationJob
 from components.network import NetworkStack
@@ -15,6 +16,7 @@ __all__ = [
     "CloudSQLPostgres",
     "ContextServiceRun",
     "IAMStack",
+    "InternalDNS",
     "MigrationJob",
     "NetworkStack",
     "SecretsStack",
