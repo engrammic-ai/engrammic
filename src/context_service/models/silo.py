@@ -276,9 +276,7 @@ class SiloConfig(BaseModel):
                 if f.rate_limit_per_hour is not None
                 else settings.forget_rate_limit_per_hour
             ),
-            forget_enabled=(
-                f.enabled if f.enabled is not None else settings.forget_enabled
-            ),
+            forget_enabled=(f.enabled if f.enabled is not None else settings.forget_enabled),
         )
 
     def to_metadata_dict(self) -> dict[str, Any]:

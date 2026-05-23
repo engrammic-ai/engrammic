@@ -132,31 +132,37 @@ class RateLimitMiddleware:
             response_body = (
                 f'{{"error": "rate_limit_exceeded", "retry_after": {exc.retry_after}}}'.encode()
             )
-            await send({
-                "type": "http.response.start",
-                "status": 429,
-                "headers": [
-                    (b"content-type", b"application/json"),
-                    (b"retry-after", str(exc.retry_after).encode()),
-                    (b"x-ratelimit-limit", str(exc.limit).encode()),
-                    (b"x-ratelimit-remaining", b"0"),
-                ],
-            })
-            await send({
-                "type": "http.response.body",
-                "body": response_body,
-            })
+            await send(
+                {
+                    "type": "http.response.start",
+                    "status": 429,
+                    "headers": [
+                        (b"content-type", b"application/json"),
+                        (b"retry-after", str(exc.retry_after).encode()),
+                        (b"x-ratelimit-limit", str(exc.limit).encode()),
+                        (b"x-ratelimit-remaining", b"0"),
+                    ],
+                }
+            )
+            await send(
+                {
+                    "type": "http.response.body",
+                    "body": response_body,
+                }
+            )
             return
 
         async def _send_with_headers(message: MutableMapping[str, Any]) -> None:
             if message["type"] == "http.response.start" and rate_headers:
                 headers = list(message.get("headers", []))
-                headers.extend([
-                    (b"x-ratelimit-limit", str(rate_headers.limit).encode()),
-                    (b"x-ratelimit-remaining", str(rate_headers.remaining).encode()),
-                    (b"x-ratelimit-reset", str(rate_headers.reset).encode()),
-                    (b"x-ratelimit-policy", rate_headers.policy.encode()),
-                ])
+                headers.extend(
+                    [
+                        (b"x-ratelimit-limit", str(rate_headers.limit).encode()),
+                        (b"x-ratelimit-remaining", str(rate_headers.remaining).encode()),
+                        (b"x-ratelimit-reset", str(rate_headers.reset).encode()),
+                        (b"x-ratelimit-policy", rate_headers.policy.encode()),
+                    ]
+                )
                 message = dict(message)
                 message["headers"] = headers
             await send(message)

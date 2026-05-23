@@ -1,4 +1,5 @@
 """Tests for tiered rate limit configuration."""
+
 from context_service.config.settings import EndpointLimits, RateLimitConfig, TierLimits
 
 

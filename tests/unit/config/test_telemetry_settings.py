@@ -12,9 +12,11 @@ def test_telemetry_config_defaults():
 def test_telemetry_config_beacon_secret() -> None:
     """Beacon secret can be configured via env."""
     import os
+
     os.environ["TELEMETRY__BEACON_SECRET"] = "test-secret-123"
 
     from context_service.config.settings import Settings
+
     settings = Settings()
 
     assert settings.telemetry.beacon_secret == "test-secret-123"

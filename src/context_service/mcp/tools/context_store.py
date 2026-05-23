@@ -96,9 +96,7 @@ async def create_supersession(
     ctx_svc = get_context_service()
 
     if str(new_node_id) == supersedes_id:
-        raise SupersessionCycleError(
-            f"Cannot supersede self: {new_node_id}"
-        )
+        raise SupersessionCycleError(f"Cannot supersede self: {new_node_id}")
 
     result = await ctx_svc.graph_store.execute_query(
         CHECK_SUPERSESSION_CYCLE,

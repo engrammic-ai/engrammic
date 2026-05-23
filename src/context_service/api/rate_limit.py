@@ -27,10 +27,19 @@ class RateLimitCategory(StrEnum):
     REST = "rest"
 
 
-WRITE_TOOLS = frozenset({
-    "remember", "learn", "believe", "link",
-    "reason", "reflect", "hypothesize", "revise", "commit",
-})
+WRITE_TOOLS = frozenset(
+    {
+        "remember",
+        "learn",
+        "believe",
+        "link",
+        "reason",
+        "reflect",
+        "hypothesize",
+        "revise",
+        "commit",
+    }
+)
 READ_TOOLS = frozenset({"recall", "trace", "patterns"})
 
 

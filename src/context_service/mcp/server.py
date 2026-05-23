@@ -196,7 +196,9 @@ async def _resolve_api_key_auth(token: str) -> AuthContext | None:
         response = client.api_keys.create_validation(value=token)
 
         if response.api_key is None:
-            logger.debug("api_key_auth_failed", reason="validation_returned_none", key_prefix=key_prefix)
+            logger.debug(
+                "api_key_auth_failed", reason="validation_returned_none", key_prefix=key_prefix
+            )
             return None
 
         owner = response.api_key.owner
@@ -212,7 +214,9 @@ async def _resolve_api_key_auth(token: str) -> AuthContext | None:
             db_user_id=None,
         )
     except Exception as exc:
-        logger.debug("api_key_auth_failed", reason="exception", key_prefix=key_prefix, error=str(exc))
+        logger.debug(
+            "api_key_auth_failed", reason="exception", key_prefix=key_prefix, error=str(exc)
+        )
         return None
 
 

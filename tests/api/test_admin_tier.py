@@ -66,7 +66,10 @@ class TestSetSiloTier:
         with patch("context_service.api.routes.admin.get_settings") as mock_settings:
             mock_settings.return_value = MagicMock()
             mock_settings.return_value.security.rate_limit.tiers = {
-                "free": {}, "starter": {}, "pro": {}, "enterprise": {}
+                "free": {},
+                "starter": {},
+                "pro": {},
+                "enterprise": {},
             }
             mock_settings.return_value.security.rate_limit.tier_cache_ttl_seconds = 300
 
