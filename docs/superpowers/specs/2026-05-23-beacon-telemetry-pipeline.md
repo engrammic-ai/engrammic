@@ -60,6 +60,26 @@ Replace Cloud Trace with a self-hosted pipeline:
 
 Reduce default from 24 hours to 1 hour for better granularity. Configurable via `TELEMETRY__BEACON_INTERVAL_HOURS`.
 
+### Implementation notes
+
+Changes needed to `src/context_service/telemetry/collector.py`:
+1. Add `latency_p50_ms`, `latency_p95_ms`, `tool_counts` fields to `TelemetryPayload` dataclass
+2. Update `_collect_aggregates()` to extract percentiles from histogram buckets
+3. Add MCP tool call counting via existing `_mcp_tool_counter` metric
+
+The `beacon_events` table stores payloads as JSONB, so no schema change needed for new fields.
+
+## Authentication
+
+The hosted context-service authenticates to beacon-service via `X-Beacon-Secret` header, same as future self-hosted instances.
+
+**Setup:**
+1. Pulumi generates a random secret for the hosted deployment
+2. Migration inserts the secret into `beacon_secrets` with silo_id `engrammic-hosted`
+3. Secret passed to context-service as `TELEMETRY__BEACON_SECRET` env var
+
+This keeps one auth model for all beacon clients.
+
 ## Deployment
 
 ### Beacon service
@@ -67,6 +87,7 @@ Reduce default from 24 hours to 1 hour for better granularity. Configurable via 
 - **Image:** `Dockerfile.beacon` (new)
 - **Pulumi:** existing `infra/components/beacon.py`
 - **Cloud Run:** scales to zero, VPC connector to Cloud SQL
+- **IAM:** VPC-only invoker (no public access for now, only hosted service sends)
 - **DNS:** `tel.engrammic.ai` CNAME to Cloud Run URL
 
 ### Metabase
@@ -76,7 +97,8 @@ Reduce default from 24 hours to 1 hour for better granularity. Configurable via 
 - **Cloud Run:** stateless, app state in Cloud SQL
 - **Database:** separate `metabase` database in Cloud SQL
 - **DNS:** `metrics.engrammic.ai`
-- **Auth:** Metabase built-in (email/password)
+- **Auth:** Metabase built-in, manual first-run setup (admin email/password set on first boot)
+- **IAM:** VPC-only invoker (internal dashboard)
 
 ### CI/CD
 
@@ -87,6 +109,7 @@ Add to GitHub Actions workflow:
 ### Migration
 
 - `0007_create_metabase_database.sql`: create Metabase app database
+- `0008_seed_hosted_beacon_secret.sql`: insert hosted service beacon secret
 
 ## Dashboards
 
