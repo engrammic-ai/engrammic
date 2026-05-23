@@ -1,6 +1,7 @@
 """Engrammic infrastructure components."""
 
 from components.beacon import BeaconServiceRun
+from components.metabase import MetabaseRun
 from components.cloudrun import ContextServiceRun
 from components.cloudsql import CloudSQLPostgres
 from components.compute import StatefulHost
@@ -17,6 +18,7 @@ __all__ = [
     "ContextServiceRun",
     "IAMStack",
     "InternalDNS",
+    "MetabaseRun",
     "MigrationJob",
     "NetworkStack",
     "SecretsStack",
