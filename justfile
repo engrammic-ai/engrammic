@@ -237,6 +237,11 @@ tunnel-dev:
     gcloud compute ssh engrammic-dev-stateful --zone={{zone}} --project={{project}} --tunnel-through-iap \
         -- -NL 7687:localhost:7687 -L 6333:localhost:6333 -L 6334:localhost:6334 -L 6379:localhost:6379 -L 3000:localhost:3000
 
+# Open Metabase dashboard (beta)
+metabase-beta:
+    @echo "Opening Metabase at https://engrammic-beta-metabase-chrtemdxrq-lz.a.run.app"
+    xdg-open "https://engrammic-beta-metabase-chrtemdxrq-lz.a.run.app" 2>/dev/null || open "https://engrammic-beta-metabase-chrtemdxrq-lz.a.run.app" 2>/dev/null || echo "Visit: https://engrammic-beta-metabase-chrtemdxrq-lz.a.run.app"
+
 # Start instance (beta)
 start-beta:
     gcloud compute instances start engrammic-beta-stateful --zone={{zone}} --project={{project}}

@@ -98,6 +98,7 @@ def _parse_tag_response(raw: str) -> dict[str, list[str]]:
     ),
     retry_policy=dg.RetryPolicy(max_retries=1, delay=30.0, backoff=dg.Backoff.EXPONENTIAL),
     tags={"dagster/concurrency_key": "auto_tagging"},
+    op_tags={"dagster/max_runtime_seconds": 300},
 )
 def auto_tagging(
     context: AssetExecutionContext,

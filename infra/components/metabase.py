@@ -27,7 +27,7 @@ class MetabaseRun(pulumi.ComponentResource):
             f"{name}-service",
             name=f"engrammic-{env}-metabase",
             location=region,
-            ingress="INGRESS_TRAFFIC_INTERNAL_ONLY",
+            ingress="INGRESS_TRAFFIC_ALL",
             template=cloudrunv2.ServiceTemplateArgs(
                 service_account=service_account_email,
                 scaling=cloudrunv2.ServiceTemplateScalingArgs(
@@ -49,11 +49,6 @@ class MetabaseRun(pulumi.ComponentResource):
                         resources=cloudrunv2.ServiceTemplateContainerResourcesArgs(
                             limits={"cpu": "2", "memory": "2Gi"},
                         ),
-                        ports=[
-                            cloudrunv2.ServiceTemplateContainerPortArgs(
-                                container_port=3000,
-                            )
-                        ],
                         envs=[
                             cloudrunv2.ServiceTemplateContainerEnvArgs(
                                 name="MB_DB_TYPE",
@@ -65,33 +60,40 @@ class MetabaseRun(pulumi.ComponentResource):
                             ),
                             cloudrunv2.ServiceTemplateContainerEnvArgs(
                                 name="MB_JETTY_PORT",
-                                value="3000",
+                                value="8080",
                             ),
                         ],
                         startup_probe=cloudrunv2.ServiceTemplateContainerStartupProbeArgs(
                             http_get=cloudrunv2.ServiceTemplateContainerStartupProbeHttpGetArgs(
                                 path="/api/health",
-                                port=3000,
+                                port=8080,
                             ),
-                            initial_delay_seconds=30,
-                            period_seconds=10,
-                            timeout_seconds=5,
-                            failure_threshold=10,
+                            initial_delay_seconds=60,
+                            period_seconds=15,
+                            timeout_seconds=10,
+                            failure_threshold=20,
                         ),
                         liveness_probe=cloudrunv2.ServiceTemplateContainerLivenessProbeArgs(
                             http_get=cloudrunv2.ServiceTemplateContainerLivenessProbeHttpGetArgs(
                                 path="/api/health",
-                                port=3000,
+                                port=8080,
                             ),
                             period_seconds=30,
                         ),
                     )
                 ],
             ),
-            opts=pulumi.ResourceOptions(
-                parent=self,
-                ignore_changes=["template"],
-            ),
+            opts=pulumi.ResourceOptions(parent=self),
+        )
+
+        # Allow public access (Metabase has its own auth)
+        cloudrunv2.ServiceIamMember(
+            f"{name}-public-access",
+            name=self.service.name,
+            location=region,
+            role="roles/run.invoker",
+            member="allUsers",
+            opts=pulumi.ResourceOptions(parent=self),
         )
 
         self.register_outputs({
