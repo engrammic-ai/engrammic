@@ -8,6 +8,7 @@ from typing import Any
 import dagster as dg
 from dagster import AssetExecutionContext
 
+from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import MemgraphResource
 
 
@@ -26,6 +27,7 @@ def _run_async(coro: Any) -> Any:
     description="Tombstone and hard-delete nodes per retention policy.",
     compute_kind="memgraph",
     group_name="maintenance",
+    partitions_def=silo_partitions,
 )
 def retention_sweep(
     context: AssetExecutionContext,
