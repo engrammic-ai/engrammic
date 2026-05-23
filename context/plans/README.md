@@ -2,9 +2,11 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-20)
+## Current state (2026-05-22)
 
 **Shipped:**
+- v2.20 Documentation Site (docs.engrammic.ai)
+- v2.19 Closed Beta Deployment (Cloud SQL, StatefulHost, CI/CD, DNS)
 - v2.18 MCP OAuth + Middleware (OAuth flow for Cursor/Claude Code, FastMCP error/logging/timing middleware, 20+ client allowlist)
 - v2.17 Wire Unpopulated Fields (optional schema fields in recall responses)
 - v2.16 MCP Connection Stability (error boundaries + Direct VPC Egress)
@@ -38,11 +40,9 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
-| [2026-05-20-data-lifecycle-management.md](./2026-05-20-data-lifecycle-management.md) | Data lifecycle: forget tool, three-store delete, GDPR erasure, chain pruning | Complete |
+| [2026-05-23-beacon-telemetry-pipeline.md](./2026-05-23-beacon-telemetry-pipeline.md) | Beacon telemetry + Metabase dashboards (replaces Cloud Trace) | Ready to execute |
 | [2026-05-20-self-hosted-rest-api-phase1.md](./2026-05-20-self-hosted-rest-api-phase1.md) | Self-hosted REST API: auth + Memory/Knowledge endpoints | Ready to execute |
 | [2026-05-20-rate-limiting.md](./2026-05-20-rate-limiting.md) | Tiered rate limiting for MCP tools and REST routes | Ready to execute |
-| [2026-05-20-documentation-site.md](./2026-05-20-documentation-site.md) | Documentation site implementation | Planned |
-| [2026-05-18-closed-beta-deployment.md](./2026-05-18-closed-beta-deployment.md) | Closed beta infrastructure deployment | In progress |
 
 ## Future work
 
@@ -61,6 +61,7 @@ Specced or checkpointed for later implementation:
 
 | Plan | Status | Description |
 |------|--------|-------------|
+| [2026-05-18-gcp-deployment-improvements.md](./2026-05-18-gcp-deployment-improvements.md) | Draft | Distroless images, vuln scanning, health checks |
 | [2026-05-18-context-checkpoint-hooks.md](./2026-05-18-context-checkpoint-hooks.md) | Spike | Claude Code hooks for context checkpoint/restore via Engrammic |
 | [clustering-algo-eval.md](./clustering-algo-eval.md) | Spike | Evaluate LPA/HDBSCAN as Leiden replacements |
 | [dagger-test-pipeline.md](./dagger-test-pipeline.md) | Draft | Dagger-based test pipeline |
@@ -84,6 +85,9 @@ Specced or checkpointed for later implementation:
 ## Archive
 
 Completed plans in `archive/`:
+- Documentation Site (2026-05-22) - docs.engrammic.ai
+- Closed Beta Deployment (2026-05-22) - Cloud SQL, StatefulHost, CI/CD, DNS
+- Data Lifecycle Management (2026-05-20) - forget tool, GDPR erasure, chain pruning
 - MCP OAuth + Middleware (2026-05-20) - OAuth flow, FastMCP middleware, client allowlist
 - Wire Unpopulated Fields (2026-05-19) - optional schema fields in recall responses
 - MCP Connection Stability (2026-05-19) - error boundaries + Direct VPC Egress
