@@ -24,9 +24,7 @@ def _make_qdrant_client(vector_size: int = 512) -> QdrantClient:
 def _make_mock_async_client(existing_collections: list[str] | None = None) -> AsyncMock:
     mock = AsyncMock()
     mock_collections = MagicMock()
-    mock_collections.collections = [
-        MagicMock(name=n) for n in (existing_collections or [])
-    ]
+    mock_collections.collections = [MagicMock(name=n) for n in (existing_collections or [])]
     mock.get_collections.return_value = mock_collections
     mock.create_collection = AsyncMock()
     mock.create_payload_index = AsyncMock()

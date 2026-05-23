@@ -51,7 +51,17 @@ def auth_context() -> AuthContext:
 
 class TestGetToolCategory:
     def test_write_tools(self) -> None:
-        for tool in ["remember", "learn", "believe", "link", "reason", "reflect", "hypothesize", "revise", "commit"]:
+        for tool in [
+            "remember",
+            "learn",
+            "believe",
+            "link",
+            "reason",
+            "reflect",
+            "hypothesize",
+            "revise",
+            "commit",
+        ]:
             assert get_tool_category(tool) == RateLimitCategory.MCP_WRITE
 
     def test_read_tools(self) -> None:

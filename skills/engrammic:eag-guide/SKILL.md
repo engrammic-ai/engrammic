@@ -31,6 +31,39 @@ Store when future sessions would benefit:
 
 Skip: current task steps, transient state, things obvious from code.
 
+## Action Triggers (Mandatory)
+
+These are checkpoints where you MUST store to Engrammic before proceeding:
+
+**After fixing a bug:**
+```
+learn(
+  claim="<what was wrong, why, and how it was fixed>",
+  evidence=["file://<path>#L<lines>"],
+  source="agent",
+  tags=["bug-fix", "<relevant-domain>"]
+)
+```
+
+**After a non-trivial commit:**
+If the commit reveals something non-obvious (gotcha, workaround, design decision), store it. Skip for routine changes.
+
+**After discovering a codebase pattern or gotcha:**
+```
+learn(
+  claim="<the pattern/gotcha and why it matters>",
+  evidence=["file://<path>"],
+  source="agent",
+  tags=["pattern", "<codebase-tag>"]
+)
+```
+
+**After resolving a confusing error:**
+Store the error message, root cause, and fix so future sessions can recall it.
+
+**After user teaches you something project-specific:**
+Store immediately so you don't need to be taught twice.
+
 ## Layer Selector
 
 **Raw observation, no evidence?**

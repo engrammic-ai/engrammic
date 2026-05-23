@@ -18,8 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 _MODULE_PATH = (
-    pathlib.Path(__file__).parents[2]
-    / "src/context_service/pipelines/assets/chain_pruning.py"
+    pathlib.Path(__file__).parents[2] / "src/context_service/pipelines/assets/chain_pruning.py"
 )
 
 

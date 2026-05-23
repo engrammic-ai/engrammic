@@ -147,9 +147,7 @@ async def test_convert_to_stub_returns_false_when_node_not_found(
     """convert_to_stub returns False when the node does not exist."""
     mock_client.execute_write.return_value = []
 
-    result = await memgraph_store.convert_to_stub(
-        node_id=str(uuid.uuid4()), silo_id=silo_id
-    )
+    result = await memgraph_store.convert_to_stub(node_id=str(uuid.uuid4()), silo_id=silo_id)
 
     assert result is False
 

@@ -51,9 +51,7 @@ class TestRetentionPolicyFromResolved:
     def test_silo_override_supersedes_global(self) -> None:
         """A silo with a custom supersession_chain_max_length uses that value."""
         settings = _make_settings(supersession_chain_max_length=20)
-        silo_config = SiloConfig(
-            retention=RetentionOverrides(supersession_chain_max_length=5)
-        )
+        silo_config = SiloConfig(retention=RetentionOverrides(supersession_chain_max_length=5))
         resolved = silo_config.resolve(settings)  # type: ignore[arg-type]
         policy = RetentionPolicy.from_resolved(resolved)
         assert policy.supersession_chain_max_length == 5
@@ -61,9 +59,7 @@ class TestRetentionPolicyFromResolved:
     def test_silo_override_does_not_affect_other_fields(self) -> None:
         """Custom supersession_chain_max_length does not change other policy fields."""
         settings = _make_settings(supersession_chain_max_length=20)
-        silo_config = SiloConfig(
-            retention=RetentionOverrides(supersession_chain_max_length=10)
-        )
+        silo_config = SiloConfig(retention=RetentionOverrides(supersession_chain_max_length=10))
         resolved = silo_config.resolve(settings)  # type: ignore[arg-type]
         policy = RetentionPolicy.from_resolved(resolved)
 

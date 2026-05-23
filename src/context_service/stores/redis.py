@@ -501,9 +501,7 @@ return count
         Returns:
             New counter value, or 0 if circuit is open (fail-open).
         """
-        return await guard_degrade(
-            STORE_REDIS, self._incr_with_expire_impl(key, ttl_seconds), 0
-        )
+        return await guard_degrade(STORE_REDIS, self._incr_with_expire_impl(key, ttl_seconds), 0)
 
     async def _incr_with_expire_impl(self, key: str, ttl_seconds: int) -> int:
         """Implementation for atomic INCR + EXPIRE via Lua."""

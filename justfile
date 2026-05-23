@@ -223,6 +223,10 @@ status-dev:
     gcloud compute ssh engrammic-dev-stateful --zone={{zone}} --project={{project}} --tunnel-through-iap \
         --command="docker ps --format 'table {{{{.Names}}}}\t{{{{.Status}}}}'"
 
+# Run Memgraph Lab locally (connects to tunneled or local Memgraph on 7687)
+memgraph-lab:
+    docker run --rm -p 3002:3000 --add-host=host.docker.internal:host-gateway -e QUICK_CONNECT_MG_HOST=host.docker.internal -e QUICK_CONNECT_MG_PORT=7687 memgraph/lab
+
 # Tunnel services to localhost (beta)
 tunnel-beta:
     gcloud compute ssh engrammic-beta-stateful --zone={{zone}} --project={{project}} --tunnel-through-iap \

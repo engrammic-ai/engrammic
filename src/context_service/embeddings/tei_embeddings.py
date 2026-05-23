@@ -224,7 +224,9 @@ class TEIWithFallbackEmbeddingService:
             fallback_provider="litellm",
         )
 
-    def _log_fallback_result(self, method: str, success: bool, error: Exception | None = None) -> None:
+    def _log_fallback_result(
+        self, method: str, success: bool, error: Exception | None = None
+    ) -> None:
         """Log fallback outcome."""
         span = trace.get_current_span()
         span.set_attribute("embedding.fallback_success", success)

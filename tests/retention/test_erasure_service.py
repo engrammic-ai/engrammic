@@ -43,9 +43,7 @@ async def test_basic_erasure_logs_to_audit_table(
     # hard_delete_node internals: execute_query returns a result (node found)
     mock_store.execute_query.return_value = [{"id": valid_node_id}]
 
-    with patch(
-        "context_service.retention.service.enqueue_failed_delete", new_callable=AsyncMock
-    ):
+    with patch("context_service.retention.service.enqueue_failed_delete", new_callable=AsyncMock):
         service = ErasureService(
             store=mock_store,
             qdrant_store=mock_qdrant,
@@ -106,9 +104,7 @@ async def test_cascade_finds_and_deletes_referencing_nodes(
 
     mock_store.execute_query.side_effect = execute_query_side_effect
 
-    with patch(
-        "context_service.retention.service.enqueue_failed_delete", new_callable=AsyncMock
-    ):
+    with patch("context_service.retention.service.enqueue_failed_delete", new_callable=AsyncMock):
         service = ErasureService(
             store=mock_store,
             qdrant_store=mock_qdrant,
@@ -150,9 +146,7 @@ async def test_partial_failure_status_when_some_nodes_fail(
 
     mock_store.execute_query.side_effect = execute_query_side_effect
 
-    with patch(
-        "context_service.retention.service.enqueue_failed_delete", new_callable=AsyncMock
-    ):
+    with patch("context_service.retention.service.enqueue_failed_delete", new_callable=AsyncMock):
         service = ErasureService(
             store=mock_store,
             qdrant_store=mock_qdrant,
@@ -214,9 +208,7 @@ async def test_erasure_result_contains_request_id(
 
     mock_store.execute_query.return_value = [{"id": valid_node_id}]
 
-    with patch(
-        "context_service.retention.service.enqueue_failed_delete", new_callable=AsyncMock
-    ):
+    with patch("context_service.retention.service.enqueue_failed_delete", new_callable=AsyncMock):
         service = ErasureService(
             store=mock_store,
             qdrant_store=mock_qdrant,

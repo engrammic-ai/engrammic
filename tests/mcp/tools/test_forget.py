@@ -76,7 +76,10 @@ async def test_forget_tombstones_node(mock_auth, mock_ctx_svc, mock_graph_store)
     forget_svc.forget.assert_awaited_once()
     # Reason is passed through to ForgetService.forget
     call_args = forget_svc.forget.call_args
-    assert call_args.args[2] == "no longer needed" or call_args.kwargs.get("reason") == "no longer needed"
+    assert (
+        call_args.args[2] == "no longer needed"
+        or call_args.kwargs.get("reason") == "no longer needed"
+    )
 
 
 @pytest.mark.asyncio

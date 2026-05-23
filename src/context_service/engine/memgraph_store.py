@@ -454,7 +454,9 @@ class MemgraphStore(EAGKnowledgeStore):
             return True
         lock_key = f"{_SUPERSESSION_LOCK_PREFIX}{predecessor_id}"
         try:
-            result = await self._redis.set(lock_key, "1", nx=True, ex=_SUPERSESSION_LOCK_TTL_SECONDS)
+            result = await self._redis.set(
+                lock_key, "1", nx=True, ex=_SUPERSESSION_LOCK_TTL_SECONDS
+            )
             return bool(result)
         except Exception:
             logger.error(
