@@ -77,6 +77,13 @@ class CloudSQLPostgres(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self),
         )
 
+        self.metabase_database = sql.Database(
+            f"{name}-metabase-database",
+            name="metabase",
+            instance=self.instance.name,
+            opts=pulumi.ResourceOptions(parent=self),
+        )
+
         self.user = sql.User(
             f"{name}-user",
             name="context",
