@@ -10,9 +10,16 @@ storage:
       db_name:
         env: POSTGRES_DATABASE
 
+scheduler:
+  max_catchup_runs: 1
+
 run_queue:
   max_concurrent_runs: 10
   dequeue_interval_seconds: 5
+  tag_concurrency_limits:
+    - key: "schedule_type"
+      value: "maintenance"
+      limit: 3
 
 code_servers:
   local_startup_timeout: 180
