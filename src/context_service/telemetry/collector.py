@@ -39,8 +39,6 @@ class TelemetryPayload:
     total_recall_ops: int = 0
     error_rate: float = 0.0
     latency_mean_ms: float = 0.0
-    latency_p50_ms: float = 0.0
-    latency_p95_ms: float = 0.0
     tool_counts: dict[str, int] = field(default_factory=dict)
     silo_metrics: dict[str, SiloMetrics] = field(default_factory=dict)
 

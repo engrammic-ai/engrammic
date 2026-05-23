@@ -57,8 +57,8 @@ def test_collector_all_silos_flag():
     assert payload.tier == 2
 
 
-def test_telemetry_payload_has_percentile_fields() -> None:
-    """TelemetryPayload includes p50/p95 latency and tool_counts."""
+def test_telemetry_payload_has_tool_counts_field() -> None:
+    """TelemetryPayload includes tool_counts dict."""
     from context_service.telemetry.collector import TelemetryPayload
 
     payload = TelemetryPayload(
@@ -66,13 +66,9 @@ def test_telemetry_payload_has_percentile_fields() -> None:
         version="0.1.0",
         tier=1,
         uptime_seconds=100.0,
-        latency_p50_ms=50.0,
-        latency_p95_ms=150.0,
         tool_counts={"remember": 10, "recall": 25},
     )
 
-    assert payload.latency_p50_ms == 50.0
-    assert payload.latency_p95_ms == 150.0
     assert payload.tool_counts == {"remember": 10, "recall": 25}
 
 

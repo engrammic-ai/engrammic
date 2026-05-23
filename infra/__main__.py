@@ -114,8 +114,6 @@ context_service = ContextServiceRun(
         "CUSTODIAN__ENABLED": "true",
         "LOG_LEVEL": "INFO",
         "OAUTH__ISSUER": "https://api.engrammic.ai" if env == "prod" else f"https://{env}.engrammic.ai",
-        # Observability
-        "OTEL_ENABLED": "true",
         # Telemetry beacon (URL set via config, secret from Pulumi secrets)
         "TELEMETRY__BEACON_SECRET": config.get_secret("beacon_secret") or "",
         "TELEMETRY__BEACON_URL": f"https://tel.engrammic.ai/v1/beacon" if env in ("beta", "prod") else "",
