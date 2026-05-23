@@ -1,6 +1,17 @@
+from unittest.mock import MagicMock
+
 from prometheus_client import CollectorRegistry
 
 from context_service.telemetry.collector import TelemetryCollector, TelemetryPayload
+
+
+def _make_sample(name: str, labels: dict, value: float) -> MagicMock:
+    """Create a mock Prometheus sample with correct attribute structure."""
+    sample = MagicMock()
+    sample.name = name
+    sample.labels = labels
+    sample.value = value
+    return sample
 
 
 def test_collector_returns_payload():
@@ -63,3 +74,26 @@ def test_telemetry_payload_has_percentile_fields() -> None:
     assert payload.latency_p50_ms == 50.0
     assert payload.latency_p95_ms == 150.0
     assert payload.tool_counts == {"remember": 10, "recall": 25}
+
+
+def test_collector_extracts_tool_counts() -> None:
+    """Collector extracts MCP tool call counts from registry."""
+    # Mock registry with tool counter samples
+    mock_registry = MagicMock()
+    mock_metric = MagicMock()
+    mock_metric.samples = [
+        _make_sample("mcp_tool_calls_total", {"tool": "remember"}, 10),
+        _make_sample("mcp_tool_calls_total", {"tool": "recall"}, 25),
+        _make_sample("mcp_tool_calls_total", {"tool": "learn"}, 5),
+    ]
+    mock_registry.collect.return_value = [mock_metric]
+
+    collector = TelemetryCollector(
+        install_id="test",
+        version="0.1.0",
+        registry=mock_registry,
+    )
+
+    payload = collector.collect()
+
+    assert payload.tool_counts == {"remember": 10, "recall": 25, "learn": 5}
