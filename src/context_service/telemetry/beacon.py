@@ -21,9 +21,11 @@ class BeaconService:
         beacon_url: str,
         interval_hours: int,
         enabled: bool = True,
+        beacon_secret: str = "",
     ) -> None:
         self._collector = collector
         self._beacon_url = beacon_url
+        self._beacon_secret = beacon_secret
         self._interval_seconds = interval_hours * 3600
         self._enabled = enabled
         self._task: asyncio.Task[None] | None = None
@@ -54,10 +56,14 @@ class BeaconService:
 
         try:
             payload = self._collector.collect()
+            headers: dict[str, str] = {}
+            if self._beacon_secret:
+                headers["X-Beacon-Secret"] = self._beacon_secret
             async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(
                     self._beacon_url,
                     json=asdict(payload),
+                    headers=headers,
                 )
                 if resp.status_code >= 400:
                     logger.warning(

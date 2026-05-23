@@ -546,11 +546,15 @@ class TelemetryConfig(BaseModel):
         description="Tier 2: silo IDs to include in telemetry. Empty = tier 1 only. ['*'] = all silos.",
     )
     beacon_url: str = Field(
-        default="https://tel.engrammic.com/v1/beacon",
+        default="https://tel.engrammic.ai/v1/beacon",
         description="Endpoint for telemetry heartbeats",
     )
+    beacon_secret: str = Field(
+        default="",
+        description="Secret for authenticating to beacon service (X-Beacon-Secret header)",
+    )
     beacon_interval_hours: int = Field(
-        default=24,
+        default=1,
         ge=1,
         le=168,
         description="Hours between beacon heartbeats",

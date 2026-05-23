@@ -39,6 +39,7 @@ class TelemetryPayload:
     total_recall_ops: int = 0
     error_rate: float = 0.0
     latency_mean_ms: float = 0.0
+    tool_counts: dict[str, int] = field(default_factory=dict)
     silo_metrics: dict[str, SiloMetrics] = field(default_factory=dict)
 
 
@@ -83,6 +84,7 @@ class TelemetryCollector:
         latency_sum = 0.0
         latency_count = 0
         silos_seen: set[str] = set()
+        tool_counts: dict[str, int] = {}
 
         for metric in self._registry.collect():
             for sample in metric.samples:
@@ -104,10 +106,14 @@ class TelemetryCollector:
                             metric, "context_store_latency_seconds_count", labels
                         )
                     )
+                elif name == "mcp_tool_calls_total":
+                    tool_name = labels.get("tool", "unknown")
+                    tool_counts[tool_name] = tool_counts.get(tool_name, 0) + int(value)
 
         payload.total_store_ops = store_sum
         payload.total_recall_ops = recall_sum
         payload.total_silos = len(silos_seen)
+        payload.tool_counts = tool_counts
 
         if latency_count > 0:
             payload.latency_mean_ms = (latency_sum / latency_count) * 1000

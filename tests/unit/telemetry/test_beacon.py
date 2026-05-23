@@ -50,6 +50,41 @@ async def test_beacon_disabled_does_nothing():
 
 
 @pytest.mark.asyncio
+async def test_beacon_sends_secret_header() -> None:
+    """BeaconService sends X-Beacon-Secret header with heartbeats."""
+    from unittest.mock import MagicMock
+
+    mock_collector = MagicMock(spec=TelemetryCollector)
+    mock_collector.collect.return_value = TelemetryPayload(
+        install_id="test",
+        version="0.1.0",
+        tier=1,
+        uptime_seconds=100.0,
+    )
+
+    service = BeaconService(
+        collector=mock_collector,
+        beacon_url="https://test.example.com/beacon",
+        beacon_secret="my-secret-123",
+        interval_hours=1,
+        enabled=True,
+    )
+
+    with patch("context_service.telemetry.beacon.httpx.AsyncClient") as mock_client_cls:
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=None)
+        mock_client.post = AsyncMock(return_value=AsyncMock(status_code=200))
+        mock_client_cls.return_value = mock_client
+
+        await service.send_heartbeat()
+
+        mock_client.post.assert_called_once()
+        call_kwargs = mock_client.post.call_args.kwargs
+        assert call_kwargs.get("headers", {}).get("X-Beacon-Secret") == "my-secret-123"
+
+
+@pytest.mark.asyncio
 async def test_beacon_logs_warning_on_4xx(mock_collector):
     with patch("context_service.telemetry.beacon.httpx.AsyncClient") as mock_client_cls:
         mock_client = AsyncMock()

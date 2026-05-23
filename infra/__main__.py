@@ -9,6 +9,7 @@ from components import (
     ContextServiceRun,
     IAMStack,
     InternalDNS,
+    MetabaseRun,
     MigrationJob,
     NetworkStack,
     SecretsStack,
@@ -113,8 +114,9 @@ context_service = ContextServiceRun(
         "CUSTODIAN__ENABLED": "true",
         "LOG_LEVEL": "INFO",
         "OAUTH__ISSUER": "https://api.engrammic.ai" if env == "prod" else f"https://{env}.engrammic.ai",
-        # Observability
-        "OTEL_ENABLED": "true",
+        # Telemetry beacon (URL set via config, secret from Pulumi secrets)
+        "TELEMETRY__BEACON_SECRET": config.get_secret("beacon_secret") or "",
+        "TELEMETRY__BEACON_URL": f"https://tel.engrammic.ai/v1/beacon" if env in ("beta", "prod") else "",
         # Feature flags
         **feature_flags.get(env, {}),
     },
@@ -130,6 +132,7 @@ context_service = ContextServiceRun(
 # Migration job and Beacon service (if Cloud SQL enabled - beta/prod only)
 migration_job = None
 beacon_service = None
+metabase_service = None
 if use_cloudsql:
     # SQLAlchemy format for migration job (uses asyncpg driver)
     database_url_sqlalchemy = pulumi.Output.all(
@@ -161,6 +164,20 @@ if use_cloudsql:
         database_url=database_url_asyncpg,
     )
 
+    # Metabase for internal dashboards
+    metabase_database_url = pulumi.Output.all(
+        postgres_host,
+        config.require_secret("postgres_password"),
+    ).apply(lambda args: f"postgres://context:{quote(args[1], safe='')}@{args[0]}:5432/metabase")
+
+    metabase_service = MetabaseRun(
+        "engrammic-metabase",
+        vpc_id=network.vpc.id,
+        subnet_id=network.private_subnet.name,
+        service_account_email=iam.context_service_run.email,
+        database_url=metabase_database_url,
+    )
+
 # Exports
 pulumi.export("vpc_id", network.vpc.id)
 pulumi.export("stateful_host_ip", stateful_host.instance.network_interfaces[0].network_ip)
@@ -184,3 +201,6 @@ if migration_job:
 
 if beacon_service:
     pulumi.export("beacon_url", beacon_service.service.uri)
+
+if metabase_service:
+    pulumi.export("metabase_url", metabase_service.service.uri)
