@@ -26,7 +26,7 @@
 
 **Create:**
 - `infra/components/metabase.py` - Metabase Cloud Run component
-- `alembic/versions/0007_create_metabase_database.py` - Metabase app DB migration
+- `alembic/versions/0012_create_metabase_database.py` - Metabase app DB migration
 
 **Test:**
 - `tests/unit/telemetry/test_collector.py` - Test new payload fields
@@ -209,6 +209,15 @@ git commit -m "feat(telemetry): add latency percentiles and tool_counts to paylo
 from unittest.mock import MagicMock
 
 
+def _make_sample(name: str, labels: dict, value: float) -> MagicMock:
+    """Create a mock Prometheus sample with correct attribute structure."""
+    sample = MagicMock()
+    sample.name = name
+    sample.labels = labels
+    sample.value = value
+    return sample
+
+
 def test_collector_extracts_tool_counts() -> None:
     """Collector extracts MCP tool call counts from registry."""
     from context_service.telemetry.collector import TelemetryCollector
@@ -217,9 +226,9 @@ def test_collector_extracts_tool_counts() -> None:
     mock_registry = MagicMock()
     mock_metric = MagicMock()
     mock_metric.samples = [
-        MagicMock(name="mcp_tool_calls_total", labels={"tool": "remember"}, value=10),
-        MagicMock(name="mcp_tool_calls_total", labels={"tool": "recall"}, value=25),
-        MagicMock(name="mcp_tool_calls_total", labels={"tool": "learn"}, value=5),
+        _make_sample("mcp_tool_calls_total", {"tool": "remember"}, 10),
+        _make_sample("mcp_tool_calls_total", {"tool": "recall"}, 25),
+        _make_sample("mcp_tool_calls_total", {"tool": "learn"}, 5),
     ]
     mock_registry.collect.return_value = [mock_metric]
     
@@ -582,11 +591,11 @@ git commit -m "feat(infra): add Metabase Cloud Run component"
 ### Task 6: Create Metabase database migration
 
 **Files:**
-- Create: `alembic/versions/0007_create_metabase_database.py`
+- Create: `alembic/versions/0012_create_metabase_database.py`
 
 - [ ] **Step 1: Create the migration**
 
-Create `alembic/versions/0007_create_metabase_database.py`:
+Create `alembic/versions/0012_create_metabase_database.py`:
 
 ```python
 """create metabase database
@@ -609,8 +618,8 @@ from sqlalchemy import text
 
 from alembic import op
 
-revision: str = "0007"
-down_revision: str = "0006"
+revision: str = "0012"
+down_revision: str = "0011"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -650,7 +659,7 @@ Run: `uv run python -c "import alembic.versions; print('syntax ok')"`
 - [ ] **Step 3: Commit**
 
 ```bash
-git add alembic/versions/0007_create_metabase_database.py
+git add alembic/versions/0012_create_metabase_database.py
 git commit -m "feat(db): add metabase database migration placeholder"
 ```
 
@@ -659,11 +668,11 @@ git commit -m "feat(db): add metabase database migration placeholder"
 ### Task 7: Seed hosted beacon secret migration
 
 **Files:**
-- Create: `alembic/versions/0008_seed_hosted_beacon_secret.py`
+- Create: `alembic/versions/0013_seed_hosted_beacon_secret.py`
 
 - [ ] **Step 1: Create the migration**
 
-Create `alembic/versions/0008_seed_hosted_beacon_secret.py`:
+Create `alembic/versions/0013_seed_hosted_beacon_secret.py`:
 
 ```python
 """seed hosted beacon secret
@@ -685,8 +694,8 @@ from sqlalchemy import text
 
 from alembic import op
 
-revision: str = "0008"
-down_revision: str = "0007"
+revision: str = "0013"
+down_revision: str = "0012"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -724,7 +733,7 @@ def downgrade() -> None:
 - [ ] **Step 2: Commit**
 
 ```bash
-git add alembic/versions/0008_seed_hosted_beacon_secret.py
+git add alembic/versions/0013_seed_hosted_beacon_secret.py
 git commit -m "feat(db): seed hosted service beacon secret"
 ```
 
