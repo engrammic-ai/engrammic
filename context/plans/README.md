@@ -50,8 +50,11 @@ Specced or checkpointed for later implementation:
 
 | Item | Spec/Note | Trigger |
 |------|-----------|---------|
+| **ML Products for Frontier Labs** | [ml-products-frontier-labs-design.md](../../docs/superpowers/specs/2026-05-23-ml-products-frontier-labs-design.md) | Post-fundraise; requires data capture instrumentation first |
 | **Self-Hosted REST API Phase 2+** | [self-hosted-rest-api-design.md](../../docs/superpowers/specs/2026-05-20-self-hosted-rest-api-design.md) | After Phase 1 ships; Wisdom/Intelligence/Graph/Admin endpoints |
 | **Concepts** | [concepts-design.md](../../docs/superpowers/specs/2026-05-18-concepts-design.md) | Post-closed-beta, when retrieval quality degrades at scale |
+
+**ML Products for Frontier Labs:** Two products: Heat Model (context prioritization, TGNN) and Memory Module (epistemic reasoning, adapter/LoRA). Strategy is open weights first (Llama/Mistral), build momentum, then frontier labs adopt/acquire/partner. Requires data capture instrumentation in context-service before training can begin.
 
 **Self-Hosted REST API:** Layer-aligned REST surface for self-hosted deployments. Phase 1 covers auth (proxy/JWT/API key) + Memory/Knowledge. Phase 2+ covers Wisdom, Intelligence, Graph, Search, Admin API.
 
