@@ -45,6 +45,12 @@ _source_tier_counter: metrics.Counter | None = None
 _embedding_cache_hit_counter: metrics.Counter | None = None
 _embedding_cache_miss_counter: metrics.Counter | None = None
 _belief_confidence: metrics.Histogram | None = None
+_cache_hit_counter: metrics.Counter | None = None
+_cache_miss_counter: metrics.Counter | None = None
+_cache_eviction_counter: metrics.Counter | None = None
+_recall_latency: metrics.Histogram | None = None
+_recall_depth_counter: metrics.Counter | None = None
+_recall_result_count: metrics.Histogram | None = None
 
 
 def setup_metrics(service_name: str = "context-service") -> None:
@@ -71,7 +77,13 @@ def setup_metrics(service_name: str = "context-service") -> None:
         _source_tier_counter, \
         _embedding_cache_hit_counter, \
         _embedding_cache_miss_counter, \
-        _belief_confidence
+        _belief_confidence, \
+        _cache_hit_counter, \
+        _cache_miss_counter, \
+        _cache_eviction_counter, \
+        _recall_latency, \
+        _recall_depth_counter, \
+        _recall_result_count
 
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     if not endpoint:
@@ -257,6 +269,37 @@ def setup_metrics(service_name: str = "context-service") -> None:
     _belief_confidence = _meter.create_histogram(
         name="belief.confidence",
         description="Confidence score of declared beliefs",
+        unit="1",
+    )
+
+    _cache_hit_counter = _meter.create_counter(
+        name="cache.hit",
+        description="Cache hits",
+        unit="1",
+    )
+    _cache_miss_counter = _meter.create_counter(
+        name="cache.miss",
+        description="Cache misses",
+        unit="1",
+    )
+    _cache_eviction_counter = _meter.create_counter(
+        name="cache.eviction",
+        description="Cache evictions",
+        unit="1",
+    )
+    _recall_latency = _meter.create_histogram(
+        name="recall.latency",
+        description="Recall operation latency",
+        unit="ms",
+    )
+    _recall_depth_counter = _meter.create_counter(
+        name="recall.depth",
+        description="Recall depth distribution",
+        unit="1",
+    )
+    _recall_result_count = _meter.create_histogram(
+        name="recall.result_count",
+        description="Number of results returned by recall",
         unit="1",
     )
 
@@ -496,6 +539,69 @@ def record_belief_confidence(confidence: float, silo_id: str | None = None) -> N
     if silo_id:
         attributes["silo_id"] = silo_id
     _belief_confidence.record(confidence, attributes)
+
+
+def record_cache_hit(cache_type: str, silo_id: str | None = None) -> None:
+    if _cache_hit_counter is None:
+        return
+    attrs: dict[str, str] = {"cache_type": cache_type}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _cache_hit_counter.add(1, attrs)
+
+
+def record_cache_miss(cache_type: str, silo_id: str | None = None) -> None:
+    if _cache_miss_counter is None:
+        return
+    attrs: dict[str, str] = {"cache_type": cache_type}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _cache_miss_counter.add(1, attrs)
+
+
+def record_cache_eviction(cache_type: str, silo_id: str | None = None) -> None:
+    if _cache_eviction_counter is None:
+        return
+    attrs: dict[str, str] = {"cache_type": cache_type}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _cache_eviction_counter.add(1, attrs)
+
+
+def record_recall_latency(
+    duration_ms: float,
+    depth: int,
+    source: str,
+    silo_id: str | None = None,
+) -> None:
+    if _recall_latency is None:
+        return
+    attrs: dict[str, str] = {"depth": str(depth), "source": source}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _recall_latency.record(duration_ms, attrs)
+
+
+def record_recall_depth(depth: int, silo_id: str | None = None) -> None:
+    if _recall_depth_counter is None:
+        return
+    attrs: dict[str, str] = {"depth": str(depth)}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _recall_depth_counter.add(1, attrs)
+
+
+def record_recall_result_count(
+    count: int,
+    layer: str,
+    silo_id: str | None = None,
+) -> None:
+    if _recall_result_count is None:
+        return
+    attrs: dict[str, str] = {"layer": layer}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _recall_result_count.record(count, attrs)
 
 
 # Public references used for import checks and direct access
