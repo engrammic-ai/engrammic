@@ -99,7 +99,7 @@ SAGE operates independently of user-facing MCP tools. The tools handle real-time
 | Recall knowledge | context_recall | - |
 | Synthesize beliefs | - | sage.synthesizer |
 | Update heat scores | - | sage.groundskeeper |
-| Accept/reject beliefs | context_accept_belief | - |
+| Accept/reject beliefs | accept / reject | - |
 
 ## Monitoring
 

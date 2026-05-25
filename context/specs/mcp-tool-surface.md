@@ -50,8 +50,8 @@ Secondary: Human-in-loop with approval gates
 | `context_belief_state` | Query live session WorkingHypotheses and detect contradictions |
 | `context_update_belief` | Mutate a WorkingHypothesis in-place |
 | `context_crystallize` | Promote WorkingHypotheses to Commitments (Wisdom layer) |
-| `context_accept_belief` | Accept a ProposedBelief, converting it to a Belief |
-| `context_reject_belief` | Reject a ProposedBelief with optional reason |
+| `accept` | Accept a ProposedBelief, converting it to a Belief |
+| `reject` | Reject a ProposedBelief with optional reason |
 
 ---
 

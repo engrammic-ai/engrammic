@@ -338,8 +338,8 @@ These are NOT exposed to external agents. Used by SAGE and internal systems via 
 | Current Tool | Internal Use |
 |--------------|--------------|
 | context_admin | Silo management, session lifecycle |
-| context_accept_belief | sage.synthesizer accepting ProposedBeliefs |
-| context_reject_belief | sage.synthesizer rejecting ProposedBeliefs |
+| accept | Agent-facing verb for accepting ProposedBeliefs (reasoning profile) |
+| reject | Agent-facing verb for rejecting ProposedBeliefs (reasoning profile) |
 | context_belief_state | Internal session inspection (replaced by `recall(include_hypotheses=True)` for agents) |
 
 ## MCP Instructions
@@ -710,8 +710,8 @@ def get_profile() -> str:
 | context_update_belief | revise | reasoning profile |
 | context_crystallize | commit | reasoning profile |
 | context_admin | (internal only) | |
-| context_accept_belief | (internal only) | |
-| context_reject_belief | (internal only) | |
+| context_accept_belief | accept | reasoning profile |
+| context_reject_belief | reject | reasoning profile |
 | context_belief_state | recall(include_hypotheses=true) | Merged into recall |
 | context_skills | patterns | renamed, always available, workflow templates |
 
