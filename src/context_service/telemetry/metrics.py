@@ -51,6 +51,10 @@ _cache_eviction_counter: metrics.Counter | None = None
 _recall_latency: metrics.Histogram | None = None
 _recall_depth_counter: metrics.Counter | None = None
 _recall_result_count: metrics.Histogram | None = None
+_tool_error_counter: metrics.Counter | None = None
+_supersession_used_counter: metrics.Counter | None = None
+_supersession_skipped_counter: metrics.Counter | None = None
+_node_confidence: metrics.Histogram | None = None
 
 
 def setup_metrics(service_name: str = "context-service") -> None:
@@ -83,7 +87,11 @@ def setup_metrics(service_name: str = "context-service") -> None:
         _cache_eviction_counter, \
         _recall_latency, \
         _recall_depth_counter, \
-        _recall_result_count
+        _recall_result_count, \
+        _tool_error_counter, \
+        _supersession_used_counter, \
+        _supersession_skipped_counter, \
+        _node_confidence
 
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     if not endpoint:
@@ -300,6 +308,30 @@ def setup_metrics(service_name: str = "context-service") -> None:
     _recall_result_count = _meter.create_histogram(
         name="recall.result_count",
         description="Number of results returned by recall",
+        unit="1",
+    )
+
+    _tool_error_counter = _meter.create_counter(
+        name="tool.error",
+        description="Tool errors by type",
+        unit="1",
+    )
+
+    _supersession_used_counter = _meter.create_counter(
+        name="store.supersession_used",
+        description="Writes that used supersession",
+        unit="1",
+    )
+
+    _supersession_skipped_counter = _meter.create_counter(
+        name="store.supersession_skipped",
+        description="Duplicates caught by Custodian that should have been supersession",
+        unit="1",
+    )
+
+    _node_confidence = _meter.create_histogram(
+        name="node.confidence",
+        description="Confidence distribution at write time",
         unit="1",
     )
 
@@ -602,6 +634,42 @@ def record_recall_result_count(
     if silo_id:
         attrs["silo_id"] = silo_id
     _recall_result_count.record(count, attrs)
+
+
+def record_tool_error(tool_name: str, error_type: str, silo_id: str | None = None) -> None:
+    if _tool_error_counter is None:
+        return
+    attrs: dict[str, str] = {"tool": tool_name, "error_type": error_type}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _tool_error_counter.add(1, attrs)
+
+
+def record_supersession_used(tool_name: str, silo_id: str | None = None) -> None:
+    if _supersession_used_counter is None:
+        return
+    attrs: dict[str, str] = {"tool": tool_name}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _supersession_used_counter.add(1, attrs)
+
+
+def record_supersession_skipped(silo_id: str | None = None) -> None:
+    if _supersession_skipped_counter is None:
+        return
+    attrs: dict[str, str] = {}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _supersession_skipped_counter.add(1, attrs)
+
+
+def record_node_confidence(confidence: float, layer: str, silo_id: str | None = None) -> None:
+    if _node_confidence is None:
+        return
+    attrs: dict[str, str] = {"layer": layer}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _node_confidence.record(confidence, attrs)
 
 
 # Public references used for import checks and direct access
