@@ -115,13 +115,25 @@ signoz-tunnel:
 # GCP Infrastructure
 # =============================================================================
 
-# Pulumi preview
+# Pulumi preview (current stack)
 infra-preview:
     cd infra && pulumi preview
 
-# Pulumi deploy
+# Pulumi deploy (current stack)
 infra-up:
     cd infra && pulumi up
+
+# Pulumi deploy to specific stack
+infra-up-stack stack:
+    cd infra && pulumi up --stack {{stack}}
+
+# Pulumi deploy dev
+infra-up-dev:
+    cd infra && pulumi up --stack dev
+
+# Pulumi deploy beta
+infra-up-beta:
+    cd infra && pulumi up --stack beta
 
 # Pulumi refresh
 infra-refresh:
