@@ -1351,7 +1351,7 @@ SET existing.valid_to = $valid_from
 WITH cm, COALESCE(cm.tail_id, derived_tail_id) AS tail_id
 MATCH (tail:Commitment {id: tail_id, silo_id: $silo_id})
 SET tail.head_id = cm.id
-RETURN cm.id AS commitment_id
+RETURN cm.id AS commitment_id, cm.confidence AS confidence
 """
 
 
