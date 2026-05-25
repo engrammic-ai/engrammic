@@ -48,6 +48,18 @@ async def _context_accept_belief(
             "message": f"ProposedBelief {proposed_belief_id!r} not found or not pending",
         }
 
+    # Clear touch counter so the agent can recall normally again.
+    # Fire-and-forget: non-fatal if Redis is unavailable.
+    import contextlib
+
+    from context_service.engine.touch_counter import clear_touches
+    from context_service.mcp.server import get_redis
+
+    redis_client = get_redis()
+    if redis_client is not None:
+        with contextlib.suppress(Exception):
+            await clear_touches(redis_client._redis, silo_id, proposed_belief_id)
+
     return {
         "proposed_belief_id": proposed_belief_id,
         "status": "accepted",

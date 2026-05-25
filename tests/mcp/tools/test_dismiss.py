@@ -290,6 +290,62 @@ class TestDismissMarkerInternal:
         assert result["error"] == "service_unavailable"
         assert "Redis" in result["message"]
 
+    @pytest.mark.asyncio
+    async def test_dismiss_clears_touch_counter_on_success(
+        self, mock_context_service, mock_redis_client
+    ):
+        """clear_touches is called with correct silo_id and marker_id after dismiss."""
+        mock_clear = AsyncMock()
+
+        with (
+            patch(
+                "context_service.mcp.server.get_context_service",
+                return_value=mock_context_service,
+            ),
+            patch(
+                "context_service.mcp.server.get_redis",
+                return_value=mock_redis_client,
+            ),
+            patch(
+                "context_service.engine.markers.get_marker_details",
+                new=AsyncMock(
+                    return_value=[
+                        {
+                            "id": "marker-5",
+                            "marker_type": "Contradiction",
+                            "status": "pending",
+                            "about_ids": ["node-a"],
+                        }
+                    ]
+                ),
+            ),
+            patch(
+                "context_service.engine.markers.dismiss_marker",
+                new=AsyncMock(
+                    return_value={
+                        "marker_id": "marker-5",
+                        "marker_type": "Contradiction",
+                        "status": "dismissed",
+                        "resolution": "false positive",
+                        "resolved_at": "2026-01-01T00:00:00Z",
+                    }
+                ),
+            ),
+            patch("context_service.engine.touch_counter.clear_touches", mock_clear),
+        ):
+            from context_service.mcp.tools.dismiss import _dismiss_marker
+
+            result = await _dismiss_marker(
+                marker_id="marker-5",
+                reason="false positive",
+                silo_id="silo-1",
+            )
+
+        assert result["status"] == "dismissed"
+        mock_clear.assert_awaited_once_with(
+            mock_redis_client._redis, "silo-1", "marker-5"
+        )
+
 
 class TestDismissToolRegistration:
     """Tests for tool registration."""

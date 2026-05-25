@@ -68,6 +68,15 @@ async def _dismiss_marker(
         reason=reason,
     )
 
+    # Clear touch counter so the agent can recall normally again.
+    # Fire-and-forget: non-fatal if Redis is unavailable.
+    import contextlib
+
+    from context_service.engine.touch_counter import clear_touches
+
+    with contextlib.suppress(Exception):
+        await clear_touches(redis, silo_id, marker_id)
+
     return {
         "marker_id": result["marker_id"],
         "status": "dismissed",
