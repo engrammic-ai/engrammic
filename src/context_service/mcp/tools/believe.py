@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.rate_limit import rate_limited
 from context_service.mcp.server import get_mcp_auth_context, track_tool_usage
+from context_service.mcp.tools.coerce import coerce_list
 from context_service.mcp.tools.context_store import _context_commit
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.telemetry.metrics import (
@@ -59,7 +60,7 @@ def register(mcp: FastMCP) -> None:
     @mcp_error_boundary
     async def believe(
         belief: str,
-        about: list[str],
+        about: list[str] | str,
         confidence: float = 0.8,
         reasoning: str | None = None,
         supersedes: str | None = None,
@@ -78,8 +79,9 @@ def register(mcp: FastMCP) -> None:
         """
         start = time.perf_counter()
         success = True
+        about_list = coerce_list(about)
         try:
-            return await _believe_impl(belief, about, confidence, reasoning, supersedes)
+            return await _believe_impl(belief, about_list, confidence, reasoning, supersedes)
         except Exception:
             success = False
             raise

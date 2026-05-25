@@ -149,6 +149,37 @@ Record to Meta when your understanding shifts:
 
 The history of belief is as valuable as current belief.
 
+## Engagement: Handling Markers
+
+The system surfaces engagement markers that require your attention. Check `recall` responses for an `engagement` field, or call `tick()` periodically.
+
+**Marker types:**
+- **ProposedBelief:** SAGE synthesized a candidate belief from existing knowledge
+- **Contradiction:** Two knowledge claims conflict
+- **StaleCommitment:** A commitment is outdated relative to newer knowledge
+
+**Two modes:**
+
+| Mode | Behavior | What to do |
+|------|----------|------------|
+| `soft` | Markers are advisory. Results still returned. | Resolve when convenient, don't let them accumulate |
+| `hard` | Results withheld until you resolve at least one marker | Must resolve before continuing |
+
+Hard mode activates after 3+ touches without resolution.
+
+**Resolution verbs:**
+
+| Marker | Right action | Wrong action |
+|--------|--------------|--------------|
+| ProposedBelief (accurate) | `accept(belief_id)` | `dismiss` |
+| ProposedBelief (inaccurate) | `reject(belief_id, reason)` | `dismiss` |
+| Contradiction | `believe(..., supersedes=...)` then `dismiss(marker_id, reason)` | ignore |
+| StaleCommitment | `believe(..., supersedes=...)` then `dismiss(marker_id, reason)` | ignore |
+
+**Proactive checking:** Call `tick()` if many turns have passed without a `recall`. It surfaces pending markers without full recall overhead.
+
+For full details, see the `engrammic:engage` skill.
+
 ## Anti-patterns
 
 **Storing:**
@@ -160,3 +191,8 @@ The history of belief is as valuable as current belief.
 - Waiting to be explicitly asked: be proactive
 - Skipping recall because you're fairly sure: false confidence propagates stale context
 - Recalling on every topic: only when it would change your response
+
+**Engagement:**
+- Ignoring soft markers until they go hard: resolve proactively
+- Using `dismiss` for ProposedBeliefs: use `accept` or `reject` instead
+- Letting contradictions accumulate: they degrade knowledge quality
