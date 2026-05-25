@@ -295,13 +295,15 @@ tests/
 
 Plan B is complete when:
 
-- [ ] Contradiction and StaleCommitment node types exist with indexes
-- [ ] Inline contradiction flagging wired into learn/believe (<20ms overhead)
-- [ ] sage.validator job runs every 5 min, confirms candidates, writes markers
-- [ ] Redis marker index populated and queryable by about-set
-- [ ] Synthesizer thresholds tuned with cooldown and cap
-- [ ] `just check` and `just test` green
-- [ ] Architecture doc updated
+- [x] Contradiction and StaleCommitment node types exist with indexes
+- [x] Inline contradiction flagging wired into learn/believe (<20ms overhead)
+- [x] sage.validator job runs every 5 min, confirms candidates, writes markers
+- [x] Redis marker index populated and queryable by about-set
+- [x] Synthesizer thresholds tuned with cooldown and cap
+- [x] `just check` and `just test` green
+- [x] Architecture doc updated
+
+**Status: SHIPPED 2026-05-25** on branch `feat/telemetry-observability`. Ready for PR.
 
 ---
 
