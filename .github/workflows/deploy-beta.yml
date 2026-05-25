@@ -10,12 +10,11 @@ env:
   PROJECT_ID: engrammic
 
 jobs:
-  build-and-deploy:
+  build-api:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
-
     steps:
       - uses: actions/checkout@v4
 
@@ -36,15 +35,71 @@ jobs:
           gcloud builds submit --config cloudbuild.api.yaml --timeout 600s \
             --substitutions SHORT_SHA=${{ env.SHORT_SHA }}
 
+  build-beacon:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
       - name: Build Beacon image with Cloud Build
         run: |
           gcloud builds submit --config cloudbuild.beacon.yaml --timeout 300s \
             --substitutions SHORT_SHA=${{ env.SHORT_SHA }}
 
+  build-dagster:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
       - name: Build Dagster image with Cloud Build
         run: |
           gcloud builds submit --config cloudbuild.dagster.yaml --timeout 600s \
             --substitutions SHORT_SHA=${{ env.SHORT_SHA }}
+
+  deploy:
+    needs: [build-api, build-beacon, build-dagster]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
 
       - name: Deploy API to Cloud Run
         run: |
