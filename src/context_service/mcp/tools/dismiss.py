@@ -5,6 +5,8 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
+from context_service.mcp.error_boundary import mcp_error_boundary
+from context_service.mcp.server import get_mcp_auth_context, track_tool_usage
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.services.models import derive_silo_id
 from context_service.telemetry.metrics import record_mcp_tool
@@ -69,6 +71,8 @@ async def _dismiss_marker(
     return {
         "marker_id": result["marker_id"],
         "status": "dismissed",
+        "reason": result.get("resolution"),
+        "resolved_at": result.get("resolved_at"),
     }
 
 
@@ -79,6 +83,7 @@ def register(mcp: FastMCP) -> None:
         name="dismiss",
         description=get_tool_description("dismiss"),
     )
+    @mcp_error_boundary
     async def dismiss(
         marker_id: str,
         reason: str,
@@ -96,12 +101,13 @@ def register(mcp: FastMCP) -> None:
                 derived from auth.
 
         Returns:
-            {marker_id, status: "dismissed"}
+            {marker_id, status, reason, resolved_at}
         """
-        from context_service.mcp.server import get_mcp_auth_context, get_silo_service
+        from context_service.mcp.server import get_silo_service
         from context_service.services.silo import validate_silo_ownership
 
         auth = await get_mcp_auth_context()
+        await track_tool_usage(auth, "dismiss")
         if silo_id is not None:
             err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
             if err is not None:
