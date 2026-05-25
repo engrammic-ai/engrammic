@@ -58,8 +58,10 @@ class InternalDNS(pulumi.ComponentResource):
         if signoz_ip:
             self.signoz_record = dns.RecordSet(
                 f"{name}-signoz",
-                name=f"signoz.{self.zone.dns_name}",
+                name=self.zone.dns_name.apply(lambda z: f"signoz.{z}"),
                 type="A",
+                # 300s TTL: SigNoz is a long-lived host; faster than the default but
+                # short enough to converge within minutes if the IP changes.
                 ttl=300,
                 managed_zone=self.zone.name,
                 rrdatas=[signoz_ip],
