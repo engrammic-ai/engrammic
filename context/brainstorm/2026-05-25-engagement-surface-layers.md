@@ -154,155 +154,39 @@ We do not have to invent it. Existing handles:
 
 The cleanest is (1). Auth subject (3) layers on top if and when auth is universal across our deployments.
 
-#### Constraint discovered during spike: `stateless_http=True`
-
-`src/context_service/api/app.py:289` configures the FastMCP server with `stateless_http=True`. In stateless HTTP mode, FastMCP does not maintain per-connection state across requests. Every HTTP request is independent. `fastmcp_context` is not stable across calls, even within a logical "session."
-
-This is a deliberate config choice — stateless mode enables horizontal scaling without sticky sessions or shared session state. Flipping to stateful is not free: it imposes sticky LB sessions or Redis-backed session state, which we do not want to take on for engagement alone.
-
-Implication: **server-side connection identity does not exist as currently deployed**. Any session-state design must rely on something the client sends, not something the server tracks per-connection.
-
-#### Existing infrastructure
-
-`src/context_service/mcp/server.py:271` already extracts `x-session-id`, `x-agent-id`, `x-org-id`, and `authorization` headers from incoming HTTP requests. The mechanism for client-sent identity is already wired. We are not adding plumbing; we are deciding what to do with it.
-
-The MCP spec also defines `mcp-session-id` as the standard header for HTTP-streamable session identity, separate from our custom `x-session-id`.
-
 #### Revised options
 
-- **Option A (revised again): Consume `x-session-id` / `mcp-session-id` header.** Server keys engagement state off the header the client sends. Redis keys `(silo_id, session_id, about_node_id) -> touch_count` with time decay. Stateless HTTP preserved. Burden on client/harness to send a stable identifier per their own session concept. No round-trip at the agent level — the harness handles the header in its MCP config.
-- **Option B: Make the server stateful.** Flip `stateless_http=False`, add sticky sessions or Redis-backed FastMCP session state. Breaks the current scaling model for one feature. Rejected unless engagement proves to need it.
+- **Option A (revised): Server-managed state keyed off MCP connection identity.** No token round-tripping. Server uses the transport-provided connection identifier as the agent handle. Redis keys `(silo_id, connection_id, about_node_id) -> touch_count` with time decay (exponential or sliding window). Multi-agent precision falls out naturally because each connection is distinct.
+- **Option B: Client-managed UUID.** Agent generates and passes a session identifier. De-prioritized: assumes harness behavior we do not control, and we already get equivalent identity from the transport.
 - **Option C: Stateless recompute.** Recompute "touched recently" from graph traversal at recall time. No state stored. Pushes work into the recall hot path. Demoted to future / if Redis becomes a bottleneck.
-- **Option D (rejected earlier): Heat as the threshold.** Silo-scoped heat conflates concurrent agents in the same silo. Wrong for the intended multi-agent deployment pattern.
-- **Option E: Auth subject.** Use the authenticated principal as identity. Only works when auth is universal across deployments. Not the case in beta yet. Layers on top of A naturally: `(silo, auth_subject, session_id)` becomes the richer tuple when auth is everywhere.
+- **Option D (rejected): Heat as the threshold.** Silo-scoped heat conflates concurrent agents in the same silo. Wrong for the intended multi-agent deployment pattern. Rejected.
 
-Current lean: A revised again. Header-keyed, time-decayed, stateless HTTP preserved.
+Current lean: A revised. Connection-keyed, time-decayed, no round-trip.
 
-#### The lower bar that makes this work
+#### Failure modes to price before committing
 
-The engagement threshold (time-decayed touches) only needs stability *within a single MCP client process / conversation*, not across reconnects. If a client reconnects mid-task and rotates `x-session-id`, touch counts reset and hard checkpoint under-fires until counts rebuild. Graceful degradation, not a broken design.
+- **Connection drops mid-task.** New connection means fresh identity and a reset counter. Stdio: rare (process restart). HTTP-streamable: depends on how clients handle session IDs across requests. Worth verifying our FastMCP transports give stable connection identity in practice, not just in spec.
+- **Sub-agents.** A parent Claude Code dispatching Task workers: do they share the parent's MCP connection or open their own? If shared, the threshold fires correctly (one logical agent). If split, touches are diluted across N workers and threshold under-fires. This needs to be tested against actual harness behavior, not assumed.
+- **Connection ID stability across reconnects.** Most transports rotate connection IDs on reconnect. The counter resets, threshold under-fires for the rest of that logical task. Acceptable for now; auth subject layered on later resolves it.
 
-This matters because most harnesses likely manage session ID per process/conversation, not across restarts. We do not need cross-reconnect stability to ship.
+#### Spike to do before locking this in
 
-#### Failure modes to price
+Verify what FastMCP gives us as a stable connection identifier across stdio, SSE, and HTTP-streamable transports. Roughly 30 minutes. Outcome determines whether revised-A is implementable as written or needs auth-subject from day one.
 
-- **Harnesses do not send a session header by default.** Then engagement state can only be keyed by silo, which collapses concurrent agents. Mitigation: ship "add `x-session-id: <uuid>` to your MCP client config" instructions in the installer / skill bundle. Acceptable papercut.
-- **Sub-agents.** A parent Claude Code dispatching Task workers: do they share the parent's session header or open new ones? If shared, threshold fires correctly. If split, touches are diluted across N workers and threshold under-fires. Needs empirical testing.
-- **Header forgery.** A malicious client could send a session header matching another tenant. Mitigated by silo scoping already in place (sessions are namespaced under `silo_id`). Within a silo, header forgery is not a meaningful threat model because anyone with silo access can already read/write everything.
+### 3. `commit` extension vs separate accept/reject agent verbs
 
-#### Empirical findings from spike
+Two shapes for the same behavior:
 
-A standalone FastMCP probe server (`scripts/probe_identity_server.py`) was hit from Claude Code 2.1.150. Results:
+- **Option A: Extend `commit`.** `commit(hypothesis_ids?, marker_ids?)` accepts either. Semantically: "I commit to this," whether it's my own hypothesis or a system-proposed belief. Surface stays small.
+- **Option B: Add agent-facing `accept(marker_id)` / `reject(marker_id)`.** Mirrors the internal verbs. Clearer separation between "I authored this belief" (commit) and "I ratified a system-proposed belief" (accept).
 
-**Stateless mode (matches production):**
-- No `mcp-session-id`, `x-session-id`, `x-agent-id`, or `authorization` headers sent by Claude Code
-- `client_id` always null (comes from MCP request `meta`, not auth)
-- `session_id` (FastMCP attribute) rotates per request — fresh UUID every call
-- `fmc_id` (Python object id of fastmcp_context) rotates per request
-- **Conclusion:** stateless mode provides zero stable agent identity server-side, and Claude Code sends nothing identity-bearing at the HTTP level
+Tradeoffs: A keeps the agent surface smaller (good for adoption, fewer verbs to learn). B is semantically cleaner and matches the SAGE-vs-agent belief flow split documented in CLAUDE.md.
 
-**Stateful mode (`stateless_http=False`):**
-- Server mints `mcp-session-id` on initialize, Claude Code echoes it back on every subsequent request
-- `session_id` (FastMCP) stable across all calls in the connection
-- Zero client config needed — Claude Code participates in MCP session protocol correctly
-- **Blocked:** Cloud Run cold-start race (`Received request before initialization was complete`). Documented in `git show 58cfa20`. Known upstream issue (modelcontextprotocol/python-sdk#737, #1053). Already mitigated in our codebase by combined-lifespan composition in `api/app.py:303` — yet the error still occurred on Cloud Run. Fixing is a multi-hour platform investigation (FastMCP version bump, low-level `StreamableHTTPSessionManager` refactor, or Cloud Run `min-instances=1`), not pre-engagement work.
-
-#### Locked: Path 1 (stateless + installer-distributed header)
-
-Stateless HTTP preserved. Engrammic's installer writes MCP client configs that include `x-session-id: <stable-uuid>` per install / per session. Server consumes the header (already wired at `server.py:271`), keys engagement state off it.
-
-- Zero user-facing config burden (installer handles it).
-- Hand-configured clients get documented instructions.
-- The cold-start fix can land later as a platform improvement that lets us drop the header requirement.
-- Spec evolution (2026 MCP roadmap standardizes stateless session handling) eventually makes this the future-correct path anyway.
-
-#### Probe cleanup
-
-- Standalone probe at `scripts/probe_identity_server.py` — keep for future spikes
-- Probe was added to `src/context_service/mcp/middleware.py` and reverted in this session
-- `.mcp.json` has `engrammic-probe` entry — remove before merging engagement layer 1
-
-### 3. Verb shape for responding to engagement
-
-The engagement payload's `decision_required` field carries one of `commit | revise | dismiss` today, but that masks a more nuanced verb question: across the marker zoo, which verbs cleanly express the agent's response?
-
-#### The marker zoo and natural responses
-
-| Marker type | Natural responses |
-|---|---|
-| ProposedBelief (from `sage.synthesizer`) | ratify, modify, reject |
-| Contradiction (from `sage.validator`) | resolve by asserting winning version, or acknowledge unresolved |
-| WorkingHypothesis (touched repeatedly) | crystallize, update, drop |
-| StaleCommitment (new evidence arrived) | form a new commitment, acknowledge as stale |
-
-`commit` only naturally fits ProposedBelief and WorkingHypothesis. Contradictions and stale commitments are better served by `revise` (assert a new version) or `dismiss` (acknowledge without resolving).
-
-#### Options
-
-- **Option A: Extend `commit`.** `commit(hypothesis_ids?, marker_ids?)` accepts either. Mental model: "I commit to this," whether self-authored or system-proposed.
-- **Option B: Promote internal verbs to agent surface.** `context_accept_belief` and `context_reject_belief` already exist as internal-only tools. Promote them as agent-facing `accept(marker_id)` and `reject(marker_id, reason)`, mirroring the SAGE-vs-agent belief flow split.
-
-#### The discriminator
-
-The cost calculus for B is different than it first appears. The verbs already exist in the codebase (`src/context_service/mcp/tools/context_accept_belief.py`, `context_reject_belief.py`). Promotion is mostly a yaml change to add them to a profile — not new code, new tests, or new semantics.
-
-That weakens the "smaller surface" argument for A. We're not comparing "add 2 verbs" vs "extend 1 verb." We're comparing "expose 2 existing verbs" vs "extend 1 verb and lose semantic fidelity."
-
-#### Why semantic fidelity matters here
-
-Engrammic's product positioning is epistemic rigor. Provenance and trace are differentiators, not internal details. Three concrete places where the distinction matters:
-
-- **Trace.** `trace(node_id)` should say "this belief was system-synthesized and ratified by the agent" vs "this belief was authored by the agent." Same verb (unified `commit`) produces ambiguous provenance unless we encode it back into a parameter, at which point separate verbs are cleaner.
-- **Audit.** When a belief turns out wrong, knowing whether the agent generated it or merely accepted it changes failure-mode analysis.
-- **Trust calibration.** A user reviewing memory should distinguish "the agent reasoned to this" from "the system proposed and the agent didn't push back." Different epistemic acts.
-
-The asymmetry is honest: ratifying a system proposal is a different epistemic act than crystallizing one's own reasoning. The surface should reflect that.
-
-#### Resolution
-
-**Option B.** Promote `context_accept_belief` and `context_reject_belief` to agent-facing `accept` and `reject`.
-
-> Plan A (verb promotion) shipped 2026-05-25 via `context/plans/2026-05-25-engagement-plan-a-verb-promotion.md`. `accept` and `reject` are live in the reasoning profile.
-
-Final verb set for engagement response:
-
-- `commit(hypothesis_ids)` — unchanged, agent's own hypotheses only
-- `accept(marker_id)` — agent ratifies a ProposedBelief (promoted from internal)
-- `reject(marker_id, reason)` — agent rejects a ProposedBelief, marker archived, SAGE marks belief do-not-re-propose (promoted from internal)
-- `revise(hypothesis_id | marker_id, ...)` — extended to handle contradiction and stale-commitment resolution via supersession; auto-archives the marker
-- `dismiss(marker_id, reason)` — new verb for non-ProposedBelief markers; "saw and chose not to act"
-
-Five verbs touch engagement, but each does one thing. The "not now" vs "rejected" distinction is preserved naturally: `reject` for ProposedBelief, `dismiss` for everything else.
-
-### 4. Validator architecture (Plan B)
-
-How does sage.validator detect contradictions and stale commitments?
-
-#### Options considered
-
-- **A: Pure Batch** — validator scans every 15 min. Simple but 15-min delay.
-- **B: Inline + Async** — contradiction check inline, async marker write. Near-real-time but 50-100ms overhead.
-- **C: Hybrid** — inline embedding check sets flag (~20ms), batch validator confirms via LLM every 5 min.
-
-#### Resolution
-
-**Option C (Hybrid).** Inline flagging keeps write path fast. Batch confirmation matches existing SAGE patterns. 5-min delay is acceptable for engagement surfacing.
-
-> Plan B (SAGE prerequisites) specced 2026-05-25 via `context/plans/2026-05-25-engagement-plan-b-sage-prerequisites.md`. Introduces Contradiction/StaleCommitment markers, Redis index, validator job.
+Current lean: A. Smaller surface wins. The semantic distinction matters internally but not at the agent verb level. We can keep `accept` / `reject` as internal-only.
 
 ## Layer 2: Hook surface
 
-**Status: checkpointed. Revisit after layer 1 ships.**
-
-Layer 2 design is deferred until layer 1 is implemented and we have engagement-rate data from real deployments. The shape below is sketched only to ensure layer 1 does not preclude it — concrete design happens after we know what layer 1 actually achieves on its own.
-
-What we need from layer 1 to keep layer 2 viable:
-
-- `tick`-shaped verb exists (or can be added without redesign). Reads only the precomputed marker index.
-- Engagement payload shape is stable enough to reuse outside recall.
-- Marker index supports fast lookup by about-set.
-
-Sketch (do not lock in):
+Speccing the shape, not the implementation. Layer 1 must not preclude this.
 
 ### `tick` verb
 
@@ -344,11 +228,12 @@ If we get layer 1 right, layer 2 is mostly distribution and harness-specific con
 
 ## Layer 3: Custom harness
 
-**Status: checkpointed indefinitely.** Out of scope as a product.
+Out of scope as a product. Worth a short spec for two reasons:
 
-Decision rule for revisiting: only build if (a) hooks (layer 2) prove empirically insufficient across multiple harnesses, and (b) we have product-market fit and can afford the harness-agnostic positioning breaking. Until both are true, do not build.
+1. **Decision rule.** When (if ever) would we build one? Only if (a) hooks prove empirically insufficient across multiple harnesses, and (b) we have product-market fit and can afford the harness-agnostic story breaking. Until both are true, do not build.
+2. **Competitive intel.** Other agent-memory companies may go this route. Knowing what a full harness would look like helps us evaluate their tradeoffs.
 
-Speccing further is deferred. If competitive pressure makes a research artifact useful, write that separately rather than developing this section.
+Not specced further here.
 
 ## What we measure
 
