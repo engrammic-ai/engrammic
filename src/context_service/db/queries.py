@@ -1461,6 +1461,26 @@ RETURN c.id AS cluster_id, fact_count
 ORDER BY fact_count DESC
 """
 
+GET_PENDING_PROPOSED_BELIEFS_FOR_CLAIMS = """
+MATCH (pb:ProposedBelief {silo_id: $silo_id, status: 'pending'})
+WHERE pb.expires_at IS NULL OR pb.expires_at > datetime()
+WITH pb
+MATCH (pb)-[:SYNTHESIZED_FROM]->(f:Fact)
+WHERE f.id IN $about_ids OR f.silo_id = $silo_id AND EXISTS {
+    MATCH (f)<-[:ABOUT]-(other)
+    WHERE other.id IN $about_ids
+}
+WITH DISTINCT pb
+OPTIONAL MATCH (pb)-[:SYNTHESIZED_FROM]->(f2:Fact)
+RETURN pb.id AS id,
+       pb.content AS content,
+       pb.confidence AS confidence,
+       pb.status AS status,
+       pb.created_at AS created_at,
+       collect(DISTINCT f2.id) AS about_ids
+ORDER BY pb.created_at DESC
+"""
+
 
 # ---------------------------------------------------------------------------
 # Marker queries (SAGE-internal validator types)
