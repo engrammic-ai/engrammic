@@ -212,12 +212,14 @@ tests/
 
 Plan C is complete when:
 
-- [ ] Recall responses include `engagement` field when pending markers touch about-set
-- [ ] `dismiss(marker_id, reason)` verb works for Contradiction/StaleCommitment markers
-- [ ] `dismiss` returns clear error for ProposedBelief markers
-- [ ] `tick` verb returns engagement state without full recall
-- [ ] Engagement detection adds <10ms to recall latency
-- [ ] `just check` and `just test` green
+- [x] Recall responses include `engagement` field when pending markers touch about-set
+- [x] `dismiss(marker_id, reason)` verb works for Contradiction/StaleCommitment markers
+- [x] `dismiss` returns clear error for ProposedBelief markers
+- [x] `tick` verb returns engagement state without full recall
+- [x] Engagement detection adds <10ms to recall latency
+- [x] `just check` and `just test` green
+
+**Status: SHIPPED 2026-05-25** on branch `feat/telemetry-observability`. Ready for PR.
 
 ---
 
