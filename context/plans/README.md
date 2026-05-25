@@ -2,9 +2,11 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-23)
+## Current state (2026-05-25)
 
 **Shipped:**
+- v2.24 Telemetry & Observability (SigNoz infra, OTEL instrumentation for cache/recall/epistemic health)
+- v2.23 Verb Promotion Plan A (accept/reject tools promoted to agent-facing in reasoning profile)
 - v2.22 Rate Limiting (tiered rate limiting for MCP tools and REST routes)
 - v2.21 Beacon Telemetry Pipeline (Metabase dashboards, replaces Cloud Trace)
 - v2.20 Documentation Site (docs.engrammic.ai)
@@ -42,8 +44,6 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
-| [2026-05-25-telemetry-observability.md](./2026-05-25-telemetry-observability.md) | SigNoz infra + OTEL instrumentation for cache, recall, and epistemic health metrics | Ready to execute |
-| [2026-05-25-engagement-plan-a-verb-promotion.md](./2026-05-25-engagement-plan-a-verb-promotion.md) | Engagement layer 1 Plan A: promote `accept`/`reject` from internal-only to agent-facing in the `reasoning` profile | Ready to execute |
 | [2026-05-20-self-hosted-rest-api-phase1.md](./2026-05-20-self-hosted-rest-api-phase1.md) | Self-hosted REST API: auth + Memory/Knowledge endpoints | Ready to execute |
 
 ## Future work
@@ -90,6 +90,8 @@ Specced or checkpointed for later implementation:
 ## Archive
 
 Completed plans in `archive/`:
+- Telemetry & Observability (2026-05-25) - SigNoz infra, OTEL metrics for cache/recall/epistemic health
+- Verb Promotion Plan A (2026-05-25) - accept/reject promoted to agent-facing in reasoning profile
 - Rate Limiting (2026-05-23) - tiered rate limiting for MCP tools and REST routes
 - Beacon Telemetry Pipeline (2026-05-23) - Metabase dashboards, replaces Cloud Trace
 - Documentation Site (2026-05-22) - docs.engrammic.ai

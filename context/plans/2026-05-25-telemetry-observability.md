@@ -1,6 +1,6 @@
 # Telemetry and Observability Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status:** SHIPPED (2026-05-25). Branch `feat/telemetry-observability` ready to merge. Deploy with `pulumi up --stack beta`.
 
 **Goal:** Add full observability stack with self-hosted SigNoz and comprehensive metrics instrumentation for closed beta.
 
