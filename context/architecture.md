@@ -140,7 +140,7 @@ class HyperGraphStore(Protocol):
 |-------|------|---------|---------|
 | MemgraphStore | `stores/memgraph.py` | Memgraph | Graph storage (nodes, edges, traversals) |
 | QdrantClient | `stores/qdrant.py` | Qdrant | Vector storage (embeddings, similarity search) |
-| RedisClient | `stores/redis.py` | Redis | Caching, rate limiting, Custodian batching |
+| RedisClient | `stores/redis.py` | Redis | Caching, rate limiting, SAGE batching |
 
 ### Query Organization
 
@@ -151,27 +151,27 @@ Graph queries live in dedicated modules:
 | Engine queries | `engine/queries.py` | Content node CRUD, supersession, version chains |
 | DB queries | `db/queries.py` | Belief/Commitment/Pattern queries, synthesis |
 
-## Custodian Pipeline
+## SAGE Pipeline
 
 Background synthesis system that promotes, consolidates, and maintains the knowledge graph.
 
 ```
 src/context_service/custodian/
 ├── pipeline.py           # Validation pipeline (citation + business rules)
-├── agents.py             # LLM agents (Synthesizer, Custodian)
+├── agents.py             # LLM agents (sage.synthesizer, sage.custodian)
 ├── dispatch.py           # Job dispatch to Dagster
 ├── handlers/             # Stage handlers (extraction, synthesis, etc.)
 ├── identities/           # Trigger systems (batch, async)
 ├── sensors/              # Dagster sensors
 ├── validators.py         # Citation validation
 ├── business_rules.py     # Acceptance criteria
-└── models.py             # Custodian DTOs
+└── models.py             # SAGE DTOs
 ```
 
 ### Synthesis Flow
 
 ```
-[Knowledge write] -> AsyncBatchTrigger -> Custodian Identity
+[Knowledge write] -> AsyncBatchTrigger -> sage.custodian
                                                |
                                                v
                                      Extraction (LLM)
@@ -189,6 +189,7 @@ src/context_service/custodian/
                               |                                 |
                         Fact Promotion                  Belief Synthesis
                      (Knowledge -> Fact)            (Facts -> ProposedBelief)
+                                                     (sage.synthesizer)
 ```
 
 ### Key Components
@@ -198,11 +199,11 @@ src/context_service/custodian/
 - `BusinessRuleValidator` - Enforces acceptance thresholds
 
 **Agents (LLM-powered):**
-- `Synthesizer` - Generates beliefs from corroborated facts
-- `Custodian` - Extracts claims from documents
+- `sage.synthesizer` - Generates beliefs from corroborated facts
+- `sage.custodian` - Extracts claims from documents
 
 **Triggers:**
-- `AsyncBatchTrigger` - Batches writes, fires Custodian on threshold
+- `AsyncBatchTrigger` - Batches writes, fires sage.custodian on threshold
 
 ## Dagster Integration
 
@@ -225,7 +226,7 @@ src/context_service/pipelines/
 |-----|---------|---------|
 | `groundskeeper_nightly` | Decay, cleanup, maintenance | Schedule (nightly) |
 | `causal_tombstone_job` | Cascade deletes from source | Manual |
-| Custodian synthesis | Process extraction batches | Sensor (on batch ready) |
+| SAGE ingestion | Process extraction batches | Sensor (on batch ready) |
 
 ### Resources
 
@@ -289,7 +290,7 @@ MemgraphStore  QdrantClient
 AsyncBatchTrigger (if Knowledge layer)
     |
     v
-Custodian Pipeline (async)
+SAGE Pipeline (async)
 ```
 
 ### Read Path (Agent <- Storage)
@@ -327,7 +328,7 @@ RedisCache   QdrantClient  MemgraphStore
 2. **Silo isolation** - All queries scoped by `silo_id`
 3. **Supersession chains** - Superseded nodes have `valid_to` set; queries return chain heads
 4. **Evidence requirement** - Knowledge layer writes require `evidence_uri`
-5. **Async synthesis** - Custodian runs async, doesn't block writes
+5. **Async synthesis** - SAGE runs async, doesn't block writes
 
 ## Configuration
 

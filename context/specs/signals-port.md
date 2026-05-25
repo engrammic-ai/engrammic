@@ -6,7 +6,7 @@
 
 ## Goal
 
-Port the three signal subsystems from `prototype` (`pipelines/assets/heat.py`, `app/services/access_events.py`, retrieval-time freshness in `app/services/context.py`, `app/custodian/priority.py`) into `context-service/src/context_service/signals/`. The custodian must visit hot-and-uncertain content first (cost control); retrieval must penalise stale content; the demo must be able to show "the system gets sharper on what you actually use."
+Port the three signal subsystems from `prototype` (`pipelines/assets/heat.py`, `app/services/access_events.py`, retrieval-time freshness in `app/services/context.py`, `app/custodian/priority.py`) into `context-service/src/context_service/signals/`. sage.custodian must visit hot-and-uncertain content first (cost control); retrieval must penalise stale content; the demo must be able to show "the system gets sharper on what you actually use."
 
 ## Non-goals
 
@@ -41,7 +41,7 @@ src/context_service/signals/
 |---|---|
 | `signals.heat.get_heat(memgraph, node_id, silo_id)` | async. Phase 1 ignores `memgraph` and returns `0.5` (neutral); logs `heat.stub_active` once per silo per process run so the stub is grep-able. Signature stays stable across phases so consumers don't refactor when stub flips to real. |
 | `signals.freshness.compute_freshness(created_at, now, sigma_days=30)` | real. `max(0.25, exp(-0.5 * (t/σ)**2))` where `t` is days. Pure function, no I/O. |
-| `signals.priority.compute_consensus_priority(avg_confidence, avg_heat, distinct_agents)` | real. File moved from `custodian/priority.py`; formula unchanged. |
+| `signals.priority.compute_consensus_priority(avg_confidence, avg_heat, distinct_agents)` | real. File moved from `custodian/priority.py` (SAGE internal); formula unchanged. |
 | `signals.access_events.emit_access_event(redis, silo_id, node_id)` | real. `await redis.xadd(f"silo:{silo_id}:access_events", {"node_id": str(node_id)}, maxlen=100_000, approximate=True)`. Wrap in try/except — log and swallow on Redis failure (best-effort signal, never blocks reads). |
 
 ### 1.2 Wire-ups
@@ -65,7 +65,7 @@ for cand in candidates:
 
 Add `freshness_weight: float = 0.3` and `freshness_sigma_days: int = 30` to `config/settings.py`.
 
-**Priority in consensus sensor** — extend `custodian/sensors/consensus.py::FIND_CONSENSUS_CANDIDATES` to also return `avg_chain_confidence` (from chain rows). After the Cypher returns, in Python: for each candidate, fetch heat via `await signals.heat.get_heat(memgraph, target_id, silo_id)` (stubbed → 0.5 in P1, real in P2), compute priority, sort `DESC` by priority, return top `limit`. Replace the current `ORDER BY distinct_agents DESC, chain_count DESC` with this Python-side ranking.
+**Priority in consensus sensor** — extend `custodian/sensors/consensus.py::FIND_CONSENSUS_CANDIDATES` (sage.custodian sensor) to also return `avg_chain_confidence` (from chain rows). After the Cypher returns, in Python: for each candidate, fetch heat via `await signals.heat.get_heat(memgraph, target_id, silo_id)` (stubbed → 0.5 in P1, real in P2), compute priority, sort `DESC` by priority, return top `limit`. Replace the current `ORDER BY distinct_agents DESC, chain_count DESC` with this Python-side ranking.
 
 ### 1.3 Tests
 

@@ -424,7 +424,7 @@ class EvidencePolicy:
 | Scenario | Resolution |
 |----------|------------|
 | Same claim asserted twice | Deterministic ID (content hash) + MERGE |
-| Conflicting claims | Both written, Custodian detects via T2 supersession |
+| Conflicting claims | Both written, sage.custodian detects via T2 supersession |
 | Same belief committed | No conflict — commitments are agent-scoped |
 | Same memory recorded | Deterministic ID + MERGE |
 
@@ -436,7 +436,7 @@ class EvidencePolicy:
 |-------|-------------------|-----------|
 | Memory | No | Self-evident |
 | Knowledge | Yes | `DERIVED_FROM` edge to Memory or URI |
-| Wisdom | No | `SYNTHESIZED_FROM` edges (Custodian) |
+| Wisdom | No | `SYNTHESIZED_FROM` edges (sage.synthesizer) |
 | Intelligence | No | Session-scoped |
 
 ---
@@ -445,12 +445,12 @@ class EvidencePolicy:
 
 Agent verbs map to system transitions:
 
-| Agent verb | System transition | Custodian role |
-|------------|-------------------|----------------|
-| `remember` | (direct write) | Decay (T8), hard-delete (T9) |
-| `assert` | (direct write) | Extract (T1), supersede (T2), promote (T5) |
-| `commit` | T7 | Reconciliation |
+| Agent verb | System transition | SAGE role |
+|------------|-------------------|-----------|
+| `remember` | (direct write) | Decay (T8), hard-delete (T9) — sage.groundskeeper |
+| `assert` | (direct write) | Extract (T1), supersede (T2), promote (T5) — sage.custodian |
+| `commit` | T7 | Reconciliation — sage.validator |
 | `reflect` | (direct write) | None |
-| `reason` | (direct write) | Consensus (T5), trace (T6) |
+| `reason` | (direct write) | Consensus (T5), trace (T6) — sage.custodian |
 
-Agents express intent; Custodian handles mechanics.
+Agents express intent; SAGE handles mechanics.

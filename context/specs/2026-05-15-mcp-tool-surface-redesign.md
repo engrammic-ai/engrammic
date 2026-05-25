@@ -338,8 +338,8 @@ These are NOT exposed to external agents. Used by SAGE and internal systems via 
 | Current Tool | Internal Use |
 |--------------|--------------|
 | context_admin | Silo management, session lifecycle |
-| context_accept_belief | SAGE Custodian accepting ProposedBeliefs |
-| context_reject_belief | SAGE Custodian rejecting ProposedBeliefs |
+| context_accept_belief | sage.synthesizer accepting ProposedBeliefs |
+| context_reject_belief | sage.synthesizer rejecting ProposedBeliefs |
 | context_belief_state | Internal session inspection (replaced by `recall(include_hypotheses=True)` for agents) |
 
 ## MCP Instructions

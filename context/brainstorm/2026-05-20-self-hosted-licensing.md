@@ -10,7 +10,7 @@
 Customers like Complink and SmartStorify want self-hosted deployments. We need to protect subscription revenue without creating friction that kills deals.
 
 **What we're protecting:**
-- Container images (context-service, custodian workers)
+- Container images (context-service, SAGE workers)
 - Helm charts / deployment configs
 - Future: local engine binaries
 
