@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -72,17 +73,21 @@ async def _recall_impl(
     else:
         source = "get"
 
-    record_recall_latency(duration_ms, depth=depth, source=source, silo_id=silo_id)
-    record_recall_depth(depth, silo_id=silo_id)
+    with contextlib.suppress(Exception):
+        record_recall_latency(duration_ms, depth=depth, source=source, silo_id=silo_id)
+        record_recall_depth(depth, silo_id=silo_id)
+        result_list = result.get("results") or result.get("nodes") or []
+        layer_label = (layers[0] if layers and len(layers) == 1 else "mixed") if layers else "all"
+        record_recall_result_count(len(result_list), layer=layer_label, silo_id=silo_id)
 
     result_list = result.get("results") or result.get("nodes") or []
-    layer_label = (layers[0] if layers and len(layers) == 1 else "mixed") if layers else "all"
-    record_recall_result_count(len(result_list), layer=layer_label, silo_id=silo_id)
 
     # Track node access for evidence accessibility (Layer 3 chain reuse)
+    # Fire-and-forget to avoid blocking recall hot path
     session_id = auth.session_id
     if session_id and result.get("results"):
-        await _track_node_access(silo_id, session_id, result["results"])
+        import asyncio
+        asyncio.create_task(_track_node_access(silo_id, session_id, result["results"]))
 
     if include_hypotheses:
         # Fetch active hypotheses for current session

@@ -13,6 +13,7 @@ Usage:
 
 from __future__ import annotations
 
+import contextlib
 import time
 import traceback
 from typing import TYPE_CHECKING, Any
@@ -62,7 +63,8 @@ class ErrorHandlingMiddleware(Middleware):
                 error_message=str(e),
                 exc_info=True,
             )
-            record_tool_error(tool_name, type(e).__name__)
+            with contextlib.suppress(Exception):
+                record_tool_error(tool_name, type(e).__name__)
 
             if self.mask_errors:
                 raise RuntimeError(

@@ -13,7 +13,7 @@ from context_service.auth.context import AuthContext
 from context_service.mcp.server import create_mcp_server
 from context_service.mcp.tools import register_all
 
-EXPECTED_STANDARD_TOOLS = {
+EXPECTED_TOOLS = {
     "remember",
     "learn",
     "believe",
@@ -21,9 +21,6 @@ EXPECTED_STANDARD_TOOLS = {
     "trace",
     "link",
     "patterns",
-}
-
-EXPECTED_REASONING_TOOLS = EXPECTED_STANDARD_TOOLS | {
     "reason",
     "reflect",
     "hypothesize",
@@ -45,20 +42,12 @@ _DEV_AUTH = AuthContext(
 @pytest.mark.integration
 class TestMCPProtocol:
     @pytest.mark.asyncio
-    async def test_standard_profile_tools_registered(self) -> None:
+    async def test_all_tools_registered(self) -> None:
         mcp = FastMCP("test-registration")
-        register_all(mcp, profile="standard")
+        register_all(mcp)
         tools = await mcp.list_tools()
         registered = {t.name for t in tools}
-        assert registered == EXPECTED_STANDARD_TOOLS
-
-    @pytest.mark.asyncio
-    async def test_reasoning_profile_tools_registered(self) -> None:
-        mcp = FastMCP("test-registration")
-        register_all(mcp, profile="reasoning")
-        tools = await mcp.list_tools()
-        registered = {t.name for t in tools}
-        assert registered == EXPECTED_REASONING_TOOLS
+        assert registered == EXPECTED_TOOLS
 
     def test_create_mcp_server_returns_fastmcp(self) -> None:
         server = create_mcp_server()
@@ -71,7 +60,7 @@ class TestMCPProtocol:
         tools = await server.list_tools()
         registered = {t.name for t in tools}
         # create_mcp_server uses the default profile (reasoning)
-        assert registered == EXPECTED_REASONING_TOOLS
+        assert registered == EXPECTED_TOOLS
 
     @pytest.mark.asyncio
     async def test_tool_invocation_structure(self) -> None:
