@@ -220,13 +220,15 @@ tests/
 
 Plan D is complete when:
 
-- [ ] Touch counter tracks per-(silo, session, marker) with time decay
-- [ ] Recall escalates to hard mode after N touches (default: 3)
-- [ ] Hard mode returns `results: []` with engagement-only payload
-- [ ] Resolution (accept/reject/dismiss) clears touch counter
-- [ ] Missing `x-session-id` degrades gracefully to silo-scoped tracking
-- [ ] Configuration via environment variables
-- [ ] `just check` and `just test` green
+- [x] Touch counter tracks per-(silo, session, marker) with time decay
+- [x] Recall escalates to hard mode after N touches (default: 3)
+- [x] Hard mode returns `results: []` with engagement-only payload
+- [x] Resolution (accept/reject/dismiss) clears touch counter
+- [x] Missing `x-session-id` degrades gracefully to silo-scoped tracking
+- [x] Configuration via environment variables
+- [x] `just check` and `just test` green
+
+**Status: SHIPPED 2026-05-25** on branch `feat/telemetry-observability`. Ready for PR.
 
 ---
 
