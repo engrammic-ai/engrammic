@@ -37,6 +37,12 @@ from context_service.pipelines.assets.step_embedding import (
     step_embedding_backfill,
 )
 from context_service.pipelines.assets.tag_maintenance import tag_maintenance
+from context_service.pipelines.assets.validator_contradiction import (
+    validator_contradiction_asset,
+)
+from context_service.pipelines.assets.validator_stale_commitment import (
+    validator_stale_commitment_asset,
+)
 from context_service.pipelines.assets.weak_link_creation import (
     create_weak_links_for_node as create_weak_links_for_node,
 )
@@ -75,4 +81,6 @@ all_assets: list[Any] = [
     step_embedding_backfill,
     session_step_embedding,
     prewarm_sweep_asset,
+    validator_contradiction_asset,
+    validator_stale_commitment_asset,
 ]
