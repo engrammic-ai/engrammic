@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.rate_limit import rate_limited
 from context_service.mcp.server import get_mcp_auth_context, track_tool_usage
+from context_service.mcp.tools.coerce import coerce_list
 from context_service.mcp.tools.context_store import _context_store_belief
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.services.models import derive_silo_id
@@ -61,7 +62,7 @@ def register(mcp: FastMCP) -> None:
     @mcp_error_boundary
     async def hypothesize(
         hypothesis: str,
-        about: list[str],
+        about: list[str] | str,
         confidence: float = 0.8,
         session_id: str | None = None,
     ) -> dict[str, Any]:
@@ -78,8 +79,9 @@ def register(mcp: FastMCP) -> None:
         """
         start = time.perf_counter()
         success = True
+        about_list = coerce_list(about)
         try:
-            return await _hypothesize_impl(hypothesis, about, confidence, session_id)
+            return await _hypothesize_impl(hypothesis, about_list, confidence, session_id)
         except Exception:
             success = False
             raise
