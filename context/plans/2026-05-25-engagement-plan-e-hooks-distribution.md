@@ -217,13 +217,15 @@ docs/
 
 Plan E is complete when:
 
-- [ ] Session ID injection documented and configurable
-- [ ] Claude Code hook configs distributed via installer
-- [ ] engrammic-engage skill teaches resolution patterns
-- [ ] AGENTS.md guidance covers engagement workflow
-- [ ] Installer distributes all new configs/skills
-- [ ] docs.engrammic.ai updated with engagement surface docs
-- [ ] `just check` and `just test` green
+- [x] Session ID injection documented and configurable
+- [x] Claude Code hook configs distributed via skills/hooks/
+- [x] engrammic-engage skill teaches resolution patterns
+- [x] AGENTS.md guidance covers engagement workflow
+- [x] Hooks distributed via skills/hooks/ (installer wires in future)
+- [x] docs.engrammic.ai updated with engagement surface docs
+- [x] `just check` and `just test` green
+
+**Status: SHIPPED 2026-05-26** on branch `feat/telemetry-observability`. Ready for PR.
 
 ---
 

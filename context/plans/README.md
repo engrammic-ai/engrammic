@@ -5,6 +5,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 ## Current state (2026-05-25)
 
 **Shipped:**
+- v2.28 Engagement Plan E — Hooks and Distribution (session ID config, engage hook, skill, AGENTS.md, docs)
 - v2.27 Engagement Plan D — Hard Checkpoint (touch counter, soft-to-hard escalation, empty results on hard mode)
 - v2.26 Engagement Plan C — Recall Surfacing (engagement field in recall, dismiss/tick verbs)
 - v2.25 Engagement Plan B — SAGE Prerequisites (sage.validator, Contradiction/StaleCommitment markers, inline flagging, Redis index)
@@ -93,6 +94,7 @@ Specced or checkpointed for later implementation:
 ## Archive
 
 Completed plans in `archive/`:
+- Engagement Plan E (2026-05-26) - session ID config, engage hook, skill, AGENTS.md, docs
 - Engagement Plan D (2026-05-25) - touch counter, soft-to-hard escalation, empty results on hard mode
 - Engagement Plan C (2026-05-25) - engagement field in recall, dismiss/tick verbs
 - Engagement Plan B (2026-05-25) - sage.validator, Contradiction/StaleCommitment markers, inline flagging, Redis index
