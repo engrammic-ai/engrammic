@@ -34,33 +34,6 @@ mcp_instructions: |
   Onboarding:
   - At session start, call patterns(action='get', name='onboarding') for your workflow guide
 
-default_profile: reasoning
-
-profiles:
-  standard:
-    - remember
-    - learn
-    - believe
-    - recall
-    - trace
-    - link
-
-  reasoning:
-    - remember
-    - learn
-    - believe
-    - reason
-    - reflect
-    - recall
-    - trace
-    - link
-    - hypothesize
-    - revise
-    - commit
-    - accept
-    - reject
-    - forget
-
 tools:
   remember:
     description: "Store an observation. No evidence required. Consider recall first - if updating existing knowledge, pass supersedes:<node_id>."
@@ -121,4 +94,3 @@ tools:
   patterns:
     description: "Discover workflow templates for common tasks."
     maps_to: skills
-    always_available: true

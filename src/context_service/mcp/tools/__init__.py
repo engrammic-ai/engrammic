@@ -28,16 +28,16 @@ from context_service.mcp.tools import (
 from context_service.mcp.tools.context_admin import register as register_admin
 from context_service.mcp.tools.context_belief_state import register as register_belief_state
 
-# Registry for profile-based registration
-from context_service.mcp.tools.registry import register_profile_tools
+# Registry
+from context_service.mcp.tools.registry import register_tools
 
 
-def register_all(mcp: FastMCP, profile: str = "standard") -> None:
-    """Register all MCP tools for the given profile.
+def register_all(mcp: FastMCP) -> None:
+    """Register all MCP tools.
 
     This is the main entry point. Use this instead of individual registers.
     """
-    register_profile_tools(mcp, profile)
+    register_tools(mcp)
 
 
 def register_internal_tools(mcp: FastMCP) -> None:
@@ -53,7 +53,7 @@ def register_internal_tools(mcp: FastMCP) -> None:
 __all__ = [
     "register_all",
     "register_internal_tools",
-    "register_profile_tools",
+    "register_tools",
     # Individual tool modules
     "remember",
     "learn",

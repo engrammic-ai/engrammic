@@ -977,7 +977,6 @@ class Settings(BaseSettings):
     dev_agent_id: str = Field(default="dev-agent")
 
     # MCP settings
-    mcp_tool_profile: str = Field(default="reasoning")
     default_icp_preset: str = Field(default="coding")
 
     # =========================================================================
