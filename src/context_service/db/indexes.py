@@ -165,6 +165,26 @@ META_MEMORY_INDEX_QUERIES: tuple[str, ...] = (
 )
 
 
+# --- Marker nodes (SAGE-internal, bare string labels) ---
+#
+# Contradiction and StaleCommitment are validator marker types used by the
+# SAGE groundskeeper/validator to flag issues for agent engagement. They are
+# not primitives enum labels — bare strings are intentional.
+
+MARKER_INDEX_QUERIES: tuple[str, ...] = (
+    "CREATE INDEX ON :Contradiction(id);",
+    "CREATE INDEX ON :Contradiction(silo_id);",
+    "CREATE INDEX ON :Contradiction(status);",
+    "CREATE INDEX ON :Contradiction(detected_at);",
+    "CREATE INDEX ON :Contradiction(expires_at);",
+    "CREATE INDEX ON :StaleCommitment(id);",
+    "CREATE INDEX ON :StaleCommitment(silo_id);",
+    "CREATE INDEX ON :StaleCommitment(status);",
+    "CREATE INDEX ON :StaleCommitment(detected_at);",
+    "CREATE INDEX ON :StaleCommitment(expires_at);",
+)
+
+
 # --- Aggregate ---
 
 ALL_INDEX_QUERIES: tuple[str, ...] = (
@@ -180,6 +200,7 @@ ALL_INDEX_QUERIES: tuple[str, ...] = (
     *REGISTRY_INDEX_QUERIES,
     *AUDIT_INDEX_QUERIES,
     *META_MEMORY_INDEX_QUERIES,
+    *MARKER_INDEX_QUERIES,
 )
 
 

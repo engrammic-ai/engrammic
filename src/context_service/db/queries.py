@@ -1452,3 +1452,129 @@ WHERE pb IS NULL
 RETURN c.id AS cluster_id, fact_count
 ORDER BY fact_count DESC
 """
+
+
+# ---------------------------------------------------------------------------
+# Marker queries (SAGE-internal validator types)
+#
+# Contradiction and StaleCommitment are bare-label marker nodes written by the
+# SAGE validator/groundskeeper when it detects epistemic issues. Status
+# transitions: pending -> resolved | dismissed.
+# Agents engage via the about_ids index — a marker surfaces to the agent when
+# one of its about_ids matches a node the agent recently touched.
+# ---------------------------------------------------------------------------
+
+CREATE_CONTRADICTION = """
+CREATE (c:Contradiction {
+    id: $id,
+    silo_id: $silo_id,
+    status: 'pending',
+    node_a_id: $node_a_id,
+    node_b_id: $node_b_id,
+    about_ids: $about_ids,
+    confidence: $confidence,
+    detected_at: $detected_at,
+    resolved_at: null,
+    resolution: null,
+    expires_at: $expires_at
+})
+RETURN c.id AS marker_id
+"""
+
+CREATE_STALE_COMMITMENT = """
+CREATE (sc:StaleCommitment {
+    id: $id,
+    silo_id: $silo_id,
+    status: 'pending',
+    commitment_id: $commitment_id,
+    evidence_ids: $evidence_ids,
+    about_ids: $about_ids,
+    detected_at: $detected_at,
+    resolved_at: null,
+    resolution: null,
+    expires_at: $expires_at
+})
+RETURN sc.id AS marker_id
+"""
+
+GET_MARKERS_BY_SILO = """
+CALL {
+    MATCH (c:Contradiction {silo_id: $silo_id})
+    WHERE $status IS NULL OR c.status = $status
+    RETURN c.id AS id,
+           'Contradiction' AS marker_type,
+           c.status AS status,
+           c.detected_at AS detected_at,
+           c.expires_at AS expires_at,
+           c.about_ids AS about_ids
+    UNION ALL
+    MATCH (sc:StaleCommitment {silo_id: $silo_id})
+    WHERE $status IS NULL OR sc.status = $status
+    RETURN sc.id AS id,
+           'StaleCommitment' AS marker_type,
+           sc.status AS status,
+           sc.detected_at AS detected_at,
+           sc.expires_at AS expires_at,
+           sc.about_ids AS about_ids
+}
+RETURN id, marker_type, status, detected_at, expires_at, about_ids
+ORDER BY detected_at DESC
+LIMIT $limit
+"""
+
+GET_MARKERS_BY_ABOUT_ID = """
+CALL {
+    MATCH (c:Contradiction {silo_id: $silo_id})
+    WHERE $about_id IN c.about_ids
+    AND ($status IS NULL OR c.status = $status)
+    RETURN c.id AS id,
+           'Contradiction' AS marker_type,
+           c.status AS status,
+           c.detected_at AS detected_at,
+           c.about_ids AS about_ids
+    UNION ALL
+    MATCH (sc:StaleCommitment {silo_id: $silo_id})
+    WHERE $about_id IN sc.about_ids
+    AND ($status IS NULL OR sc.status = $status)
+    RETURN sc.id AS id,
+           'StaleCommitment' AS marker_type,
+           sc.status AS status,
+           sc.detected_at AS detected_at,
+           sc.about_ids AS about_ids
+}
+RETURN id, marker_type, status, detected_at, about_ids
+ORDER BY detected_at DESC
+"""
+
+UPDATE_MARKER_STATUS = """
+CALL {
+    MATCH (c:Contradiction {id: $id, silo_id: $silo_id})
+    SET c.status = $status,
+        c.resolved_at = $resolved_at,
+        c.resolution = $resolution
+    RETURN c.id AS marker_id, 'Contradiction' AS marker_type
+    UNION ALL
+    MATCH (sc:StaleCommitment {id: $id, silo_id: $silo_id})
+    SET sc.status = $status,
+        sc.resolved_at = $resolved_at,
+        sc.resolution = $resolution
+    RETURN sc.id AS marker_id, 'StaleCommitment' AS marker_type
+}
+RETURN marker_id, marker_type
+"""
+
+DELETE_EXPIRED_MARKERS = """
+CALL {
+    MATCH (c:Contradiction {silo_id: $silo_id})
+    WHERE c.expires_at IS NOT NULL AND c.expires_at < $now
+    DETACH DELETE c
+    RETURN count(c) AS deleted_contradictions
+}
+CALL {
+    MATCH (sc:StaleCommitment {silo_id: $silo_id})
+    WHERE sc.expires_at IS NOT NULL AND sc.expires_at < $now
+    DETACH DELETE sc
+    RETURN count(sc) AS deleted_stale_commitments
+}
+RETURN deleted_contradictions, deleted_stale_commitments
+"""
