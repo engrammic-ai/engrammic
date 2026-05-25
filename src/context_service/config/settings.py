@@ -1396,12 +1396,14 @@ class Settings(BaseSettings):
     engagement_escalation_threshold: int = Field(
         default=3,
         ge=1,
-        description="Number of touches before a soft checkpoint escalates to hard.",
+        le=100,
+        description="Number of touches before a soft checkpoint escalates to hard. Wired into the touch counter and engagement modules. Values above 100 would effectively disable escalation.",
     )
     engagement_decay_window_ms: int = Field(
         default=1_800_000,
         ge=1,
-        description="Decay window in milliseconds (30 min) for engagement touch counting.",
+        le=86_400_000,
+        description="Decay window in milliseconds (30 min) for engagement touch counting. Wired into the touch counter and engagement modules. Max 24 hours (86400000 ms) to prevent unbounded Redis growth.",
     )
     engagement_hard_enabled: bool = Field(
         default=True,
