@@ -17,6 +17,7 @@ class InternalDNS(pulumi.ComponentResource):
         name: str,
         vpc_id: pulumi.Input[str],
         stateful_host_ip: pulumi.Input[str],
+        signoz_ip: pulumi.Input[str] | None = None,
         opts: pulumi.ResourceOptions | None = None,
     ):
         super().__init__("engrammic:dns:InternalDNS", name, None, opts)
@@ -53,6 +54,17 @@ class InternalDNS(pulumi.ComponentResource):
         )
 
         self.hostname = f"stateful.{env}.engrammic.internal"
+
+        if signoz_ip:
+            self.signoz_record = dns.RecordSet(
+                f"{name}-signoz",
+                name=f"signoz.{self.zone.dns_name}",
+                type="A",
+                ttl=300,
+                managed_zone=self.zone.name,
+                rrdatas=[signoz_ip],
+                opts=pulumi.ResourceOptions(parent=self),
+            )
 
         self.register_outputs({
             "zone_name": self.zone.name,

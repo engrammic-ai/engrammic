@@ -93,6 +93,7 @@ internal_dns = InternalDNS(
     "engrammic-dns",
     vpc_id=network.vpc.id,
     stateful_host_ip=stateful_host.instance.network_interfaces[0].network_ip,
+    signoz_ip=signoz_host.instance.network_interfaces[0].network_ip,
 )
 stateful_hostname = internal_dns.hostname
 
@@ -192,6 +193,7 @@ if use_cloudsql:
 pulumi.export("vpc_id", network.vpc.id)
 pulumi.export("stateful_host_ip", stateful_host.instance.network_interfaces[0].network_ip)
 pulumi.export("stateful_hostname", stateful_hostname)
+pulumi.export("signoz_hostname", "signoz.engrammic.internal")
 pulumi.export("backup_bucket_name", storage.backup_bucket.name)
 pulumi.export(
     "service_account_emails",
