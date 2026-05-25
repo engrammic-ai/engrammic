@@ -287,16 +287,26 @@ def record_db_query(operation: str, duration_ms: float) -> None:
     _db_query_duration.record(duration_ms, {"db.operation": operation})
 
 
-def record_embedding(model: str, duration_ms: float) -> None:
+def record_embedding(model: str, duration_ms: float, silo_id: str | None = None) -> None:
     """Record embedding generation duration."""
     if _embedding_duration is None:
         return
-    _embedding_duration.record(duration_ms, {"model": model})
+    attributes: dict[str, str] = {"model": model}
+    if silo_id:
+        attributes["silo_id"] = silo_id
+    _embedding_duration.record(duration_ms, attributes)
 
 
-def record_mcp_tool(tool: str, duration_ms: float, success: bool = True) -> None:
+def record_mcp_tool(
+    tool: str,
+    duration_ms: float,
+    success: bool = True,
+    silo_id: str | None = None,
+) -> None:
     """Record MCP tool invocation metrics."""
-    attrs = {"mcp.tool": tool, "success": str(success).lower()}
+    attrs: dict[str, str] = {"mcp.tool": tool, "success": str(success).lower()}
+    if silo_id:
+        attrs["silo_id"] = silo_id
     if _mcp_tool_duration:
         _mcp_tool_duration.record(duration_ms, attrs)
     if _mcp_tool_counter:
@@ -311,11 +321,19 @@ def record_llm_tokens(model: str, input_tokens: int, output_tokens: int) -> None
     _llm_token_counter.add(output_tokens, {"model": model, "type": "output"})
 
 
-def record_llm_call(model: str, duration_ms: float, success: bool = True) -> None:
+def record_llm_call(
+    model: str,
+    duration_ms: float,
+    success: bool = True,
+    silo_id: str | None = None,
+) -> None:
     """Record LLM call duration."""
     if _llm_call_duration is None:
         return
-    _llm_call_duration.record(duration_ms, {"model": model, "success": str(success).lower()})
+    attributes: dict[str, str] = {"model": model, "success": str(success).lower()}
+    if silo_id:
+        attributes["silo_id"] = silo_id
+    _llm_call_duration.record(duration_ms, attributes)
 
 
 def record_context_recall_size(layer: str, bytes_size: int) -> None:
