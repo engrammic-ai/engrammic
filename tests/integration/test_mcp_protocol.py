@@ -13,16 +13,25 @@ from context_service.auth.context import AuthContext
 from context_service.mcp.server import create_mcp_server
 from context_service.mcp.tools import register_all
 
-EXPECTED_TOOLS = {
-    "context_store",
-    "context_recall",
-    "context_admin",
-    "context_link",
-    "context_belief_state",
-    "context_update_belief",
-    "context_crystallize",
-    "context_accept_belief",
-    "context_reject_belief",
+EXPECTED_STANDARD_TOOLS = {
+    "remember",
+    "learn",
+    "believe",
+    "recall",
+    "trace",
+    "link",
+    "patterns",
+}
+
+EXPECTED_REASONING_TOOLS = EXPECTED_STANDARD_TOOLS | {
+    "reason",
+    "reflect",
+    "hypothesize",
+    "revise",
+    "commit",
+    "accept",
+    "reject",
+    "forget",
 }
 
 _DEV_AUTH = AuthContext(
@@ -36,12 +45,20 @@ _DEV_AUTH = AuthContext(
 @pytest.mark.integration
 class TestMCPProtocol:
     @pytest.mark.asyncio
-    async def test_all_tools_registered(self) -> None:
+    async def test_standard_profile_tools_registered(self) -> None:
         mcp = FastMCP("test-registration")
-        register_all(mcp)
+        register_all(mcp, profile="standard")
         tools = await mcp.list_tools()
         registered = {t.name for t in tools}
-        assert registered == EXPECTED_TOOLS
+        assert registered == EXPECTED_STANDARD_TOOLS
+
+    @pytest.mark.asyncio
+    async def test_reasoning_profile_tools_registered(self) -> None:
+        mcp = FastMCP("test-registration")
+        register_all(mcp, profile="reasoning")
+        tools = await mcp.list_tools()
+        registered = {t.name for t in tools}
+        assert registered == EXPECTED_REASONING_TOOLS
 
     def test_create_mcp_server_returns_fastmcp(self) -> None:
         server = create_mcp_server()
@@ -53,7 +70,8 @@ class TestMCPProtocol:
         server = create_mcp_server()
         tools = await server.list_tools()
         registered = {t.name for t in tools}
-        assert registered == EXPECTED_TOOLS
+        # create_mcp_server uses the default profile (reasoning)
+        assert registered == EXPECTED_REASONING_TOOLS
 
     @pytest.mark.asyncio
     async def test_tool_invocation_structure(self) -> None:
