@@ -12,7 +12,12 @@ from context_service.mcp.server import get_mcp_auth_context, get_preset_resolver
 from context_service.mcp.tools.context_recall import _context_recall
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.services.models import derive_silo_id
-from context_service.telemetry.metrics import record_mcp_tool
+from context_service.telemetry.metrics import (
+    record_mcp_tool,
+    record_recall_depth,
+    record_recall_latency,
+    record_recall_result_count,
+)
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -45,6 +50,7 @@ async def _recall_impl(
         except RuntimeError:
             pass
 
+    start = time.perf_counter()
     result = await _context_recall(
         silo_id=silo_id,
         query=query,
@@ -55,6 +61,23 @@ async def _recall_impl(
         bypass_cache=bypass_cache,
         max_age_seconds=max_age_seconds,
     )
+    duration_ms = (time.perf_counter() - start) * 1000
+
+    # Determine source path taken for latency attribution
+    cache_meta = result.get("cache_meta")
+    if cache_meta is not None:
+        source = "cache" if cache_meta.get("result_cached") else "search"
+    elif "edges" in result:
+        source = "graph"
+    else:
+        source = "get"
+
+    record_recall_latency(duration_ms, depth=depth, source=source, silo_id=silo_id)
+    record_recall_depth(depth, silo_id=silo_id)
+
+    result_list = result.get("results") or result.get("nodes") or []
+    layer_label = (layers[0] if layers and len(layers) == 1 else "mixed") if layers else "all"
+    record_recall_result_count(len(result_list), layer=layer_label, silo_id=silo_id)
 
     # Track node access for evidence accessibility (Layer 3 chain reuse)
     session_id = auth.session_id
