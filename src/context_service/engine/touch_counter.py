@@ -6,11 +6,12 @@ a marker needs more urgent attention.
 
 Redis key pattern:
     touches:{silo_id}:{marker_id}  ->  sorted set
-    Members: {session_id}
+    Members: {session_id}:{timestamp_ns}  (unique per touch)
     Scores:  {timestamp_ms} (Unix epoch in milliseconds)
 
-On each touch the set is pruned to the decay window, so old sessions fall
-off automatically without a separate cleanup job.
+Each touch creates a distinct member so cumulative counts are preserved
+within the decay window. On each touch the set is pruned to the decay
+window, so old entries fall off automatically without a separate cleanup job.
 """
 
 from __future__ import annotations
@@ -38,6 +39,10 @@ def _now_ms() -> int:
     return int(time.time() * 1000)
 
 
+def _now_ns() -> int:
+    return time.time_ns()
+
+
 async def record_touch(
     redis: Redis[bytes],  # type: ignore[type-arg]
     silo_id: str,
@@ -46,11 +51,12 @@ async def record_touch(
     *,
     decay_window_ms: int = DEFAULT_DECAY_WINDOW_MS,
 ) -> int:
-    """Record a touch and return the new touch count for this session+marker.
+    """Record a touch and return the new cumulative touch count for this session+marker.
 
-    Adds the current timestamp for ``session_id`` to the sorted set keyed by
-    ``silo_id`` and ``marker_id``, prunes entries older than ``decay_window_ms``,
-    then returns how many touches from this session remain in the window.
+    Adds a unique member ``{session_id}:{timestamp_ns}`` to the sorted set keyed
+    by ``silo_id`` and ``marker_id``, prunes entries older than
+    ``decay_window_ms``, then returns the total number of touches from this
+    session that remain in the window.
 
     Failures are logged and swallowed; returns 0 on error.
 
@@ -69,18 +75,20 @@ async def record_touch(
 
     Returns
     -------
-    Number of touches from this session within the decay window, including
-    the one just recorded.
+    Cumulative number of touches from this session within the decay window,
+    including the one just recorded.
     """
     key = _touches_key(silo_id, marker_id)
     now = _now_ms()
     cutoff = now - decay_window_ms
+    member = f"{session_id}:{_now_ns()}"
+    prefix = f"{session_id}:"
 
     try:
         pipe = redis.pipeline(transaction=False)
-        pipe.zadd(key, {session_id: now})
+        pipe.zadd(key, {member: now})
         pipe.zremrangebyscore(key, "-inf", cutoff)
-        pipe.zscore(key, session_id)
+        pipe.zrangebyscore(key, cutoff + 1, "+inf")
         results = await pipe.execute()
     except Exception as exc:
         logger.warning(
@@ -92,13 +100,12 @@ async def record_touch(
         )
         return 0
 
-    # The pipeline records only one entry per session_id (ZADD updates the
-    # score); the "count" here means: is this session still present after
-    # pruning?  We return 1 if the session survived the prune, 0 otherwise.
-    # Callers treat this as "active touch count" (presence-based, not a
-    # cumulative counter), which is what the escalation system needs.
-    score = results[2]  # zscore result: float | None
-    count = 1 if score is not None else 0
+    members: list[bytes] | list[str] = results[2]
+    count = sum(
+        1
+        for m in members
+        if (m.decode() if isinstance(m, bytes) else m).startswith(prefix)
+    )
 
     logger.debug(
         "touch_recorded",
@@ -118,10 +125,11 @@ async def get_touch_count(
     *,
     decay_window_ms: int = DEFAULT_DECAY_WINDOW_MS,
 ) -> int:
-    """Get current touch count for this session+marker within the decay window.
+    """Get current cumulative touch count for this session+marker within the decay window.
 
-    Returns 1 if the session has an active (non-expired) touch, 0 otherwise.
-    Does not record a new touch; read-only operation.
+    Prunes stale entries, then counts all touches from this session that
+    remain within the window. Does not record a new touch; read-only aside
+    from pruning.
 
     Parameters
     ----------
@@ -138,14 +146,18 @@ async def get_touch_count(
 
     Returns
     -------
-    1 if the session has a touch within the window, 0 otherwise.
+    Number of touches from this session within the decay window.
     """
     key = _touches_key(silo_id, marker_id)
     now = _now_ms()
     cutoff = now - decay_window_ms
+    prefix = f"{session_id}:"
 
     try:
-        score = await redis.zscore(key, session_id)
+        pipe = redis.pipeline(transaction=False)
+        pipe.zremrangebyscore(key, "-inf", cutoff)
+        pipe.zrangebyscore(key, cutoff + 1, "+inf")
+        results = await pipe.execute()
     except Exception as exc:
         logger.warning(
             "touch_counter_get_failed",
@@ -156,10 +168,12 @@ async def get_touch_count(
         )
         return 0
 
-    if score is None:
-        return 0
-    # Score is the timestamp in ms; check if it's within the decay window.
-    return 1 if float(score) > cutoff else 0
+    members: list[bytes] | list[str] = results[1]
+    return sum(
+        1
+        for m in members
+        if (m.decode() if isinstance(m, bytes) else m).startswith(prefix)
+    )
 
 
 async def clear_touches(
