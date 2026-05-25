@@ -5,9 +5,78 @@ description: Proactive memory behavior + layer selection for Engrammic MCP
 
 # EAG Cognitive Guide
 
-You have persistent memory across sessions. Use it proactively — don't wait to be asked.
+## MANDATORY PROTOCOL
 
-## Recall Triggers
+Before ANY store operation, follow these steps in order:
+
+```
+1. RECALL FIRST   — recall(query="<topic>") to check existing knowledge
+2. DECIDE         — Does a node exist?
+                    - Yes, update:      supersede it (pass supersedes=<node_id>)
+                    - Yes, contradicts: link(type="CONTRADICTS") + reflect
+                    - Yes, related:     link to it after storing
+                    - No:               proceed to store
+3. STORE          — Use the appropriate layer (see Decision Tree below)
+4. LINK           — If you referenced other nodes, link them explicitly
+```
+
+Skipping step 1 creates duplicates. Skipping step 4 creates orphan nodes.
+
+---
+
+## DECISION TREE
+
+```
+Is this uncertain or still evolving?
+  → hypothesize, then revise/commit when resolved
+
+Do you have a citable source (file path, URL, doc reference)?
+  → learn(claim="...", evidence=["<uri>"])
+
+Is this a conclusion drawn from multiple known facts?
+  → recall those facts, get their node IDs
+  → believe(claim="...", about=["<id1>", "<id2>"])
+
+Otherwise (raw observation, no source, not a conclusion)?
+  → remember(content="...")
+```
+
+---
+
+## CHECKPOINTS TABLE
+
+| Moment | Required Action |
+|--------|-----------------|
+| Before any store | `recall(query="<topic>")` |
+| Starting work in a domain you've touched before | `recall` relevant background |
+| Your understanding of something changed | `reflect` |
+| Found two nodes that contradict each other | `link(type="CONTRADICTS")` + `reflect` |
+| Drawing a conclusion from multiple facts | `believe` with `about` node IDs |
+| Wrapping up an exploration session | `recall` your session tag, check for orphan nodes |
+| User corrects you or clarifies intent | Store the correction immediately |
+
+---
+
+## QUICK REFERENCE
+
+```
+recall first, always — before any store
+supersede, don't duplicate — pass supersedes= when updating
+remember = raw observation (no evidence needed)
+learn = claim with evidence (evidence= required)
+believe = conclusion from facts (about= required, recall IDs first)
+hypothesize = uncertain/evolving (finalize with commit)
+link = explicit relationship (CONTRADICTS / SUPPORTS / SUPERSEDES / RELATES_TO)
+reflect = when understanding shifts
+forget = wrong/harmful nodes only, not stale ones
+tick = check pending markers without a full recall
+```
+
+---
+
+## REFERENCE SECTIONS
+
+### Recall Triggers
 
 Act on these automatically:
 - User mentions a person, project, term, or concept: recall to check what you know
@@ -20,7 +89,7 @@ Act on these automatically:
 
 **Using results:** Treat recalled context as knowledge you already have — don't announce "I found in memory..." Just use it naturally.
 
-## Store Triggers
+### Store Triggers
 
 Store when future sessions would benefit:
 - User shares a preference, constraint, or standing decision: store it
@@ -31,9 +100,7 @@ Store when future sessions would benefit:
 
 Skip: current task steps, transient state, things obvious from code.
 
-## Action Triggers (Mandatory)
-
-These are checkpoints where you MUST store to Engrammic before proceeding:
+### Action Triggers (Mandatory)
 
 **After fixing a bug:**
 ```
@@ -64,7 +131,7 @@ Store the error message, root cause, and fix so future sessions can recall it.
 **After user teaches you something project-specific:**
 Store immediately so you don't need to be taught twice.
 
-## Layer Selector
+### Layer Selector
 
 **Raw observation, no evidence?**
 Use Memory (remember)
@@ -81,7 +148,7 @@ Use Wisdom (believe) — requires about_node_ids linking to the supporting facts
 **Your understanding just changed?**
 Use Meta (reflect) — link to the nodes that changed
 
-## Reasoning Flow vs Direct Belief
+### Reasoning Flow vs Direct Belief
 
 Two paths to Wisdom:
 
@@ -97,7 +164,7 @@ hypothesize (tentative) then gather evidence then revise if needed then commit (
 
 Use hypothesize/commit when you're uncertain and refining. Use believe directly when the conclusion is clear from existing facts.
 
-## Using Link
+### Using Link
 
 Create explicit relationships when:
 - Two nodes are related but that relationship isn't obvious from content
@@ -106,7 +173,7 @@ Create explicit relationships when:
 
 Don't over-link — the system infers relationships from content. Link when inference would miss the connection.
 
-## When to Forget
+### When to Forget
 
 Use forget to remove nodes that:
 - Are factually wrong and shouldn't persist (not just outdated — those get superseded)
@@ -118,7 +185,7 @@ Use forget to remove nodes that:
 
 When removing: if the node has dependents (beliefs grounded in it, links to it), consider whether those also need updating or removal.
 
-## Quality Checks
+### Quality Checks
 
 **Memory:** "Would I tell a colleague about this tomorrow?"
 - Yes: store
@@ -132,14 +199,14 @@ When removing: if the node has dependents (beliefs grounded in it, links to it),
 - Can fill in [facts]: form belief, link to those nodes
 - Can't: it's a hunch — store as Memory
 
-## Belief vs Commitment
+### Belief vs Commitment
 
 Both live in Wisdom:
 
 - **Belief:** Grounded in evidence. "Based on load tests, Redis handles our access patterns better than Memcached."
 - **Commitment:** A declared decision. "We will use Redis for all cache layers. Decided 2026-04-12, no benchmark required — team decision." Commitments don't need evidence; they need declaration.
 
-## When to Reflect
+### When to Reflect
 
 Record to Meta when your understanding shifts:
 - You update or reverse a belief based on new evidence
@@ -149,7 +216,7 @@ Record to Meta when your understanding shifts:
 
 The history of belief is as valuable as current belief.
 
-## Engagement: Handling Markers
+### Engagement: Handling Markers
 
 The system surfaces engagement markers that require your attention. Check `recall` responses for an `engagement` field, or call `tick()` periodically.
 
@@ -180,12 +247,13 @@ Hard mode activates after 3+ touches without resolution.
 
 For full details, see the `engrammic:engage` skill.
 
-## Anti-patterns
+### Anti-patterns
 
 **Storing:**
 - Storing everything "just in case": creates noise, degrades recall quality
 - Skipping evidence on knowledge claims: ungrounded facts pollute the graph
 - Forming beliefs without linked facts: these are hunches, not beliefs
+- Storing without recalling first: creates duplicates the Custodian has to clean up
 
 **Recalling:**
 - Waiting to be explicitly asked: be proactive
