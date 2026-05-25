@@ -13,6 +13,7 @@ from components import (
     MigrationJob,
     NetworkStack,
     SecretsStack,
+    SignozHost,
     StatefulHost,
     StorageStack,
 )
@@ -73,6 +74,15 @@ stateful_host = StatefulHost(
     service_account_email=iam.stateful_host.email,
     postgres_host=postgres_host,
 )
+
+# SigNoz observability host
+signoz_host = SignozHost(
+    "engrammic-signoz",
+    network=network.vpc,
+    subnet=network.private_subnet,
+    service_account_email=iam.stateful_host.email,  # reuse SA for now
+)
+signoz_hostname = signoz_host.instance.network_interfaces[0].network_ip
 
 # Set postgres_host from StatefulHost if not using Cloud SQL
 if not use_cloudsql:
