@@ -38,6 +38,26 @@ def mock_redis():
     return redis
 
 
+@pytest.fixture
+def mock_redis_with_touches():
+    """Mock redis that supports record_touch pipeline calls (zadd/zremrangebyscore/zrangebyscore)."""
+    redis = AsyncMock()
+
+    pipe = AsyncMock()
+    pipe.zadd = MagicMock(return_value=pipe)
+    pipe.zremrangebyscore = MagicMock(return_value=pipe)
+    pipe.zrangebyscore = MagicMock(return_value=pipe)
+    pipe.__aenter__ = AsyncMock(return_value=pipe)
+    pipe.__aexit__ = AsyncMock(return_value=None)
+    # Default: first pipeline call (get_markers_for_about_set) returns empty,
+    # subsequent calls (record_touch) return count=0 (below threshold).
+    pipe.execute = AsyncMock(return_value=[1, 0, []])
+
+    redis.pipeline = MagicMock(return_value=pipe)
+    redis._mock_pipe = pipe
+    return redis
+
+
 # ---------------------------------------------------------------------------
 # get_engagement_for_about_set
 # ---------------------------------------------------------------------------

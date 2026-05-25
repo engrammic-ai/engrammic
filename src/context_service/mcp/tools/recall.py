@@ -99,6 +99,7 @@ async def _recall_impl(
     # Engagement detection: check for markers touching the about-set
     about_ids = [item.get("node_id") for item in result_list if item.get("node_id")]
     redis = get_redis()
+    effective_session_id = session_id or "default"
     if about_ids and redis is not None:
         engagement_start = time.perf_counter()
         try:
@@ -107,7 +108,8 @@ async def _recall_impl(
 
             ctx = get_context_service()
             engagement = await get_engagement_for_about_set(
-                redis._redis, ctx._memgraph, silo_id, about_ids
+                redis._redis, ctx._memgraph, silo_id, about_ids,
+                session_id=effective_session_id,
             )
             result["engagement"] = engagement
             engagement_ms = (time.perf_counter() - engagement_start) * 1000
@@ -124,7 +126,17 @@ async def _recall_impl(
     else:
         result["engagement"] = None
 
-    if include_hypotheses:
+    # Hard checkpoint enforcement: when engagement mode is "hard", suppress
+    # all results so the agent has no content to act on until markers are resolved.
+    hard_mode = bool(
+        result.get("engagement") and result["engagement"].get("mode") == "hard"
+    )
+    if hard_mode:
+        result["results"] = []
+        if include_hypotheses:
+            result["hypotheses"] = []
+
+    if include_hypotheses and not hard_mode:
         # Fetch active hypotheses for current session
         from context_service.db.queries import GET_WORKING_HYPOTHESES_FOR_SESSION
         from context_service.mcp.server import get_context_service
