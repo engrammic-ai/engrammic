@@ -31,6 +31,8 @@ def test_config_has_all_expected_tools():
         "reject",
         "forget",
         "patterns",
+        "dismiss",
+        "tick",
     }
     assert expected == set(config["tools"].keys())
 

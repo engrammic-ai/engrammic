@@ -60,7 +60,7 @@ def _build_contradiction_prompt(content_a: str, content_b: str) -> list[dict[str
     user_msg = (
         f"Claim A: {content_a}\n\n"
         f"Claim B: {content_b}\n\n"
-        'Do these claims contradict each other? Respond with JSON only:\n'
+        "Do these claims contradict each other? Respond with JSON only:\n"
         '{"contradicts": true/false, "confidence": 0.0-1.0, "explanation": "brief reason"}'
     )
     return [
@@ -254,9 +254,7 @@ def validator_contradiction_asset(
         metadata={
             "silo_id": dg.MetadataValue.text(silo_id),
             "candidates_processed": dg.MetadataValue.int(counts["candidates_processed"]),
-            "contradictions_confirmed": dg.MetadataValue.int(
-                counts["contradictions_confirmed"]
-            ),
+            "contradictions_confirmed": dg.MetadataValue.int(counts["contradictions_confirmed"]),
             "false_positives": dg.MetadataValue.int(counts["false_positives"]),
             "errors": dg.MetadataValue.int(counts["errors"]),
             "duration_s": dg.MetadataValue.float(duration_s),

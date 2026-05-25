@@ -109,7 +109,10 @@ async def _recall_impl(
 
             ctx = get_context_service()
             engagement = await get_engagement_for_about_set(
-                redis._redis, ctx._memgraph, silo_id, about_ids,
+                redis._redis,
+                ctx._memgraph,
+                silo_id,
+                about_ids,
                 session_id=effective_session_id,
             )
             result["engagement"] = engagement
@@ -120,18 +123,14 @@ async def _recall_impl(
             # Non-fatal: don't break recall on engagement detection failure
             import structlog
 
-            structlog.get_logger(__name__).warning(
-                "engagement_detection_failed", silo_id=silo_id
-            )
+            structlog.get_logger(__name__).warning("engagement_detection_failed", silo_id=silo_id)
             result["engagement"] = None
     else:
         result["engagement"] = None
 
     # Hard checkpoint enforcement: when engagement mode is "hard", suppress
     # all results so the agent has no content to act on until markers are resolved.
-    hard_mode = bool(
-        result.get("engagement") and result["engagement"].get("mode") == MODE_HARD
-    )
+    hard_mode = bool(result.get("engagement") and result["engagement"].get("mode") == MODE_HARD)
     if hard_mode:
         result["results"] = []
         if "nodes" in result:

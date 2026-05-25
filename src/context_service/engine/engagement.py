@@ -109,14 +109,16 @@ async def get_engagement_for_about_set(
             if m.get("status") != "pending":
                 continue
             marker_type = m.get("marker_type", "")
-            markers_out.append({
-                "marker_id": str(m.get("id", "")),
-                "marker_type": marker_type,
-                "summary": _build_summary(m),
-                "node_ids": m.get("about_ids", []),
-                "detected_at": m.get("detected_at", ""),
-                "decision_required": _get_decision_required(marker_type),
-            })
+            markers_out.append(
+                {
+                    "marker_id": str(m.get("id", "")),
+                    "marker_type": marker_type,
+                    "summary": _build_summary(m),
+                    "node_ids": m.get("about_ids", []),
+                    "detected_at": m.get("detected_at", ""),
+                    "decision_required": _get_decision_required(marker_type),
+                }
+            )
 
     # 2. Get pending ProposedBeliefs that touch the about_ids
     try:
@@ -127,14 +129,18 @@ async def get_engagement_for_about_set(
         for pb in proposed_rows:
             if pb.get("status") != "pending":
                 continue
-            markers_out.append({
-                "marker_id": str(pb.get("id", "")),
-                "marker_type": "ProposedBelief",
-                "summary": _build_summary({"marker_type": "ProposedBelief", "content": pb.get("content", "")}),
-                "node_ids": pb.get("about_ids", []),
-                "detected_at": pb.get("created_at", ""),
-                "decision_required": "accept",
-            })
+            markers_out.append(
+                {
+                    "marker_id": str(pb.get("id", "")),
+                    "marker_type": "ProposedBelief",
+                    "summary": _build_summary(
+                        {"marker_type": "ProposedBelief", "content": pb.get("content", "")}
+                    ),
+                    "node_ids": pb.get("about_ids", []),
+                    "detected_at": pb.get("created_at", ""),
+                    "decision_required": "accept",
+                }
+            )
     except Exception as exc:
         logger.warning(
             "engagement_proposed_beliefs_query_failed",
@@ -206,14 +212,16 @@ async def get_engagement_for_silo(
             if m.get("status") != "pending":
                 continue
             marker_type = m.get("marker_type", "")
-            markers_out.append({
-                "marker_id": str(m.get("id", "")),
-                "marker_type": marker_type,
-                "summary": _build_summary(m),
-                "node_ids": m.get("about_ids", []),
-                "detected_at": m.get("detected_at", ""),
-                "decision_required": _get_decision_required(marker_type),
-            })
+            markers_out.append(
+                {
+                    "marker_id": str(m.get("id", "")),
+                    "marker_type": marker_type,
+                    "summary": _build_summary(m),
+                    "node_ids": m.get("about_ids", []),
+                    "detected_at": m.get("detected_at", ""),
+                    "decision_required": _get_decision_required(marker_type),
+                }
+            )
 
     # 2. Get all pending ProposedBeliefs for the silo
     try:
@@ -222,14 +230,18 @@ async def get_engagement_for_silo(
             {"silo_id": silo_id, "limit": _SILO_PROPOSED_BELIEF_LIMIT},
         )
         for pb in proposed_rows:
-            markers_out.append({
-                "marker_id": str(pb.get("proposed_belief_id", "")),
-                "marker_type": "ProposedBelief",
-                "summary": _build_summary({"marker_type": "ProposedBelief", "content": pb.get("content", "")}),
-                "node_ids": pb.get("source_fact_ids", []),
-                "detected_at": pb.get("created_at", ""),
-                "decision_required": "accept",
-            })
+            markers_out.append(
+                {
+                    "marker_id": str(pb.get("proposed_belief_id", "")),
+                    "marker_type": "ProposedBelief",
+                    "summary": _build_summary(
+                        {"marker_type": "ProposedBelief", "content": pb.get("content", "")}
+                    ),
+                    "node_ids": pb.get("source_fact_ids", []),
+                    "detected_at": pb.get("created_at", ""),
+                    "decision_required": "accept",
+                }
+            )
     except Exception as exc:
         logger.warning(
             "engagement_silo_proposed_beliefs_query_failed",

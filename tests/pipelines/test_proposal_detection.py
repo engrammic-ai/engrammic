@@ -174,12 +174,15 @@ async def test_create_proposal_creates_when_under_cap_and_no_cooldown():
 
     graph_store.execute_query = AsyncMock(side_effect=_query_side_effect)
 
-    with patch(
-        "context_service.custodian.proposal_worker.get_cluster_facts",
-        return_value=[{"fact_id": "f1", "content": "test fact", "confidence": 0.8}],
-    ), patch(
-        "context_service.custodian.proposal_worker.synthesize_proposal_content",
-        return_value="A test belief",
+    with (
+        patch(
+            "context_service.custodian.proposal_worker.get_cluster_facts",
+            return_value=[{"fact_id": "f1", "content": "test fact", "confidence": 0.8}],
+        ),
+        patch(
+            "context_service.custodian.proposal_worker.synthesize_proposal_content",
+            return_value="A test belief",
+        ),
     ):
         result = await create_proposal(
             graph_store,

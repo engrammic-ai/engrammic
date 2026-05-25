@@ -167,6 +167,17 @@ class FakeGraphStore:
     ) -> uuid.UUID | None:
         raise NotImplementedError("FakeGraphStore.resolve_current_head not implemented")
 
+    async def find_stale_chain_interior(
+        self,
+        silo_id: str,
+        max_length: int,
+        batch_size: int = 100,
+    ) -> list[str]:
+        raise NotImplementedError("FakeGraphStore.find_stale_chain_interior not implemented")
+
+    async def convert_to_stub(self, node_id: str, silo_id: str) -> bool:
+        raise NotImplementedError("FakeGraphStore.convert_to_stub not implemented")
+
     async def find_nodes(
         self,
         silo_id: str,

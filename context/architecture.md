@@ -63,12 +63,18 @@ Services contain business logic. They depend on storage protocols, not implement
 
 ```
 src/context_service/services/
-├── context.py          # Core CRUD: store, query, lookup, delete
-├── silo.py             # Silo lifecycle, ownership
-├── evidence.py         # Evidence validation for knowledge layer
-├── skills.py           # Skill/pattern management
-├── auto_tagging.py     # Content classification
-└── models.py           # Service-level DTOs
+├── context.py              # Core CRUD: store, query, lookup, delete
+├── context_meta.py         # Meta-memory: provenance chains, reflection
+├── silo.py                 # Silo lifecycle, ownership
+├── evidence.py             # Evidence validation for knowledge layer
+├── source_tier_resolver.py # Evidence source tier resolution (silo rules, global defaults)
+├── skills.py               # Skill/pattern management
+├── auto_tagging.py         # Content classification
+├── tag_config.py           # Per-silo tag configuration CRUD
+├── usage.py                # Tool usage tracking and metrics
+├── user.py                 # User management
+├── oauth.py                # OAuth flow for MCP authentication
+└── models.py               # Service-level DTOs
 ```
 
 ### ContextService

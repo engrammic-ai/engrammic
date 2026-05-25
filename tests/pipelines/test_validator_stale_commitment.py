@@ -1,6 +1,5 @@
 """Tests for the validator_stale_commitment Dagster asset."""
 
-
 import pytest
 
 # ---------------------------------------------------------------------------

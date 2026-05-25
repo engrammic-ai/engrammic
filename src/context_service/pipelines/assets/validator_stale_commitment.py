@@ -87,7 +87,7 @@ def _build_stale_prompt(
         "- Direct contradiction\n"
         "- New information that makes the commitment outdated\n"
         "- Evidence that the basis for the commitment was wrong\n\n"
-        'Respond with JSON only:\n'
+        "Respond with JSON only:\n"
         '{"undermines": true/false, "confidence": 0.0-1.0, "explanation": "brief reason"}'
     )
     return [
@@ -134,7 +134,9 @@ def validator_stale_commitment_asset(
             watermark = raw_wm.decode() if isinstance(raw_wm, bytes) else str(raw_wm)
         else:
             # First run: look back one hour so we don't blast all historical commitments.
-            watermark = (datetime.now(UTC) - timedelta(seconds=_DEFAULT_LOOKBACK_SECONDS)).isoformat()
+            watermark = (
+                datetime.now(UTC) - timedelta(seconds=_DEFAULT_LOOKBACK_SECONDS)
+            ).isoformat()
 
         rows = await store.execute_query(
             _GET_COMMITMENTS_WITH_NEW_EVIDENCE,
@@ -146,9 +148,7 @@ def validator_stale_commitment_asset(
         )
 
         if not rows:
-            context.log.info(
-                f"validator_stale_commitment: no candidates silo={silo_id}"
-            )
+            context.log.info(f"validator_stale_commitment: no candidates silo={silo_id}")
             new_watermark = datetime.now(UTC).isoformat()
             await redis_client.set(wm_key, new_watermark)
             return {
@@ -232,8 +232,7 @@ def validator_stale_commitment_asset(
             except Exception as exc:  # noqa: BLE001
                 errors += 1
                 context.log.warning(
-                    f"validator_stale_commitment: error "
-                    f"commitment={commitment_id} error={exc!r}"
+                    f"validator_stale_commitment: error commitment={commitment_id} error={exc!r}"
                 )
 
         # Advance watermark after processing the batch.

@@ -225,7 +225,10 @@ async def callback(
             )
 
         logger.info("oauth.callback.direct_signup_success", workos_user_id=user_info["id"])
-        return {"status": "ok", "message": "Account created. You can now use Engrammic with your MCP client."}
+        return {
+            "status": "ok",
+            "message": "Account created. You can now use Engrammic with your MCP client.",
+        }
 
     # MCP OAuth flow - look up the authorization request by workos_state
     async with get_session() as session:

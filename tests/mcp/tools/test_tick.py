@@ -188,9 +188,7 @@ class TestTickInternal:
         assert result["engagement"]["markers"][0]["marker_id"] == "marker-2"
 
     @pytest.mark.asyncio
-    async def test_tick_with_about_hint_no_markers(
-        self, mock_context_service, mock_redis_client
-    ):
+    async def test_tick_with_about_hint_no_markers(self, mock_context_service, mock_redis_client):
         """When about_hint provided but no markers found, engagement is null."""
         with (
             patch(
@@ -233,9 +231,7 @@ class TestTickInternal:
         assert "Redis" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_tick_filters_non_pending_markers(
-        self, mock_context_service, mock_redis_client
-    ):
+    async def test_tick_filters_non_pending_markers(self, mock_context_service, mock_redis_client):
         """Resolved markers are excluded by get_engagement_for_silo; null returned."""
         with (
             patch(

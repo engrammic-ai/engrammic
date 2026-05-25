@@ -92,9 +92,7 @@ async def record_touch(
         results = await pipe.execute()
         members: list[bytes] | list[str] = results[2]
         count = sum(
-            1
-            for m in members
-            if (m.decode() if isinstance(m, bytes) else m).startswith(prefix)
+            1 for m in members if (m.decode() if isinstance(m, bytes) else m).startswith(prefix)
         )
     except Exception as exc:
         logger.warning(
@@ -168,11 +166,7 @@ async def get_touch_count(
         return 0
 
     members: list[bytes] | list[str] = results[1]
-    return sum(
-        1
-        for m in members
-        if (m.decode() if isinstance(m, bytes) else m).startswith(prefix)
-    )
+    return sum(1 for m in members if (m.decode() if isinstance(m, bytes) else m).startswith(prefix))
 
 
 async def clear_touches(

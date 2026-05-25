@@ -46,9 +46,7 @@ class TestRecordTouch:
         now_ms = 1_000_000
         # pipeline returns: [zadd_result, zremrangebyscore_result, zrangebyscore_result]
         # zrangebyscore returns one member for session-a
-        mock_redis._mock_pipe.execute = AsyncMock(
-            return_value=[1, 0, [b"session-a:1000000000000"]]
-        )
+        mock_redis._mock_pipe.execute = AsyncMock(return_value=[1, 0, [b"session-a:1000000000000"]])
 
         with patch("context_service.engine.touch_counter._now_ms", return_value=now_ms):
             result = await record_touch(mock_redis, "silo-1", "marker-1", "session-a")
@@ -152,9 +150,7 @@ class TestRecordTouch:
     async def test_uses_correct_key(self, mock_redis):
         """Verifies the Redis key format is touches:{silo_id}:{marker_id}."""
         now_ms = 5_000_000
-        mock_redis._mock_pipe.execute = AsyncMock(
-            return_value=[1, 0, [b"sess-1:5000000000000"]]
-        )
+        mock_redis._mock_pipe.execute = AsyncMock(return_value=[1, 0, [b"sess-1:5000000000000"]])
 
         pipe = mock_redis._mock_pipe
         zadd_calls: list[tuple[object, ...]] = []
@@ -177,9 +173,7 @@ class TestRecordTouch:
     async def test_member_uses_session_prefix(self, mock_redis):
         """Member added to sorted set starts with session_id: prefix."""
         now_ms = 6_000_000
-        mock_redis._mock_pipe.execute = AsyncMock(
-            return_value=[1, 0, [b"session-a:6000000000000"]]
-        )
+        mock_redis._mock_pipe.execute = AsyncMock(return_value=[1, 0, [b"session-a:6000000000000"]])
 
         pipe = mock_redis._mock_pipe
         zadd_calls: list[tuple[object, ...]] = []
@@ -212,9 +206,7 @@ class TestGetTouchCount:
     async def test_active_touch_returns_one(self, mock_redis):
         """Session with one active member returns 1."""
         now_ms = 10_000_000
-        mock_redis._mock_pipe.execute = AsyncMock(
-            return_value=[0, [b"session-a:10000000000000"]]
-        )
+        mock_redis._mock_pipe.execute = AsyncMock(return_value=[0, [b"session-a:10000000000000"]])
 
         with patch("context_service.engine.touch_counter._now_ms", return_value=now_ms):
             result = await get_touch_count(mock_redis, "silo-1", "marker-1", "session-a")
@@ -266,9 +258,7 @@ class TestGetTouchCount:
         )
 
         with patch("context_service.engine.touch_counter._now_ms", return_value=now_ms):
-            result = await get_touch_count(
-                mock_redis, "silo-1", "marker-1", "session-a"
-            )
+            result = await get_touch_count(mock_redis, "silo-1", "marker-1", "session-a")
 
         assert result == 1
 
@@ -277,9 +267,7 @@ class TestGetTouchCount:
         """After decay window, old touches are pruned and count drops."""
         now_ms = 20_000_000
         # Prune removed old entries; only one remains
-        mock_redis._mock_pipe.execute = AsyncMock(
-            return_value=[2, [b"session-a:20000000000000"]]
-        )
+        mock_redis._mock_pipe.execute = AsyncMock(return_value=[2, [b"session-a:20000000000000"]])
 
         with patch("context_service.engine.touch_counter._now_ms", return_value=now_ms):
             result = await get_touch_count(

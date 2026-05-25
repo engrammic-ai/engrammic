@@ -342,9 +342,7 @@ class TestDismissMarkerInternal:
             )
 
         assert result["status"] == "dismissed"
-        mock_clear.assert_awaited_once_with(
-            mock_redis_client._redis, "silo-1", "marker-5"
-        )
+        mock_clear.assert_awaited_once_with(mock_redis_client._redis, "silo-1", "marker-5")
 
 
 class TestDismissToolRegistration:

@@ -126,7 +126,9 @@ async def test_marker_cleanup_redis_zrem_called_for_about_ids() -> None:
         redis_client = await mock_redis.client()
         now = datetime.now(UTC).isoformat()
 
-        expired = await graph_store.execute_query(GET_EXPIRED_MARKERS, {"silo_id": silo_id, "now": now})
+        expired = await graph_store.execute_query(
+            GET_EXPIRED_MARKERS, {"silo_id": silo_id, "now": now}
+        )
 
         contradictions: list[tuple[str, list[str]]] = []
         stale: list[tuple[str, list[str]]] = []
@@ -138,7 +140,9 @@ async def test_marker_cleanup_redis_zrem_called_for_about_ids() -> None:
             else:
                 stale.append((mid, aids))
 
-        result = await graph_store.execute_query(DELETE_EXPIRED_MARKERS, {"silo_id": silo_id, "now": now})
+        result = await graph_store.execute_query(
+            DELETE_EXPIRED_MARKERS, {"silo_id": silo_id, "now": now}
+        )
         deleted_c = int(result[0]["deleted_contradictions"]) if result else 0
         deleted_sc = int(result[0]["deleted_stale_commitments"]) if result else 0
 

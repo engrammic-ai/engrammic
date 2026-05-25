@@ -527,7 +527,9 @@ class TestGetEngagementForAboutSet:
         assert "message" in result
 
     @pytest.mark.asyncio
-    async def test_hard_disabled_stays_soft_despite_threshold(self, mock_store, mock_redis_with_touches):
+    async def test_hard_disabled_stays_soft_despite_threshold(
+        self, mock_store, mock_redis_with_touches
+    ):
         """When engagement_hard_enabled is False, stays soft even above threshold."""
         call_count = 0
 
@@ -584,9 +586,7 @@ class TestGetEngagementForAboutSet:
 
 class TestGetEngagementForSilo:
     @pytest.mark.asyncio
-    async def test_no_markers_no_proposed_beliefs_returns_none(
-        self, mock_store, mock_redis
-    ):
+    async def test_no_markers_no_proposed_beliefs_returns_none(self, mock_store, mock_redis):
         mock_store.execute_query.return_value = []
 
         from context_service.engine.engagement import get_engagement_for_silo
@@ -600,9 +600,7 @@ class TestGetEngagementForSilo:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_proposed_belief_included_when_no_other_markers(
-        self, mock_store, mock_redis
-    ):
+    async def test_proposed_belief_included_when_no_other_markers(self, mock_store, mock_redis):
         """ProposedBelief should appear in no-hint silo engagement."""
         mock_store.execute_query.side_effect = [
             # get_all_pending_markers returns nothing
@@ -638,9 +636,7 @@ class TestGetEngagementForSilo:
         assert m["node_ids"] == ["fact-a", "fact-b"]
 
     @pytest.mark.asyncio
-    async def test_includes_both_markers_and_proposed_beliefs(
-        self, mock_store, mock_redis
-    ):
+    async def test_includes_both_markers_and_proposed_beliefs(self, mock_store, mock_redis):
         """Both Contradiction markers and ProposedBeliefs must appear in result."""
         mock_store.execute_query.side_effect = [
             # get_all_pending_markers returns one marker ID
@@ -683,9 +679,7 @@ class TestGetEngagementForSilo:
         assert types == {"Contradiction", "ProposedBelief"}
 
     @pytest.mark.asyncio
-    async def test_proposed_belief_query_failure_graceful(
-        self, mock_store, mock_redis
-    ):
+    async def test_proposed_belief_query_failure_graceful(self, mock_store, mock_redis):
         """Failure in ProposedBelief query should not break marker results."""
         mock_store.execute_query.side_effect = [
             # get_all_pending_markers returns one marker ID

@@ -151,6 +151,9 @@ _ALL_PROTOCOL_METHODS: list[tuple[str, int]] = [
     ("upsert_agent", 2),
     # ReasoningChain Projection
     ("upsert_reasoning_chain", 12),
+    # Chain Pruning
+    ("find_stale_chain_interior", 2),
+    ("convert_to_stub", 2),
     # Bulk Operations
     ("batch_upsert_nodes", 1),
     ("batch_upsert_binary_edges", 2),

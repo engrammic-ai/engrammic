@@ -247,9 +247,7 @@ class TestCreateStaleCommitment:
 class TestResolveMarker:
     @pytest.mark.asyncio
     async def test_resolves_marker_and_returns_dict(self, mock_store, mock_redis):
-        mock_store.execute_query.return_value = [
-            {"id": "m-1", "about_ids": ["node-a", "node-b"]}
-        ]
+        mock_store.execute_query.return_value = [{"id": "m-1", "about_ids": ["node-a", "node-b"]}]
         mock_store.execute_write.return_value = [
             {"marker_id": "m-1", "marker_type": "Contradiction"}
         ]
@@ -292,9 +290,7 @@ class TestResolveMarker:
 
     @pytest.mark.asyncio
     async def test_removes_from_redis_index(self, mock_store, mock_redis):
-        mock_store.execute_query.return_value = [
-            {"about_ids": ["node-a", "node-b"]}
-        ]
+        mock_store.execute_query.return_value = [{"about_ids": ["node-a", "node-b"]}]
         mock_store.execute_write.return_value = [
             {"marker_id": "m-1", "marker_type": "Contradiction"}
         ]
@@ -340,9 +336,7 @@ class TestResolveMarker:
 class TestDismissMarker:
     @pytest.mark.asyncio
     async def test_dismisses_marker(self, mock_store, mock_redis):
-        mock_store.execute_query.return_value = [
-            {"about_ids": ["node-x"]}
-        ]
+        mock_store.execute_query.return_value = [{"about_ids": ["node-x"]}]
         mock_store.execute_write.return_value = [
             {"marker_id": "m-2", "marker_type": "StaleCommitment"}
         ]
