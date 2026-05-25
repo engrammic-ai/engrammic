@@ -9,6 +9,7 @@ from pydantic_ai import Agent
 
 from context_service.config.logging import get_logger
 from context_service.config.settings import get_settings
+from context_service.telemetry.metrics import record_supersession_skipped
 
 if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
@@ -174,3 +175,4 @@ async def on_custodian_batch_fire(silo_id: str, node_ids: list[str]) -> None:
                 await custodian.write_supersession(
                     node_id, old_id, result.reason or "contradiction"
                 )
+                record_supersession_skipped(silo_id=silo_id)
