@@ -119,7 +119,7 @@ context_service = ContextServiceRun(
         "EMBEDDING_PROVIDER": "vertex",
         "LLM_PROVIDER": "vertex_gemini",
         "DEFAULT_LLM_MODEL": "gemini-2.5-flash",
-        "AUTH_ENABLED": "true",
+        "AUTH_ENABLED": "false" if env == "dev" else "true",
         "CUSTODIAN__ENABLED": "true",
         "LOG_LEVEL": "INFO",
         "OAUTH__ISSUER": "https://api.engrammic.ai" if env == "prod" else f"https://{env}.engrammic.ai",
