@@ -274,6 +274,22 @@ Final verb set for engagement response:
 
 Five verbs touch engagement, but each does one thing. The "not now" vs "rejected" distinction is preserved naturally: `reject` for ProposedBelief, `dismiss` for everything else.
 
+### 4. Validator architecture (Plan B)
+
+How does sage.validator detect contradictions and stale commitments?
+
+#### Options considered
+
+- **A: Pure Batch** — validator scans every 15 min. Simple but 15-min delay.
+- **B: Inline + Async** — contradiction check inline, async marker write. Near-real-time but 50-100ms overhead.
+- **C: Hybrid** — inline embedding check sets flag (~20ms), batch validator confirms via LLM every 5 min.
+
+#### Resolution
+
+**Option C (Hybrid).** Inline flagging keeps write path fast. Batch confirmation matches existing SAGE patterns. 5-min delay is acceptable for engagement surfacing.
+
+> Plan B (SAGE prerequisites) specced 2026-05-25 via `context/plans/2026-05-25-engagement-plan-b-sage-prerequisites.md`. Introduces Contradiction/StaleCommitment markers, Redis index, validator job.
+
 ## Layer 2: Hook surface
 
 **Status: checkpointed. Revisit after layer 1 ships.**
