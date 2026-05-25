@@ -91,7 +91,10 @@ def register(mcp: FastMCP) -> None:
                 return err
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
         if confidence is not None and not 0.0 <= confidence <= 1.0:
-            return {"error": "invalid_confidence", "message": "confidence must be between 0.0 and 1.0"}
+            return {
+                "error": "invalid_confidence",
+                "message": "confidence must be between 0.0 and 1.0",
+            }
 
         start = time.perf_counter()
         success = True

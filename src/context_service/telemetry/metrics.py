@@ -55,6 +55,7 @@ _tool_error_counter: metrics.Counter | None = None
 _supersession_used_counter: metrics.Counter | None = None
 _supersession_skipped_counter: metrics.Counter | None = None
 _node_confidence: metrics.Histogram | None = None
+_engagement_latency: metrics.Histogram | None = None
 
 
 def setup_metrics(service_name: str = "context-service") -> None:
@@ -91,7 +92,8 @@ def setup_metrics(service_name: str = "context-service") -> None:
         _tool_error_counter, \
         _supersession_used_counter, \
         _supersession_skipped_counter, \
-        _node_confidence
+        _node_confidence, \
+        _engagement_latency
 
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     if not endpoint:
@@ -333,6 +335,12 @@ def setup_metrics(service_name: str = "context-service") -> None:
         name="node.confidence",
         description="Confidence distribution at write time",
         unit="1",
+    )
+
+    _engagement_latency = _meter.create_histogram(
+        name="recall.engagement.latency",
+        description="Engagement detection latency during recall",
+        unit="ms",
     )
 
 
@@ -670,6 +678,16 @@ def record_node_confidence(confidence: float, layer: str, silo_id: str | None = 
     if silo_id:
         attrs["silo_id"] = silo_id
     _node_confidence.record(confidence, attrs)
+
+
+def record_engagement_latency(duration_ms: float, silo_id: str | None = None) -> None:
+    """Record engagement detection latency during recall."""
+    if _engagement_latency is None:
+        return
+    attrs: dict[str, str] = {}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _engagement_latency.record(duration_ms, attrs)
 
 
 # Public references used for import checks and direct access
