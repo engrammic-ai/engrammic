@@ -1390,6 +1390,25 @@ class Settings(BaseSettings):
     heat_dedup_window_seconds: int = Field(default=300)
 
     # =========================================================================
+    # Engagement Escalation Settings
+    # =========================================================================
+
+    engagement_escalation_threshold: int = Field(
+        default=3,
+        ge=1,
+        description="Number of touches before a soft checkpoint escalates to hard.",
+    )
+    engagement_decay_window_ms: int = Field(
+        default=1_800_000,
+        ge=1,
+        description="Decay window in milliseconds (30 min) for engagement touch counting.",
+    )
+    engagement_hard_enabled: bool = Field(
+        default=True,
+        description="Kill switch for hard checkpoint mode. Set false to disable escalation.",
+    )
+
+    # =========================================================================
     # YAML loading
     # =========================================================================
 
