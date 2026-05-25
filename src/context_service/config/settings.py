@@ -1345,6 +1345,26 @@ class Settings(BaseSettings):
     )
 
     # =========================================================================
+    # Contradiction Detection (inline flagging)
+    # =========================================================================
+
+    contradiction_candidate_threshold: float = Field(
+        default=0.85,
+        ge=0.0,
+        le=1.0,
+        description="Cosine similarity threshold for flagging contradiction candidates",
+    )
+    contradiction_candidate_ttl_hours: int = Field(
+        default=1,
+        ge=1,
+        description="Hours before unflagged candidates expire (validator picks them up)",
+    )
+    contradiction_flagging_enabled: bool = Field(
+        default=True,
+        description="Enable inline contradiction candidate flagging during writes",
+    )
+
+    # =========================================================================
     # Signals — heat / freshness / priority
     # =========================================================================
 
