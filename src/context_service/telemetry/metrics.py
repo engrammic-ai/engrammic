@@ -44,6 +44,7 @@ _orphan_chains_recovered: metrics.Counter | None = None
 _source_tier_counter: metrics.Counter | None = None
 _embedding_cache_hit_counter: metrics.Counter | None = None
 _embedding_cache_miss_counter: metrics.Counter | None = None
+_belief_confidence: metrics.Histogram | None = None
 
 
 def setup_metrics(service_name: str = "context-service") -> None:
@@ -69,7 +70,8 @@ def setup_metrics(service_name: str = "context-service") -> None:
         _orphan_chains_recovered, \
         _source_tier_counter, \
         _embedding_cache_hit_counter, \
-        _embedding_cache_miss_counter
+        _embedding_cache_miss_counter, \
+        _belief_confidence
 
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     if not endpoint:
@@ -249,6 +251,12 @@ def setup_metrics(service_name: str = "context-service") -> None:
     _embedding_cache_miss_counter = _meter.create_counter(
         name="embedding.cache.miss",
         description="Embedding cache misses",
+        unit="1",
+    )
+
+    _belief_confidence = _meter.create_histogram(
+        name="belief.confidence",
+        description="Confidence score of declared beliefs",
         unit="1",
     )
 
@@ -478,6 +486,16 @@ def record_embedding_cache_miss(task: str) -> None:
     if _embedding_cache_miss_counter is None:
         return
     _embedding_cache_miss_counter.add(1, {"task": task})
+
+
+def record_belief_confidence(confidence: float, silo_id: str | None = None) -> None:
+    """Record the confidence score of a declared belief."""
+    if _belief_confidence is None:
+        return
+    attributes: dict[str, str] = {}
+    if silo_id:
+        attributes["silo_id"] = silo_id
+    _belief_confidence.record(confidence, attributes)
 
 
 # Public references used for import checks and direct access
