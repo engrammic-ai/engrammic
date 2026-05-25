@@ -1333,6 +1333,16 @@ class Settings(BaseSettings):
         le=1.0,
         description="Confidence above which (but below auto_synthesis) creates ProposedBelief.",
     )
+    proposal_cooldown_hours: int = Field(
+        default=24,
+        ge=1,
+        description="Don't re-propose rejected beliefs within this window",
+    )
+    max_proposals_per_silo: int = Field(
+        default=10,
+        ge=1,
+        description="Cap pending ProposedBeliefs per silo to avoid noise",
+    )
 
     # =========================================================================
     # Signals — heat / freshness / priority

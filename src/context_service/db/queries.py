@@ -1439,6 +1439,14 @@ DETACH DELETE pb
 RETURN count(pb) AS deleted_count
 """
 
+GET_RECENTLY_REJECTED_PROPOSAL_FOR_CLUSTER = """
+MATCH (pb:ProposedBelief {silo_id: $silo_id, status: 'rejected'})
+WHERE pb.rejected_at IS NOT NULL AND pb.rejected_at >= $cutoff
+WITH pb
+MATCH (pb)-[:SYNTHESIZED_FROM]->(f:Fact)-[:MEMBER_OF]->(c:Cluster {id: $cluster_id, silo_id: $silo_id})
+RETURN count(pb) AS rejected_count
+"""
+
 LIST_DENSE_CLUSTERS_WITHOUT_BELIEF_OR_PROPOSAL = """
 MATCH (f:Fact)-[:MEMBER_OF]->(c:Cluster {silo_id: $silo_id})
 WITH c, count(f) AS fact_count
@@ -1561,6 +1569,58 @@ CALL {
     RETURN sc.id AS marker_id, 'StaleCommitment' AS marker_type
 }
 RETURN marker_id, marker_type
+"""
+
+GET_MARKERS_BY_IDS = """
+CALL {
+    MATCH (c:Contradiction {silo_id: $silo_id})
+    WHERE c.id IN $ids
+    RETURN c.id AS id,
+           'Contradiction' AS marker_type,
+           c.status AS status,
+           c.detected_at AS detected_at,
+           c.expires_at AS expires_at,
+           c.about_ids AS about_ids,
+           c.node_a_id AS node_a_id,
+           c.node_b_id AS node_b_id,
+           c.confidence AS confidence,
+           null AS commitment_id,
+           null AS evidence_ids,
+           c.resolution AS resolution,
+           c.resolved_at AS resolved_at
+    UNION ALL
+    MATCH (sc:StaleCommitment {silo_id: $silo_id})
+    WHERE sc.id IN $ids
+    RETURN sc.id AS id,
+           'StaleCommitment' AS marker_type,
+           sc.status AS status,
+           sc.detected_at AS detected_at,
+           sc.expires_at AS expires_at,
+           sc.about_ids AS about_ids,
+           null AS node_a_id,
+           null AS node_b_id,
+           null AS confidence,
+           sc.commitment_id AS commitment_id,
+           sc.evidence_ids AS evidence_ids,
+           sc.resolution AS resolution,
+           sc.resolved_at AS resolved_at
+}
+RETURN id, marker_type, status, detected_at, expires_at, about_ids,
+       node_a_id, node_b_id, confidence, commitment_id, evidence_ids,
+       resolution, resolved_at
+"""
+
+GET_EXPIRED_MARKERS = """
+CALL {
+    MATCH (c:Contradiction {silo_id: $silo_id})
+    WHERE c.expires_at IS NOT NULL AND c.expires_at < $now
+    RETURN c.id AS id, 'Contradiction' AS marker_type, c.about_ids AS about_ids
+    UNION ALL
+    MATCH (sc:StaleCommitment {silo_id: $silo_id})
+    WHERE sc.expires_at IS NOT NULL AND sc.expires_at < $now
+    RETURN sc.id AS id, 'StaleCommitment' AS marker_type, sc.about_ids AS about_ids
+}
+RETURN id, marker_type, about_ids
 """
 
 DELETE_EXPIRED_MARKERS = """
