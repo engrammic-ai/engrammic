@@ -1638,3 +1638,41 @@ CALL {
 }
 RETURN deleted_contradictions, deleted_stale_commitments
 """
+
+# ---------------------------------------------------------------------------
+# Contradiction candidate flag queries (validator Task 4)
+#
+# Nodes are flagged by Task 3 (inline detection) with three properties:
+#   contradiction_candidate = true
+#   contradiction_candidate_with = [node_id, ...] (one or more peer node ids)
+#   contradiction_candidate_at = ISO datetime string
+#
+# The validator asset queries within a TTL window (1 h by default) so stale
+# flags that were never confirmed do not accumulate indefinitely.
+# ---------------------------------------------------------------------------
+
+GET_CONTRADICTION_CANDIDATES = """
+MATCH (n {silo_id: $silo_id})
+WHERE n.contradiction_candidate = true
+  AND n.contradiction_candidate_at > $cutoff
+  AND n.contradiction_candidate_with IS NOT NULL
+RETURN n.id AS node_id,
+       n.content AS content,
+       n.contradiction_candidate_with AS candidate_with_ids
+LIMIT $limit
+"""
+
+CLEAR_CONTRADICTION_CANDIDATE_FLAGS = """
+MATCH (n {id: $node_id, silo_id: $silo_id})
+REMOVE n.contradiction_candidate,
+       n.contradiction_candidate_with,
+       n.contradiction_candidate_at
+RETURN n.id AS node_id
+"""
+
+GET_NODES_CONTENT_BY_IDS = """
+UNWIND $node_ids AS nid
+MATCH (n {id: nid, silo_id: $silo_id})
+WHERE n.content IS NOT NULL
+RETURN n.id AS node_id, n.content AS content
+"""

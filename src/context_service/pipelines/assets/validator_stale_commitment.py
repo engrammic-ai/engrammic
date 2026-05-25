@@ -16,8 +16,6 @@ Metrics emitted per run:
     errors               -- unexpected exceptions per commitment
 """
 
-from __future__ import annotations
-
 import contextlib
 import time
 from datetime import UTC, datetime, timedelta
