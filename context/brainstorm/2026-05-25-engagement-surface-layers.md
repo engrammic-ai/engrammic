@@ -262,6 +262,8 @@ The asymmetry is honest: ratifying a system proposal is a different epistemic ac
 
 **Option B.** Promote `context_accept_belief` and `context_reject_belief` to agent-facing `accept` and `reject`.
 
+> Plan A (verb promotion) shipped 2026-05-25 via `context/plans/2026-05-25-engagement-plan-a-verb-promotion.md`. `accept` and `reject` are live in the reasoning profile.
+
 Final verb set for engagement response:
 
 - `commit(hypothesis_ids)` — unchanged, agent's own hypotheses only
