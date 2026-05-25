@@ -193,9 +193,7 @@ class TestMaybeFlagContradiction:
         ]
         store.execute_write.return_value = [{"id": "new-node"}]
 
-        with patch(
-            "context_service.engine.contradiction.get_settings"
-        ) as mock_settings:
+        with patch("context_service.engine.contradiction.get_settings") as mock_settings:
             mock_settings.return_value.contradiction_flagging_enabled = True
             mock_settings.return_value.contradiction_candidate_threshold = 0.85
 
@@ -213,9 +211,7 @@ class TestMaybeFlagContradiction:
     async def test_respects_disabled_flag(self) -> None:
         store = AsyncMock()
 
-        with patch(
-            "context_service.engine.contradiction.get_settings"
-        ) as mock_settings:
+        with patch("context_service.engine.contradiction.get_settings") as mock_settings:
             mock_settings.return_value.contradiction_flagging_enabled = False
 
             candidates = await maybe_flag_contradiction(

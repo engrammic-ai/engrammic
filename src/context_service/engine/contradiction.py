@@ -95,10 +95,12 @@ async def check_contradiction_candidates(
     if not embedding:
         return []
 
-    cutoff = datetime.now(UTC).replace(
-        hour=0, minute=0, second=0, microsecond=0
+    cutoff = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    cutoff = (
+        cutoff.replace(day=cutoff.day - lookback_days)
+        if cutoff.day > lookback_days
+        else cutoff.replace(month=cutoff.month - 1, day=1)
     )
-    cutoff = cutoff.replace(day=cutoff.day - lookback_days) if cutoff.day > lookback_days else cutoff.replace(month=cutoff.month - 1, day=1)
     cutoff_str = cutoff.isoformat()
 
     try:

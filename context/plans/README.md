@@ -5,6 +5,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 ## Current state (2026-05-25)
 
 **Shipped:**
+- v2.25 Engagement Plan B — SAGE Prerequisites (sage.validator, Contradiction/StaleCommitment markers, inline flagging, Redis index)
 - v2.24 Telemetry & Observability (SigNoz infra, OTEL instrumentation for cache/recall/epistemic health)
 - v2.23 Verb Promotion Plan A (accept/reject tools promoted to agent-facing in reasoning profile)
 - v2.22 Rate Limiting (tiered rate limiting for MCP tools and REST routes)
@@ -90,6 +91,7 @@ Specced or checkpointed for later implementation:
 ## Archive
 
 Completed plans in `archive/`:
+- Engagement Plan B (2026-05-25) - sage.validator, Contradiction/StaleCommitment markers, inline flagging, Redis index
 - Telemetry & Observability (2026-05-25) - SigNoz infra, OTEL metrics for cache/recall/epistemic health
 - Verb Promotion Plan A (2026-05-25) - accept/reject promoted to agent-facing in reasoning profile
 - Rate Limiting (2026-05-23) - tiered rate limiting for MCP tools and REST routes
