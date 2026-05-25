@@ -9,11 +9,11 @@ allowed-tools:
 
 **Internal tool, SAGE-only. Not for agent use.**
 
-Reject a ProposedBelief from custodian synthesis. The rejection reason is stored for provenance so the custodian can improve future proposals.
+Reject a ProposedBelief from sage.synthesizer. The rejection reason is stored for provenance so sage.synthesizer can improve future proposals.
 
 ## When to use
 
-- The custodian has surfaced a ProposedBelief that is incorrect, unsupported, or premature
+- sage.synthesizer has surfaced a ProposedBelief that is incorrect, unsupported, or premature
 - Triggered by SAGE review workflows, not by agent reasoning flows
 - Use `accept` instead if the proposal is sound
 
@@ -31,5 +31,5 @@ The ProposedBelief status changes to `rejected`. The reason is stored for proven
 ## What comes next
 
 After rejecting a belief, you might:
-- `reflect` - record why this synthesis failed, to inform future custodian runs
+- `reflect` - record why this synthesis failed, to inform future sage.synthesizer runs
 - `learn` - if the rejection reveals a gap in the knowledge base that should be filled explicitly

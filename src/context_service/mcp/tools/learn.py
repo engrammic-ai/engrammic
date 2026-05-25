@@ -15,7 +15,11 @@ from context_service.mcp.rate_limit import rate_limited
 from context_service.mcp.server import get_mcp_auth_context, track_tool_usage
 from context_service.mcp.tools.context_store import _context_assert
 from context_service.mcp.tools.registry import get_tool_description
-from context_service.telemetry.metrics import record_mcp_tool, record_node_confidence, record_supersession_used
+from context_service.telemetry.metrics import (
+    record_mcp_tool,
+    record_node_confidence,
+    record_supersession_used,
+)
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP

@@ -9,11 +9,11 @@ allowed-tools:
 
 **Internal tool, SAGE-only. Not for agent use.**
 
-Accept a ProposedBelief from custodian synthesis, converting it to a full Belief in the wisdom layer.
+Accept a ProposedBelief from sage.synthesizer, converting it to a full Belief in the wisdom layer.
 
 ## When to use
 
-- The custodian has surfaced a ProposedBelief and a reviewer is approving it
+- sage.synthesizer has surfaced a ProposedBelief and a reviewer is approving it
 - Triggered by SAGE review workflows, not by agent reasoning flows
 - Use `reject` instead if the proposal is incorrect or unsupported
 

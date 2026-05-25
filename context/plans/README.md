@@ -42,6 +42,8 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
+| [2026-05-25-telemetry-observability.md](./2026-05-25-telemetry-observability.md) | SigNoz infra + OTEL instrumentation for cache, recall, and epistemic health metrics | Ready to execute |
+| [2026-05-25-engagement-plan-a-verb-promotion.md](./2026-05-25-engagement-plan-a-verb-promotion.md) | Engagement layer 1 Plan A: promote `accept`/`reject` from internal-only to agent-facing in the `reasoning` profile | Ready to execute |
 | [2026-05-20-self-hosted-rest-api-phase1.md](./2026-05-20-self-hosted-rest-api-phase1.md) | Self-hosted REST API: auth + Memory/Knowledge endpoints | Ready to execute |
 
 ## Future work
