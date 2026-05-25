@@ -178,10 +178,10 @@ async def authorize(
 )
 async def callback(
     code: str = Query(..., description="Authorization code from WorkOS"),
-    state: str = Query(..., description="WorkOS state parameter (maps to workos_state)"),
+    state: str = Query(default=None, description="WorkOS state parameter (maps to workos_state)"),
     error: str = Query(default=None, description="Error from WorkOS"),
     error_description: str = Query(default=None, description="Error description from WorkOS"),
-) -> RedirectResponse:
+) -> RedirectResponse | dict[str, str]:
     """Handle the WorkOS OAuth callback.
 
     Exchanges the WorkOS code for user info, upserts the user, creates an
@@ -198,7 +198,35 @@ async def callback(
             detail=f"WorkOS authorization error: {error}",
         )
 
-    # Look up the authorization request by workos_state
+    # Direct signup flow (no MCP client) - state is None
+    if state is None:
+        try:
+            user_info = await exchange_code_for_user(code)
+        except ValueError as exc:
+            logger.error("oauth.callback.direct_signup_failed", error=str(exc))
+            raise HTTPException(status_code=400, detail="Failed to verify signup") from exc
+
+        async with get_session() as session:
+            from context_service.services.models import derive_silo_id
+
+            workos_user_id: str = user_info["id"]
+            email: str = user_info.get("email", "")
+            org_id: str | None = user_info.get("organization_id")
+            effective_org_id = org_id or workos_user_id
+            silo_id = str(derive_silo_id(effective_org_id))
+
+            user_svc = UserService(session)
+            await user_svc.upsert_user(
+                workos_user_id=workos_user_id,
+                org_id=effective_org_id,
+                silo_id=silo_id,
+                email=email,
+            )
+
+        logger.info("oauth.callback.direct_signup_success", workos_user_id=user_info["id"])
+        return {"status": "ok", "message": "Account created. You can now use Engrammic with your MCP client."}
+
+    # MCP OAuth flow - look up the authorization request by workos_state
     async with get_session() as session:
         stmt = select(OAuthAuthorizationRequest).where(
             OAuthAuthorizationRequest.workos_state == state
@@ -219,11 +247,10 @@ async def callback(
                 status_code=400, detail="Failed to exchange authorization code"
             ) from exc
 
-        workos_user_id: str = user_info["id"]
-        email: str = user_info.get("email", "")
-        org_id: str | None = user_info.get("organization_id")
+        workos_user_id = user_info["id"]
+        email = user_info.get("email", "")
+        org_id = user_info.get("organization_id")
 
-        # Upsert user; fall back to user ID as silo/org when org not set
         from context_service.services.models import derive_silo_id
 
         effective_org_id = org_id or workos_user_id
