@@ -107,6 +107,10 @@ signoz-up:
 signoz-down:
     docker compose -f docker-compose.signoz.yml down
 
+# Open IAP tunnel to SigNoz UI
+signoz-tunnel:
+    gcloud compute start-iap-tunnel engrammic-beta-signoz 3301 --local-host-port=localhost:3301 --zone=europe-north1-b
+
 # =============================================================================
 # GCP Infrastructure
 # =============================================================================
