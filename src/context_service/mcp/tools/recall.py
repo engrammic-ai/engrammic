@@ -7,6 +7,7 @@ import contextlib
 import time
 from typing import TYPE_CHECKING, Any
 
+from context_service.engine.engagement import MODE_HARD
 from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.rate_limit import rate_limited
 from context_service.mcp.server import (
@@ -129,10 +130,12 @@ async def _recall_impl(
     # Hard checkpoint enforcement: when engagement mode is "hard", suppress
     # all results so the agent has no content to act on until markers are resolved.
     hard_mode = bool(
-        result.get("engagement") and result["engagement"].get("mode") == "hard"
+        result.get("engagement") and result["engagement"].get("mode") == MODE_HARD
     )
     if hard_mode:
         result["results"] = []
+        if "nodes" in result:
+            result["nodes"] = []
         if include_hypotheses:
             result["hypotheses"] = []
 
