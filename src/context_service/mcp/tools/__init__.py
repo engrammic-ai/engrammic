@@ -25,10 +25,8 @@ from context_service.mcp.tools import (
 )
 
 # Internal-only tools (not registered via registry)
-from context_service.mcp.tools.context_accept_belief import register as register_accept_belief
 from context_service.mcp.tools.context_admin import register as register_admin
 from context_service.mcp.tools.context_belief_state import register as register_belief_state
-from context_service.mcp.tools.context_reject_belief import register as register_reject_belief
 
 # Registry for profile-based registration
 from context_service.mcp.tools.registry import register_profile_tools
@@ -49,8 +47,6 @@ def register_internal_tools(mcp: FastMCP) -> None:
     Call separately if needed.
     """
     register_admin(mcp)
-    register_accept_belief(mcp)
-    register_reject_belief(mcp)
     register_belief_state(mcp)
 
 

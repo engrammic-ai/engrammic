@@ -53,13 +53,14 @@ def register(mcp: FastMCP) -> None:
     """Register the context_reject_belief tool."""
 
     @mcp.tool(
-        name="context_reject_belief",
+        name="reject",
         description=(
-            "Reject a ProposedBelief with an optional reason. "
-            "The proposal is tombstoned (status='rejected') but preserved for audit."
+            "Reject a system-synthesized ProposedBelief with an optional reason. "
+            "The proposal is tombstoned (status='rejected') but preserved for audit. "
+            "Use when SAGE has surfaced a ProposedBelief you do not endorse."
         ),
     )
-    async def context_reject_belief(
+    async def reject(
         belief_id: str,
         reason: str | None = None,
         silo_id: str | None = None,
@@ -98,5 +99,8 @@ def register(mcp: FastMCP) -> None:
             raise
         finally:
             record_mcp_tool(
-                "context_reject_belief", (time.perf_counter() - start) * 1000, success=success
+                "reject",
+                (time.perf_counter() - start) * 1000,
+                success=success,
+                silo_id=resolved_silo_id,
             )

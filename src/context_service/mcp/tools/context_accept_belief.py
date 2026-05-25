@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from context_service.services.models import derive_silo_id
-from context_service.telemetry.metrics import record_mcp_tool
+from context_service.telemetry.metrics import record_belief_confidence, record_mcp_tool
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -59,14 +59,14 @@ def register(mcp: FastMCP) -> None:
     """Register the context_accept_belief tool."""
 
     @mcp.tool(
-        name="context_accept_belief",
+        name="accept",
         description=(
-            "Accept a ProposedBelief and convert it to an active Belief. "
-            "ProposedBeliefs are weak syntheses from the Custodian awaiting validation. "
+            "Ratify a system-synthesized ProposedBelief, promoting it to an active Belief. "
+            "Use when SAGE has surfaced a ProposedBelief you agree with. "
             "Optionally override the confidence on acceptance."
         ),
     )
-    async def context_accept_belief(
+    async def accept(
         belief_id: str,
         confidence: float | None = None,
         silo_id: str | None = None,
@@ -100,11 +100,19 @@ def register(mcp: FastMCP) -> None:
                 silo_id=resolved_silo_id,
                 confidence=confidence,
             )
+            if "error" not in result:
+                record_belief_confidence(
+                    confidence if confidence is not None else 0.7,
+                    silo_id=resolved_silo_id,
+                )
             return result
         except Exception:
             success = False
             raise
         finally:
             record_mcp_tool(
-                "context_accept_belief", (time.perf_counter() - start) * 1000, success=success
+                "accept",
+                (time.perf_counter() - start) * 1000,
+                success=success,
+                silo_id=resolved_silo_id,
             )
