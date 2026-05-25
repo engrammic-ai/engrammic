@@ -9,11 +9,13 @@ from context_service.pipelines.jobs.usage_retention import (
     usage_retention_job,
     usage_retention_schedule,
 )
+from context_service.pipelines.jobs.validator_job import sage_validator_job
 
 __all__ = [
     "groundskeeper_nightly",
     "orphan_chain_recovery_job",
     "orphan_recovery_schedule",
+    "sage_validator_job",
     "usage_retention_job",
     "usage_retention_schedule",
 ]
