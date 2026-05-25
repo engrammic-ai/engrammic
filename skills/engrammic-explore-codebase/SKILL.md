@@ -25,15 +25,25 @@ Example: `/engrammic:explore-codebase tag=somnus`
 TeamCreate({ team_name: "explore-{tag}" })
 ```
 
-Launch these **in parallel**. Each agent:
-1. Invokes `/engrammic:eag-guide` first
-2. Explores their focus area
-3. Tags all nodes with "{tag}"
+Launch these **in parallel**. Each agent follows the EAG store discipline below.
 
 #### arch-explorer
 ```
 prompt: |
   Explore {path} architecture. First invoke `/engrammic:eag-guide`.
+
+  BEFORE EACH STORE:
+  1. recall(query="<topic> {tag}") - check what's already known
+  2. Only then remember/learn, using supersedes if updating existing
+
+  AFTER STORING:
+  - link() findings to related nodes when relevant
+
+  AT END OF EXPLORATION:
+  1. recall(tags=["{tag}"]) - review your nodes
+  2. Form at least one believe() synthesizing key findings
+  3. reflect() if your understanding shifted from initial assumptions
+
   Focus: structure, modules, data flow, abstractions.
   Tag everything with "{tag}".
 ```
@@ -42,6 +52,19 @@ prompt: |
 ```
 prompt: |
   Explore {path} patterns. First invoke `/engrammic:eag-guide`.
+
+  BEFORE EACH STORE:
+  1. recall(query="<topic> {tag}") - check what's already known
+  2. Only then remember/learn, using supersedes if updating existing
+
+  AFTER STORING:
+  - link() findings to related nodes when relevant
+
+  AT END OF EXPLORATION:
+  1. recall(tags=["{tag}"]) - review your nodes
+  2. Form at least one believe() synthesizing key findings
+  3. reflect() if your understanding shifted from initial assumptions
+
   Focus: design patterns, conventions, idioms, protocols.
   Tag everything with "{tag}".
 ```
@@ -50,6 +73,19 @@ prompt: |
 ```
 prompt: |
   Explore {path} quality. First invoke `/engrammic:eag-guide`.
+
+  BEFORE EACH STORE:
+  1. recall(query="<topic> {tag}") - check what's already known
+  2. Only then remember/learn, using supersedes if updating existing
+
+  AFTER STORING:
+  - link() findings to related nodes when relevant
+
+  AT END OF EXPLORATION:
+  1. recall(tags=["{tag}"]) - review your nodes
+  2. Form at least one believe() synthesizing key findings
+  3. reflect() if your understanding shifted from initial assumptions
+
   Focus: tests, error handling, tech debt, coverage gaps.
   Tag everything with "{tag}".
 ```
@@ -58,6 +94,19 @@ prompt: |
 ```
 prompt: |
   Explore {path} domain. First invoke `/engrammic:eag-guide`.
+
+  BEFORE EACH STORE:
+  1. recall(query="<topic> {tag}") - check what's already known
+  2. Only then remember/learn, using supersedes if updating existing
+
+  AFTER STORING:
+  - link() findings to related nodes when relevant
+
+  AT END OF EXPLORATION:
+  1. recall(tags=["{tag}"]) - review your nodes
+  2. Form at least one believe() synthesizing key findings
+  3. reflect() if your understanding shifted from initial assumptions
+
   Focus: problem solved, domain concepts, terminology.
   Tag everything with "{tag}".
 ```
@@ -65,6 +114,19 @@ prompt: |
 ### Wait for Phase 1 completion
 
 Collect summaries from all 4 agents. Note the node count.
+
+## Phase 1.5: Mid-Exploration Checkpoint
+
+After ~50% of exploration time, prompt each agent:
+
+```
+CHECKPOINT: Verify EAG compliance:
+- Have you used recall() before stores? If not, do it now.
+- Have you used link() for related findings?
+- Are you ready to form a believe() from your findings?
+
+Run: recall(tags=["{tag}"]) to see your stored nodes.
+```
 
 ## Phase 2: Wandering
 
@@ -74,14 +136,17 @@ After targeted explorers complete, spawn a wanderer who can see what's been stor
 prompt: |
   The codebase at {path} has been explored by 4 targeted agents.
   Their findings are in Engrammic tagged "{tag}".
-  
-  First invoke `/engrammic:eag-guide`, then recall what's stored:
-  - Query for tag "{tag}" to see what's known
-  - Look for gaps, contradictions, missing connections
-  
-  Then invoke `/engrammic:wander` to explore with curiosity.
-  Find what the focused explorers missed. Tag everything with "{tag}".
-  Link your findings to theirs where relevant.
+
+  FIRST: recall(tags=["{tag}"]) - see ALL stored nodes
+
+  YOUR MISSION:
+  1. Find GAPS - what did focused explorers miss?
+  2. Find CONTRADICTIONS - do any findings conflict? If so, link(type="CONTRADICTS") + reflect()
+  3. Create CROSS-LINKS - connect related findings from different explorers
+  4. Form BELIEFS - synthesize cross-cutting insights with believe(about=[node_ids])
+
+  Then invoke `/engrammic:wander` for curiosity-driven exploration.
+  Tag everything with "{tag}".
 ```
 
 ## Synthesize
