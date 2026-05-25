@@ -6,6 +6,7 @@ import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from context_service.mcp.tools.registry import get_tool_description
 from context_service.services.models import derive_silo_id
 from context_service.telemetry.metrics import record_mcp_tool
 
@@ -54,11 +55,7 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(
         name="reject",
-        description=(
-            "Reject a system-synthesized ProposedBelief with an optional reason. "
-            "The proposal is tombstoned (status='rejected') but preserved for audit. "
-            "Use when SAGE has surfaced a ProposedBelief you do not endorse."
-        ),
+        description=get_tool_description("reject"),
     )
     async def reject(
         belief_id: str,
@@ -93,6 +90,8 @@ def register(mcp: FastMCP) -> None:
                 silo_id=resolved_silo_id,
                 reason=reason,
             )
+            if "error" in result:
+                success = False
             return result
         except Exception:
             success = False

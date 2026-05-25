@@ -53,6 +53,7 @@ async def test_reject_returns_rejected_status_on_success() -> None:
     assert result["status"] == "rejected"
     assert result["proposed_belief_id"] == proposed_belief_id
     assert result["reason"] == "superseded by direct evidence"
+    assert "rejected_at" in result
 
 
 @pytest.mark.asyncio

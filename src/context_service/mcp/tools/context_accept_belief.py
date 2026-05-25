@@ -7,6 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from context_service.mcp.tools.registry import get_tool_description
 from context_service.services.models import derive_silo_id
 from context_service.telemetry.metrics import record_belief_confidence, record_mcp_tool
 
@@ -51,6 +52,7 @@ async def _context_accept_belief(
         "proposed_belief_id": proposed_belief_id,
         "status": "accepted",
         "created_belief_id": rows[0]["belief_id"],
+        "confidence": rows[0]["confidence"],
         "accepted_at": accepted_at,
     }
 
@@ -60,11 +62,7 @@ def register(mcp: FastMCP) -> None:
 
     @mcp.tool(
         name="accept",
-        description=(
-            "Ratify a system-synthesized ProposedBelief, promoting it to an active Belief. "
-            "Use when SAGE has surfaced a ProposedBelief you agree with. "
-            "Optionally override the confidence on acceptance."
-        ),
+        description=get_tool_description("accept"),
     )
     async def accept(
         belief_id: str,
@@ -92,6 +90,9 @@ def register(mcp: FastMCP) -> None:
             if err is not None:
                 return err
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
+        if confidence is not None and not 0.0 <= confidence <= 1.0:
+            return {"error": "invalid_confidence", "message": "confidence must be between 0.0 and 1.0"}
+
         start = time.perf_counter()
         success = True
         try:
@@ -100,9 +101,11 @@ def register(mcp: FastMCP) -> None:
                 silo_id=resolved_silo_id,
                 confidence=confidence,
             )
-            if "error" not in result:
+            if "error" in result:
+                success = False
+            else:
                 record_belief_confidence(
-                    confidence if confidence is not None else 0.7,
+                    result["confidence"],
                     silo_id=resolved_silo_id,
                 )
             return result

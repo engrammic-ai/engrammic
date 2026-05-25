@@ -1414,7 +1414,7 @@ CREATE (b)-[:PROMOTED_FROM]->(pb)
 WITH pb, b
 MATCH (pb)-[:SYNTHESIZED_FROM]->(f)
 CREATE (b)-[:SYNTHESIZED_FROM]->(f)
-RETURN b.id AS belief_id
+RETURN b.id AS belief_id, b.confidence AS confidence
 """
 
 REJECT_PROPOSED_BELIEF = """

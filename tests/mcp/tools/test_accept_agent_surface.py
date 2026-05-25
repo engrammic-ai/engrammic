@@ -36,7 +36,7 @@ async def test_accept_returns_created_belief_id_on_success() -> None:
     expected_belief_id = str(uuid.uuid4())
 
     fake_store = AsyncMock()
-    fake_store.execute_write.return_value = [{"belief_id": expected_belief_id}]
+    fake_store.execute_write.return_value = [{"belief_id": expected_belief_id, "confidence": 0.85}]
 
     fake_service = AsyncMock()
     fake_service.graph_store = fake_store
@@ -53,6 +53,8 @@ async def test_accept_returns_created_belief_id_on_success() -> None:
     assert result["status"] == "accepted"
     assert result["proposed_belief_id"] == proposed_belief_id
     assert result["created_belief_id"] == expected_belief_id
+    assert result["confidence"] == 0.85
+    assert "accepted_at" in result
 
 
 @pytest.mark.asyncio
@@ -76,3 +78,17 @@ async def test_accept_returns_not_found_when_no_rows() -> None:
         )
 
     assert result["error"] == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_accept_rejects_invalid_confidence() -> None:
+    """Invalid confidence values are rejected at the boundary."""
+    from context_service.mcp.tools.context_accept_belief import _context_accept_belief
+
+    result = await _context_accept_belief(
+        proposed_belief_id=str(uuid.uuid4()),
+        silo_id=str(uuid.uuid4()),
+        confidence=1.5,
+    )
+
+    assert result["error"] == "invalid_confidence"

@@ -26,12 +26,18 @@ def test_standard_profile_has_six_tools():
     assert "link" in config["profiles"]["standard"]
 
 
-def test_reasoning_profile_has_fourteen_tools():
+def test_reasoning_profile_includes_all_expected_tools():
+    """Reasoning profile includes standard tools plus reasoning-specific verbs."""
     config = load_tool_config()
-    assert len(config["profiles"]["reasoning"]) == 14
-    assert "forget" in config["profiles"]["reasoning"]
-    assert "accept" in config["profiles"]["reasoning"]
-    assert "reject" in config["profiles"]["reasoning"]
+    reasoning_tools = set(config["profiles"]["reasoning"])
+    standard_tools = set(config["profiles"]["standard"])
+
+    # Reasoning should be a superset of standard
+    assert standard_tools.issubset(reasoning_tools)
+
+    # Must include these reasoning-specific tools
+    expected_extras = {"reason", "reflect", "hypothesize", "revise", "commit", "accept", "reject", "forget"}
+    assert expected_extras.issubset(reasoning_tools), f"Missing: {expected_extras - reasoning_tools}"
 
 
 def test_get_profile_tools_standard():
@@ -65,6 +71,7 @@ def test_accept_description_present() -> None:
 
 
 def test_reject_description_present() -> None:
-    """reject tool has a non-empty description."""
+    """reject tool has a non-empty description mentioning ProposedBelief."""
     desc = get_tool_description("reject")
     assert desc, "reject description is empty"
+    assert "ProposedBelief" in desc or "tombstone" in desc.lower() or "rejected" in desc.lower()
