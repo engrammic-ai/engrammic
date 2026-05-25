@@ -120,6 +120,11 @@ disallow_incomplete_defs = false
 module = ["fastmcp", "fastmcp.*"]
 ignore_missing_imports = true
 
+# workos lacks type stubs (no types-workos on PyPI)
+[[tool.mypy.overrides]]
+module = ["workos", "workos.*"]
+ignore_missing_imports = true
+
 # MCP tools use untyped @mcp.tool decorator from fastmcp
 [[tool.mypy.overrides]]
 module = ["context_service.mcp.tools.*", "context_service.mcp.server"]

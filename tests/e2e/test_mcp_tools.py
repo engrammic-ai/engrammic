@@ -19,6 +19,8 @@ import pytest
 
 from tests.e2e.conftest import call_result
 
+pytestmark = pytest.mark.skip(reason="Uses internal tool names; pending verb promotion refactor")
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

@@ -35,7 +35,7 @@ Two repos in `delta-prime/`:
 At pre-seed, the primary threat is obscurity, not cloning.
 
 The actual moat is in context-service:
-- Custodian workers (automated claim-to-fact promotion, supersession)
+- SAGE workers (automated claim-to-fact promotion, supersession)
 - Multi-tenancy architecture
 - Dagster pipeline orchestration
 - Production-scale backends
@@ -56,11 +56,11 @@ Open (MIT via primitives):
 Open (Apache 2.0 via engine):
 - Single-tenant SQLite engine
 - Basic MCP server surface
-- Manual promotion (no custodian)
+- Manual promotion (no SAGE workers)
 
 Proprietary (context-service):
 - Multi-tenancy (silo_id partitioning)
-- Custodian workers (automated curation)
+- SAGE workers (automated curation)
 - Production backends (Memgraph, Qdrant, Redis)
 - Dagster pipelines
 - Scale and performance tuning
@@ -109,7 +109,7 @@ Outline (~5-6 pages, 15 min read):
    - Link to examples/
 
 6. **When You Need More** (half page)
-   - What commercial tier adds (custodian, multi-tenancy, scale)
+   - What commercial tier adds (SAGE workers, multi-tenancy, scale)
    - Waitlist CTA (not "contact us")
 
 ## Launch Sequence
@@ -165,7 +165,7 @@ Distribution prep:
 
 - Production deployment needs
 - Multi-tenant requirements
-- Automated curation (custodian)
+- Automated curation (SAGE)
 - Scale requirements
 
 ### What Commercial Customers Get

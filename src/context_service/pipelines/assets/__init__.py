@@ -25,6 +25,7 @@ from context_service.pipelines.assets.fact_promotion import claim_to_fact_promot
 from context_service.pipelines.assets.heat import heat_asset
 from context_service.pipelines.assets.heat_diffusion import heat_diffusion_asset
 from context_service.pipelines.assets.llm_pattern_detection import llm_pattern_detection
+from context_service.pipelines.assets.marker_cleanup import marker_cleanup_asset
 from context_service.pipelines.assets.pattern_detection import pattern_detection
 from context_service.pipelines.assets.prewarm_sweep import prewarm_sweep_asset
 from context_service.pipelines.assets.proposal_cleanup import proposal_cleanup
@@ -36,6 +37,12 @@ from context_service.pipelines.assets.step_embedding import (
     step_embedding_backfill,
 )
 from context_service.pipelines.assets.tag_maintenance import tag_maintenance
+from context_service.pipelines.assets.validator_contradiction import (
+    validator_contradiction_asset,
+)
+from context_service.pipelines.assets.validator_stale_commitment import (
+    validator_stale_commitment_asset,
+)
 from context_service.pipelines.assets.weak_link_creation import (
     create_weak_links_for_node as create_weak_links_for_node,
 )
@@ -68,9 +75,12 @@ all_assets: list[Any] = [
     reconciliation_gc,
     proposal_detection,
     proposal_cleanup,
+    marker_cleanup_asset,
     chain_usefulness_signals,
     chain_pruning,
     step_embedding_backfill,
     session_step_embedding,
     prewarm_sweep_asset,
+    validator_contradiction_asset,
+    validator_stale_commitment_asset,
 ]

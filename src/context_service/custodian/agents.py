@@ -153,7 +153,6 @@ def fast_pass_limits() -> UsageLimits:
     settings = get_settings()
     return UsageLimits(
         output_tokens_limit=settings.custodian.fast_pass_hard_tokens,
-        tool_calls_limit=settings.custodian.fast_pass_tool_calls_limit,
         request_limit=settings.custodian.fast_pass_request_limit,
     )
 
@@ -163,7 +162,6 @@ def plan_limits() -> UsageLimits:
     settings = get_settings()
     return UsageLimits(
         output_tokens_limit=settings.custodian.plan_nominal_tokens * 3,  # loose cap
-        tool_calls_limit=0,  # plan phase does not call tools
         request_limit=2,
     )
 
@@ -171,17 +169,15 @@ def plan_limits() -> UsageLimits:
 def deep_pass_limits() -> UsageLimits:
     """UsageLimits for phase 3.
 
-    Hard output cap protects against runaway responses; tool_calls_limit +
-    request_limit protect against agent loops. total_tokens_limit was
-    dropped 2026-04-26 -- post-hoc absolute cap fired at +5% over with no
-    streaming abort, killing dense-but-valid clusters. Industry pattern
-    (pydantic-ai docs, LangGraph) uses request_limit + tool_calls_limit as
-    primary guards; output cap as the per-call ceiling.
+    Hard output cap protects against runaway responses; request_limit
+    protects against agent loops. total_tokens_limit was dropped 2026-04-26
+    -- post-hoc absolute cap fired at +5% over with no streaming abort,
+    killing dense-but-valid clusters. request_limit is the primary loop
+    guard; output cap is the per-call ceiling.
     """
     settings = get_settings()
     return UsageLimits(
         output_tokens_limit=settings.custodian.deep_pass_hard_tokens,
-        tool_calls_limit=30,
         request_limit=20,
     )
 
@@ -191,19 +187,18 @@ def stitch_limits() -> UsageLimits:
     settings = get_settings()
     return UsageLimits(
         output_tokens_limit=settings.custodian.stitch_hard_tokens,
-        tool_calls_limit=0,
         request_limit=1,
     )
 
 
 def proposal_synthesis_limits() -> UsageLimits:
     """UsageLimits for proposal synthesis. Single call, no tools."""
-    return UsageLimits(output_tokens_limit=512, request_limit=1, tool_calls_limit=0)
+    return UsageLimits(output_tokens_limit=512, request_limit=1)
 
 
 def silo_synthesis_limits() -> UsageLimits:
     """UsageLimits for silo-level synthesis. Single call, no tools."""
-    return UsageLimits(output_tokens_limit=1024, request_limit=1, tool_calls_limit=0)
+    return UsageLimits(output_tokens_limit=1024, request_limit=1)
 
 
 # --- Lazy singletons for tool registration ---

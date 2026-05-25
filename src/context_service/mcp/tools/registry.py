@@ -33,31 +33,6 @@ def load_tool_config() -> dict[str, Any]:
     return _cached_config
 
 
-def get_profile_tools(profile: str) -> list[str]:
-    """Get list of tool names for a profile, including always-available tools.
-
-    Args:
-        profile: Profile name (standard, reasoning). Falls back to standard if invalid.
-
-    Returns:
-        List of tool names to register.
-    """
-    config = load_tool_config()
-
-    if profile not in config["profiles"]:
-        logger.warning("invalid_mcp_profile", profile=profile, fallback="standard")
-        profile = "standard"
-
-    tools = list(config["profiles"][profile])
-
-    # Add always-available tools
-    for name, tool_def in config["tools"].items():
-        if tool_def.get("always_available") and name not in tools:
-            tools.append(name)
-
-    return tools
-
-
 def get_tool_description(tool_name: str) -> str:
     """Get description for a tool from config."""
     config = load_tool_config()
@@ -70,12 +45,11 @@ def get_mcp_instructions() -> str:
     return str(config.get("mcp_instructions", ""))
 
 
-def register_profile_tools(mcp: FastMCP, profile: str = "standard") -> None:
-    """Register all tools for a profile.
+def register_tools(mcp: FastMCP) -> None:
+    """Register all MCP tools.
 
     Args:
         mcp: FastMCP server instance.
-        profile: Tool profile (standard or reasoning).
 
     Note: Imports are inside function to avoid circular imports,
     since tool modules import from registry.
@@ -83,6 +57,9 @@ def register_profile_tools(mcp: FastMCP, profile: str = "standard") -> None:
     from context_service.mcp.tools import (
         believe,
         commit,
+        context_accept_belief,
+        context_reject_belief,
+        dismiss,
         forget,
         hypothesize,
         learn,
@@ -93,6 +70,7 @@ def register_profile_tools(mcp: FastMCP, profile: str = "standard") -> None:
         reflect,
         remember,
         revise,
+        tick,
         trace,
     )
 
@@ -108,21 +86,16 @@ def register_profile_tools(mcp: FastMCP, profile: str = "standard") -> None:
         "hypothesize": hypothesize.register,
         "revise": revise.register,
         "commit": commit.register,
+        "accept": context_accept_belief.register,
+        "reject": context_reject_belief.register,
+        "dismiss": dismiss.register,
+        "tick": tick.register,
         "patterns": patterns.register,
         "forget": forget.register,
     }
 
-    tool_names = get_profile_tools(profile)
+    for name, register_fn in tool_registers.items():
+        register_fn(mcp)
+        logger.debug("mcp_tool_registered", tool=name)
 
-    for name in tool_names:
-        if name in tool_registers:
-            tool_registers[name](mcp)
-            logger.debug("mcp_tool_registered", tool=name, profile=profile)
-        else:
-            logger.warning("mcp_tool_not_found", tool=name)
-
-    logger.info(
-        "mcp_profile_tools_registered",
-        profile=profile,
-        tool_count=len(tool_names),
-    )
+    logger.info("mcp_tools_registered", tool_count=len(tool_registers))

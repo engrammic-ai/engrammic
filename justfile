@@ -107,17 +107,33 @@ signoz-up:
 signoz-down:
     docker compose -f docker-compose.signoz.yml down
 
+# Open IAP tunnel to SigNoz UI
+signoz-tunnel:
+    gcloud compute start-iap-tunnel engrammic-beta-signoz 3301 --local-host-port=localhost:3301 --zone=europe-north1-b
+
 # =============================================================================
 # GCP Infrastructure
 # =============================================================================
 
-# Pulumi preview
+# Pulumi preview (current stack)
 infra-preview:
     cd infra && pulumi preview
 
-# Pulumi deploy
+# Pulumi deploy (current stack)
 infra-up:
     cd infra && pulumi up
+
+# Pulumi deploy to specific stack
+infra-up-stack stack:
+    cd infra && pulumi up --stack {{stack}}
+
+# Pulumi deploy dev
+infra-up-dev:
+    cd infra && pulumi up --stack dev
+
+# Pulumi deploy beta
+infra-up-beta:
+    cd infra && pulumi up --stack beta
 
 # Pulumi refresh
 infra-refresh:

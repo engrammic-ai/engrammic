@@ -11,7 +11,12 @@ from context_service.mcp.rate_limit import rate_limited
 from context_service.mcp.server import get_mcp_auth_context, track_tool_usage
 from context_service.mcp.tools.context_store import _context_remember
 from context_service.mcp.tools.registry import get_tool_description
-from context_service.telemetry.metrics import record_mcp_tool
+from context_service.services.models import derive_silo_id
+from context_service.telemetry.metrics import (
+    record_mcp_tool,
+    record_node_confidence,
+    record_supersession_used,
+)
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -27,13 +32,19 @@ async def _remember_impl(
     """Implementation for remember tool."""
     auth = await get_mcp_auth_context()
     await track_tool_usage(auth, "remember")
-    return await _context_remember(
+    silo_id = str(derive_silo_id(auth.org_id))
+    result = await _context_remember(
         silo_id=None,  # auto-derived from auth
         content=content,
         tags=tags,
         decay_class=decay,
         supersedes=supersedes,
     )
+    if "error" not in result:
+        record_node_confidence(1.0, layer="memory", silo_id=silo_id)
+        if supersedes:
+            record_supersession_used("remember", silo_id=silo_id)
+    return result
 
 
 def register(mcp: FastMCP) -> None:

@@ -14,15 +14,21 @@ from context_service.mcp.server import create_mcp_server
 from context_service.mcp.tools import register_all
 
 EXPECTED_TOOLS = {
-    "context_store",
-    "context_recall",
-    "context_admin",
-    "context_link",
-    "context_belief_state",
-    "context_update_belief",
-    "context_crystallize",
-    "context_accept_belief",
-    "context_reject_belief",
+    "remember",
+    "learn",
+    "believe",
+    "recall",
+    "trace",
+    "link",
+    "patterns",
+    "reason",
+    "reflect",
+    "hypothesize",
+    "revise",
+    "commit",
+    "accept",
+    "reject",
+    "forget",
 }
 
 _DEV_AUTH = AuthContext(
@@ -46,13 +52,14 @@ class TestMCPProtocol:
     def test_create_mcp_server_returns_fastmcp(self) -> None:
         server = create_mcp_server()
         assert isinstance(server, FastMCP)
-        assert server.name == "context-service"
+        assert server.name == "engrammic"
 
     @pytest.mark.asyncio
     async def test_create_mcp_server_tool_count(self) -> None:
         server = create_mcp_server()
         tools = await server.list_tools()
         registered = {t.name for t in tools}
+        # create_mcp_server uses the default profile (reasoning)
         assert registered == EXPECTED_TOOLS
 
     @pytest.mark.asyncio

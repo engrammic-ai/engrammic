@@ -44,6 +44,18 @@ _orphan_chains_recovered: metrics.Counter | None = None
 _source_tier_counter: metrics.Counter | None = None
 _embedding_cache_hit_counter: metrics.Counter | None = None
 _embedding_cache_miss_counter: metrics.Counter | None = None
+_belief_confidence: metrics.Histogram | None = None
+_cache_hit_counter: metrics.Counter | None = None
+_cache_miss_counter: metrics.Counter | None = None
+_cache_eviction_counter: metrics.Counter | None = None
+_recall_latency: metrics.Histogram | None = None
+_recall_depth_counter: metrics.Counter | None = None
+_recall_result_count: metrics.Histogram | None = None
+_tool_error_counter: metrics.Counter | None = None
+_supersession_used_counter: metrics.Counter | None = None
+_supersession_skipped_counter: metrics.Counter | None = None
+_node_confidence: metrics.Histogram | None = None
+_engagement_latency: metrics.Histogram | None = None
 
 
 def setup_metrics(service_name: str = "context-service") -> None:
@@ -69,7 +81,19 @@ def setup_metrics(service_name: str = "context-service") -> None:
         _orphan_chains_recovered, \
         _source_tier_counter, \
         _embedding_cache_hit_counter, \
-        _embedding_cache_miss_counter
+        _embedding_cache_miss_counter, \
+        _belief_confidence, \
+        _cache_hit_counter, \
+        _cache_miss_counter, \
+        _cache_eviction_counter, \
+        _recall_latency, \
+        _recall_depth_counter, \
+        _recall_result_count, \
+        _tool_error_counter, \
+        _supersession_used_counter, \
+        _supersession_skipped_counter, \
+        _node_confidence, \
+        _engagement_latency
 
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
     if not endpoint:
@@ -252,6 +276,73 @@ def setup_metrics(service_name: str = "context-service") -> None:
         unit="1",
     )
 
+    _belief_confidence = _meter.create_histogram(
+        name="belief.confidence",
+        description="Confidence score of declared beliefs",
+        unit="1",
+    )
+
+    _cache_hit_counter = _meter.create_counter(
+        name="cache.hit",
+        description="Cache hits",
+        unit="1",
+    )
+    _cache_miss_counter = _meter.create_counter(
+        name="cache.miss",
+        description="Cache misses",
+        unit="1",
+    )
+    _cache_eviction_counter = _meter.create_counter(
+        name="cache.eviction",
+        description="Cache evictions",
+        unit="1",
+    )
+    _recall_latency = _meter.create_histogram(
+        name="recall.latency",
+        description="Recall operation latency",
+        unit="ms",
+    )
+    _recall_depth_counter = _meter.create_counter(
+        name="recall.depth",
+        description="Recall depth distribution",
+        unit="1",
+    )
+    _recall_result_count = _meter.create_histogram(
+        name="recall.result_count",
+        description="Number of results returned by recall",
+        unit="1",
+    )
+
+    _tool_error_counter = _meter.create_counter(
+        name="tool.error",
+        description="Tool errors by type",
+        unit="1",
+    )
+
+    _supersession_used_counter = _meter.create_counter(
+        name="store.supersession_used",
+        description="Writes that used supersession",
+        unit="1",
+    )
+
+    _supersession_skipped_counter = _meter.create_counter(
+        name="store.supersession_skipped",
+        description="Duplicates caught by Custodian that should have been supersession",
+        unit="1",
+    )
+
+    _node_confidence = _meter.create_histogram(
+        name="node.confidence",
+        description="Confidence distribution at write time",
+        unit="1",
+    )
+
+    _engagement_latency = _meter.create_histogram(
+        name="recall.engagement.latency",
+        description="Engagement detection latency during recall",
+        unit="ms",
+    )
+
 
 def record_request(method: str, path: str, status: int, duration_ms: float) -> None:
     """Record HTTP request metrics."""
@@ -287,16 +378,26 @@ def record_db_query(operation: str, duration_ms: float) -> None:
     _db_query_duration.record(duration_ms, {"db.operation": operation})
 
 
-def record_embedding(model: str, duration_ms: float) -> None:
+def record_embedding(model: str, duration_ms: float, silo_id: str | None = None) -> None:
     """Record embedding generation duration."""
     if _embedding_duration is None:
         return
-    _embedding_duration.record(duration_ms, {"model": model})
+    attributes: dict[str, str] = {"model": model}
+    if silo_id:
+        attributes["silo_id"] = silo_id
+    _embedding_duration.record(duration_ms, attributes)
 
 
-def record_mcp_tool(tool: str, duration_ms: float, success: bool = True) -> None:
+def record_mcp_tool(
+    tool: str,
+    duration_ms: float,
+    success: bool = True,
+    silo_id: str | None = None,
+) -> None:
     """Record MCP tool invocation metrics."""
-    attrs = {"mcp.tool": tool, "success": str(success).lower()}
+    attrs: dict[str, str] = {"mcp.tool": tool, "success": str(success).lower()}
+    if silo_id:
+        attrs["silo_id"] = silo_id
     if _mcp_tool_duration:
         _mcp_tool_duration.record(duration_ms, attrs)
     if _mcp_tool_counter:
@@ -311,11 +412,19 @@ def record_llm_tokens(model: str, input_tokens: int, output_tokens: int) -> None
     _llm_token_counter.add(output_tokens, {"model": model, "type": "output"})
 
 
-def record_llm_call(model: str, duration_ms: float, success: bool = True) -> None:
+def record_llm_call(
+    model: str,
+    duration_ms: float,
+    success: bool = True,
+    silo_id: str | None = None,
+) -> None:
     """Record LLM call duration."""
     if _llm_call_duration is None:
         return
-    _llm_call_duration.record(duration_ms, {"model": model, "success": str(success).lower()})
+    attributes: dict[str, str] = {"model": model, "success": str(success).lower()}
+    if silo_id:
+        attributes["silo_id"] = silo_id
+    _llm_call_duration.record(duration_ms, attributes)
 
 
 def record_context_recall_size(layer: str, bytes_size: int) -> None:
@@ -460,6 +569,125 @@ def record_embedding_cache_miss(task: str) -> None:
     if _embedding_cache_miss_counter is None:
         return
     _embedding_cache_miss_counter.add(1, {"task": task})
+
+
+def record_belief_confidence(confidence: float, silo_id: str | None = None) -> None:
+    """Record the confidence score of a declared belief."""
+    if _belief_confidence is None:
+        return
+    attributes: dict[str, str] = {}
+    if silo_id:
+        attributes["silo_id"] = silo_id
+    _belief_confidence.record(confidence, attributes)
+
+
+def record_cache_hit(cache_type: str, silo_id: str | None = None) -> None:
+    if _cache_hit_counter is None:
+        return
+    attrs: dict[str, str] = {"cache_type": cache_type}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _cache_hit_counter.add(1, attrs)
+
+
+def record_cache_miss(cache_type: str, silo_id: str | None = None) -> None:
+    if _cache_miss_counter is None:
+        return
+    attrs: dict[str, str] = {"cache_type": cache_type}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _cache_miss_counter.add(1, attrs)
+
+
+def record_cache_eviction(cache_type: str, silo_id: str | None = None) -> None:
+    if _cache_eviction_counter is None:
+        return
+    attrs: dict[str, str] = {"cache_type": cache_type}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _cache_eviction_counter.add(1, attrs)
+
+
+def record_recall_latency(
+    duration_ms: float,
+    depth: int,
+    source: str,
+    silo_id: str | None = None,
+) -> None:
+    if _recall_latency is None:
+        return
+    attrs: dict[str, str] = {"depth": str(depth), "source": source}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _recall_latency.record(duration_ms, attrs)
+
+
+def record_recall_depth(depth: int, silo_id: str | None = None) -> None:
+    if _recall_depth_counter is None:
+        return
+    attrs: dict[str, str] = {"depth": str(depth)}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _recall_depth_counter.add(1, attrs)
+
+
+def record_recall_result_count(
+    count: int,
+    layer: str,
+    silo_id: str | None = None,
+) -> None:
+    if _recall_result_count is None:
+        return
+    attrs: dict[str, str] = {"layer": layer}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _recall_result_count.record(count, attrs)
+
+
+def record_tool_error(tool_name: str, error_type: str, silo_id: str | None = None) -> None:
+    if _tool_error_counter is None:
+        return
+    attrs: dict[str, str] = {"tool": tool_name, "error_type": error_type}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _tool_error_counter.add(1, attrs)
+
+
+def record_supersession_used(tool_name: str, silo_id: str | None = None) -> None:
+    if _supersession_used_counter is None:
+        return
+    attrs: dict[str, str] = {"tool": tool_name}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _supersession_used_counter.add(1, attrs)
+
+
+def record_supersession_skipped(silo_id: str | None = None) -> None:
+    if _supersession_skipped_counter is None:
+        return
+    attrs: dict[str, str] = {}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _supersession_skipped_counter.add(1, attrs)
+
+
+def record_node_confidence(confidence: float, layer: str, silo_id: str | None = None) -> None:
+    if _node_confidence is None:
+        return
+    attrs: dict[str, str] = {"layer": layer}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _node_confidence.record(confidence, attrs)
+
+
+def record_engagement_latency(duration_ms: float, silo_id: str | None = None) -> None:
+    """Record engagement detection latency during recall."""
+    if _engagement_latency is None:
+        return
+    attrs: dict[str, str] = {}
+    if silo_id:
+        attrs["silo_id"] = silo_id
+    _engagement_latency.record(duration_ms, attrs)
 
 
 # Public references used for import checks and direct access

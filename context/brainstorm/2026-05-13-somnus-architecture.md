@@ -137,7 +137,7 @@ lift < -0.1 -> Engrammic hurt (regression)
 ### Tier 2 - Release
 
 - LLM-as-judge coherence/relevance tests pass
-- Custodian synthesis produces expected Beliefs (80%+)
+- sage.synthesizer produces expected Beliefs (80%+)
 - Time-travel queries return correct state at T-1
 - Ablation shows positive lift on reference tasks
 
@@ -374,7 +374,7 @@ profiles:
 |---|---|---|
 | Context boundary | MCP storage/retrieval across agent instances | Fast (v1) |
 | Process boundary | No hidden in-process state leaking | Slow (v2) |
-| Time boundary | Custodian synthesis doesn't break recall | Slow (v2) |
+| Time boundary | SAGE synthesis doesn't break recall | Slow (v2) |
 
 ### Context Boundary (v1)
 
@@ -610,7 +610,7 @@ recovery:
 
 ## Contaminated State Seeding
 
-**Approach**: Generate realistic noise via Custodian-style synthesis on synthetic observations.
+**Approach**: Generate realistic noise via SAGE-style synthesis on synthetic observations.
 
 1. Seed 50-100 Memory nodes with realistic but outdated/partial information
 2. Run a mini-synthesis pass to create some Knowledge/Wisdom nodes
@@ -672,5 +672,5 @@ Hypothesis: complementary rather than competing. Engrammic provides structured b
 ## Open Items Resolved
 
 - **Ablation tasks**: 5 categories, LLM-generated with held-out oracles
-- **Contaminated state**: Custodian-style synthesis on synthetic observations + manual contradiction injection
+- **Contaminated state**: SAGE-style synthesis on synthetic observations + manual contradiction injection
 - **Repo location**: Stays at ../somnus, connects to context-service as black box

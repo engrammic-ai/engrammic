@@ -20,6 +20,7 @@ from context_service.custodian.prompt_loader import load_prompt
 from context_service.db.queries import (
     CREATE_PROPOSED_BELIEF,
     GET_PENDING_PROPOSAL_COUNT_FOR_SILO,
+    GET_RECENTLY_REJECTED_PROPOSAL_FOR_CLUSTER,
     LIST_DENSE_CLUSTERS_WITHOUT_BELIEF_OR_PROPOSAL,
 )
 from context_service.llm.sanitize import escape_for_prompt
@@ -29,7 +30,6 @@ if TYPE_CHECKING:
     from context_service.models.silo import ResolvedSiloConfig
 
 PROPOSAL_TTL_DAYS = 7
-MAX_PENDING_PER_SILO = 20
 
 PROPOSAL_SYNTHESIS_SYSTEM_PROMPT = load_prompt("prompts/custodian/proposal_synthesis.yaml")
 
@@ -125,15 +125,33 @@ async def synthesize_proposal_content(fact_contents: list[str]) -> str:
     return str(result.output).strip()
 
 
+async def was_recently_rejected(
+    graph_store: HyperGraphStore,
+    cluster_id: str,
+    silo_id: str,
+    cooldown_hours: int,
+) -> bool:
+    """Return True if a ProposedBelief for this cluster was rejected within the cooldown window."""
+    cutoff = (datetime.now(UTC) - timedelta(hours=cooldown_hours)).isoformat()
+    rows = await graph_store.execute_query(
+        GET_RECENTLY_REJECTED_PROPOSAL_FOR_CLUSTER,
+        {"silo_id": silo_id, "cluster_id": cluster_id, "cutoff": cutoff},
+    )
+    rejected_count = int(rows[0]["rejected_count"]) if rows else 0
+    return rejected_count > 0
+
+
 async def create_proposal(
     graph_store: HyperGraphStore,
     cluster_id: str,
     silo_id: str,
     confidence: float,
+    max_pending: int,
+    cooldown_hours: int,
 ) -> str | None:
-    """Create a ProposedBelief for a cluster if under per-silo limit.
+    """Create a ProposedBelief for a cluster if under per-silo limit and not in cooldown.
 
-    Returns the proposal ID if created, None if limit reached.
+    Returns the proposal ID if created, None if limit reached or cooldown active.
     """
     count_result = await graph_store.execute_query(
         GET_PENDING_PROPOSAL_COUNT_FOR_SILO,
@@ -141,7 +159,10 @@ async def create_proposal(
     )
     pending_count = int(count_result[0]["pending_count"]) if count_result else 0
 
-    if pending_count >= MAX_PENDING_PER_SILO:
+    if pending_count >= max_pending:
+        return None
+
+    if await was_recently_rejected(graph_store, cluster_id, silo_id, cooldown_hours):
         return None
 
     facts = await get_cluster_facts(graph_store, cluster_id, silo_id)
@@ -181,6 +202,10 @@ async def run_proposal_detection(
 
     Returns list of created proposal IDs.
     """
+    settings = get_settings()
+    max_pending = settings.max_proposals_per_silo
+    cooldown_hours = settings.proposal_cooldown_hours
+
     candidates = await get_proposal_candidates(graph_store, silo_id, config)
     created_ids: list[str] = []
 
@@ -190,6 +215,8 @@ async def run_proposal_detection(
             cluster_id=candidate["cluster_id"],
             silo_id=silo_id,
             confidence=candidate["confidence"],
+            max_pending=max_pending,
+            cooldown_hours=cooldown_hours,
         )
         if proposal_id:
             created_ids.append(proposal_id)

@@ -87,3 +87,19 @@ class TestFeatureFlags:
         assert settings.causal.extraction_enabled is False
         assert settings.causal.inference_enabled is False
         assert settings.causal.query_enabled is False
+
+
+class TestEngagementEscalationDefaults:
+    """Verify engagement escalation settings exist with correct defaults."""
+
+    def test_engagement_escalation_threshold_default(self) -> None:
+        settings = Settings()
+        assert settings.engagement_escalation_threshold == 3
+
+    def test_engagement_decay_window_ms_default(self) -> None:
+        settings = Settings()
+        assert settings.engagement_decay_window_ms == 1_800_000
+
+    def test_engagement_hard_enabled_default(self) -> None:
+        settings = Settings()
+        assert settings.engagement_hard_enabled is True

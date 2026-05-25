@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 from context_service.mcp.tools import (
     believe,
     commit,
+    dismiss,
     hypothesize,
     learn,
     link,
@@ -21,25 +22,24 @@ from context_service.mcp.tools import (
     reflect,
     remember,
     revise,
+    tick,
     trace,
 )
 
 # Internal-only tools (not registered via registry)
-from context_service.mcp.tools.context_accept_belief import register as register_accept_belief
 from context_service.mcp.tools.context_admin import register as register_admin
 from context_service.mcp.tools.context_belief_state import register as register_belief_state
-from context_service.mcp.tools.context_reject_belief import register as register_reject_belief
 
-# Registry for profile-based registration
-from context_service.mcp.tools.registry import register_profile_tools
+# Registry
+from context_service.mcp.tools.registry import register_tools
 
 
-def register_all(mcp: FastMCP, profile: str = "standard") -> None:
-    """Register all MCP tools for the given profile.
+def register_all(mcp: FastMCP) -> None:
+    """Register all MCP tools.
 
     This is the main entry point. Use this instead of individual registers.
     """
-    register_profile_tools(mcp, profile)
+    register_tools(mcp)
 
 
 def register_internal_tools(mcp: FastMCP) -> None:
@@ -49,15 +49,13 @@ def register_internal_tools(mcp: FastMCP) -> None:
     Call separately if needed.
     """
     register_admin(mcp)
-    register_accept_belief(mcp)
-    register_reject_belief(mcp)
     register_belief_state(mcp)
 
 
 __all__ = [
     "register_all",
     "register_internal_tools",
-    "register_profile_tools",
+    "register_tools",
     # Individual tool modules
     "remember",
     "learn",
@@ -70,5 +68,7 @@ __all__ = [
     "hypothesize",
     "revise",
     "commit",
+    "dismiss",
+    "tick",
     "patterns",
 ]

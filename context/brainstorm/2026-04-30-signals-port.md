@@ -6,7 +6,7 @@
 
 ## Why
 
-`src/context_service/signals/__init__.py` has been a one-line TODO since the 2026-04-26 port from `prototype`. The custodian visits nodes without priority weighting (LLM cost is uncontrolled), and the demo story for partners — "the system gets sharper on what you actually use" — has no implementation behind it. v1-β master plan never scoped signals; they fell through the gap. Time to close it.
+`src/context_service/signals/__init__.py` has been a one-line TODO since the 2026-04-26 port from `prototype`. sage.custodian visits nodes without priority weighting (LLM cost is uncontrolled), and the demo story for partners — "the system gets sharper on what you actually use" — has no implementation behind it. v1-β master plan never scoped signals; they fell through the gap. Time to close it.
 
 ## What was already in prototype
 

@@ -26,11 +26,11 @@ When context is updated, the new version explicitly supersedes the old via a gra
 - Gets filtered from active queries
 - Can be restored if the supersession was wrong
 
-### Custodian synthesis
+### SAGE synthesis
 Background pipeline that:
-- Detects contradictions between nodes
+- Detects contradictions between nodes (sage.custodian)
 - Flags stale evidence (dead links, outdated citations)
-- Proposes belief updates when underlying facts change
+- Proposes belief updates when underlying facts change (sage.synthesizer)
 - Consolidates redundant context
 
 ### Evidence requirements

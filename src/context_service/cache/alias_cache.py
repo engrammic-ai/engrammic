@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from context_service.config.logging import get_logger
+from context_service.telemetry.metrics import record_cache_hit, record_cache_miss
 from context_service.utils.json import dumps, loads
 
 if TYPE_CHECKING:
@@ -42,7 +43,9 @@ class AliasCache:
         try:
             data = await self._redis.get(self._key(silo_id, normalized_form))
             if data is None:
+                record_cache_miss("alias", silo_id=silo_id)
                 return None
+            record_cache_hit("alias", silo_id=silo_id)
             result: dict[str, Any] = loads(data)
             return result
         except Exception as exc:

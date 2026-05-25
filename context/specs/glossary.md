@@ -4,30 +4,30 @@ Service-layer terminology for Engrammic. For EAG layer/transition definitions, s
 
 ---
 
-## Custodian Identities
+## SAGE Sub-agents
 
-The original Custodian was split into four specialized identities, each owning specific EAG transitions:
+SAGE (Synthesis, Aggregation, and Graph Evolution) is the background system responsible for knowledge graph maintenance. It is composed of four sub-agents, each owning specific EAG transitions:
 
-| Identity | Role | EAG Transitions | Trigger | Model |
-|----------|------|-----------------|---------|-------|
-| **Custodian** | Contradiction detection, supersession | T2 | Per-write (async) | haiku |
-| **Synthesizer** | Weak synthesis, ProposedBelief creation, revision | T3, T4, T10 | Periodic + threshold | sonnet |
-| **Groundskeeper** | Memory lifecycle, decay enforcement, dedup | T6, T9 | Nightly batch | none (deterministic) |
-| **Validator** | Reasoning structure validation | T13 | Sync on crystallize | sonnet |
+| Sub-agent | Role | EAG Transitions | Trigger | Model |
+|-----------|------|-----------------|---------|-------|
+| **sage.custodian** | Contradiction detection, supersession | T2 | Per-write (async) | haiku |
+| **sage.synthesizer** | Weak synthesis, ProposedBelief creation, revision | T3, T4, T10 | Periodic + threshold | sonnet |
+| **sage.groundskeeper** | Memory lifecycle, decay enforcement, dedup | T6, T9 | Nightly batch | none (deterministic) |
+| **sage.validator** | Reasoning structure validation | T13 | Sync on crystallize | sonnet |
 
-### Custodian
+### sage.custodian
 
 Reactive identity triggered after every `context_store` write. Checks if new Facts contradict existing Facts in the silo. If so, writes `SUPERSEDES` edges (T2). Micro-batched for LLM cost efficiency.
 
-### Synthesizer
+### sage.synthesizer
 
 Periodic identity that detects when clusters of Facts reach density thresholds. Creates Beliefs (T3) for high-confidence clusters, ProposedBeliefs (T10) for medium-confidence. Also handles evidence-gated revision (T4) when underlying fact distributions shift.
 
-### Groundskeeper
+### sage.groundskeeper
 
 Batch identity responsible for memory hygiene. Manages the lifecycle of Memory-layer nodes according to their decay class (ephemeral/standard/durable/permanent). Enforces hard-delete (T9) for nodes past their decay threshold. Handles trace archival (T6) and lossless hyperedge deduplication. Does not use LLM - all operations are deterministic.
 
-### Validator
+### sage.validator
 
 Synchronous identity invoked during `context_crystallize`. Validates that a WorkingHypothesis has sound reasoning structure and valid premises before promoting to Commitment. 5s timeout; on timeout, crystallize proceeds with `validation_skipped=True` flag.
 

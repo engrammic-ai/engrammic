@@ -18,7 +18,7 @@ just dev                # Run FastAPI with reload
 | `just test` | Run pytest (takes args: `just test -k name`) |
 | `just ci` | check + test (pre-push) |
 | `just db-migrate` | Run migrations |
-| `just dagster-web` | Dagster UI for Custodian jobs |
+| `just dagster-web` | Dagster UI for SAGE jobs |
 
 ## Structure
 

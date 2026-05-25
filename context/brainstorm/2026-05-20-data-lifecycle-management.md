@@ -334,7 +334,7 @@ Independent reviews by Opus and Sonnet agents. Issues must be resolved before pl
 | C2 | **`SiloConfig.resolve()` already exists** - `models/silo.py` has `RetentionOverrides`, `SiloConfig`. | APPROVE | Use existing pattern. **Bonus:** Fixes latent bug - Dagster asset bypasses `SiloConfig` entirely (`RetentionPolicy.from_settings()` ignores per-silo overrides). Add `supersession_chain_max_length` to `RetentionOverrides`. Put `forget_cancel_window_hours` in separate `ForgetPolicyOverrides` group. |
 | C3 | **`subject_id` deferred = GDPR non-compliance** - Existing data un-erasable. | APPROVE | Ship both options in v1. Option A: `subject_id` on new writes. Option B: graph walk from anchor. **Required:** Define anchor-edge whitelist (suggest: `EXTRACTED_FROM`, `SUPERSEDES`, `DERIVED_FROM_EVIDENCE`; exclude `MENTIONS` or limit to 1 hop). |
 | C4 | **Three-store saga has no compensation** - No concrete rollback defined. | CORRECTED | **Memgraph first** (authoritative store). Order: (1) Memgraph.delete - must succeed or abort, (2) Qdrant.delete - retry 3x, failure → dead-letter, (3) Postgres.cleanup - retry 3x, failure acceptable. Don't block GDPR response for vector cleanup. |
-| C5 | **Concurrent supersession race** - Constraint not mandated. | CORRECTED | **Don't use DB constraint** - wrong property (`superseded_by` not `supersedes_id`), wrong label (`:Node` not in schema). Use **Redis lock** on predecessor node ID during supersession (same pattern as Custodian semaphore). MERGE provides edge-level idempotency. |
+| C5 | **Concurrent supersession race** - Constraint not mandated. | CORRECTED | **Don't use DB constraint** - wrong property (`superseded_by` not `supersedes_id`), wrong label (`:Node` not in schema). Use **Redis lock** on predecessor node ID during supersession (same pattern as SAGE semaphore). MERGE provides edge-level idempotency. |
 | C6 | **Chain pruning breaks `trace`** - D cites B, B pruned = broken reference. | CORRECTED | **Don't rewrite edges** (fabricates provenance). Use **stub-retention**: clear `content`/`properties`, set `compacted_at` + `compact_reason='chain_pruning'`, keep node ID + all edges. `trace` shows "[pruned: content removed]" for stub nodes. Same pattern as `COMPACT_CHAIN`. |
 
 ### High Issues
@@ -384,7 +384,7 @@ All critical, high, and medium issues have been resolved in this spec. Key resol
 
 1. **SiloConfig.resolve()** - Wire into Dagster asset (fixes latent bug)
 2. **Anchor-edge whitelist** - Defined: `EXTRACTED_FROM`, `SUPERSEDES`, `DERIVED_FROM_EVIDENCE`, etc.
-3. **Redis lock** - For supersession race (same pattern as Custodian)
+3. **Redis lock** - For supersession race (same pattern as SAGE)
 4. **Stub-retention** - For chain pruning (preserves provenance)
 5. **Memgraph-first ordering** - For three-store saga
 6. **Full cascade edge list** - 11 edge types defined
@@ -460,7 +460,7 @@ DB constraint rejected because:
 
 Correct approach:
 - **Redis lock on predecessor node ID** during supersession writes
-- Same pattern as Custodian semaphore (`pipelines/poison_queue.py`)
+- Same pattern as SAGE semaphore (`pipelines/poison_queue.py`)
 - MERGE provides edge-level idempotency as additional guard
 
 ### Chain Compaction (Stub-Retention)

@@ -7,8 +7,9 @@ import uuid
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from context_service.mcp.tools.registry import get_tool_description
 from context_service.services.models import derive_silo_id
-from context_service.telemetry.metrics import record_mcp_tool
+from context_service.telemetry.metrics import record_belief_confidence, record_mcp_tool
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -47,10 +48,23 @@ async def _context_accept_belief(
             "message": f"ProposedBelief {proposed_belief_id!r} not found or not pending",
         }
 
+    # Clear touch counter so the agent can recall normally again.
+    # Fire-and-forget: non-fatal if Redis is unavailable.
+    import contextlib
+
+    from context_service.engine.touch_counter import clear_touches
+    from context_service.mcp.server import get_redis
+
+    redis_client = get_redis()
+    if redis_client is not None:
+        with contextlib.suppress(Exception):
+            await clear_touches(redis_client._redis, silo_id, proposed_belief_id)
+
     return {
         "proposed_belief_id": proposed_belief_id,
         "status": "accepted",
         "created_belief_id": rows[0]["belief_id"],
+        "confidence": rows[0]["confidence"],
         "accepted_at": accepted_at,
     }
 
@@ -59,14 +73,10 @@ def register(mcp: FastMCP) -> None:
     """Register the context_accept_belief tool."""
 
     @mcp.tool(
-        name="context_accept_belief",
-        description=(
-            "Accept a ProposedBelief and convert it to an active Belief. "
-            "ProposedBeliefs are weak syntheses from the Custodian awaiting validation. "
-            "Optionally override the confidence on acceptance."
-        ),
+        name="accept",
+        description=get_tool_description("accept"),
     )
-    async def context_accept_belief(
+    async def accept(
         belief_id: str,
         confidence: float | None = None,
         silo_id: str | None = None,
@@ -92,6 +102,12 @@ def register(mcp: FastMCP) -> None:
             if err is not None:
                 return err
         resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
+        if confidence is not None and not 0.0 <= confidence <= 1.0:
+            return {
+                "error": "invalid_confidence",
+                "message": "confidence must be between 0.0 and 1.0",
+            }
+
         start = time.perf_counter()
         success = True
         try:
@@ -100,11 +116,21 @@ def register(mcp: FastMCP) -> None:
                 silo_id=resolved_silo_id,
                 confidence=confidence,
             )
+            if "error" in result:
+                success = False
+            else:
+                record_belief_confidence(
+                    result["confidence"],
+                    silo_id=resolved_silo_id,
+                )
             return result
         except Exception:
             success = False
             raise
         finally:
             record_mcp_tool(
-                "context_accept_belief", (time.perf_counter() - start) * 1000, success=success
+                "accept",
+                (time.perf_counter() - start) * 1000,
+                success=success,
+                silo_id=resolved_silo_id,
             )

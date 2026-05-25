@@ -2,11 +2,11 @@
 
 ## Purpose
 
-Separate Custodian subworker that detects weak synthesis opportunities and creates ProposedBelief nodes for validation. Runs independently from T3 auto-synthesis.
+Separate sage.synthesizer subworker that detects weak synthesis opportunities and creates ProposedBelief nodes for validation. Runs independently from T3 auto-synthesis.
 
 ## Trigger
 
-Signal-driven, same as other Custodian workers. Candidates:
+Signal-driven, same as other SAGE workers. Candidates:
 - Scheduled interval (e.g., every 5 minutes per silo)
 - Piggyback on clustering completion events
 - Heat threshold on fact clusters
@@ -68,7 +68,7 @@ Recommendation: Start with cron (simple), migrate to event-driven if latency mat
 
 ## Dagster Integration
 
-New asset or sensor in `custodian/pipeline.py`:
+New asset or sensor in `custodian/pipeline.py` (sage.synthesizer job):
 ```python
 @asset(deps=[clustering_asset])
 def proposal_detection(context: AssetExecutionContext) -> MaterializeResult:

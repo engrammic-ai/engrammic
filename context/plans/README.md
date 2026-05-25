@@ -2,9 +2,15 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-23)
+## Current state (2026-05-25)
 
 **Shipped:**
+- v2.28 Engagement Plan E — Hooks and Distribution (session ID config, engage hook, skill, AGENTS.md, docs)
+- v2.27 Engagement Plan D — Hard Checkpoint (touch counter, soft-to-hard escalation, empty results on hard mode)
+- v2.26 Engagement Plan C — Recall Surfacing (engagement field in recall, dismiss/tick verbs)
+- v2.25 Engagement Plan B — SAGE Prerequisites (sage.validator, Contradiction/StaleCommitment markers, inline flagging, Redis index)
+- v2.24 Telemetry & Observability (SigNoz infra, OTEL instrumentation for cache/recall/epistemic health)
+- v2.23 Verb Promotion Plan A (accept/reject tools promoted to agent-facing in reasoning profile)
 - v2.22 Rate Limiting (tiered rate limiting for MCP tools and REST routes)
 - v2.21 Beacon Telemetry Pipeline (Metabase dashboards, replaces Cloud Trace)
 - v2.20 Documentation Site (docs.engrammic.ai)
@@ -50,8 +56,11 @@ Specced or checkpointed for later implementation:
 
 | Item | Spec/Note | Trigger |
 |------|-----------|---------|
+| **ML Products for Frontier Labs** | [ml-products-frontier-labs-design.md](../../docs/superpowers/specs/2026-05-23-ml-products-frontier-labs-design.md) | Post-fundraise; requires data capture instrumentation first |
 | **Self-Hosted REST API Phase 2+** | [self-hosted-rest-api-design.md](../../docs/superpowers/specs/2026-05-20-self-hosted-rest-api-design.md) | After Phase 1 ships; Wisdom/Intelligence/Graph/Admin endpoints |
 | **Concepts** | [concepts-design.md](../../docs/superpowers/specs/2026-05-18-concepts-design.md) | Post-closed-beta, when retrieval quality degrades at scale |
+
+**ML Products for Frontier Labs:** Two products: Heat Model (context prioritization, TGNN) and Memory Module (epistemic reasoning, adapter/LoRA). Strategy is open weights first (Llama/Mistral), build momentum, then frontier labs adopt/acquire/partner. Requires data capture instrumentation in context-service before training can begin.
 
 **Self-Hosted REST API:** Layer-aligned REST surface for self-hosted deployments. Phase 1 covers auth (proxy/JWT/API key) + Memory/Knowledge. Phase 2+ covers Wisdom, Intelligence, Graph, Search, Admin API.
 
@@ -85,6 +94,12 @@ Specced or checkpointed for later implementation:
 ## Archive
 
 Completed plans in `archive/`:
+- Engagement Plan E (2026-05-26) - session ID config, engage hook, skill, AGENTS.md, docs
+- Engagement Plan D (2026-05-25) - touch counter, soft-to-hard escalation, empty results on hard mode
+- Engagement Plan C (2026-05-25) - engagement field in recall, dismiss/tick verbs
+- Engagement Plan B (2026-05-25) - sage.validator, Contradiction/StaleCommitment markers, inline flagging, Redis index
+- Telemetry & Observability (2026-05-25) - SigNoz infra, OTEL metrics for cache/recall/epistemic health
+- Verb Promotion Plan A (2026-05-25) - accept/reject promoted to agent-facing in reasoning profile
 - Rate Limiting (2026-05-23) - tiered rate limiting for MCP tools and REST routes
 - Beacon Telemetry Pipeline (2026-05-23) - Metabase dashboards, replaces Cloud Trace
 - Documentation Site (2026-05-22) - docs.engrammic.ai

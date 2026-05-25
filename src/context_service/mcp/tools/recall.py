@@ -3,16 +3,29 @@
 
 from __future__ import annotations
 
+import contextlib
 import time
 from typing import TYPE_CHECKING, Any
 
+from context_service.engine.engagement import MODE_HARD
 from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.rate_limit import rate_limited
-from context_service.mcp.server import get_mcp_auth_context, get_preset_resolver, track_tool_usage
+from context_service.mcp.server import (
+    get_mcp_auth_context,
+    get_preset_resolver,
+    get_redis,
+    track_tool_usage,
+)
 from context_service.mcp.tools.context_recall import _context_recall
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.services.models import derive_silo_id
-from context_service.telemetry.metrics import record_mcp_tool
+from context_service.telemetry.metrics import (
+    record_engagement_latency,
+    record_mcp_tool,
+    record_recall_depth,
+    record_recall_latency,
+    record_recall_result_count,
+)
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -45,6 +58,7 @@ async def _recall_impl(
         except RuntimeError:
             pass
 
+    start = time.perf_counter()
     result = await _context_recall(
         silo_id=silo_id,
         query=query,
@@ -55,13 +69,76 @@ async def _recall_impl(
         bypass_cache=bypass_cache,
         max_age_seconds=max_age_seconds,
     )
+    duration_ms = (time.perf_counter() - start) * 1000
+
+    # Determine source path taken for latency attribution
+    cache_meta = result.get("cache_meta")
+    if cache_meta is not None:
+        source = "cache" if cache_meta.get("result_cached") else "search"
+    elif "edges" in result:
+        source = "graph"
+    else:
+        source = "get"
+
+    with contextlib.suppress(Exception):
+        record_recall_latency(duration_ms, depth=depth, source=source, silo_id=silo_id)
+        record_recall_depth(depth, silo_id=silo_id)
+        result_list = result.get("results") or result.get("nodes") or []
+        layer_label = (layers[0] if layers and len(layers) == 1 else "mixed") if layers else "all"
+        record_recall_result_count(len(result_list), layer=layer_label, silo_id=silo_id)
+
+    result_list = result.get("results") or result.get("nodes") or []
 
     # Track node access for evidence accessibility (Layer 3 chain reuse)
+    # Fire-and-forget to avoid blocking recall hot path
     session_id = auth.session_id
     if session_id and result.get("results"):
-        await _track_node_access(silo_id, session_id, result["results"])
+        import asyncio
 
-    if include_hypotheses:
+        asyncio.create_task(_track_node_access(silo_id, session_id, result["results"]))
+
+    # Engagement detection: check for markers touching the about-set
+    about_ids = [item.get("node_id") for item in result_list if item.get("node_id")]
+    redis = get_redis()
+    effective_session_id = session_id or "default"
+    if about_ids and redis is not None:
+        engagement_start = time.perf_counter()
+        try:
+            from context_service.engine.engagement import get_engagement_for_about_set
+            from context_service.mcp.server import get_context_service
+
+            ctx = get_context_service()
+            engagement = await get_engagement_for_about_set(
+                redis._redis,
+                ctx._memgraph,
+                silo_id,
+                about_ids,
+                session_id=effective_session_id,
+            )
+            result["engagement"] = engagement
+            engagement_ms = (time.perf_counter() - engagement_start) * 1000
+            with contextlib.suppress(Exception):
+                record_engagement_latency(engagement_ms, silo_id=silo_id)
+        except Exception:
+            # Non-fatal: don't break recall on engagement detection failure
+            import structlog
+
+            structlog.get_logger(__name__).warning("engagement_detection_failed", silo_id=silo_id)
+            result["engagement"] = None
+    else:
+        result["engagement"] = None
+
+    # Hard checkpoint enforcement: when engagement mode is "hard", suppress
+    # all results so the agent has no content to act on until markers are resolved.
+    hard_mode = bool(result.get("engagement") and result["engagement"].get("mode") == MODE_HARD)
+    if hard_mode:
+        result["results"] = []
+        if "nodes" in result:
+            result["nodes"] = []
+        if include_hypotheses:
+            result["hypotheses"] = []
+
+    if include_hypotheses and not hard_mode:
         # Fetch active hypotheses for current session
         from context_service.db.queries import GET_WORKING_HYPOTHESES_FOR_SESSION
         from context_service.mcp.server import get_context_service

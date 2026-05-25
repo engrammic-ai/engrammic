@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 from context_service.config import get_settings
 from context_service.config.logging import get_logger
+from context_service.telemetry.metrics import record_cache_hit, record_cache_miss
 from context_service.utils.json import JSONDecodeError, loads
 
 if TYPE_CHECKING:
@@ -46,10 +47,17 @@ class NodeCache:
             if node_id is not None:
                 data = await self._redis.get(self._key(key_or_silo, node_id))
                 if data is None:
+                    record_cache_miss("node", silo_id=key_or_silo)
                     return None
+                record_cache_hit("node", silo_id=key_or_silo)
                 result: dict[str, Any] = loads(data)
                 return result
-            return await self._redis.get(key_or_silo)
+            value = await self._redis.get(key_or_silo)
+            if value is None:
+                record_cache_miss("node")
+            else:
+                record_cache_hit("node")
+            return value
         except Exception as e:
             logger.debug("node_cache_get_error", error=str(e))
             return None
@@ -110,6 +118,9 @@ class NodeCache:
                 if val is not None:
                     with contextlib.suppress(JSONDecodeError, TypeError):
                         result[nid] = loads(val)
+                        record_cache_hit("node", silo_id=silo_id)
+                else:
+                    record_cache_miss("node", silo_id=silo_id)
             return result
         except Exception as e:
             logger.debug("node_cache_batch_get_error", error=str(e))

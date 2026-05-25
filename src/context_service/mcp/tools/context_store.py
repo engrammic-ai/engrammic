@@ -35,6 +35,12 @@ from context_service.services.source_tier_resolver import resolve_source_tier
 from context_service.signals import emit_access_event
 from context_service.telemetry.metrics import record_mcp_tool
 
+# Query to get embedding for contradiction check
+_GET_NODE_EMBEDDING = """
+MATCH (n {id: $node_id, silo_id: $silo_id})
+RETURN n.embedding AS embedding
+"""
+
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
@@ -436,6 +442,27 @@ async def _context_assert(
                 "Use a different claim text or omit supersedes.",
             }
 
+    # Inline contradiction flagging (non-blocking, best-effort)
+    contradiction_candidates: list[str] = []
+    try:
+        from context_service.engine.contradiction import maybe_flag_contradiction
+
+        settings = get_settings()
+        if settings.contradiction_flagging_enabled:
+            emb_result = await ctx_svc.graph_store.execute_query(
+                _GET_NODE_EMBEDDING,
+                {"node_id": str(node.id), "silo_id": str(expected_silo_id)},
+            )
+            if emb_result and emb_result[0].get("embedding"):
+                contradiction_candidates = await maybe_flag_contradiction(
+                    store=ctx_svc.graph_store,
+                    silo_id=str(expected_silo_id),
+                    node_id=str(node.id),
+                    embedding=emb_result[0]["embedding"],
+                )
+    except Exception as exc:
+        logger.debug("contradiction_check_skipped", error=str(exc))
+
     response: dict[str, Any] = {
         "node_id": str(node.id),
         "layer": "knowledge",
@@ -449,6 +476,8 @@ async def _context_assert(
         response["promoted_error"] = promoted_error
     if supersedes is not None:
         response["supersedes"] = supersedes
+    if contradiction_candidates:
+        response["contradiction_candidates"] = contradiction_candidates
     return response
 
 
@@ -540,6 +569,28 @@ async def _context_commit(
                 "hint": "Content-hash dedup returned a node already in the chain. "
                 "Use a different claim text or omit supersedes.",
             }
+
+    # Inline contradiction flagging for beliefs (non-blocking, best-effort)
+    try:
+        from context_service.engine.contradiction import maybe_flag_contradiction
+
+        settings = get_settings()
+        if settings.contradiction_flagging_enabled:
+            emb_result = await ctx_svc.graph_store.execute_query(
+                _GET_NODE_EMBEDDING,
+                {"node_id": str(node.id), "silo_id": str(expected_silo_id)},
+            )
+            if emb_result and emb_result[0].get("embedding"):
+                contradiction_candidates = await maybe_flag_contradiction(
+                    store=ctx_svc.graph_store,
+                    silo_id=str(expected_silo_id),
+                    node_id=str(node.id),
+                    embedding=emb_result[0]["embedding"],
+                )
+                if contradiction_candidates:
+                    result["contradiction_candidates"] = contradiction_candidates
+    except Exception as exc:
+        logger.debug("contradiction_check_skipped", error=str(exc))
 
     return result
 

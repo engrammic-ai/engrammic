@@ -6,6 +6,7 @@ import time
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
+from context_service.mcp.tools.registry import get_tool_description
 from context_service.services.models import derive_silo_id
 from context_service.telemetry.metrics import record_mcp_tool
 
@@ -41,6 +42,18 @@ async def _context_reject_belief(
             "message": f"ProposedBelief {proposed_belief_id!r} not found or not pending",
         }
 
+    # Clear touch counter so the agent can recall normally again.
+    # Fire-and-forget: non-fatal if Redis is unavailable.
+    import contextlib
+
+    from context_service.engine.touch_counter import clear_touches
+    from context_service.mcp.server import get_redis
+
+    redis_client = get_redis()
+    if redis_client is not None:
+        with contextlib.suppress(Exception):
+            await clear_touches(redis_client._redis, silo_id, proposed_belief_id)
+
     return {
         "proposed_belief_id": proposed_belief_id,
         "status": "rejected",
@@ -53,13 +66,10 @@ def register(mcp: FastMCP) -> None:
     """Register the context_reject_belief tool."""
 
     @mcp.tool(
-        name="context_reject_belief",
-        description=(
-            "Reject a ProposedBelief with an optional reason. "
-            "The proposal is tombstoned (status='rejected') but preserved for audit."
-        ),
+        name="reject",
+        description=get_tool_description("reject"),
     )
-    async def context_reject_belief(
+    async def reject(
         belief_id: str,
         reason: str | None = None,
         silo_id: str | None = None,
@@ -92,11 +102,16 @@ def register(mcp: FastMCP) -> None:
                 silo_id=resolved_silo_id,
                 reason=reason,
             )
+            if "error" in result:
+                success = False
             return result
         except Exception:
             success = False
             raise
         finally:
             record_mcp_tool(
-                "context_reject_belief", (time.perf_counter() - start) * 1000, success=success
+                "reject",
+                (time.perf_counter() - start) * 1000,
+                success=success,
+                silo_id=resolved_silo_id,
             )

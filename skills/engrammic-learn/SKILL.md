@@ -7,7 +7,7 @@ allowed-tools:
 
 # Learn
 
-Store a verifiable claim with supporting evidence to the knowledge layer. Facts stored here may be promoted to Beliefs by the custodian when corroborated across multiple sources.
+Store a verifiable claim with supporting evidence to the knowledge layer. Facts stored here may be promoted to Beliefs by sage.synthesizer when corroborated across multiple sources.
 
 ## When to use
 
