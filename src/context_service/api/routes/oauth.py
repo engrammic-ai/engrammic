@@ -45,37 +45,41 @@ def _success_page_html(email: str) -> str:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Welcome to Engrammic</title>
     <style>
+        :root {{
+            --bg: #1c1c1c;
+            --fg: #f5f2ed;
+            --muted: #a0998f;
+            --accent: #a63d2f;
+        }}
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: linear-gradient(135deg, #0f0f0f 0%, #1a1a2e 100%);
+            background: var(--bg);
+            color: var(--fg);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            color: #e0e0e0;
+            padding: 2rem;
         }}
         .container {{
             max-width: 480px;
-            padding: 48px;
             text-align: center;
         }}
-        .logo {{
-            font-size: 28px;
-            font-weight: 600;
-            letter-spacing: -0.5px;
-            margin-bottom: 32px;
-            color: #fff;
+        h1 {{
+            font-size: 1.5rem;
+            font-weight: 500;
+            margin-bottom: 1rem;
         }}
         .checkmark {{
             width: 64px;
             height: 64px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            background: var(--accent);
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 24px;
+            margin: 0 auto 1.5rem;
         }}
         .checkmark svg {{
             width: 32px;
@@ -84,97 +88,34 @@ def _success_page_html(email: str) -> str:
             stroke-width: 3;
             fill: none;
         }}
-        h1 {{
-            font-size: 24px;
-            font-weight: 600;
-            margin-bottom: 12px;
-            color: #fff;
-        }}
         .email {{
-            color: #9ca3af;
-            margin-bottom: 32px;
+            color: var(--muted);
+            margin-bottom: 2rem;
+            font-size: 0.875rem;
         }}
-        .next-steps {{
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 24px;
-            text-align: left;
-        }}
-        .next-steps h2 {{
-            font-size: 14px;
-            font-weight: 500;
-            color: #9ca3af;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 16px;
-        }}
-        .step {{
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            margin-bottom: 16px;
-        }}
-        .step:last-child {{ margin-bottom: 0; }}
-        .step-num {{
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            background: rgba(99, 102, 241, 0.2);
-            color: #818cf8;
-            font-size: 12px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }}
-        .step-text {{
-            font-size: 14px;
-            line-height: 1.5;
-        }}
-        .step-text code {{
-            background: rgba(99, 102, 241, 0.15);
-            color: #a5b4fc;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-family: 'SF Mono', Monaco, monospace;
-            font-size: 13px;
-        }}
-        .docs-link {{
+        .cta {{
             display: inline-block;
-            margin-top: 24px;
-            color: #818cf8;
+            background: var(--accent);
+            color: white;
+            padding: 0.875rem 1.5rem;
+            border-radius: 8px;
             text-decoration: none;
-            font-size: 14px;
+            font-weight: 500;
+            font-size: 0.875rem;
         }}
-        .docs-link:hover {{ text-decoration: underline; }}
+        .cta:hover {{
+            opacity: 0.9;
+        }}
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="logo">engrammic</div>
         <div class="checkmark">
             <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
         </div>
         <h1>You're all set</h1>
         <p class="email">{email}</p>
-        <div class="next-steps">
-            <h2>Next steps</h2>
-            <div class="step">
-                <span class="step-num">1</span>
-                <span class="step-text">Install the MCP server: <code>npx @engrammic/mcp</code></span>
-            </div>
-            <div class="step">
-                <span class="step-num">2</span>
-                <span class="step-text">Add it to your MCP client (Claude Code, Cursor, etc.)</span>
-            </div>
-            <div class="step">
-                <span class="step-num">3</span>
-                <span class="step-text">Run <code>/auth</code> to connect your account</span>
-            </div>
-        </div>
-        <a href="https://docs.engrammic.ai/quickstart" class="docs-link">View documentation &rarr;</a>
+        <a href="https://docs.engrammic.ai/quickstart" class="cta">Continue to Quickstart</a>
     </div>
 </body>
 </html>"""

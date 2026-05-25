@@ -27,17 +27,14 @@ jobs:
           echo "Must type 'deploy' to confirm"
           exit 1
 
-  deploy:
+  deploy-api:
     needs: validate
     runs-on: ubuntu-latest
     environment: production
     permissions:
       contents: read
       id-token: write
-
     steps:
-      - uses: actions/checkout@v4
-
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
@@ -47,10 +44,9 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Verify images exist
+      - name: Verify API image exists
         run: |
           gcloud artifacts docker images describe ${{ env.REGISTRY }}/engrammic-api:${{ github.event.inputs.sha }} --quiet
-          gcloud artifacts docker images describe ${{ env.REGISTRY }}/engrammic-beacon:${{ github.event.inputs.sha }} --quiet
 
       - name: Deploy API (no traffic)
         run: |
@@ -59,12 +55,50 @@ jobs:
             --region ${{ env.REGION }} \
             --no-traffic
 
+  deploy-beacon:
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Verify Beacon image exists
+        run: |
+          gcloud artifacts docker images describe ${{ env.REGISTRY }}/engrammic-beacon:${{ github.event.inputs.sha }} --quiet
+
       - name: Deploy Beacon (no traffic)
         run: |
           gcloud run services update engrammic-prod-beacon \
             --image ${{ env.REGISTRY }}/engrammic-beacon:${{ github.event.inputs.sha }} \
             --region ${{ env.REGION }} \
             --no-traffic
+
+  finalize:
+    needs: [deploy-api, deploy-beacon]
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
 
       - name: Run migrations
         run: |
