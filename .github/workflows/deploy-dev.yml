@@ -54,7 +54,7 @@ jobs:
 
       - name: Deploy API to Cloud Run
         run: |
-          gcloud run deploy engrammic-dev-api \
+          gcloud run deploy engrammic-dev-context-service \
             --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-api:latest \
             --region ${{ env.REGION }} \
             --min-instances 0 \
