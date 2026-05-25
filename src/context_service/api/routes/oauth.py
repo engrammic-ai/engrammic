@@ -21,7 +21,7 @@ from urllib.parse import urlencode, urlparse
 
 import structlog
 from fastapi import APIRouter, Form, HTTPException, Query
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import select
 
 from context_service.auth.workos_authkit import exchange_code_for_user, get_authorization_url
@@ -34,6 +34,150 @@ from context_service.services.user import UserService
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(tags=["oauth"])
+
+
+def _success_page_html(email: str) -> str:
+    """Generate a branded success page for direct signup flow."""
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Engrammic</title>
+    <style>
+        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0f0f 0%, #1a1a2e 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #e0e0e0;
+        }}
+        .container {{
+            max-width: 480px;
+            padding: 48px;
+            text-align: center;
+        }}
+        .logo {{
+            font-size: 28px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            margin-bottom: 32px;
+            color: #fff;
+        }}
+        .checkmark {{
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+        }}
+        .checkmark svg {{
+            width: 32px;
+            height: 32px;
+            stroke: white;
+            stroke-width: 3;
+            fill: none;
+        }}
+        h1 {{
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #fff;
+        }}
+        .email {{
+            color: #9ca3af;
+            margin-bottom: 32px;
+        }}
+        .next-steps {{
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 24px;
+            text-align: left;
+        }}
+        .next-steps h2 {{
+            font-size: 14px;
+            font-weight: 500;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 16px;
+        }}
+        .step {{
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 16px;
+        }}
+        .step:last-child {{ margin-bottom: 0; }}
+        .step-num {{
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: rgba(99, 102, 241, 0.2);
+            color: #818cf8;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }}
+        .step-text {{
+            font-size: 14px;
+            line-height: 1.5;
+        }}
+        .step-text code {{
+            background: rgba(99, 102, 241, 0.15);
+            color: #a5b4fc;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 13px;
+        }}
+        .docs-link {{
+            display: inline-block;
+            margin-top: 24px;
+            color: #818cf8;
+            text-decoration: none;
+            font-size: 14px;
+        }}
+        .docs-link:hover {{ text-decoration: underline; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">engrammic</div>
+        <div class="checkmark">
+            <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        </div>
+        <h1>You're all set</h1>
+        <p class="email">{email}</p>
+        <div class="next-steps">
+            <h2>Next steps</h2>
+            <div class="step">
+                <span class="step-num">1</span>
+                <span class="step-text">Install the MCP server: <code>npx @engrammic/mcp</code></span>
+            </div>
+            <div class="step">
+                <span class="step-num">2</span>
+                <span class="step-text">Add it to your MCP client (Claude Code, Cursor, etc.)</span>
+            </div>
+            <div class="step">
+                <span class="step-num">3</span>
+                <span class="step-text">Run <code>/auth</code> to connect your account</span>
+            </div>
+        </div>
+        <a href="https://docs.engrammic.ai/quickstart" class="docs-link">View documentation &rarr;</a>
+    </div>
+</body>
+</html>"""
 
 
 @router.get(
@@ -182,7 +326,7 @@ async def callback(
     state: str = Query(default=None, description="WorkOS state parameter (maps to workos_state)"),
     error: str = Query(default=None, description="Error from WorkOS"),
     error_description: str = Query(default=None, description="Error description from WorkOS"),
-) -> RedirectResponse | dict[str, str]:
+) -> RedirectResponse | HTMLResponse:
     """Handle the WorkOS OAuth callback.
 
     Exchanges the WorkOS code for user info, upserts the user, creates an
@@ -225,10 +369,7 @@ async def callback(
             )
 
         logger.info("oauth.callback.direct_signup_success", workos_user_id=user_info["id"])
-        return {
-            "status": "ok",
-            "message": "Account created. You can now use Engrammic with your MCP client.",
-        }
+        return HTMLResponse(content=_success_page_html(email), status_code=200)
 
     # MCP OAuth flow - look up the authorization request by workos_state
     async with get_session() as session:
