@@ -20,7 +20,7 @@ import structlog
 
 from context_service.config.settings import get_settings
 from context_service.engine.dtw import dtw_similarity
-from context_service.telemetry.metrics import record_chain_lookup
+from context_service.telemetry.metrics import record_chain_evidence_modified, record_chain_lookup
 
 log = structlog.get_logger()
 
@@ -405,4 +405,4 @@ async def record_evidence_modification(
     if not evidence_ids or not chain_created_at:
         return
     # Stub: full implementation wires into the graph store.
-    # record_chain_evidence_modified() will be called here once wired.
+    record_chain_evidence_modified()
