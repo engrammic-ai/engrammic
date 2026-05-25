@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -373,6 +373,208 @@ class TestGetEngagementForAboutSet:
         assert marker["summary"].endswith("...")
         # Summary should be truncated to ~80 chars of content
         assert len(marker["summary"]) < 150
+
+    @pytest.mark.asyncio
+    async def test_below_threshold_stays_soft(self, mock_store, mock_redis_with_touches):
+        """Touch count below threshold keeps mode soft."""
+        call_count = 0
+
+        async def side_effect() -> list[object]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # get_markers_for_about_set pipeline: one zrange result per about_id
+                return [[b"marker-1"]]
+            # record_touch pipeline: [zadd_result, zremrangebyscore_result, members]
+            # count = 1 (one member with session prefix, below threshold of 3)
+            return [1, 0, [b"sess-1:12345678"]]
+
+        mock_redis_with_touches._mock_pipe.execute = AsyncMock(side_effect=side_effect)
+        mock_store.execute_query.side_effect = [
+            [
+                {
+                    "id": "marker-1",
+                    "marker_type": "Contradiction",
+                    "status": "pending",
+                    "detected_at": "2026-05-25T10:00:00+00:00",
+                    "about_ids": ["node-a", "node-b"],
+                    "node_a_id": "node-a",
+                    "node_b_id": "node-b",
+                }
+            ],
+            [],
+        ]
+
+        from context_service.engine.engagement import get_engagement_for_about_set
+
+        with patch("context_service.engine.engagement.get_settings") as mock_settings:
+            settings = MagicMock()
+            settings.engagement_escalation_threshold = 3
+            settings.engagement_decay_window_ms = 1_800_000
+            settings.engagement_hard_enabled = True
+            mock_settings.return_value = settings
+
+            result = await get_engagement_for_about_set(
+                redis=mock_redis_with_touches,
+                store=mock_store,
+                silo_id="silo-1",
+                about_ids=["node-a"],
+                session_id="sess-1",
+            )
+
+        assert result is not None
+        assert result["mode"] == "soft"
+        assert "message" not in result
+
+    @pytest.mark.asyncio
+    async def test_at_threshold_escalates_to_hard(self, mock_store, mock_redis_with_touches):
+        """Touch count at threshold with hard enabled escalates to hard mode."""
+        call_count = 0
+
+        async def side_effect() -> list[object]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return [[b"marker-1"]]
+            # record_touch: count = 3 (at threshold of 3)
+            return [1, 0, [b"sess-1:1", b"sess-1:2", b"sess-1:3"]]
+
+        mock_redis_with_touches._mock_pipe.execute = AsyncMock(side_effect=side_effect)
+        mock_store.execute_query.side_effect = [
+            [
+                {
+                    "id": "marker-1",
+                    "marker_type": "Contradiction",
+                    "status": "pending",
+                    "detected_at": "2026-05-25T10:00:00+00:00",
+                    "about_ids": ["node-a", "node-b"],
+                    "node_a_id": "node-a",
+                    "node_b_id": "node-b",
+                }
+            ],
+            [],
+        ]
+
+        from context_service.engine.engagement import get_engagement_for_about_set
+
+        with patch("context_service.engine.engagement.get_settings") as mock_settings:
+            settings = MagicMock()
+            settings.engagement_escalation_threshold = 3
+            settings.engagement_decay_window_ms = 1_800_000
+            settings.engagement_hard_enabled = True
+            mock_settings.return_value = settings
+
+            result = await get_engagement_for_about_set(
+                redis=mock_redis_with_touches,
+                store=mock_store,
+                silo_id="silo-1",
+                about_ids=["node-a"],
+                session_id="sess-1",
+            )
+
+        assert result is not None
+        assert result["mode"] == "hard"
+        assert "message" in result
+        assert "Resolution required" in result["message"]
+
+    @pytest.mark.asyncio
+    async def test_above_threshold_escalates_to_hard(self, mock_store, mock_redis_with_touches):
+        """Touch count above threshold with hard enabled escalates to hard mode."""
+        call_count = 0
+
+        async def side_effect() -> list[object]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return [[b"marker-1"]]
+            # record_touch: count = 5 (above threshold of 3)
+            return [1, 0, [b"sess-1:1", b"sess-1:2", b"sess-1:3", b"sess-1:4", b"sess-1:5"]]
+
+        mock_redis_with_touches._mock_pipe.execute = AsyncMock(side_effect=side_effect)
+        mock_store.execute_query.side_effect = [
+            [
+                {
+                    "id": "marker-1",
+                    "marker_type": "StaleCommitment",
+                    "status": "pending",
+                    "detected_at": "2026-05-25T10:00:00+00:00",
+                    "about_ids": ["commit-1"],
+                    "commitment_id": "commit-1",
+                }
+            ],
+            [],
+        ]
+
+        from context_service.engine.engagement import get_engagement_for_about_set
+
+        with patch("context_service.engine.engagement.get_settings") as mock_settings:
+            settings = MagicMock()
+            settings.engagement_escalation_threshold = 3
+            settings.engagement_decay_window_ms = 1_800_000
+            settings.engagement_hard_enabled = True
+            mock_settings.return_value = settings
+
+            result = await get_engagement_for_about_set(
+                redis=mock_redis_with_touches,
+                store=mock_store,
+                silo_id="silo-1",
+                about_ids=["commit-1"],
+                session_id="sess-1",
+            )
+
+        assert result is not None
+        assert result["mode"] == "hard"
+        assert "message" in result
+
+    @pytest.mark.asyncio
+    async def test_hard_disabled_stays_soft_despite_threshold(self, mock_store, mock_redis_with_touches):
+        """When engagement_hard_enabled is False, stays soft even above threshold."""
+        call_count = 0
+
+        async def side_effect() -> list[object]:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return [[b"marker-1"]]
+            # record_touch: count = 5 (above threshold)
+            return [1, 0, [b"sess-1:1", b"sess-1:2", b"sess-1:3", b"sess-1:4", b"sess-1:5"]]
+
+        mock_redis_with_touches._mock_pipe.execute = AsyncMock(side_effect=side_effect)
+        mock_store.execute_query.side_effect = [
+            [
+                {
+                    "id": "marker-1",
+                    "marker_type": "Contradiction",
+                    "status": "pending",
+                    "detected_at": "2026-05-25T10:00:00+00:00",
+                    "about_ids": ["node-a", "node-b"],
+                    "node_a_id": "node-a",
+                    "node_b_id": "node-b",
+                }
+            ],
+            [],
+        ]
+
+        from context_service.engine.engagement import get_engagement_for_about_set
+
+        with patch("context_service.engine.engagement.get_settings") as mock_settings:
+            settings = MagicMock()
+            settings.engagement_escalation_threshold = 3
+            settings.engagement_decay_window_ms = 1_800_000
+            settings.engagement_hard_enabled = False
+            mock_settings.return_value = settings
+
+            result = await get_engagement_for_about_set(
+                redis=mock_redis_with_touches,
+                store=mock_store,
+                silo_id="silo-1",
+                about_ids=["node-a"],
+                session_id="sess-1",
+            )
+
+        assert result is not None
+        assert result["mode"] == "soft"
+        assert "message" not in result
 
 
 # ---------------------------------------------------------------------------

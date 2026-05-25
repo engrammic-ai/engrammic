@@ -90,6 +90,12 @@ async def record_touch(
         pipe.zremrangebyscore(key, "-inf", cutoff)
         pipe.zrangebyscore(key, cutoff + 1, "+inf")
         results = await pipe.execute()
+        members: list[bytes] | list[str] = results[2]
+        count = sum(
+            1
+            for m in members
+            if (m.decode() if isinstance(m, bytes) else m).startswith(prefix)
+        )
     except Exception as exc:
         logger.warning(
             "touch_counter_record_failed",
@@ -99,13 +105,6 @@ async def record_touch(
             error=str(exc),
         )
         return 0
-
-    members: list[bytes] | list[str] = results[2]
-    count = sum(
-        1
-        for m in members
-        if (m.decode() if isinstance(m, bytes) else m).startswith(prefix)
-    )
 
     logger.debug(
         "touch_recorded",

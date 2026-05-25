@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from context_service.config.settings import get_settings
 from context_service.db.queries import (
     GET_PENDING_PROPOSED_BELIEFS_FOR_CLAIMS,
     GET_PROPOSED_BELIEFS_FOR_SILO,
@@ -19,8 +20,17 @@ from context_service.engine.markers import (
     get_marker_details,
     get_markers_for_about_set,
 )
+from context_service.engine.touch_counter import record_touch
 
 _SILO_PROPOSED_BELIEF_LIMIT = 50
+
+MODE_SOFT = "soft"
+MODE_HARD = "hard"
+
+_HARD_MODE_MESSAGE = (
+    "Resolution required before recall results are available. "
+    "Use accept/reject for ProposedBelief markers, or dismiss for others."
+)
 
 if TYPE_CHECKING:
     from redis.asyncio import Redis
@@ -59,6 +69,7 @@ async def get_engagement_for_about_set(
     store: HyperGraphStore,
     silo_id: str,
     about_ids: list[str],
+    session_id: str | None = None,
 ) -> dict[str, Any] | None:
     """Query markers and pending ProposedBeliefs for an about_id set.
 
@@ -72,13 +83,21 @@ async def get_engagement_for_about_set(
         Silo scope.
     about_ids:
         Node IDs to check for engagement markers.
+    session_id:
+        Session performing the recall. Used to track touch counts for
+        escalation. Defaults to ``"default"`` when not provided.
 
     Returns
     -------
     Engagement payload dict with mode and markers list, or None if no markers.
+    Mode is ``"hard"`` when any marker's touch count meets the escalation
+    threshold and ``engagement_hard_enabled`` is True.
     """
     if not about_ids:
         return None
+
+    effective_session_id = session_id or "default"
+    settings = get_settings()
 
     markers_out: list[dict[str, Any]] = []
 
@@ -125,6 +144,26 @@ async def get_engagement_for_about_set(
 
     if not markers_out:
         return None
+
+    # 3. Record touches and check for escalation
+    escalated = False
+    for marker in markers_out:
+        touch_count = await record_touch(
+            redis,
+            silo_id,
+            marker["marker_id"],
+            effective_session_id,
+            decay_window_ms=settings.engagement_decay_window_ms,
+        )
+        if touch_count >= settings.engagement_escalation_threshold:
+            escalated = True
+
+    if escalated and settings.engagement_hard_enabled:
+        return {
+            "mode": "hard",
+            "message": _HARD_MODE_MESSAGE,
+            "markers": markers_out,
+        }
 
     return {
         "mode": "soft",
