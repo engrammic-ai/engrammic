@@ -126,6 +126,11 @@ context_service = ContextServiceRun(
         # Telemetry beacon (URL set via config, secret from Pulumi secrets)
         "TELEMETRY__BEACON_SECRET": config.get_secret("beacon_secret") or "",
         "TELEMETRY__BEACON_URL": f"https://tel.engrammic.ai/v1/beacon" if env in ("beta", "prod") else "",
+        # OTEL / SigNoz
+        "OTEL_ENABLED": "true",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://signoz.engrammic.internal:4317",
+        "OTEL_SERVICE_NAME": "engrammic",
+        "OTEL_EXPORTER_OTLP_INSECURE": "true",
         # Feature flags
         **feature_flags.get(env, {}),
     },
