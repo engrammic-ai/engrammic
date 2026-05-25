@@ -21,6 +21,7 @@ import structlog
 from context_service.db.queries import (
     CREATE_CONTRADICTION,
     CREATE_STALE_COMMITMENT,
+    GET_ALL_PENDING_MARKERS_FOR_SILO,
     GET_MARKERS_BY_IDS,
     UPDATE_MARKER_STATUS,
 )
@@ -174,9 +175,7 @@ async def create_stale_commitment(
 
     rows = await store.execute_write(CREATE_STALE_COMMITMENT, params)
     if not rows:
-        raise RuntimeError(
-            f"CREATE_STALE_COMMITMENT returned no rows for silo={silo_id}"
-        )
+        raise RuntimeError(f"CREATE_STALE_COMMITMENT returned no rows for silo={silo_id}")
 
     logger.info(
         "marker_created",
@@ -328,6 +327,34 @@ async def get_markers_for_about_set(
                 marker_ids.append(mid)
 
     return marker_ids
+
+
+async def get_all_pending_markers(
+    store: HyperGraphStore,
+    silo_id: str,
+) -> list[str]:
+    """Return all pending (non-expired) marker IDs for a silo.
+
+    Queries the graph directly for Contradiction and StaleCommitment nodes
+    with status='pending' that have not yet expired. Used by the tick verb
+    to surface engagement without a specific about_id set.
+
+    Parameters
+    ----------
+    store:
+        HyperGraphStore used for graph reads.
+    silo_id:
+        Silo scope.
+
+    Returns
+    -------
+    List of marker_id strings, most-recently-detected first.
+    """
+    rows = await store.execute_query(
+        GET_ALL_PENDING_MARKERS_FOR_SILO,
+        {"silo_id": silo_id},
+    )
+    return [str(row["id"]) for row in rows if row.get("id")]
 
 
 async def get_marker_details(

@@ -1696,3 +1696,32 @@ MATCH (n {id: nid, silo_id: $silo_id})
 WHERE n.content IS NOT NULL
 RETURN n.id AS node_id, n.content AS content
 """
+
+GET_ALL_PENDING_MARKERS_FOR_SILO = """
+CALL {
+    MATCH (c:Contradiction {silo_id: $silo_id, status: 'pending'})
+    WHERE c.expires_at IS NULL OR c.expires_at > datetime()
+    RETURN c.id AS id,
+           'Contradiction' AS marker_type,
+           c.status AS status,
+           c.detected_at AS detected_at,
+           c.about_ids AS about_ids,
+           c.node_a_id AS node_a_id,
+           c.node_b_id AS node_b_id,
+           null AS commitment_id
+    UNION ALL
+    MATCH (sc:StaleCommitment {silo_id: $silo_id, status: 'pending'})
+    WHERE sc.expires_at IS NULL OR sc.expires_at > datetime()
+    RETURN sc.id AS id,
+           'StaleCommitment' AS marker_type,
+           sc.status AS status,
+           sc.detected_at AS detected_at,
+           sc.about_ids AS about_ids,
+           null AS node_a_id,
+           null AS node_b_id,
+           sc.commitment_id AS commitment_id
+}
+RETURN id, marker_type, status, detected_at, about_ids,
+       node_a_id, node_b_id, commitment_id
+ORDER BY detected_at DESC
+"""

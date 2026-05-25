@@ -59,6 +59,7 @@ def register_tools(mcp: FastMCP) -> None:
         commit,
         context_accept_belief,
         context_reject_belief,
+        dismiss,
         forget,
         hypothesize,
         learn,
@@ -69,6 +70,7 @@ def register_tools(mcp: FastMCP) -> None:
         reflect,
         remember,
         revise,
+        tick,
         trace,
     )
 
@@ -86,6 +88,8 @@ def register_tools(mcp: FastMCP) -> None:
         "commit": commit.register,
         "accept": context_accept_belief.register,
         "reject": context_reject_belief.register,
+        "dismiss": dismiss.register,
+        "tick": tick.register,
         "patterns": patterns.register,
         "forget": forget.register,
     }

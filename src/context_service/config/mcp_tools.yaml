@@ -91,6 +91,14 @@ tools:
     description: "Request deletion of a node. The node enters a cancel window before permanent deletion."
     maps_to: forget
 
+  dismiss:
+    description: "Dismiss a Contradiction or StaleCommitment marker without resolving it. Use for false positives or acknowledged issues."
+    maps_to: marker
+
   patterns:
     description: "Discover workflow templates for common tasks."
     maps_to: skills
+
+  tick:
+    description: "Lightweight engagement check. Returns pending markers without a full recall. Safe to call frequently; zero side effects. Optionally scope to specific node IDs via about_hint."
+    maps_to: engagement

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 from context_service.mcp.tools import (
     believe,
     commit,
+    dismiss,
     hypothesize,
     learn,
     link,
@@ -21,6 +22,7 @@ from context_service.mcp.tools import (
     reflect,
     remember,
     revise,
+    tick,
     trace,
 )
 
@@ -66,5 +68,7 @@ __all__ = [
     "hypothesize",
     "revise",
     "commit",
+    "dismiss",
+    "tick",
     "patterns",
 ]
