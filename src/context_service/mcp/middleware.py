@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Any
 import structlog
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 
+from context_service.telemetry.metrics import record_tool_error
+
 if TYPE_CHECKING:
     pass
 
@@ -60,6 +62,7 @@ class ErrorHandlingMiddleware(Middleware):
                 error_message=str(e),
                 exc_info=True,
             )
+            record_tool_error(tool_name, type(e).__name__)
 
             if self.mask_errors:
                 raise RuntimeError(
