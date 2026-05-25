@@ -359,14 +359,8 @@ async def _record_usage_task(user_id: UUID, org_id: str, tool_name: str) -> None
         logger.warning("usage_tracking_failed", error=str(e), tool_name=tool_name)
 
 
-def create_mcp_server(profile: str | None = None) -> FastMCP:
-    """Create and configure the FastMCP server with intent-based tools.
-
-    Args:
-        profile: Tool profile override. If None, uses settings or env var.
-    """
-    import os
-
+def create_mcp_server() -> FastMCP:
+    """Create and configure the FastMCP server with intent-based tools."""
     from context_service.config.settings import get_settings
     from context_service.mcp.middleware import (
         ErrorHandlingMiddleware,
@@ -375,15 +369,10 @@ def create_mcp_server(profile: str | None = None) -> FastMCP:
     )
     from context_service.mcp.tools.registry import (
         get_mcp_instructions,
-        register_profile_tools,
+        register_tools,
     )
 
     settings = get_settings()
-
-    # Determine profile: param > env > settings > default
-    resolved_profile = (
-        profile or os.environ.get("MCP_TOOL_PROFILE") or settings.mcp_tool_profile or "standard"
-    )
 
     mcp = FastMCP(
         name="engrammic",
@@ -397,8 +386,7 @@ def create_mcp_server(profile: str | None = None) -> FastMCP:
     mcp.add_middleware(LoggingMiddleware())
     mcp.add_middleware(TimingMiddleware(slow_threshold_ms=500.0))
 
-    # Register tools based on profile
-    register_profile_tools(mcp, resolved_profile)
+    register_tools(mcp)
 
-    logger.info("mcp_server_created", profile=resolved_profile, middleware_count=3)
+    logger.info("mcp_server_created", middleware_count=3)
     return mcp

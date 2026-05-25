@@ -128,7 +128,7 @@ RETURN [node IN nodes(path) | node.agent_id] AS lineage
 1. **WorkOS agent_id source**: Custom attribute vs derived from `user_id`?
 2. **Caller-supplied override**: Allow orchestrators to pass worker identity?
 3. **CONTINUES vs DERIVED_FROM**: Chain handoff semantics?
-4. **Custodian vote counting**: Should custodian chains count toward R2 consensus?
+4. **sage.custodian vote counting**: Should sage.custodian chains count toward R2 consensus?
 
 ## Implementation Phases
 
@@ -145,7 +145,7 @@ RETURN [node IN nodes(path) | node.agent_id] AS lineage
 **Phase C - Consumer Features**:
 - `context_get_reflections(agent_id=...)` filter
 - `context_reason(parent_chain_id=...)` for handoffs
-- Custodian identity constant
+- sage.custodian identity constant
 
 **Phase D - Migration**:
 - Backfill script for existing nodes

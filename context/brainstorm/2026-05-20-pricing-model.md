@@ -61,7 +61,7 @@
 | hypothesize | 0 | 0 | 0 | Graph write only |
 | revise | 0 | 0 | 0 | Graph update only |
 | commit | 600 | 150 | 0 | Validator LLM (if enabled) |
-| synthesis (Custodian) | 1500 | 600 | 0 | Background batch job |
+| synthesis (sage.synthesizer) | 1500 | 600 | 0 | Background batch job |
 
 ### 2.2 Cost per Operation (Gemini 2.5 Flash Standard)
 
@@ -106,7 +106,7 @@
 ### 3.1 Assumptions
 
 - Average user: 70% writes (remember/learn), 25% recalls (search), 5% other
-- Synthesis runs 1x per 100 writes (Custodian batch)
+- Synthesis runs 1x per 100 writes (SAGE batch)
 - 20% of recalls use reranking
 - 10% of commits use validator
 

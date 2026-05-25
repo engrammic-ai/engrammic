@@ -4,6 +4,7 @@ SAGE (Synthesis, Aggregation, and Graph Evolution) schedules:
 - sage_custodian_schedule: ingestion pipeline (every 2h, pending-work gated)
 - sage_synthesizer_schedule: belief formation (hourly, pending-work gated)
 - sage_groundskeeper_schedule: heat and maintenance (hourly, pending-work gated)
+- sage_validator_schedule: contradiction + stale commitment checks (every 5m, pending-work gated)
 
 Maintenance schedules:
 - reasoning_compaction_schedule: every 2h (pending-work gated)
@@ -81,6 +82,20 @@ _SILOS_WITH_EXPIRED_PROPOSALS = """
 MATCH (p:ProposedBelief)
 WHERE p.expires_at < datetime()
 RETURN DISTINCT p.silo_id AS silo_id
+"""
+
+_SILOS_WITH_PENDING_VALIDATION = """
+MATCH (n)
+WHERE n.silo_id IS NOT NULL
+  AND n.contradiction_candidate = true
+RETURN DISTINCT n.silo_id AS silo_id
+UNION
+MATCH (n:Commitment)
+WHERE n.silo_id IS NOT NULL
+  AND (n.stale_checked_at IS NULL
+       OR n.stale_checked_at < datetime() - duration('PT5M'))
+RETURN DISTINCT n.silo_id AS silo_id
+LIMIT 50
 """
 
 
@@ -373,11 +388,39 @@ def groundskeeper_gc_schedule(context: ScheduleEvaluationContext) -> dg.RunReque
     )
 
 
+@dg.schedule(
+    cron_schedule="*/5 * * * *",
+    name="sage_validator_schedule",
+    target=dg.AssetSelection.assets(
+        "validator_contradiction_asset",
+        "validator_stale_commitment_asset",
+        "marker_cleanup_asset",
+    ),
+    description="SAGE Validator (every 5m): contradiction confirmation, stale commitment detection, and marker cleanup.",
+    execution_timezone="UTC",
+)
+def sage_validator_schedule(
+    context: ScheduleEvaluationContext,
+    memgraph: MemgraphResource,
+) -> Iterator[dg.RunRequest]:
+    """SAGE Validator: run contradiction and stale-commitment checks for silos with pending work."""
+    silo_ids = _fetch_silos_with_pending_work(memgraph, _SILOS_WITH_PENDING_VALIDATION)
+
+    for silo_id in silo_ids:
+        _ensure_partition_exists(context, silo_id)
+        yield _run_request_with_partition(
+            silo_id=silo_id,
+            run_key=f"sage_validator:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            tags={"sage_job": "validator", "dagster/concurrency_key": silo_id},
+        )
+
+
 all_schedules: list[Any] = [
     # SAGE pipelines
     sage_custodian_schedule,
     sage_synthesizer_schedule,
     sage_groundskeeper_schedule,
+    sage_validator_schedule,
     # Maintenance
     reasoning_compaction_schedule,
     daily_maintenance_schedule,
@@ -392,6 +435,7 @@ __all__ = [
     "sage_custodian_schedule",
     "sage_synthesizer_schedule",
     "sage_groundskeeper_schedule",
+    "sage_validator_schedule",
     "reasoning_compaction_schedule",
     "daily_maintenance_schedule",
     "auto_tagging_schedule",

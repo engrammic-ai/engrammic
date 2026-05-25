@@ -44,6 +44,6 @@ After creating a link, you might:
 
 ## Example workflow
 
-1. `learn(claim: "Redis semaphore prevents Custodian race conditions", evidence: [...])` - store the fact
-2. `connect(from_node: "{learn_node_id}", to_node: "{custodian_design_node_id}", relationship: "SUPPORTS")` - link to the design node it supports
-3. `trace(node_id: "{custodian_design_node_id}")` - verify the provenance chain is correct
+1. `learn(claim: "Redis semaphore prevents SAGE race conditions", evidence: [...])` - store the fact
+2. `connect(from_node: "{learn_node_id}", to_node: "{sage_design_node_id}", relationship: "SUPPORTS")` - link to the design node it supports
+3. `trace(node_id: "{sage_design_node_id}")` - verify the provenance chain is correct

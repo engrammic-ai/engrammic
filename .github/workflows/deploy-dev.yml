@@ -1,0 +1,70 @@
+name: Deploy Dev
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_build:
+        description: 'Skip image build (use existing latest)'
+        type: boolean
+        default: false
+
+env:
+  REGION: europe-north1
+  PROJECT_ID: engrammic
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set short SHA
+        run: echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build API image with Cloud Build
+        if: ${{ !inputs.skip_build }}
+        run: |
+          gcloud builds submit --config cloudbuild.api.yaml --timeout 600s \
+            --substitutions SHORT_SHA=${{ env.SHORT_SHA }}
+
+      - name: Build Beacon image with Cloud Build
+        if: ${{ !inputs.skip_build }}
+        run: |
+          gcloud builds submit --config cloudbuild.beacon.yaml --timeout 300s \
+            --substitutions SHORT_SHA=${{ env.SHORT_SHA }}
+
+      - name: Build Dagster image with Cloud Build
+        if: ${{ !inputs.skip_build }}
+        run: |
+          gcloud builds submit --config cloudbuild.dagster.yaml --timeout 600s \
+            --substitutions SHORT_SHA=${{ env.SHORT_SHA }}
+
+      - name: Deploy API to Cloud Run
+        run: |
+          gcloud run deploy engrammic-dev-context-service \
+            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-api:latest \
+            --region ${{ env.REGION }} \
+            --min-instances 0 \
+            --no-cpu-throttling \
+            --session-affinity \
+            --timeout 3600
+
+      - name: Deploy to VM (pull latest images)
+        run: |
+          gcloud compute ssh engrammic-dev-stateful \
+            --zone ${{ env.REGION }}-a \
+            --tunnel-through-iap \
+            --command "cd /opt/engrammic && sudo docker compose pull && sudo docker compose up -d"

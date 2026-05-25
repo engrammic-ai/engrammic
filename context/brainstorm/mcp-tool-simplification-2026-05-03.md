@@ -87,7 +87,7 @@ context_store(
 | Layer | Decays | Requires | Creates |
 |-------|--------|----------|---------|
 | memory | Yes | - | Memory node |
-| knowledge | No | evidence | Claim (promotes to Fact via custodian) |
+| knowledge | No | evidence | Claim (promotes to Fact via sage.custodian) |
 | wisdom | No | about | Belief/Commitment |
 | intelligence | No | steps | ReasoningChain |
 | meta | No | about | MetaObservation |

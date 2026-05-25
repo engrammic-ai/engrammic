@@ -22,8 +22,8 @@ async def _crystallize_one(
     reason: str,
     created_at: str,
     rationale_chain_id: str | None = None,
-) -> str | None:
-    """Crystallize a single WorkingHypothesis; returns commitment_id or None on miss."""
+) -> tuple[str, float] | None:
+    """Crystallize a single WorkingHypothesis; returns (commitment_id, confidence) or None on miss."""
     from context_service.db import queries as q
 
     commitment_id = str(uuid.uuid4())
@@ -41,7 +41,9 @@ async def _crystallize_one(
     )
     if not rows:
         return None
-    return commitment_id
+    row = rows[0]
+    confidence = float(row.get("confidence", 1.0) or 1.0)
+    return commitment_id, confidence
 
 
 async def _context_crystallize(
@@ -102,7 +104,8 @@ async def _context_crystallize(
         ]
     )
 
-    commitment_ids = [r for r in results if r is not None]
+    commitment_ids = [r[0] for r in results if r is not None]
+    confidences = [r[1] for r in results if r is not None]
     crystallized_belief_ids = [
         bid for bid, r in zip(belief_ids, results, strict=True) if r is not None
     ]
@@ -111,6 +114,7 @@ async def _context_crystallize(
     response: dict[str, Any] = {
         "commitment_ids": commitment_ids,
         "crystallized_belief_ids": crystallized_belief_ids,
+        "confidences": confidences,
     }
     if not_found:
         response["not_found"] = not_found

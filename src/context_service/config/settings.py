@@ -977,7 +977,6 @@ class Settings(BaseSettings):
     dev_agent_id: str = Field(default="dev-agent")
 
     # MCP settings
-    mcp_tool_profile: str = Field(default="reasoning")
     default_icp_preset: str = Field(default="coding")
 
     # =========================================================================
@@ -1334,6 +1333,36 @@ class Settings(BaseSettings):
         le=1.0,
         description="Confidence above which (but below auto_synthesis) creates ProposedBelief.",
     )
+    proposal_cooldown_hours: int = Field(
+        default=24,
+        ge=1,
+        description="Don't re-propose rejected beliefs within this window",
+    )
+    max_proposals_per_silo: int = Field(
+        default=10,
+        ge=1,
+        description="Cap pending ProposedBeliefs per silo to avoid noise",
+    )
+
+    # =========================================================================
+    # Contradiction Detection (inline flagging)
+    # =========================================================================
+
+    contradiction_candidate_threshold: float = Field(
+        default=0.85,
+        ge=0.0,
+        le=1.0,
+        description="Cosine similarity threshold for flagging contradiction candidates",
+    )
+    contradiction_candidate_ttl_hours: int = Field(
+        default=1,
+        ge=1,
+        description="Hours before unflagged candidates expire (validator picks them up)",
+    )
+    contradiction_flagging_enabled: bool = Field(
+        default=True,
+        description="Enable inline contradiction candidate flagging during writes",
+    )
 
     # =========================================================================
     # Signals — heat / freshness / priority
@@ -1359,6 +1388,27 @@ class Settings(BaseSettings):
     heat_read_weight: float = Field(default=1.0)
     heat_write_weight: float = Field(default=0.5)
     heat_dedup_window_seconds: int = Field(default=300)
+
+    # =========================================================================
+    # Engagement Escalation Settings
+    # =========================================================================
+
+    engagement_escalation_threshold: int = Field(
+        default=3,
+        ge=1,
+        le=100,
+        description="Number of touches before a soft checkpoint escalates to hard. Wired into the touch counter and engagement modules. Values above 100 would effectively disable escalation.",
+    )
+    engagement_decay_window_ms: int = Field(
+        default=1_800_000,
+        ge=1,
+        le=86_400_000,
+        description="Decay window in milliseconds (30 min) for engagement touch counting. Wired into the touch counter and engagement modules. Max 24 hours (86400000 ms) to prevent unbounded Redis growth.",
+    )
+    engagement_hard_enabled: bool = Field(
+        default=True,
+        description="Kill switch for hard checkpoint mode. Set false to disable escalation.",
+    )
 
     # =========================================================================
     # YAML loading

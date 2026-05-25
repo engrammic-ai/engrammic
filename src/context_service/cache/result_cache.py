@@ -11,6 +11,7 @@ from cachetools import TTLCache
 
 from context_service.config import get_settings
 from context_service.config.logging import get_logger
+from context_service.telemetry.metrics import record_cache_hit, record_cache_miss
 
 if TYPE_CHECKING:
     from context_service.stores.redis import RedisClient
@@ -161,7 +162,12 @@ class ResultCacheStore:
             include_superseded,
             search_mode,
         )
-        return cache.get(key)
+        value = cache.get(key)
+        if value is not None:
+            record_cache_hit("result", silo_id=silo_id)
+            return value
+        record_cache_miss("result", silo_id=silo_id)
+        return None
 
     def set(
         self,

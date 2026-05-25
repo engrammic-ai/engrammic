@@ -11,7 +11,11 @@ from context_service.mcp.rate_limit import rate_limited
 from context_service.mcp.server import get_mcp_auth_context, track_tool_usage
 from context_service.mcp.tools.context_store import _context_commit
 from context_service.mcp.tools.registry import get_tool_description
-from context_service.telemetry.metrics import record_mcp_tool
+from context_service.telemetry.metrics import (
+    record_belief_confidence,
+    record_mcp_tool,
+    record_node_confidence,
+)
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -31,7 +35,7 @@ async def _believe_impl(
     if not about:
         return {"error": "missing_about", "message": "about must reference at least one node"}
 
-    return await _context_commit(
+    result = await _context_commit(
         silo_id=None,  # auto-derived from auth
         belief=belief,
         about=about,
@@ -39,6 +43,10 @@ async def _believe_impl(
         reasoning=reasoning,
         supersedes=supersedes,
     )
+    if "error" not in result:
+        record_belief_confidence(confidence, silo_id=None)
+        record_node_confidence(confidence, layer="wisdom", silo_id=None)
+    return result
 
 
 def register(mcp: FastMCP) -> None:

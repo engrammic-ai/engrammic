@@ -34,31 +34,6 @@ mcp_instructions: |
   Onboarding:
   - At session start, call patterns(action='get', name='onboarding') for your workflow guide
 
-default_profile: reasoning
-
-profiles:
-  standard:
-    - remember
-    - learn
-    - believe
-    - recall
-    - trace
-    - link
-
-  reasoning:
-    - remember
-    - learn
-    - believe
-    - reason
-    - reflect
-    - recall
-    - trace
-    - link
-    - hypothesize
-    - revise
-    - commit
-    - forget
-
 tools:
   remember:
     description: "Store an observation. No evidence required. Consider recall first - if updating existing knowledge, pass supersedes:<node_id>."
@@ -104,11 +79,26 @@ tools:
     description: "Promote tentative hypotheses to permanent commitments."
     maps_to: crystallize
 
+  accept:
+    description: "Ratify a system-synthesized ProposedBelief, promoting it to an active Belief. Use when SAGE has surfaced a ProposedBelief you agree with. Optionally override the confidence on acceptance."
+    maps_to: wisdom
+
+  reject:
+    description: "Reject a system-synthesized ProposedBelief with an optional reason. The proposal is tombstoned (status='rejected') but preserved for audit. Use when SAGE has surfaced a ProposedBelief you do not endorse."
+    maps_to: wisdom
+
   forget:
     description: "Request deletion of a node. The node enters a cancel window before permanent deletion."
     maps_to: forget
 
+  dismiss:
+    description: "Dismiss a Contradiction or StaleCommitment marker without resolving it. Use for false positives or acknowledged issues."
+    maps_to: marker
+
   patterns:
     description: "Discover workflow templates for common tasks."
     maps_to: skills
-    always_available: true
+
+  tick:
+    description: "Lightweight engagement check. Returns pending markers without a full recall. Safe to call frequently; zero side effects. Optionally scope to specific node IDs via about_hint."
+    maps_to: engagement

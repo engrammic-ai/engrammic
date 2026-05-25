@@ -32,7 +32,7 @@ context_store(
 
 2. Accept the first ProposedBelief:
    ```
-   context_accept_belief(
+   accept(
        belief_id="<first_proposal_id>",
        silo_id="qa-test-003"
    )
@@ -48,7 +48,7 @@ context_store(
 
 2. Reject one with a reason:
    ```
-   context_reject_belief(
+   reject(
        belief_id="<proposal_id>",
        reason="Insufficient sample size in source data",
        silo_id="qa-test-003"
@@ -57,7 +57,7 @@ context_store(
 
 3. Reject another without a reason:
    ```
-   context_reject_belief(
+   reject(
        belief_id="<proposal_id>",
        silo_id="qa-test-003"
    )

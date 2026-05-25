@@ -100,6 +100,19 @@ class NetworkStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self),
         )
 
+        # Firewall: allow Cloud Run to reach SigNoz OTLP collector
+        self.fw_signoz_otlp = compute.Firewall(
+            f"{name}-fw-signoz-otlp",
+            name=f"engrammic-{env}-allow-signoz-otlp",
+            network=self.vpc.id,
+            allows=[
+                compute.FirewallAllowArgs(protocol="tcp", ports=["4317", "4318"]),
+            ],
+            source_ranges=["10.0.2.0/24"],  # Private subnet CIDR
+            target_tags=["signoz"],
+            opts=pulumi.ResourceOptions(parent=self),
+        )
+
         # VPC Connector for Cloud Run
         self.vpc_connector = compute.Subnetwork(
             f"{name}-connector-subnet",
