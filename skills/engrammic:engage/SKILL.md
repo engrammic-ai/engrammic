@@ -134,8 +134,8 @@ dismiss(
 
 | Marker type | Right action | Wrong action |
 |-------------|--------------|--------------|
-| ProposedBelief - accurate | `context_accept_belief` | `dismiss` |
-| ProposedBelief - inaccurate | `context_reject_belief` | `dismiss` |
+| ProposedBelief - accurate | `accept` | `dismiss` |
+| ProposedBelief - inaccurate | `reject` | `dismiss` |
 | Contradiction - one side wrong | `believe(..., supersedes=...)` then `dismiss` | ignore |
 | Contradiction - false positive | `dismiss` with explanation | delete either node |
 | StaleCommitment | `believe(..., supersedes=...)` then `dismiss` | ignore |

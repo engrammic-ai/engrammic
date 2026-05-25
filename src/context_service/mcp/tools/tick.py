@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 async def _tick(
     about_hint: list[str] | None,
     silo_id: str,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     from context_service.engine.engagement import (
@@ -42,6 +43,7 @@ async def _tick(
             store=store,
             silo_id=silo_id,
             about_ids=about_hint,
+            session_id=session_id,
         )
     else:
         # No hint: surface all pending markers and ProposedBeliefs for the silo
@@ -98,6 +100,7 @@ def register(mcp: FastMCP) -> None:
             result = await _tick(
                 about_hint=about_hint,
                 silo_id=resolved_silo_id,
+                session_id=auth.session_id,
             )
             if "error" in result:
                 success = False
