@@ -9,11 +9,17 @@ from typing import TYPE_CHECKING, Any
 
 from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.rate_limit import rate_limited
-from context_service.mcp.server import get_mcp_auth_context, get_preset_resolver, track_tool_usage
+from context_service.mcp.server import (
+    get_mcp_auth_context,
+    get_preset_resolver,
+    get_redis,
+    track_tool_usage,
+)
 from context_service.mcp.tools.context_recall import _context_recall
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.services.models import derive_silo_id
 from context_service.telemetry.metrics import (
+    record_engagement_latency,
     record_mcp_tool,
     record_recall_depth,
     record_recall_latency,
@@ -87,7 +93,36 @@ async def _recall_impl(
     session_id = auth.session_id
     if session_id and result.get("results"):
         import asyncio
+
         asyncio.create_task(_track_node_access(silo_id, session_id, result["results"]))
+
+    # Engagement detection: check for markers touching the about-set
+    about_ids = [item.get("node_id") for item in result_list if item.get("node_id")]
+    redis = get_redis()
+    if about_ids and redis is not None:
+        engagement_start = time.perf_counter()
+        try:
+            from context_service.engine.engagement import get_engagement_for_about_set
+            from context_service.mcp.server import get_context_service
+
+            ctx = get_context_service()
+            engagement = await get_engagement_for_about_set(
+                redis._redis, ctx._memgraph, silo_id, about_ids
+            )
+            result["engagement"] = engagement
+            engagement_ms = (time.perf_counter() - engagement_start) * 1000
+            with contextlib.suppress(Exception):
+                record_engagement_latency(engagement_ms, silo_id=silo_id)
+        except Exception:
+            # Non-fatal: don't break recall on engagement detection failure
+            import structlog
+
+            structlog.get_logger(__name__).warning(
+                "engagement_detection_failed", silo_id=silo_id
+            )
+            result["engagement"] = None
+    else:
+        result["engagement"] = None
 
     if include_hypotheses:
         # Fetch active hypotheses for current session
