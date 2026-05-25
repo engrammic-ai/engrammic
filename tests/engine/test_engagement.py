@@ -353,3 +353,145 @@ class TestGetEngagementForAboutSet:
         assert marker["summary"].endswith("...")
         # Summary should be truncated to ~80 chars of content
         assert len(marker["summary"]) < 150
+
+
+# ---------------------------------------------------------------------------
+# get_engagement_for_silo
+# ---------------------------------------------------------------------------
+
+
+class TestGetEngagementForSilo:
+    @pytest.mark.asyncio
+    async def test_no_markers_no_proposed_beliefs_returns_none(
+        self, mock_store, mock_redis
+    ):
+        mock_store.execute_query.return_value = []
+
+        from context_service.engine.engagement import get_engagement_for_silo
+
+        result = await get_engagement_for_silo(
+            redis=mock_redis,
+            store=mock_store,
+            silo_id="silo-1",
+        )
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_proposed_belief_included_when_no_other_markers(
+        self, mock_store, mock_redis
+    ):
+        """ProposedBelief should appear in no-hint silo engagement."""
+        mock_store.execute_query.side_effect = [
+            # get_all_pending_markers returns nothing
+            [],
+            # GET_PROPOSED_BELIEFS_FOR_SILO returns one pending belief
+            [
+                {
+                    "proposed_belief_id": "pb-silo-1",
+                    "content": "Users prefer dark mode by default",
+                    "confidence": 0.9,
+                    "created_at": "2026-05-25T12:00:00+00:00",
+                    "source_fact_ids": ["fact-a", "fact-b"],
+                }
+            ],
+        ]
+
+        from context_service.engine.engagement import get_engagement_for_silo
+
+        result = await get_engagement_for_silo(
+            redis=mock_redis,
+            store=mock_store,
+            silo_id="silo-1",
+        )
+
+        assert result is not None
+        assert result["mode"] == "soft"
+        assert len(result["markers"]) == 1
+        m = result["markers"][0]
+        assert m["marker_id"] == "pb-silo-1"
+        assert m["marker_type"] == "ProposedBelief"
+        assert "dark mode" in m["summary"]
+        assert m["decision_required"] == "accept"
+        assert m["node_ids"] == ["fact-a", "fact-b"]
+
+    @pytest.mark.asyncio
+    async def test_includes_both_markers_and_proposed_beliefs(
+        self, mock_store, mock_redis
+    ):
+        """Both Contradiction markers and ProposedBeliefs must appear in result."""
+        mock_store.execute_query.side_effect = [
+            # get_all_pending_markers returns one marker ID
+            [{"id": "marker-c1"}],
+            # get_marker_details returns the full marker
+            [
+                {
+                    "id": "marker-c1",
+                    "marker_type": "Contradiction",
+                    "status": "pending",
+                    "detected_at": "2026-05-25T10:00:00+00:00",
+                    "about_ids": ["node-a", "node-b"],
+                    "node_a_id": "node-a",
+                    "node_b_id": "node-b",
+                }
+            ],
+            # GET_PROPOSED_BELIEFS_FOR_SILO
+            [
+                {
+                    "proposed_belief_id": "pb-s1",
+                    "content": "A system belief",
+                    "confidence": 0.8,
+                    "created_at": "2026-05-25T11:00:00+00:00",
+                    "source_fact_ids": ["fact-1"],
+                }
+            ],
+        ]
+
+        from context_service.engine.engagement import get_engagement_for_silo
+
+        result = await get_engagement_for_silo(
+            redis=mock_redis,
+            store=mock_store,
+            silo_id="silo-1",
+        )
+
+        assert result is not None
+        assert len(result["markers"]) == 2
+        types = {m["marker_type"] for m in result["markers"]}
+        assert types == {"Contradiction", "ProposedBelief"}
+
+    @pytest.mark.asyncio
+    async def test_proposed_belief_query_failure_graceful(
+        self, mock_store, mock_redis
+    ):
+        """Failure in ProposedBelief query should not break marker results."""
+        mock_store.execute_query.side_effect = [
+            # get_all_pending_markers returns one marker ID
+            [{"id": "marker-c1"}],
+            # get_marker_details returns the full marker
+            [
+                {
+                    "id": "marker-c1",
+                    "marker_type": "Contradiction",
+                    "status": "pending",
+                    "detected_at": "2026-05-25T10:00:00+00:00",
+                    "about_ids": ["node-a", "node-b"],
+                    "node_a_id": "node-a",
+                    "node_b_id": "node-b",
+                }
+            ],
+            # GET_PROPOSED_BELIEFS_FOR_SILO fails
+            Exception("DB error"),
+        ]
+
+        from context_service.engine.engagement import get_engagement_for_silo
+
+        result = await get_engagement_for_silo(
+            redis=mock_redis,
+            store=mock_store,
+            silo_id="silo-1",
+        )
+
+        assert result is not None
+        assert len(result["markers"]) == 1
+        assert result["markers"][0]["marker_type"] == "Contradiction"

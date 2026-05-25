@@ -20,8 +20,10 @@ async def _tick(
     silo_id: str,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
-    from context_service.engine.engagement import get_engagement_for_about_set
-    from context_service.engine.markers import get_all_pending_markers, get_marker_details
+    from context_service.engine.engagement import (
+        get_engagement_for_about_set,
+        get_engagement_for_silo,
+    )
     from context_service.mcp.server import get_context_service, get_redis
 
     ctx = get_context_service()
@@ -42,31 +44,12 @@ async def _tick(
             about_ids=about_hint,
         )
     else:
-        # No hint: surface all pending markers for the silo
-        marker_ids = await get_all_pending_markers(store, silo_id)
-        if not marker_ids:
-            engagement = None
-        else:
-            from context_service.engine.engagement import (
-                _build_summary,
-                _get_decision_required,
-            )
-
-            marker_details = await get_marker_details(store, silo_id, marker_ids)
-            markers_out: list[dict[str, Any]] = []
-            for m in marker_details:
-                if m.get("status") != "pending":
-                    continue
-                marker_type = m.get("marker_type", "")
-                markers_out.append({
-                    "marker_id": str(m.get("id", "")),
-                    "marker_type": marker_type,
-                    "summary": _build_summary(m),
-                    "node_ids": m.get("about_ids", []),
-                    "detected_at": m.get("detected_at", ""),
-                    "decision_required": _get_decision_required(marker_type),
-                })
-            engagement = {"mode": "soft", "markers": markers_out} if markers_out else None
+        # No hint: surface all pending markers and ProposedBeliefs for the silo
+        engagement = await get_engagement_for_silo(
+            redis=redis,
+            store=store,
+            silo_id=silo_id,
+        )
 
     return {"engagement": engagement}
 

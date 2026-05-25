@@ -46,8 +46,8 @@ class TestTickInternal:
                 return_value=mock_redis_client,
             ),
             patch(
-                "context_service.engine.markers.get_all_pending_markers",
-                new=AsyncMock(return_value=[]),
+                "context_service.engine.engagement.get_engagement_for_silo",
+                new=AsyncMock(return_value=None),
             ),
         ):
             from context_service.mcp.tools.tick import _tick
@@ -61,17 +61,19 @@ class TestTickInternal:
         self, mock_context_service, mock_redis_client
     ):
         """When pending markers exist, engagement payload should be returned."""
-        marker_details = [
-            {
-                "id": "marker-1",
-                "marker_type": "Contradiction",
-                "status": "pending",
-                "detected_at": "2026-05-25T10:00:00Z",
-                "about_ids": ["node-a", "node-b"],
-                "node_a_id": "node-a",
-                "node_b_id": "node-b",
-            }
-        ]
+        expected_engagement = {
+            "mode": "soft",
+            "markers": [
+                {
+                    "marker_id": "marker-1",
+                    "marker_type": "Contradiction",
+                    "summary": "Contradiction between node-a and node-b",
+                    "node_ids": ["node-a", "node-b"],
+                    "detected_at": "2026-05-25T10:00:00Z",
+                    "decision_required": "dismiss",
+                }
+            ],
+        }
 
         with (
             patch(
@@ -83,12 +85,8 @@ class TestTickInternal:
                 return_value=mock_redis_client,
             ),
             patch(
-                "context_service.engine.markers.get_all_pending_markers",
-                new=AsyncMock(return_value=["marker-1"]),
-            ),
-            patch(
-                "context_service.engine.markers.get_marker_details",
-                new=AsyncMock(return_value=marker_details),
+                "context_service.engine.engagement.get_engagement_for_silo",
+                new=AsyncMock(return_value=expected_engagement),
             ),
         ):
             from context_service.mcp.tools.tick import _tick
@@ -103,6 +101,51 @@ class TestTickInternal:
         assert m["marker_id"] == "marker-1"
         assert m["marker_type"] == "Contradiction"
         assert m["decision_required"] == "dismiss"
+
+    @pytest.mark.asyncio
+    async def test_tick_no_hint_includes_proposed_belief(
+        self, mock_context_service, mock_redis_client
+    ):
+        """No-hint path must surface ProposedBelief markers via get_engagement_for_silo."""
+        expected_engagement = {
+            "mode": "soft",
+            "markers": [
+                {
+                    "marker_id": "pb-1",
+                    "marker_type": "ProposedBelief",
+                    "summary": "System synthesized belief: Users prefer dark mode",
+                    "node_ids": ["fact-1"],
+                    "detected_at": "2026-05-25T12:00:00Z",
+                    "decision_required": "accept",
+                }
+            ],
+        }
+
+        with (
+            patch(
+                "context_service.mcp.server.get_context_service",
+                return_value=mock_context_service,
+            ),
+            patch(
+                "context_service.mcp.server.get_redis",
+                return_value=mock_redis_client,
+            ),
+            patch(
+                "context_service.engine.engagement.get_engagement_for_silo",
+                new=AsyncMock(return_value=expected_engagement),
+            ),
+        ):
+            from context_service.mcp.tools.tick import _tick
+
+            result = await _tick(about_hint=None, silo_id="silo-1")
+
+        assert result["engagement"] is not None
+        engagement = result["engagement"]
+        assert len(engagement["markers"]) == 1
+        m = engagement["markers"][0]
+        assert m["marker_type"] == "ProposedBelief"
+        assert m["decision_required"] == "accept"
+        assert m["marker_id"] == "pb-1"
 
     @pytest.mark.asyncio
     async def test_tick_with_about_hint_filters_correctly(
@@ -193,19 +236,7 @@ class TestTickInternal:
     async def test_tick_filters_non_pending_markers(
         self, mock_context_service, mock_redis_client
     ):
-        """Markers that are not 'pending' are excluded from results."""
-        marker_details = [
-            {
-                "id": "marker-resolved",
-                "marker_type": "Contradiction",
-                "status": "resolved",
-                "detected_at": "2026-05-25T10:00:00Z",
-                "about_ids": ["node-a"],
-                "node_a_id": "node-a",
-                "node_b_id": "node-b",
-            }
-        ]
-
+        """Resolved markers are excluded by get_engagement_for_silo; null returned."""
         with (
             patch(
                 "context_service.mcp.server.get_context_service",
@@ -216,12 +247,8 @@ class TestTickInternal:
                 return_value=mock_redis_client,
             ),
             patch(
-                "context_service.engine.markers.get_all_pending_markers",
-                new=AsyncMock(return_value=["marker-resolved"]),
-            ),
-            patch(
-                "context_service.engine.markers.get_marker_details",
-                new=AsyncMock(return_value=marker_details),
+                "context_service.engine.engagement.get_engagement_for_silo",
+                new=AsyncMock(return_value=None),
             ),
         ):
             from context_service.mcp.tools.tick import _tick
