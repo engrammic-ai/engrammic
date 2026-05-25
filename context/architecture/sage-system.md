@@ -46,17 +46,17 @@ Keeps the graph healthy over time.
 
 **Cadence:** Every 15 minutes
 
-### sage.validator - "The Verifier" (planned)
+### sage.validator - "The Verifier"
 
-Checks quality and tracks confidence.
+Checks quality and tracks confidence. Surfaces engagement markers for agent review.
 
 **Responsibilities:**
+- Contradiction detection (confirms flagged candidates via LLM, writes Contradiction markers)
+- Stale commitment detection (monitors Commitments for undermining evidence, writes StaleCommitment markers)
+- Marker cleanup (expires old unresolved markers)
 - Cascade review (belief invalidation propagation)
-- Contradiction detection
-- Confidence drift monitoring
-- Cross-silo consistency checks
 
-**Cadence:** TBD
+**Cadence:** Every 5 minutes
 
 ## Architecture
 
@@ -77,6 +77,11 @@ sage_groundskeeper_schedule (*/15 * * * *)
     |
     +-> query silos with stale heat/maintenance needs
     +-> trigger sage_groundskeeper_job per silo partition
+
+sage_validator_schedule (*/5 * * * *)
+    |
+    +-> query silos with pending validation work (flagged candidates, stale commitments)
+    +-> trigger sage_validator_job per silo partition
 ```
 
 Jobs use Dagster's partition system. Each silo is a partition, enabling parallel processing and isolated failure handling.
