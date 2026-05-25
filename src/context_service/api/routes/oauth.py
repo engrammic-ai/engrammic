@@ -175,6 +175,7 @@ async def authorize(
     "/oauth/callback",
     operation_id="oauth_callback",
     summary="Handle WorkOS OAuth callback",
+    response_model=None,
 )
 async def callback(
     code: str = Query(..., description="Authorization code from WorkOS"),
