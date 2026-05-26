@@ -292,11 +292,23 @@ DELETE /v1/admin/silos/{id}         # Delete silo
     "memgraph": "healthy",
     "qdrant": "healthy",
     "redis": "healthy",
-    "postgres": "healthy"
+    "postgres": "healthy",
+    "dagster": "healthy"
   },
+  "sage_mode": "active",
+  "recent_restarts": [],
   "version": "0.3.2"
 }
 ```
+
+**Status logic:**
+- `healthy`: All services up, no recent restarts
+- `degraded`: Some services down or restarted recently, core API still works
+- `unhealthy`: Critical services (memgraph, postgres) down
+
+**SAGE mode:**
+- `active`: LLM keys configured, full synthesis
+- `passive`: No LLM keys, storage + recall only
 
 **Diagnostic command:** Installer includes `engrammic doctor`
 
@@ -314,7 +326,27 @@ All checks passed.
 
 Reduces support burden by helping customers self-diagnose.
 
-### 10. Telemetry
+### 10. LLM Configuration
+
+SAGE pipeline (custodian, synthesizer, groundskeeper) requires LLM access. Self-hosted customers provide their own API keys.
+
+**Env vars:**
+```bash
+# .env
+LLM_PROVIDER=openai          # openai | anthropic | google-vertex
+LLM_API_KEY=sk-...           # API key for chosen provider
+LLM_MODEL=gpt-4o-mini        # Optional: override default model
+```
+
+**Behavior:**
+| Config state | SAGE behavior |
+|--------------|---------------|
+| Keys provided | Full SAGE: synthesis, dedup, contradiction detection |
+| Keys missing | Passive mode: storage + recall only, no LLM features |
+
+**Passive mode:** Core memory/recall works immediately. Customer can add LLM keys later for full SAGE. Logs info message on startup: "SAGE running in passive mode (no LLM_API_KEY)".
+
+### 11. Telemetry
 
 **Default:** Enabled (license terms include consent)
 
@@ -335,6 +367,28 @@ Reduces support burden by helping customers self-diagnose.
 
 **Behavior:** Fire-and-forget. If endpoint unreachable, log locally and continue. Never block operations.
 
+### 12. Resilience & OOM Handling
+
+**Container restart policy:** All services use `restart: unless-stopped`. Docker auto-restarts crashed containers.
+
+**Resource limits:** Compose file includes memory limits. If exceeded, container is OOM-killed and restarted.
+
+**Health degradation:** `/health` endpoint returns `degraded` status if:
+- Any service restarted in the last 5 minutes
+- Memory usage exceeds 80% of limit
+
+**Diagnostic detection:** `engrammic doctor` checks:
+```bash
+# Check for recent OOM events
+docker events --filter 'event=oom' --since 1h --until now
+
+# Output if OOM detected:
+⚠ Container engrammic-memgraph was OOM-killed 23 minutes ago
+  Recommendation: Increase memory limit in docker-compose.yml
+```
+
+**Graceful degradation:** If Dagster (SAGE) crashes, core API continues serving memory/recall. SAGE features return 503 until Dagster recovers.
+
 ## Implementation Phases
 
 ### Phase 1: Core Distribution (MVP for Luke)
@@ -344,8 +398,9 @@ Reduces support burden by helping customers self-diagnose.
 - [ ] Add auto-renewal endpoint (`license.engrammic.ai/renew`)
 - [ ] Create internal CLI repo with license generation
 - [ ] Extend installer for Docker flow + license key input
-- [ ] Add health endpoint with license status
-- [ ] Add `engrammic doctor` diagnostic command
+- [ ] Add health endpoint with license status + SAGE mode + restart detection
+- [ ] Add SAGE passive mode (graceful degradation when no LLM keys)
+- [ ] Add `engrammic doctor` diagnostic command with OOM detection
 
 ### Phase 2: Polish
 - [ ] Documentation for self-hosted setup
@@ -367,6 +422,8 @@ Reduces support burden by helping customers self-diagnose.
 4. **Auth MVP:** api_key strategy only; proxy/jwt deferred to Phase 3
 5. **Compose location:** Install to `./engrammic/` subdirectory (keeps things tidy)
 6. **MCP config:** Installer prints instructions; doesn't auto-write editor config (too many editors)
+7. **LLM for SAGE:** Customer provides API keys; passive mode (storage only) if not configured
+8. **OOM handling:** Docker restart policy + health degradation + doctor OOM detection
 
 ## Dependencies
 
