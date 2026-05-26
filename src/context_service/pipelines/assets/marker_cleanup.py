@@ -46,44 +46,38 @@ def marker_cleanup_asset(
     silo_id: str = context.partition_key
 
     async def _run() -> tuple[int, int]:
-        from context_service.db.queries import DELETE_EXPIRED_MARKERS, GET_EXPIRED_MARKERS
+        from context_service.db.queries import DELETE_EXPIRED_MARKERS_ATOMIC
 
         graph_store = await memgraph.store()
         redis_client = await redis.client()
         now = datetime.now(UTC).isoformat()
 
-        # Phase 1: collect expired marker IDs and their about_ids before deletion.
-        expired_rows = await graph_store.execute_query(
-            GET_EXPIRED_MARKERS,
+        # Atomic delete: query and delete in a single transaction to avoid race conditions.
+        # Returns marker IDs and about_ids for Redis cleanup.
+        deleted_rows = await graph_store.execute_query(
+            DELETE_EXPIRED_MARKERS_ATOMIC,
             {"silo_id": silo_id, "now": now},
         )
 
-        # Build a map from marker_id -> list[about_id] per marker type.
-        contradictions_to_clean: list[tuple[str, list[str]]] = []
-        stale_commitments_to_clean: list[tuple[str, list[str]]] = []
-        for row in expired_rows:
+        # Build counts and collect about_ids for Redis cleanup.
+        deleted_contradictions = 0
+        deleted_stale_commitments = 0
+        markers_to_clean: list[tuple[str, list[str]]] = []
+        for row in deleted_rows:
             marker_id = str(row["id"])
             about_ids: list[str] = list(row.get("about_ids") or [])
             marker_type = str(row.get("marker_type", ""))
+            markers_to_clean.append((marker_id, about_ids))
             if marker_type == "Contradiction":
-                contradictions_to_clean.append((marker_id, about_ids))
+                deleted_contradictions += 1
             else:
-                stale_commitments_to_clean.append((marker_id, about_ids))
+                deleted_stale_commitments += 1
 
-        # Phase 2: delete from graph.
-        result = await graph_store.execute_query(
-            DELETE_EXPIRED_MARKERS,
-            {"silo_id": silo_id, "now": now},
-        )
-        deleted_contradictions = int(result[0]["deleted_contradictions"]) if result else 0
-        deleted_stale_commitments = int(result[0]["deleted_stale_commitments"]) if result else 0
-
-        # Phase 3: remove deleted marker IDs from the Redis sorted-set index.
+        # Remove deleted marker IDs from the Redis sorted-set index.
         # Each about_id has its own key; ZREM the marker_id from every relevant key.
-        all_markers_to_clean = contradictions_to_clean + stale_commitments_to_clean
-        if all_markers_to_clean:
+        if markers_to_clean:
             pipe = redis_client.pipeline(transaction=False)
-            for marker_id, about_ids in all_markers_to_clean:
+            for marker_id, about_ids in markers_to_clean:
                 for node_id in about_ids:
                     key = _MARKER_INDEX_KEY.format(silo_id=silo_id, node_id=node_id)
                     pipe.zrem(key, marker_id)

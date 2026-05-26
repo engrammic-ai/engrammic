@@ -50,11 +50,18 @@ def snapshot_storage_gauges(context) -> dict[str, Any]:
             total = 0
             for silo_id in silo_ids:
                 # Query Memgraph for node counts
-                node_rows = await store.execute_query(_COUNT_NODES, {"silo_id": silo_id})
-                node_row = node_rows[0] if node_rows else {}
+                try:
+                    node_rows = await store.execute_query(_COUNT_NODES, {"silo_id": silo_id})
+                    node_row = node_rows[0] if node_rows else {}
+                except Exception:
+                    node_row = {}
+                    context.log.warning(f"telemetry_gauges: memgraph query failed for silo={silo_id}")
 
-                edge_rows = await store.execute_query(_COUNT_EDGES, {"silo_id": silo_id})
-                edge_count = edge_rows[0].get("edges", 0) if edge_rows else 0
+                try:
+                    edge_rows = await store.execute_query(_COUNT_EDGES, {"silo_id": silo_id})
+                    edge_count = edge_rows[0].get("edges", 0) if edge_rows else 0
+                except Exception:
+                    edge_count = 0
 
                 # Query Qdrant for collection stats
                 try:

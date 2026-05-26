@@ -160,7 +160,8 @@ def auto_tagging(
         if updates:
             try:
                 async with driver.session() as session:
-                    await session.run(BATCH_UPDATE_NODE_TAGS, updates=updates)
+                    result = await session.run(BATCH_UPDATE_NODE_TAGS, updates=updates)
+                    await result.consume()  # Ensure transaction commits
                 processed = len(updates)
             except Exception as exc:  # noqa: BLE001
                 context.log.warning(f"silo={silo_id} batch tag write failed: {exc}")

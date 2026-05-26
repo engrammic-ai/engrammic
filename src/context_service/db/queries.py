@@ -1435,8 +1435,10 @@ RETURN count(pb) AS pending_count
 DELETE_EXPIRED_PROPOSALS = """
 MATCH (pb:ProposedBelief {silo_id: $silo_id, status: 'pending'})
 WHERE pb.expires_at IS NOT NULL AND pb.expires_at < $now
-DETACH DELETE pb
-RETURN count(pb) AS deleted_count
+WITH pb
+WITH count(pb) AS deleted_count, collect(pb) AS to_delete
+FOREACH (p IN to_delete | DETACH DELETE p)
+RETURN deleted_count
 """
 
 GET_RECENTLY_REJECTED_PROPOSAL_FOR_CLUSTER = """
@@ -1648,16 +1650,43 @@ DELETE_EXPIRED_MARKERS = """
 CALL {
     MATCH (c:Contradiction {silo_id: $silo_id})
     WHERE c.expires_at IS NOT NULL AND c.expires_at < $now
-    DETACH DELETE c
-    RETURN count(c) AS deleted_contradictions
+    WITH c
+    WITH count(c) AS cnt, collect(c) AS to_delete
+    FOREACH (n IN to_delete | DETACH DELETE n)
+    RETURN cnt AS deleted_contradictions
 }
 CALL {
     MATCH (sc:StaleCommitment {silo_id: $silo_id})
     WHERE sc.expires_at IS NOT NULL AND sc.expires_at < $now
-    DETACH DELETE sc
-    RETURN count(sc) AS deleted_stale_commitments
+    WITH sc
+    WITH count(sc) AS cnt, collect(sc) AS to_delete
+    FOREACH (n IN to_delete | DETACH DELETE n)
+    RETURN cnt AS deleted_stale_commitments
 }
 RETURN deleted_contradictions, deleted_stale_commitments
+"""
+
+# Atomic delete+return for marker cleanup (race-condition safe)
+# Combines GET_EXPIRED_MARKERS and DELETE_EXPIRED_MARKERS into single atomic query.
+# Returns about_ids for Redis cleanup before deleting the nodes.
+DELETE_EXPIRED_MARKERS_ATOMIC = """
+CALL {
+    MATCH (c:Contradiction {silo_id: $silo_id})
+    WHERE c.expires_at IS NOT NULL AND c.expires_at < $now
+    WITH c, c.id AS id, c.about_ids AS about_ids
+    DETACH DELETE c
+    RETURN id, 'Contradiction' AS marker_type, about_ids
+}
+RETURN id, marker_type, about_ids
+UNION ALL
+CALL {
+    MATCH (sc:StaleCommitment {silo_id: $silo_id})
+    WHERE sc.expires_at IS NOT NULL AND sc.expires_at < $now
+    WITH sc, sc.id AS id, sc.about_ids AS about_ids
+    DETACH DELETE sc
+    RETURN id, 'StaleCommitment' AS marker_type, about_ids
+}
+RETURN id, marker_type, about_ids
 """
 
 # ---------------------------------------------------------------------------

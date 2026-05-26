@@ -90,7 +90,7 @@ def custodian_finalize(
             if not commitment_chains:
                 continue
 
-            distinct_agents = len({c["produced_by_agent_id"] for c in commitment_chains})
+            distinct_agents = len({c.get("produced_by_agent_id") for c in commitment_chains if c.get("produced_by_agent_id")})
             if distinct_agents < 2:
                 continue
 

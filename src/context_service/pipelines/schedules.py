@@ -103,6 +103,8 @@ LIMIT 50
 
 def _fetch_silo_ids(memgraph: MemgraphResource) -> list[str]:
     """Fetch all silo IDs with documents."""
+    import structlog
+
     from context_service.pipelines.utils import run_async
 
     async def _run() -> list[str]:
@@ -113,7 +115,12 @@ def _fetch_silo_ids(memgraph: MemgraphResource) -> list[str]:
         rows = await client.execute_query(_LIST_ACTIVE_SILOS, {})
         return [str(r["silo_id"]) for r in rows if r.get("silo_id")]
 
-    return list(run_async(_run()))
+    try:
+        return list(run_async(_run()))
+    except Exception:
+        log = structlog.get_logger()
+        log.warning("schedule_silo_fetch_failed", query_preview=_LIST_ACTIVE_SILOS[:50])
+        return []
 
 
 def _fetch_silos_with_pending_work(
@@ -121,6 +128,8 @@ def _fetch_silos_with_pending_work(
     query: str,
 ) -> list[str]:
     """Fetch silo IDs that have pending work based on query."""
+    import structlog
+
     from context_service.pipelines.utils import run_async
 
     async def _run() -> list[str]:
@@ -131,7 +140,12 @@ def _fetch_silos_with_pending_work(
         rows = await client.execute_query(query, {})
         return [str(r["silo_id"]) for r in rows if r.get("silo_id")]
 
-    return list(run_async(_run()))
+    try:
+        return list(run_async(_run()))
+    except Exception:
+        log = structlog.get_logger()
+        log.warning("schedule_silo_fetch_failed", query_preview=query[:50])
+        return []
 
 
 def _ensure_partition_exists(

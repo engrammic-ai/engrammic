@@ -116,12 +116,18 @@ def belief_merge_asset(
         merged_count = 0
         skipped_count = 0
         merged_ids: list[str] = []
+        merged_set: set[str] = set()
 
         for belief1_id, belief2_id, similarity in pairs:
+            if belief1_id in merged_set or belief2_id in merged_set:
+                skipped_count += 1
+                continue
             try:
                 source_beliefs = [beliefs_by_id[belief1_id], beliefs_by_id[belief2_id]]
                 merged_id = await merge_beliefs(store, silo_id, source_beliefs, llm_client)
                 merged_ids.append(merged_id)
+                merged_set.add(belief1_id)
+                merged_set.add(belief2_id)
                 merged_count += 1
                 context.log.info(
                     f"beliefs_merged pair=({belief1_id}, {belief2_id}) similarity={similarity:.3f} "

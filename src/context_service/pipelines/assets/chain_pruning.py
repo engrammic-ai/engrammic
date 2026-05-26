@@ -89,7 +89,8 @@ def chain_pruning(
 
     try:
         silo_id: str = context.partition_key
-    except Exception:
+    except AttributeError:
+        logger.warning("chain_pruning: no partition key, using default")
         silo_id = "default"
 
     result = _run_async(_prune_chains(memgraph, qdrant, silo_id, max_length))

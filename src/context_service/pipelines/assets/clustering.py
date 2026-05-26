@@ -58,30 +58,29 @@ def clustering(
 
         mg_client = await memgraph.store()
         cluster_qdrant = qdrant.qdrant_store()
-
-        redis_conn = await redis.client()
-        job_store = ClusteringJobStore(RedisClient(redis_conn))
-
-        llm_client = llm.get_client()
-        embedding_client = embedding.get_client()
-
-        service = ClusteringService(
-            memgraph=mg_client,
-            llm=llm_client,
-            job_store=job_store,
-            embedding=embedding_client,
-            cluster_qdrant=cluster_qdrant,
-        )
-
-        job = ClusteringJob(
-            id=str(uuid.uuid4()),
-            silo_id=silo_id,
-            status=ClusteringStatus.PENDING,
-        )
-
-        from primitives.protocols import Layer
-
         try:
+            redis_conn = await redis.client()
+            job_store = ClusteringJobStore(RedisClient(redis_conn))
+
+            llm_client = llm.get_client()
+            embedding_client = embedding.get_client()
+
+            service = ClusteringService(
+                memgraph=mg_client,
+                llm=llm_client,
+                job_store=job_store,
+                embedding=embedding_client,
+                cluster_qdrant=cluster_qdrant,
+            )
+
+            job = ClusteringJob(
+                id=str(uuid.uuid4()),
+                silo_id=silo_id,
+                status=ClusteringStatus.PENDING,
+            )
+
+            from primitives.protocols import Layer
+
             await service.run_clustering(silo_id, job, target_layers=[Layer.KNOWLEDGE])
         finally:
             await cluster_qdrant.close()
