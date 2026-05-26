@@ -39,6 +39,20 @@ from context_service.telemetry.tracing import instrument_fastapi, setup_tracing
 logger = get_logger(__name__)
 
 
+async def _periodic_version_check(interval_hours: int = 24) -> None:
+    """Background task to periodically check version."""
+    from context_service.license.version_check import check_version
+
+    while True:
+        await asyncio.sleep(interval_hours * 3600)
+        try:
+            await check_version()
+        except SystemExit:
+            pass  # Don't exit from background task, just log
+        except Exception as e:
+            logger.warning("periodic_version_check_failed", error=str(e))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage application lifespan."""
@@ -218,6 +232,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             interval_hours=settings.telemetry.beacon_interval_hours,
         )
         await beacon.start()
+
+        # Start periodic version check (every 24h)
+        asyncio.create_task(_periodic_version_check())
 
     yield
 
