@@ -374,16 +374,30 @@ Expected: FAIL with "No module named 'context_service.license'"
 # src/context_service/license/keys.py
 """Embedded public key for license validation."""
 
-# Copy from ../cli/keys/public.pem
-# This is the Ed25519 public key used to verify license signatures
+import os
+from pathlib import Path
+
+# IMPORTANT: Replace this placeholder with the actual public key from ../cli/keys/public.pem
+# The service will fail to start if this placeholder is not replaced.
+_PUBLIC_KEY_PLACEHOLDER = "REPLACE_WITH_ACTUAL_PUBLIC_KEY"
+
 PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEA... (paste actual key from ../cli/keys/public.pem)
+MCowBQYDK2VwAyEA_REPLACE_WITH_ACTUAL_PUBLIC_KEY_CONTENT_HERE
 -----END PUBLIC KEY-----
 """
 
 
 def get_public_key_pem() -> str:
-    """Return the embedded public key PEM."""
+    """Return the embedded public key PEM.
+    
+    Raises:
+        RuntimeError: If the placeholder was not replaced with actual key.
+    """
+    if _PUBLIC_KEY_PLACEHOLDER in PUBLIC_KEY_PEM or "REPLACE_WITH" in PUBLIC_KEY_PEM:
+        raise RuntimeError(
+            "License public key not configured! "
+            "Copy the key from ../cli/keys/public.pem to src/context_service/license/keys.py"
+        )
     return PUBLIC_KEY_PEM.strip()
 ```
 
@@ -726,6 +740,13 @@ def check_license_on_startup() -> LicenseInfo | None:
             customer=info.customer,
         )
 
+    # Log SAGE mode based on LLM configuration
+    if not settings.llm_api_key:
+        logger.info(
+            "sage_passive_mode",
+            msg="SAGE running in passive mode (no LLM_API_KEY). Storage and recall available, synthesis disabled.",
+        )
+
     return info
 ```
 
@@ -785,6 +806,8 @@ git commit -m "feat: add license validation at application startup"
 ---
 
 ## Task 5: Health Endpoint - License Status
+
+**Note:** Memory usage monitoring (`memory` field) is best-effort. Getting container memory stats from inside a container requires Docker socket access (`/var/run/docker.sock` mount). For MVP, we include the model but return `null` for memory. Full implementation deferred to when we add an optional sidecar or socket mount.
 
 **Files:**
 - Modify: `src/context_service/api/routes/health.py`
@@ -1107,6 +1130,8 @@ git commit -m "feat: add self-hosted Docker Compose bundle with lite defaults"
 ---
 
 ## Task 7: Make GCP Artifact Registry Public
+
+**Priority:** Do this early (after Task 1) so you can test `docker pull` before other tasks reference the images.
 
 **Files:**
 - No code changes, infrastructure only
@@ -1794,39 +1819,34 @@ git commit -m "feat: add engrammic doctor diagnostic command"
 
 ---
 
-## Task 11: License Renewal Endpoint (Cloud Run)
+## Task 11: License Renewal Endpoint (in context-service)
 
-Deploy a simple Cloud Run service for license renewal. This can be a minimal FastAPI app.
+Add renewal endpoint to existing context-service instead of separate service. Deployed at `license.engrammic.ai` via Cloud Run domain mapping.
 
 **Files:**
-- Create: `../license-service/main.py`
-- Create: `../license-service/Dockerfile`
-- Create: `../license-service/cloudbuild.yaml`
+- Create: `src/context_service/api/routes/license.py`
+- Modify: `src/context_service/api/app.py` (mount router)
 
-- [ ] **Step 1: Create license-service directory**
-
-```bash
-mkdir -p ../license-service
-```
-
-- [ ] **Step 2: Create main.py**
+- [ ] **Step 1: Create license router**
 
 ```python
-# ../license-service/main.py
-"""License renewal endpoint."""
+# src/context_service/api/routes/license.py
+"""License renewal endpoint for self-hosted customers."""
 
 import os
 from datetime import datetime, timedelta, timezone
 
 import jwt
 from cryptography.hazmat.primitives import serialization
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 
-app = FastAPI(title="Engrammic License Service")
+from context_service.config.logging import get_logger
 
-# Load private key from Secret Manager or env
-PRIVATE_KEY_PEM = os.environ.get("LICENSE_PRIVATE_KEY", "")
+logger = get_logger(__name__)
+
+router = APIRouter(prefix="/license", tags=["license"])
+
 ISSUER = "engrammic"
 KEY_PREFIX = "ENGR_"
 
@@ -1835,21 +1855,20 @@ class RenewalResponse(BaseModel):
     key: str
 
 
-class ErrorResponse(BaseModel):
-    error: str
-
-
-@app.post("/renew", response_model=RenewalResponse)
+@router.post("/renew", response_model=RenewalResponse)
 async def renew_license(authorization: str = Header(...)) -> RenewalResponse:
-    """Renew a license key."""
+    """Renew a license key. Called by self-hosted containers."""
+    private_key_pem = os.environ.get("LICENSE_PRIVATE_KEY")
+    if not private_key_pem:
+        raise HTTPException(status_code=503, detail="Renewal not configured")
+
     if not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Invalid authorization")
 
-    old_key = authorization[7:]  # Strip "Bearer "
+    old_key = authorization[7:]
     if old_key.startswith(KEY_PREFIX):
         old_key = old_key[len(KEY_PREFIX):]
 
-    # Decode without verification to get customer info
     try:
         payload = jwt.decode(old_key, options={"verify_signature": False})
     except jwt.DecodeError:
@@ -1859,12 +1878,11 @@ async def renew_license(authorization: str = Header(...)) -> RenewalResponse:
     if not customer:
         raise HTTPException(status_code=400, detail="Invalid license key")
 
-    # TODO: Check customer status in database
-    # For now, always renew if key is valid format
+    # TODO: Check customer status in database (payment active, not revoked)
+    # For MVP, always renew if key format is valid
 
-    # Generate new 90-day key
     private_key = serialization.load_pem_private_key(
-        PRIVATE_KEY_PEM.encode(), password=None
+        private_key_pem.encode(), password=None
     )
 
     now = datetime.now(timezone.utc)
@@ -1878,50 +1896,46 @@ async def renew_license(authorization: str = Header(...)) -> RenewalResponse:
     }
 
     new_token = jwt.encode(new_payload, private_key, algorithm="EdDSA")
+    logger.info("license_renewed", customer=customer)
     return RenewalResponse(key=f"{KEY_PREFIX}{new_token}")
-
-
-@app.get("/health")
-async def health() -> dict:
-    return {"status": "ok"}
 ```
 
-- [ ] **Step 3: Create Dockerfile**
+- [ ] **Step 2: Mount router in app.py**
 
-```dockerfile
-# ../license-service/Dockerfile
-FROM python:3.12-slim
+```python
+# In src/context_service/api/app.py, add:
+from context_service.api.routes.license import router as license_router
 
-WORKDIR /app
-
-RUN pip install --no-cache-dir fastapi uvicorn pyjwt cryptography
-
-COPY main.py .
-
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+# In create_app() or wherever routers are mounted:
+app.include_router(license_router)
 ```
 
-- [ ] **Step 4: Create cloudbuild.yaml**
+- [ ] **Step 3: Add LICENSE_PRIVATE_KEY to hosted deployment**
 
-```yaml
-# ../license-service/cloudbuild.yaml
-steps:
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'europe-north1-docker.pkg.dev/engrammic/engrammic/license-service:$SHORT_SHA', '.']
+```bash
+# Store private key in Secret Manager
+gcloud secrets create license-private-key --data-file=../cli/keys/private.pem
 
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'europe-north1-docker.pkg.dev/engrammic/engrammic/license-service:$SHORT_SHA']
+# Reference in Cloud Run
+gcloud run services update context-service \
+  --update-secrets=LICENSE_PRIVATE_KEY=license-private-key:latest
+```
 
-  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
-    entrypoint: gcloud
-    args:
-      - 'run'
-      - 'deploy'
-      - 'license-service'
-      - '--image=europe-north1-docker.pkg.dev/engrammic/engrammic/license-service:$SHORT_SHA'
-      - '--region=europe-north1'
-      - '--platform=managed'
-      - '--allow-unauthenticated'
+- [ ] **Step 4: Map license.engrammic.ai domain**
+
+```bash
+gcloud run domain-mappings create \
+  --service=context-service \
+  --domain=license.engrammic.ai \
+  --region=europe-north1
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/context_service/api/routes/license.py
+git commit -m "feat: add license renewal endpoint"
+```
 ```
 
 - [ ] **Step 5: Deploy**
@@ -1933,25 +1947,11 @@ gcloud builds submit --config=cloudbuild.yaml
 
 - [ ] **Step 6: Map custom domain**
 
-```bash
-gcloud run domain-mappings create \
-  --service=license-service \
-  --domain=license.engrammic.ai \
-  --region=europe-north1
-```
-
-- [ ] **Step 7: Commit**
-
-```bash
-cd ../license-service
-git init
-git add .
-git commit -m "feat: license renewal Cloud Run service"
-```
-
 ---
 
-## Task 12: Installer - Scale Command
+## Task 12: Installer - Scale Command (Simplified)
+
+Shows resource usage and provides scaling guidance. Does NOT auto-edit YAML (fragile regex parsing). User manually edits docker-compose.yml following printed recommendations.
 
 **Files:**
 - Create: `../mcp-client/installer-cli/src/scale.rs`
@@ -1962,22 +1962,12 @@ git commit -m "feat: license renewal Cloud Run service"
 
 ```rust
 // ../mcp-client/installer-cli/src/scale.rs
-//! Resource scaling for self-hosted containers.
+//! Resource scaling guidance for self-hosted containers.
 
 use anyhow::{bail, Result};
 use colored::Colorize;
 use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
 use std::process::Command;
-
-const SCALE_FACTOR: f64 = 1.2; // 20% increase
-
-/// Container memory configuration.
-struct ContainerConfig {
-    name: &'static str,
-    current_mb: u64,
-}
 
 /// Get current memory usage from docker stats.
 fn get_memory_usage() -> Result<HashMap<String, (u64, u64)>> {
@@ -1986,7 +1976,7 @@ fn get_memory_usage() -> Result<HashMap<String, (u64, u64)>> {
         .output()?;
 
     if !output.status.success() {
-        bail!("docker stats failed");
+        bail!("docker stats failed - are containers running?");
     }
 
     let mut usage = HashMap::new();
@@ -1996,7 +1986,6 @@ fn get_memory_usage() -> Result<HashMap<String, (u64, u64)>> {
         let parts: Vec<&str> = line.split('\t').collect();
         if parts.len() >= 2 {
             let name = parts[0].to_string();
-            // Parse "890MiB / 1GiB" format
             if let Some((used, limit)) = parse_mem_usage(parts[1]) {
                 usage.insert(name, (used, limit));
             }
@@ -2008,9 +1997,7 @@ fn get_memory_usage() -> Result<HashMap<String, (u64, u64)>> {
 
 fn parse_mem_usage(s: &str) -> Option<(u64, u64)> {
     let parts: Vec<&str> = s.split(" / ").collect();
-    if parts.len() != 2 {
-        return None;
-    }
+    if parts.len() != 2 { return None; }
     let used = parse_mem_value(parts[0])?;
     let limit = parse_mem_value(parts[1])?;
     Some((used, limit))
@@ -2033,112 +2020,40 @@ pub fn show_status() -> Result<()> {
     println!();
     println!("{}", "Current resource usage:".bold());
     println!();
-    println!("  {:<18} {:<10} {:<10} {}", "Container", "Used", "Limit", "Usage");
+    println!("  {:<20} {:<10} {:<10} {}", "Container", "Used", "Limit", "Usage");
 
     let usage = get_memory_usage()?;
+    let mut high_usage = Vec::new();
 
     for (name, (used, limit)) in &usage {
         let percent = (*used as f64 / *limit as f64 * 100.0) as u32;
         let warning = if percent >= 80 { " ⚠".yellow().to_string() } else { "".to_string() };
         println!(
-            "  {:<18} {:<10} {:<10} {}%{}",
-            name,
-            format!("{}MB", used),
-            format!("{}MB", limit),
-            percent,
-            warning
+            "  {:<20} {:<10} {:<10} {}%{}",
+            name, format!("{}MB", used), format!("{}MB", limit), percent, warning
         );
-    }
-
-    let any_high = usage.values().any(|(u, l)| (*u as f64 / *l as f64) >= 0.8);
-    if any_high {
-        println!();
-        println!("{}", "Recommendation: Run 'engrammic scale up' to increase limits by 20%".yellow());
-    }
-
-    Ok(())
-}
-
-pub fn scale_up() -> Result<()> {
-    scale_resources(SCALE_FACTOR)
-}
-
-pub fn scale_down() -> Result<()> {
-    scale_resources(1.0 / SCALE_FACTOR)
-}
-
-fn scale_resources(factor: f64) -> Result<()> {
-    let compose_path = Path::new("docker-compose.yml");
-    if !compose_path.exists() {
-        bail!("docker-compose.yml not found in current directory");
-    }
-
-    let content = fs::read_to_string(compose_path)?;
-    let direction = if factor > 1.0 { "up" } else { "down" };
-    let percent = ((factor - 1.0).abs() * 100.0) as u32;
-
-    println!();
-    println!("{}", format!("Scaling {} all containers by {}%...", direction, percent).bold());
-
-    // Parse and update memory limits
-    let mut new_content = String::new();
-    for line in content.lines() {
-        if line.trim().starts_with("memory:") {
-            // Parse "memory: 512M" or "memory: 1G"
-            if let Some(new_line) = scale_memory_line(line, factor) {
-                let old_val = line.split(':').nth(1).unwrap_or("").trim();
-                let new_val = new_line.split(':').nth(1).unwrap_or("").trim();
-                println!("  {}: {} → {}", 
-                    line.split(':').next().unwrap_or("memory").trim(),
-                    old_val.dimmed(),
-                    new_val.green()
-                );
-                new_content.push_str(&new_line);
-            } else {
-                new_content.push_str(line);
-            }
-        } else {
-            new_content.push_str(line);
+        if percent >= 80 {
+            let new_limit = (*limit as f64 * 1.2) as u64;
+            high_usage.push((name.clone(), *limit, new_limit));
         }
-        new_content.push('\n');
     }
 
-    fs::write(compose_path, new_content)?;
-
-    println!();
-    println!("Restarting containers...");
-
-    let status = Command::new("docker")
-        .args(["compose", "up", "-d"])
-        .status()?;
-
-    if status.success() {
-        println!("{}", "Done. New limits active.".green());
+    if !high_usage.is_empty() {
+        println!();
+        println!("{}", "Containers near limit - recommended changes to docker-compose.yml:".yellow());
+        println!();
+        for (name, old, new) in &high_usage {
+            let service = name.trim_start_matches("engrammic-");
+            println!("  {}: memory: {}M → {}M", service, old, new);
+        }
+        println!();
+        println!("After editing, run: docker compose up -d");
     } else {
-        println!("{}", "Warning: docker compose up failed".yellow());
+        println!();
+        println!("{}", "All containers have healthy memory headroom.".green());
     }
 
     Ok(())
-}
-
-fn scale_memory_line(line: &str, factor: f64) -> Option<String> {
-    let indent = line.len() - line.trim_start().len();
-    let indent_str: String = " ".repeat(indent);
-
-    let value_part = line.split(':').nth(1)?.trim();
-
-    let (num, unit) = if value_part.ends_with('G') {
-        let n: f64 = value_part.trim_end_matches('G').parse().ok()?;
-        (n * 1024.0, "M") // Convert to MB for consistency
-    } else if value_part.ends_with('M') {
-        let n: f64 = value_part.trim_end_matches('M').parse().ok()?;
-        (n, "M")
-    } else {
-        return None;
-    };
-
-    let new_num = (num * factor).round() as u64;
-    Some(format!("{}memory: {}{}", indent_str, new_num, unit))
 }
 ```
 
@@ -2146,9 +2061,8 @@ fn scale_memory_line(line: &str, factor: f64) -> Option<String> {
 
 ```rust
 // In cli.rs Commands enum, add:
-    /// Scale container resources
-    Scale {
-        #[clap(subcommand)]
+    /// Show container resource usage and scaling recommendations
+    Scale,
         action: ScaleAction,
     },
 
@@ -2168,11 +2082,7 @@ pub enum ScaleAction {
 
 ```rust
 // In main() match, add:
-        Commands::Scale { action } => match action {
-            ScaleAction::Up => scale::scale_up(),
-            ScaleAction::Down => scale::scale_down(),
-            ScaleAction::Status => scale::show_status(),
-        },
+        Commands::Scale => scale::show_status(),
 
 // Add module declaration:
 mod scale;
@@ -2184,118 +2094,27 @@ mod scale;
 cd ../mcp-client/installer-cli
 cargo build --release
 
-# Test in an engrammic directory with docker-compose.yml
+# Test in an engrammic directory with running containers
 cd /path/to/engrammic
-/path/to/engrammic-install scale status
-/path/to/engrammic-install scale up
+/path/to/engrammic-install scale
 ```
+
+Expected output shows usage and recommendations if any container is above 80%.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add src/
-git commit -m "feat: add engrammic scale command for one-click resource scaling"
+git commit -m "feat: add engrammic scale command for resource monitoring"
 ```
 
 ---
 
-## Task 13: Optional CLI Installation
+## Task 13: Optional CLI Installation (DEFERRED)
 
-The installer should offer to install itself to PATH for ongoing management.
+**Status:** Deferred to post-MVP. Nice-to-have but not critical for Luke's use case.
 
-**Files:**
-- Modify: `../mcp-client/installer-cli/src/main.rs`
-
-- [ ] **Step 1: Add install_cli function**
-
-```rust
-fn install_cli_step(yes: bool) -> Result<()> {
-    let proceed = if yes {
-        true
-    } else {
-        Confirm::new("Install 'engrammic' CLI for ongoing management (doctor, scale, update)?")
-            .with_default(true)
-            .with_render_config(render_config())
-            .prompt()?
-    };
-
-    if !proceed {
-        println!("  {} Skipped CLI installation.", "-".dimmed());
-        return Ok(());
-    }
-
-    // Determine install location
-    let install_dir = if cfg!(target_os = "macos") || cfg!(target_os = "linux") {
-        dirs::home_dir()
-            .map(|h| h.join(".local/bin"))
-            .unwrap_or_else(|| PathBuf::from("/usr/local/bin"))
-    } else {
-        // Windows
-        dirs::home_dir()
-            .map(|h| h.join(".engrammic/bin"))
-            .unwrap_or_else(|| PathBuf::from("C:\\engrammic\\bin"))
-    };
-
-    std::fs::create_dir_all(&install_dir)?;
-
-    let cli_path = install_dir.join(if cfg!(windows) { "engrammic.exe" } else { "engrammic" });
-
-    // Copy current executable
-    let current_exe = std::env::current_exe()?;
-    std::fs::copy(&current_exe, &cli_path)?;
-
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&cli_path, std::fs::Permissions::from_mode(0o755))?;
-    }
-
-    println!(
-        "  {} Installed to {}",
-        "✓".green(),
-        cli_path.display().to_string().dimmed()
-    );
-
-    // Check if in PATH
-    let in_path = std::env::var("PATH")
-        .map(|p| p.contains(&install_dir.to_string_lossy().to_string()))
-        .unwrap_or(false);
-
-    if !in_path {
-        println!();
-        println!("Add to your PATH:");
-        if cfg!(target_os = "macos") || cfg!(target_os = "linux") {
-            println!("  echo 'export PATH=\"{}:$PATH\"' >> ~/.bashrc", install_dir.display());
-        }
-    }
-
-    Ok(())
-}
-```
-
-- [ ] **Step 2: Call from Docker install flow**
-
-In `install_docker_flow()`, after writing compose files:
-
-```rust
-    // Offer CLI installation for management
-    install_cli_step(false)?;
-```
-
-- [ ] **Step 3: Build and test**
-
-```bash
-cargo build --release
-./target/release/engrammic-install
-# Select Docker flow, should offer CLI install at the end
-```
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add src/main.rs
-git commit -m "feat: optional CLI installation to PATH for ongoing management"
-```
+For now, users run the installer binary directly from the download location or keep it in their engrammic directory. We can add PATH installation later if customers ask for it.
 
 ---
 
@@ -2310,21 +2129,21 @@ git commit -m "feat: optional CLI installation to PATH for ongoing management"
 
 ## Summary
 
-| Task | Component | Est. Time |
-|------|-----------|-----------|
-| 0 | Ed25519 keypair generation | 5 min |
-| 1 | Internal CLI license generation | 30 min |
-| 2 | License validator module | 45 min |
-| 3 | License settings | 15 min |
-| 4 | Startup license check | 30 min |
-| 5 | Health endpoint updates | 30 min |
-| 6 | Docker Compose bundle | 20 min |
-| 7 | GCP AR public | 10 min |
-| 8 | Auto-renewal background | 45 min |
-| 9 | Installer Docker flow (Rust) | 2 hr |
-| 10 | Installer doctor command | 1 hr |
-| 11 | License renewal endpoint | 1 hr |
-| 12 | Installer scale command | 45 min |
-| 13 | Optional CLI installation | 30 min |
+| Task | Component | Est. Time | Notes |
+|------|-----------|-----------|-------|
+| 0 | Ed25519 keypair generation | 5 min | |
+| 1 | Internal CLI license generation | 30 min | |
+| 2 | License validator module | 45 min | Fails loudly if key not configured |
+| 3 | License settings | 15 min | |
+| 4 | Startup license check + SAGE log | 30 min | Logs passive mode if no LLM key |
+| 5 | Health endpoint updates | 30 min | Memory monitoring best-effort |
+| 6 | Docker Compose bundle | 20 min | |
+| 7 | GCP AR public | 10 min | Do early! |
+| 8 | Auto-renewal background | 45 min | |
+| 9 | Installer Docker flow (Rust) | 2 hr | |
+| 10 | Installer doctor command | 1 hr | |
+| 11 | License renewal endpoint | 30 min | In context-service, not separate repo |
+| 12 | Installer scale command | 30 min | Status only, no auto-edit |
+| 13 | Optional CLI installation | - | **DEFERRED** |
 
-**Total estimated: ~8.5 hours**
+**Total estimated: ~7 hours** (reduced from 8.5 by simplifications)
