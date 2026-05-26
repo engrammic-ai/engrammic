@@ -124,6 +124,19 @@ jobs:
             --region ${{ env.REGION }} \
             --to-latest
 
+      - uses: actions/checkout@v4
+
+      - name: Sync compose file to VM
+        run: |
+          gcloud compute scp docker-compose.prod.yml \
+            engrammic-beta-stateful:/tmp/docker-compose.yml \
+            --zone ${{ env.REGION }}-a \
+            --tunnel-through-iap
+          gcloud compute ssh engrammic-beta-stateful \
+            --zone ${{ env.REGION }}-a \
+            --tunnel-through-iap \
+            --command "sudo mv /tmp/docker-compose.yml /opt/engrammic/docker-compose.yml"
+
       - name: Deploy to VM (Dagster + infra)
         run: |
           gcloud compute ssh engrammic-beta-stateful \
