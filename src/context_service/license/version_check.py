@@ -27,7 +27,7 @@ class VersionCheckResult(Enum):
 def _get_versions_url() -> str:
     """Get versions endpoint URL from settings."""
     settings = get_settings()
-    base_url = settings.telemetry.beacon_url.rstrip("/beacon").rstrip("/v1")
+    base_url = settings.telemetry.beacon_url.removesuffix("/beacon").removesuffix("/v1")
     return f"{base_url}/versions"
 
 
