@@ -1,0 +1,125 @@
+# CLAUDE.md
+
+## Repository
+
+`context-service` — Engrammic production backend. Lives in `delta-prime/` monorepo alongside `primitives/` (sibling at `../primitives`, editable path source via `[tool.uv.sources]`).
+
+## Stack
+
+Python 3.12+ / FastAPI / FastMCP / Memgraph / Qdrant / Redis / Dagster / structlog. Optional: Vertex AI, Gemini, Anthropic, OpenAI (`llm`, `embeddings`), WorkOS (`auth`).
+
+Two surfaces: **MCP server** (primary) + **FastAPI REST** (admin). Multi-tenancy via `silo_id`.
+
+## Commands
+
+All Python via `uv run`. See `justfile` for full list.
+
+```bash
+just install-dev   # uv sync --all-extras
+just check         # lint + typecheck (must pass before merge)
+just test          # pytest (takes args: just test -k name)
+just ci            # check + test (pre-push)
+just dev           # FastAPI with reload
+just up / down     # local stack (ASK BEFORE BUILDING)
+just db-migrate    # run migrations
+just dagster-web   # Dagster UI (SAGE jobs: custodian / synthesizer / groundskeeper)
+```
+
+## Concepts
+
+- **EAG** (Epistemic Augmented Generation) — generation paradigm
+- **CITE** (Context In Tiered Epistemology) — schema/architecture (see `primitives.schema.*`)
+- Four cognitive layers: Memory → Knowledge → Wisdom → Intelligence
+- **Meta-Memory** — provenance, time-travel, reflection (cross-cutting, not a 5th layer)
+
+## Key paths
+
+- `src/context_service/mcp/` — MCP server + tools (primary agent surface)
+- `src/context_service/engine/protocols.py` — storage interfaces (depend on this, not concrete stores)
+- `../primitives/docs/` — EAG paradigm docs
+- `context/architecture.md` — service architecture (surfaces, storage, SAGE pipeline)
+- `context/architecture/sage-system.md` — SAGE sub-agents (custodian, synthesizer, groundskeeper, validator)
+- `context/plans/` — active implementation plans
+- `context/brainstorm/2026-05-10-eag-agent-instructions.md` — cognitive guide for EAG usage
+- `skills/` — MCP skills for agent onboarding (copy to `~/.claude/skills/` to use)
+
+## Rules
+
+1. Always `uv run` (never system Python)
+2. `just check` must pass before merge (mypy strict + ruff)
+3. No emojis in code or docs
+4. Depend on `engine/protocols.py`, not concrete stores
+5. Check `context/plans/` before non-trivial work
+6. Never commit directly to `main`
+7. Primitives imports: `primitives.eag.*`, `primitives.schema.*`
+
+## Communication style
+
+1. No reflexive agreement - never start with "You're absolutely right!" or similar
+2. Question unclear requirements - ask for clarification when specs are ambiguous
+3. Suggest alternatives when a better approach exists, explain trade-offs
+4. Discuss before implementing - present approach and get confirmation for significant changes
+5. Push back on problematic requests - explain why something might be a bad idea
+
+## MCP tool surface
+
+Source of truth: `src/context_service/config/mcp_tools.yaml`. Names and descriptions are config, not code. The surface is intent/verb-based. The old `context_*` names are not the agent surface; do not reference them.
+
+| Tool | Maps to |
+|------|---------|
+| `remember` | memory (observation, no evidence) |
+| `learn` | knowledge (claim, evidence required) |
+| `believe` | wisdom (commitment, requires `about` nodes) |
+| `recall` | retrieval (query or node_id) |
+| `trace` | provenance |
+| `link` | typed relationship |
+| `reason` | intelligence (reasoning steps) |
+| `reflect` | meta-observation |
+| `hypothesize` | tentative belief (finalize with `commit`) |
+| `revise` | update tentative belief |
+| `commit` | crystallize hypotheses |
+| `forget` | request node deletion |
+| `patterns` | skills / workflow templates |
+
+## Belief architecture
+
+Two separate flows:
+
+**Agent reasoning (Intelligence layer):**
+```
+WorkingHypothesis -> crystallize -> Commitment (Wisdom)
+```
+
+**System synthesis (Wisdom layer):**
+```
+sage.synthesizer weak synthesis -> ProposedBelief -> accept/reject -> Belief
+```
+
+Agent-facing verbs: `hypothesize` then `commit`. ProposedBelief acceptance/rejection is handled internally by SAGE, not via agent-facing MCP tools.
+
+## Using EAG (for agents)
+
+When interacting with Engrammic MCP tools, use the `engrammic:eag-guide` skill for cognitive guidance on when/how to use each layer.
+
+**Quick heuristics:**
+- Memory: "Would I tell a colleague tomorrow?" If no, don't store.
+- Knowledge: "Do I have evidence?" If no, use Memory instead.
+- Wisdom: "Based on [facts], I believe [conclusion]." If you can't fill in [facts], it's a hunch, not a belief.
+- Meta: Record when your understanding changes.
+
+**Belief formation flow:**
+```
+Observe → Memory → Claim (with evidence) → Knowledge → Fact (corroborated) → Belief (synthesized) → Wisdom
+```
+
+See `context/brainstorm/2026-05-10-eag-agent-instructions.md` for full documentation.
+
+## Performance targets
+
+| Operation                        | Target    |
+|----------------------------------|-----------|
+| `recall` (cached)            | < 20ms    |
+| `recall` (search)            | < 250ms   |
+| `recall` (graph depth 2)     | < 500ms   |
+| `remember` / `learn` (write) | < 300ms p95 |
+| `link`                       | < 100ms   |

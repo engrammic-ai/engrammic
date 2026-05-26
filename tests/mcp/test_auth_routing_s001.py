@@ -11,7 +11,6 @@ import inspect
 import pytest
 
 TOOL_MODULES = [
-    "context_service.mcp.tools.context_admin",
     "context_service.mcp.tools.context_get",
     "context_service.mcp.tools.context_graph",
     "context_service.mcp.tools.context_history",

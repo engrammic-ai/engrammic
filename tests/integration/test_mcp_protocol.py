@@ -26,9 +26,9 @@ EXPECTED_TOOLS = {
     "hypothesize",
     "revise",
     "commit",
-    "accept",
-    "reject",
     "forget",
+    "dismiss",
+    "tick",
 }
 
 _DEV_AUTH = AuthContext(

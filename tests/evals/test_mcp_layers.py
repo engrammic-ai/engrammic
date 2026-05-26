@@ -35,11 +35,6 @@ async def link(
     return call_result(raw)
 
 
-async def admin(client: Any, action: str, **kwargs: Any) -> dict[str, Any]:
-    raw = await client.call_tool("context_admin", {"action": action, **kwargs})
-    return call_result(raw)
-
-
 @pytest.mark.evals
 @pytest.mark.integration
 class TestMemoryLayer:
@@ -333,23 +328,3 @@ class TestTimeTravel:
             top_k=10,
         )
         assert "results" in results or "error" not in results
-
-
-@pytest.mark.evals
-@pytest.mark.integration
-class TestProvenance:
-    """Provenance tracking via context_admin."""
-
-    async def test_provenance_chain(self, mcp_client: Any) -> None:
-        doc = await store(mcp_client, "memory", "Source document content")
-        claim = await store(
-            mcp_client,
-            "knowledge",
-            "Derived claim from document",
-            evidence=[f"node:{doc['node_id']}"],
-            source_type="document",
-            confidence=0.9,
-        )
-
-        prov = await admin(mcp_client, "provenance", ref=claim["node_id"])
-        assert "chain" in prov or "root_sources" in prov or "error" not in prov

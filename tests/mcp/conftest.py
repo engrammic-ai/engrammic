@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-import context_service.mcp.tools.context_admin  # noqa: F401
 import context_service.mcp.tools.context_link  # noqa: F401
 import context_service.mcp.tools.context_recall  # noqa: F401
 import context_service.mcp.tools.context_store  # noqa: F401

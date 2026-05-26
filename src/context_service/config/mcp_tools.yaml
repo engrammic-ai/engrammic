@@ -79,14 +79,6 @@ tools:
     description: "Promote tentative hypotheses to permanent commitments."
     maps_to: crystallize
 
-  accept:
-    description: "Ratify a system-synthesized ProposedBelief, promoting it to an active Belief. Use when SAGE has surfaced a ProposedBelief you agree with. Optionally override the confidence on acceptance."
-    maps_to: wisdom
-
-  reject:
-    description: "Reject a system-synthesized ProposedBelief with an optional reason. The proposal is tombstoned (status='rejected') but preserved for audit. Use when SAGE has surfaced a ProposedBelief you do not endorse."
-    maps_to: wisdom
-
   forget:
     description: "Request deletion of a node. The node enters a cancel window before permanent deletion."
     maps_to: forget

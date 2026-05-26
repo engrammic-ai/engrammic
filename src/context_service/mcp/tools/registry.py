@@ -57,8 +57,6 @@ def register_tools(mcp: FastMCP) -> None:
     from context_service.mcp.tools import (
         believe,
         commit,
-        context_accept_belief,
-        context_reject_belief,
         dismiss,
         forget,
         hypothesize,
@@ -86,8 +84,6 @@ def register_tools(mcp: FastMCP) -> None:
         "hypothesize": hypothesize.register,
         "revise": revise.register,
         "commit": commit.register,
-        "accept": context_accept_belief.register,
-        "reject": context_reject_belief.register,
         "dismiss": dismiss.register,
         "tick": tick.register,
         "patterns": patterns.register,
