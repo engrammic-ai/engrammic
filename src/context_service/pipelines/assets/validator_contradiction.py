@@ -137,11 +137,17 @@ def validator_contradiction_asset(
 
             if not candidate_with_ids:
                 # Flag is malformed — clear it and move on.
-                with contextlib.suppress(Exception):
+                context.log.warning(
+                    f"validator_contradiction: malformed flag (empty candidate_with_ids) for node={node_a_id}"
+                )
+                errors += 1
+                try:
                     await client.execute_query(
                         CLEAR_CONTRADICTION_CANDIDATE_FLAGS,
                         {"node_id": node_a_id, "silo_id": silo_id},
                     )
+                except Exception as exc:
+                    context.log.error(f"Failed to clear malformed flag for node={node_a_id}: {exc}")
                 continue
 
             # Fetch peer content in one round trip.

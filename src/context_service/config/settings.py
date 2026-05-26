@@ -816,6 +816,7 @@ class ChainFeedbackConfig(BaseModel):
     evaluation_delay_minutes: int = Field(default=5, ge=1)
     min_subsequent_steps: int = Field(default=3, ge=1)
     max_wait_minutes: int = Field(default=30, ge=1)
+    usefulness_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
 
 
 class WeakLinksSettings(BaseModel):

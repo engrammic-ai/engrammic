@@ -63,7 +63,13 @@ def retention_sweep(
         silo_config: SiloConfig
         if rows and rows[0].get("silo_config"):
             raw = rows[0]["silo_config"]
-            data: dict[str, Any] = json.loads(raw) if isinstance(raw, str) else raw
+            try:
+                data: dict[str, Any] = json.loads(raw) if isinstance(raw, str) else raw
+            except json.JSONDecodeError:
+                context.log.warning(
+                    f"retention: malformed silo config for {silo_id}, using defaults"
+                )
+                data = {}
             silo_config = SiloConfig.from_metadata_dict(data)
         else:
             silo_config = SiloConfig()

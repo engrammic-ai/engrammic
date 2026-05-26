@@ -8,7 +8,7 @@ engine/tombstone.py.  The asset can be triggered manually via the Dagster UI
 import asyncio
 import concurrent.futures
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import dagster as dg
@@ -90,6 +90,8 @@ def causal_tombstone(
     parsed_created_before: datetime | None = None
     if created_before_str:
         parsed_created_before = datetime.fromisoformat(created_before_str)
+        if parsed_created_before.tzinfo is None:
+            parsed_created_before = parsed_created_before.replace(tzinfo=UTC)
 
     t0 = time.monotonic()
 

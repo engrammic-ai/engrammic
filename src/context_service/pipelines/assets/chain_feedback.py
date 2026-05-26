@@ -139,7 +139,7 @@ async def compute_chain_usefulness(delivery: dict[str, Any]) -> str | None:
 
     overlap = dtw_similarity(chain_steps, subsequent_steps)
 
-    if overlap > 0.7:
+    if overlap > config.usefulness_threshold:
         signal = "useful"
     elif await check_new_chain_created(
         session_id=delivery["session_id"],
@@ -163,7 +163,7 @@ def chain_usefulness_signals(context) -> dg.Output[dict[str, Any]]:  # type: ign
     """Analyze recent chain deliveries and compute implicit usefulness signals."""
     t0 = time.monotonic()
 
-    async def _run() -> tuple[int, int, int, int]:
+    async def _run() -> tuple[int, int, int, int, int]:
         from context_service.config.settings import get_settings
 
         config = get_settings().chain_feedback
@@ -187,9 +187,9 @@ def chain_usefulness_signals(context) -> dg.Output[dict[str, Any]]:  # type: ign
             except Exception as exc:
                 context.log.warning(f"Failed to process delivery {delivery['chain_id']}: {exc}")
 
-        return len(deliveries), processed, useful, not_useful
+        return len(deliveries), processed, useful, not_useful, unclear
 
-    deliveries_count, processed, useful, not_useful = _run_async(_run())
+    deliveries_count, processed, useful, not_useful, unclear = _run_async(_run())
     duration_s = time.monotonic() - t0
 
     context.log.info(
@@ -203,6 +203,7 @@ def chain_usefulness_signals(context) -> dg.Output[dict[str, Any]]:  # type: ign
             "processed": processed,
             "useful": useful,
             "not_useful": not_useful,
+            "unclear": unclear,
             "duration_s": duration_s,
         },
         metadata={
@@ -210,6 +211,7 @@ def chain_usefulness_signals(context) -> dg.Output[dict[str, Any]]:  # type: ign
             "processed": dg.MetadataValue.int(processed),
             "useful": dg.MetadataValue.int(useful),
             "not_useful": dg.MetadataValue.int(not_useful),
+            "unclear": dg.MetadataValue.int(unclear),
             "duration_s": dg.MetadataValue.float(duration_s),
         },
     )

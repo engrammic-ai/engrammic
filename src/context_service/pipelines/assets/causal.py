@@ -43,20 +43,6 @@ SKIP $skip
 LIMIT $batch_size
 """
 
-_FIND_DERIVED_EDGES = """
-MATCH (r:CAUSES {silo_id: $silo_id})
-WHERE $superseded_edge_id IN r.inferred_from_edge_ids
-  AND r.inferred = true
-RETURN r.id AS derived_edge_id
-"""
-
-_TOMBSTONE_DERIVED_EDGE = """
-MATCH ()-[r:CAUSES {id: $edge_id, silo_id: $silo_id}]->()
-SET r.invalidated = true,
-    r.invalidated_at = $invalidated_at,
-    r.invalidation_reason = $reason
-"""
-
 _UPSERT_INFERRED_CAUSES = """
 MATCH (a {{id: $source_id, silo_id: $silo_id}})
 MATCH (c {{id: $target_id, silo_id: $silo_id}})

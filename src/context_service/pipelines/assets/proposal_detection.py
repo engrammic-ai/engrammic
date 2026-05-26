@@ -2,6 +2,7 @@
 
 import asyncio
 import concurrent.futures
+import json
 from typing import Any
 
 import dagster as dg
@@ -44,7 +45,21 @@ def proposal_detection(
         settings = get_settings()
         graph_store = await memgraph.store()
 
-        resolved = SiloConfig().resolve(settings)
+        # Fetch per-silo config from the Silo node
+        rows: list[dict[str, Any]] = await graph_store.execute_query(
+            "MATCH (s:Silo {id: $silo_id}) RETURN s.silo_config AS silo_config",
+            {"silo_id": silo_id},
+        )
+
+        silo_config: SiloConfig
+        if rows and rows[0].get("silo_config"):
+            raw = rows[0]["silo_config"]
+            data: dict[str, Any] = json.loads(raw) if isinstance(raw, str) else raw
+            silo_config = SiloConfig.from_metadata_dict(data)
+        else:
+            silo_config = SiloConfig()
+
+        resolved = silo_config.resolve(settings)
         return await run_proposal_detection(graph_store, silo_id, resolved)
 
     created_ids = _run_async(_run())
