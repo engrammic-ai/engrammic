@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
+from urllib.parse import urlparse
 
 import httpx
 import structlog
@@ -13,6 +15,39 @@ if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
 
 logger = structlog.get_logger(__name__)
+
+# Private/internal IP ranges that should never be accessed via evidence URIs
+_BLOCKED_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),  # Link-local / AWS IMDS
+    ipaddress.ip_network("::1/128"),  # IPv6 loopback
+    ipaddress.ip_network("fc00::/7"),  # IPv6 private
+    ipaddress.ip_network("fe80::/10"),  # IPv6 link-local
+]
+
+
+def _is_private_ip(hostname: str) -> bool:
+    """Check if hostname resolves to a private/internal IP."""
+    import socket
+
+    try:
+        # Resolve hostname to IP
+        addr_info = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC)
+        for _family, _, _, _, sockaddr in addr_info:
+            ip_str = sockaddr[0]
+            try:
+                ip = ipaddress.ip_address(ip_str)
+                for network in _BLOCKED_NETWORKS:
+                    if ip in network:
+                        return True
+            except ValueError:
+                continue
+    except socket.gaierror:
+        pass
+    return False
 
 
 @dataclass
@@ -93,6 +128,21 @@ class EvidenceValidator:
 
     async def _validate_uri(self, uri: str, silo_id: str) -> EvidenceResult:
         """Check if URI is reachable and upsert a Document node for it."""
+        # SSRF protection: block private/internal IPs
+        parsed = urlparse(uri)
+        hostname = parsed.hostname
+        if not hostname:
+            return EvidenceResult(
+                status="invalid",
+                reason="Invalid URI: no hostname",
+            )
+        if _is_private_ip(hostname):
+            logger.warning("evidence_uri_blocked_ssrf", uri=uri, hostname=hostname)
+            return EvidenceResult(
+                status="invalid",
+                reason="URI points to internal/private network (blocked for security)",
+            )
+
         delays = [0.5, 1.0, 2.0]
         last_error: str = ""
         for attempt, delay in enumerate([0.0, *delays]):
@@ -100,7 +150,24 @@ class EvidenceValidator:
                 await asyncio.sleep(delay)
             try:
                 async with httpx.AsyncClient(timeout=self._http_timeout) as client:
-                    response = await client.head(uri, follow_redirects=True)
+                    # Disable redirects to prevent SSRF via redirect chain
+                    response = await client.head(uri, follow_redirects=False)
+                    # If redirect, validate the target before following
+                    if response.is_redirect:
+                        location = response.headers.get("location", "")
+                        if location:
+                            redirect_parsed = urlparse(location)
+                            redirect_host = redirect_parsed.hostname
+                            if redirect_host and _is_private_ip(redirect_host):
+                                logger.warning(
+                                    "evidence_uri_redirect_blocked_ssrf",
+                                    uri=uri,
+                                    redirect=location,
+                                )
+                                return EvidenceResult(
+                                    status="invalid",
+                                    reason="URI redirects to internal/private network (blocked)",
+                                )
                 if response.status_code < 400:
                     logger.debug("evidence_uri_valid", uri=uri, status=response.status_code)
                     # Upsert Document node for valid URI

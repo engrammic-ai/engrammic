@@ -174,6 +174,42 @@ ship-beta sha="latest":
     just deploy-beta {{sha}}
 
 # =============================================================================
+# Self-Hosted Distribution
+# =============================================================================
+
+releases_registry := "europe-north1-docker.pkg.dev/engrammic/releases"
+
+# Build and push self-hosted images via Cloud Build
+dist version="0.1.0":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    SHORT_SHA=$(git rev-parse --short HEAD)
+    echo "Building self-hosted images v{{version}} (${SHORT_SHA}) via Cloud Build..."
+    gcloud builds submit --config=cloudbuild.releases.yaml \
+        --substitutions=SHORT_SHA=${SHORT_SHA},_VERSION={{version}} \
+        --region={{region}} .
+    echo "Done. Test with:"
+    echo "  just dist-verify {{version}}"
+
+# Build locally (for testing, no push)
+dist-local version="0.1.0":
+    docker build -f docker/Dockerfile.selfhosted.api \
+        -t {{releases_registry}}/engrammic-api:v{{version}} .
+    docker build -f docker/Dockerfile.selfhosted.beacon \
+        -t {{releases_registry}}/engrammic-beacon:v{{version}} .
+    @echo "Built locally. To push: docker push {{releases_registry}}/engrammic-api:v{{version}}"
+
+# Verify public pull works (no auth)
+dist-verify version="0.1.0":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Testing unauthenticated pull..."
+    docker logout europe-north1-docker.pkg.dev 2>/dev/null || true
+    docker pull {{releases_registry}}/engrammic-api:v{{version}}
+    docker pull {{releases_registry}}/engrammic-beacon:v{{version}}
+    echo "Public pull works!"
+
+# =============================================================================
 # Database (Remote)
 # =============================================================================
 

@@ -26,10 +26,6 @@ from context_service.mcp.tools import (
     trace,
 )
 
-# Internal-only tools (not registered via registry)
-from context_service.mcp.tools.context_admin import register as register_admin
-from context_service.mcp.tools.context_belief_state import register as register_belief_state
-
 # Registry
 from context_service.mcp.tools.registry import register_tools
 
@@ -42,19 +38,8 @@ def register_all(mcp: FastMCP) -> None:
     register_tools(mcp)
 
 
-def register_internal_tools(mcp: FastMCP) -> None:
-    """Register internal-only tools (for SAGE and admin use).
-
-    These are NOT included in the standard/reasoning profiles.
-    Call separately if needed.
-    """
-    register_admin(mcp)
-    register_belief_state(mcp)
-
-
 __all__ = [
     "register_all",
-    "register_internal_tools",
     "register_tools",
     # Individual tool modules
     "remember",

@@ -88,6 +88,7 @@ def mcp_error_boundary[**P, R](func: Callable[P, Awaitable[R]]) -> Callable[P, A
         except Exception as e:
             backend = _classify_backend(e)
             retriable = _is_retriable(e)
+            # Log full error internally but sanitize for client response
             logger.warning(
                 "mcp_tool_error",
                 tool=func.__name__,
@@ -95,6 +96,10 @@ def mcp_error_boundary[**P, R](func: Callable[P, Awaitable[R]]) -> Callable[P, A
                 error=str(e),
                 retriable=retriable,
             )
-            raise MCPBackendError(backend=backend, message=str(e), retriable=retriable) from e
+            # Generic error message to prevent internal details leaking to clients
+            safe_message = f"Backend error ({backend})"
+            if retriable:
+                safe_message += " - please retry"
+            raise MCPBackendError(backend=backend, message=safe_message, retriable=retriable) from e
 
     return wrapper

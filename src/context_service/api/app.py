@@ -15,12 +15,15 @@ from context_service.api.metrics import REGISTRY, metrics_endpoint
 from context_service.api.middleware import PrometheusTimingMiddleware, RateLimitMiddleware
 from context_service.api.routes import admin, health
 from context_service.api.routes.gdpr import router as gdpr_router
+from context_service.api.routes.license import router as license_router
 from context_service.api.routes.oauth import router as oauth_router
 from context_service.api.routes.skills import router as skills_router
 from context_service.api.routes.source_rules import router as source_rules_router
 from context_service.config.logging import configure_logging, get_logger
 from context_service.config.settings import get_settings
 from context_service.core.service_registry import ServiceRegistry
+from context_service.license import check_license_on_startup
+from context_service.license.version_check import check_version
 from context_service.stores import (
     MemgraphClient,
     QdrantClient,
@@ -36,12 +39,44 @@ from context_service.telemetry.tracing import instrument_fastapi, setup_tracing
 logger = get_logger(__name__)
 
 
+async def _periodic_version_check(interval_hours: int = 24) -> None:
+    """Background task to periodically check version."""
+    from context_service.license.version_check import check_version
+
+    while True:
+        await asyncio.sleep(interval_hours * 3600)
+        try:
+            await check_version()
+        except SystemExit:
+            logger.critical("unsupported_version_detected_runtime")
+        except Exception as e:
+            logger.warning("periodic_version_check_failed", error=str(e))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage application lifespan."""
     settings = get_settings()
 
     app.state.start_time = time.monotonic()
+
+    license_info = check_license_on_startup()
+    app.state.license_info = license_info
+
+    # Start renewal background task if license is expiring soon
+    if license_info and license_info.is_expiring_soon:
+        from context_service.license.renewal import attempt_license_renewal
+
+        asyncio.create_task(attempt_license_renewal())
+
+    # Version deprecation check (non-blocking on failure)
+    if settings.telemetry.enabled:
+        try:
+            await check_version()
+        except SystemExit:
+            raise
+        except Exception as e:
+            logger.warning("version_check_startup_failed", error=str(e))
 
     logger.info("creating_database_connections")
 
@@ -114,7 +149,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
             logger.info("embedding_config_loading", config_dir=str(CONFIG_DIR))
             embed_config = load_config("embeddings")
-            logger.info("embedding_config_loaded", config=embed_config)
+            # Filter sensitive keys before logging
+            safe_config = {
+                k: v
+                for k, v in embed_config.items()
+                if k.lower() not in ("api_key", "secret", "password", "token", "credential")
+            }
+            logger.info("embedding_config_loaded", config=safe_config)
             embedding_service = build_embedding_service(embedding_cache)
             logger.info(
                 "embedding_service_configured",
@@ -199,6 +240,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         )
         await beacon.start()
 
+        # Start periodic version check (every 24h)
+        asyncio.create_task(_periodic_version_check())
+
     yield
 
     if beacon:
@@ -274,6 +318,7 @@ def create_app() -> ASGIApp:
     app.include_router(oauth_router)
     app.include_router(skills_router)
     app.include_router(source_rules_router)
+    app.include_router(license_router)
     app.add_route("/metrics", metrics_endpoint, include_in_schema=False)
 
     if settings.mcp_enabled:

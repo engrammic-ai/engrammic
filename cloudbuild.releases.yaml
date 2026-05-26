@@ -1,0 +1,35 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-f'
+      - 'docker/Dockerfile.selfhosted.api'
+      - '-t'
+      - '${_REGISTRY}/engrammic-api:v${_VERSION}'
+      - '-t'
+      - '${_REGISTRY}/engrammic-api:v${_VERSION}-${SHORT_SHA}'
+      - '.'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-f'
+      - 'docker/Dockerfile.selfhosted.beacon'
+      - '-t'
+      - '${_REGISTRY}/engrammic-beacon:v${_VERSION}'
+      - '-t'
+      - '${_REGISTRY}/engrammic-beacon:v${_VERSION}-${SHORT_SHA}'
+      - '.'
+
+images:
+  - '${_REGISTRY}/engrammic-api:v${_VERSION}'
+  - '${_REGISTRY}/engrammic-api:v${_VERSION}-${SHORT_SHA}'
+  - '${_REGISTRY}/engrammic-beacon:v${_VERSION}'
+  - '${_REGISTRY}/engrammic-beacon:v${_VERSION}-${SHORT_SHA}'
+
+substitutions:
+  _REGISTRY: 'europe-north1-docker.pkg.dev/engrammic/releases'
+  _VERSION: ''
+
+options:
+  logging: CLOUD_LOGGING_ONLY

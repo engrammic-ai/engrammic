@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 
-from context_service.api.metrics import CONTEXT_STORE_LATENCY
+from context_service.api.metrics import record_store_latency
 from context_service.config.settings import get_settings
 from context_service.engine.exceptions import SupersessionCycleError
 from context_service.mcp.server import (
@@ -278,9 +278,7 @@ async def _context_remember(
         observed_from=observed_from,
         agent_id=auth.agent_id,
     )
-    CONTEXT_STORE_LATENCY.labels(silo_id=validated_silo_id, layer="memory").observe(
-        time.perf_counter() - _start
-    )
+    record_store_latency(time.perf_counter() - _start, silo_id=validated_silo_id, layer="memory")
 
     if supersedes is not None:
         try:
@@ -406,9 +404,7 @@ async def _context_assert(
         agent_id=auth.agent_id,
         source_tier=resolved_tier,
     )
-    CONTEXT_STORE_LATENCY.labels(silo_id=expected_silo_id, layer="knowledge").observe(
-        time.perf_counter() - _start
-    )
+    record_store_latency(time.perf_counter() - _start, silo_id=expected_silo_id, layer="knowledge")
 
     promoted = False
     promoted_error: str | None = None
@@ -525,9 +521,7 @@ async def _context_commit(
         tags=tags,
         agent_id=agent_id,
     )
-    CONTEXT_STORE_LATENCY.labels(silo_id=expected_silo_id, layer="wisdom").observe(
-        time.perf_counter() - _start
-    )
+    record_store_latency(time.perf_counter() - _start, silo_id=expected_silo_id, layer="wisdom")
 
     result: dict[str, Any] = {
         "node_id": str(node.id),
@@ -649,9 +643,7 @@ async def _context_reflect(
         metadata=metadata,
         agent_id=agent_id,
     )
-    CONTEXT_STORE_LATENCY.labels(silo_id=expected_silo_id, layer="meta").observe(
-        time.perf_counter() - _start
-    )
+    record_store_latency(time.perf_counter() - _start, silo_id=expected_silo_id, layer="meta")
 
     return {
         "node_id": str(node.id),
@@ -777,8 +769,8 @@ async def _context_reason(
         evidence_used=evidence_used,
         org_id=derive_org_uuid(auth.org_id),
     )
-    CONTEXT_STORE_LATENCY.labels(silo_id=expected_silo_id, layer="intelligence").observe(
-        time.perf_counter() - _start
+    record_store_latency(
+        time.perf_counter() - _start, silo_id=expected_silo_id, layer="intelligence"
     )
 
     # Attach query embedding to the chain for Layer 1 applicability matching.
@@ -926,9 +918,7 @@ async def _context_store_belief(
             "about_ids": about,
         },
     )
-    CONTEXT_STORE_LATENCY.labels(silo_id=silo_id, layer="belief").observe(
-        time.perf_counter() - _start
-    )
+    record_store_latency(time.perf_counter() - _start, silo_id=silo_id, layer="belief")
 
     conflict_rows = await store.execute_query(
         q.DETECT_CONFLICTING_WORKING_HYPOTHESES,
