@@ -982,7 +982,8 @@ class Settings(BaseSettings):
 
     license_key: str | None = Field(
         default=None,
-        description="License key for self-hosted deployments (ENGRAMMIC_LICENSE_KEY)",
+        validation_alias="ENGRAMMIC_LICENSE_KEY",
+        description="License key for self-hosted deployments",
     )
     license_validation_enabled: bool = Field(
         default=False,
