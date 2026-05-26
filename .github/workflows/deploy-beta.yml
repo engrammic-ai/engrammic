@@ -142,4 +142,4 @@ jobs:
           gcloud compute ssh engrammic-beta-stateful \
             --zone ${{ env.REGION }}-a \
             --tunnel-through-iap \
-            --command "cd /opt/engrammic && sudo docker compose pull && sudo docker compose up -d"
+            --command "cd /opt/engrammic && sudo docker compose pull && sudo docker compose up -d --remove-orphans"
