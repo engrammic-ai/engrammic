@@ -60,10 +60,13 @@ def test_validate_license_key_expired() -> None:
     )
     expired_key = f"ENGR_{expired_token}"
 
-    with patch(
-        "context_service.license.validator.get_public_key_pem",
-        return_value=public_key_pem,
-    ), pytest.raises(LicenseError, match="expired"):
+    with (
+        patch(
+            "context_service.license.validator.get_public_key_pem",
+            return_value=public_key_pem,
+        ),
+        pytest.raises(LicenseError, match="expired"),
+    ):
         validate_license_key(expired_key)
 
 

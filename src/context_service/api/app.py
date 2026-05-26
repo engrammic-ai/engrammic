@@ -66,6 +66,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Start renewal background task if license is expiring soon
     if license_info and license_info.is_expiring_soon:
         from context_service.license.renewal import attempt_license_renewal
+
         asyncio.create_task(attempt_license_renewal())
 
     # Version deprecation check (non-blocking on failure)
@@ -150,7 +151,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             embed_config = load_config("embeddings")
             # Filter sensitive keys before logging
             safe_config = {
-                k: v for k, v in embed_config.items()
+                k: v
+                for k, v in embed_config.items()
                 if k.lower() not in ("api_key", "secret", "password", "token", "credential")
             }
             logger.info("embedding_config_loaded", config=safe_config)

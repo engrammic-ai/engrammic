@@ -68,7 +68,7 @@ def validate_license_key(key: str) -> LicenseInfo:
     if not key.startswith(KEY_PREFIX):
         raise LicenseError(f"License key must start with {KEY_PREFIX}")
 
-    token = key[len(KEY_PREFIX):]
+    token = key[len(KEY_PREFIX) :]
 
     public_key = _get_public_key()
 

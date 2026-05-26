@@ -769,7 +769,9 @@ async def _context_reason(
         evidence_used=evidence_used,
         org_id=derive_org_uuid(auth.org_id),
     )
-    record_store_latency(time.perf_counter() - _start, silo_id=expected_silo_id, layer="intelligence")
+    record_store_latency(
+        time.perf_counter() - _start, silo_id=expected_silo_id, layer="intelligence"
+    )
 
     # Attach query embedding to the chain for Layer 1 applicability matching.
     # Uses conclusion as the query text if no explicit query is available.

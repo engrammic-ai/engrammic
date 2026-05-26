@@ -22,6 +22,7 @@ def _anonymize_silo_id(silo_id: str) -> str:
     """
     return hashlib.sha256(silo_id.encode()).hexdigest()[:8]
 
+
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
@@ -145,7 +146,9 @@ def record_belief_confidence(
     Call this from belief-synthesis and commit write paths.
     """
     anon_silo = _anonymize_silo_id(silo_id)
-    BELIEF_CONFIDENCE_DISTRIBUTION.labels(silo_id=anon_silo, edge_type=edge_type).observe(confidence)
+    BELIEF_CONFIDENCE_DISTRIBUTION.labels(silo_id=anon_silo, edge_type=edge_type).observe(
+        confidence
+    )
 
 
 def record_store_latency(

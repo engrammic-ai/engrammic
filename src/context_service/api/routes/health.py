@@ -142,17 +142,13 @@ async def health_check(
         license_status = LicenseStatus(
             valid=True,
             customer=license_info.customer,
-            expires_at=dt.datetime.fromtimestamp(
-                license_info.expires_at, tz=dt.UTC
-            ).isoformat(),
+            expires_at=dt.datetime.fromtimestamp(license_info.expires_at, tz=dt.UTC).isoformat(),
             days_remaining=license_info.days_remaining,
         )
 
     # SAGE mode based on LLM config
     settings = get_settings()
-    sage_mode: Literal["active", "passive"] = (
-        "active" if settings.llm.api_key else "passive"
-    )
+    sage_mode: Literal["active", "passive"] = "active" if settings.llm.api_key else "passive"
 
     response = HealthResponse(
         status=status,

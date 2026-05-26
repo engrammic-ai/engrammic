@@ -36,7 +36,9 @@ def _require_admin_key(
     if configured_key is None:
         # Require key in production and staging; only skip in development
         if settings.is_production or settings.environment == "staging":
-            raise HTTPException(status_code=503, detail="admin_api_key required in production/staging")
+            raise HTTPException(
+                status_code=503, detail="admin_api_key required in production/staging"
+            )
         return
     if credentials is None:
         raise HTTPException(status_code=401, detail="Missing admin API key")

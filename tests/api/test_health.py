@@ -37,12 +37,15 @@ def _make_settings(*, llm_api_key: str | None = None) -> MagicMock:
 def test_health_returns_200() -> None:
     """Health endpoint returns 200 with required fields."""
     app = _make_app()
-    with patch(
-        "context_service.api.routes.health.get_settings",
-        return_value=_make_settings(),
-    ), patch(
-        "context_service.api.routes.health._postgres_health_check",
-        new=AsyncMock(return_value=True),
+    with (
+        patch(
+            "context_service.api.routes.health.get_settings",
+            return_value=_make_settings(),
+        ),
+        patch(
+            "context_service.api.routes.health._postgres_health_check",
+            new=AsyncMock(return_value=True),
+        ),
     ):
         client = TestClient(app)
         response = client.get("/health")
@@ -56,12 +59,15 @@ def test_health_returns_200() -> None:
 def test_health_includes_license_info() -> None:
     """Health endpoint includes license information."""
     app = _make_app()
-    with patch(
-        "context_service.api.routes.health.get_settings",
-        return_value=_make_settings(),
-    ), patch(
-        "context_service.api.routes.health._postgres_health_check",
-        new=AsyncMock(return_value=True),
+    with (
+        patch(
+            "context_service.api.routes.health.get_settings",
+            return_value=_make_settings(),
+        ),
+        patch(
+            "context_service.api.routes.health._postgres_health_check",
+            new=AsyncMock(return_value=True),
+        ),
     ):
         client = TestClient(app)
         response = client.get("/health")
@@ -76,12 +82,15 @@ def test_health_includes_license_info() -> None:
 def test_health_sage_mode_active_when_llm_key_present() -> None:
     """sage_mode is 'active' when LLM API key is configured."""
     app = _make_app()
-    with patch(
-        "context_service.api.routes.health.get_settings",
-        return_value=_make_settings(llm_api_key="sk-test-key"),
-    ), patch(
-        "context_service.api.routes.health._postgres_health_check",
-        new=AsyncMock(return_value=True),
+    with (
+        patch(
+            "context_service.api.routes.health.get_settings",
+            return_value=_make_settings(llm_api_key="sk-test-key"),
+        ),
+        patch(
+            "context_service.api.routes.health._postgres_health_check",
+            new=AsyncMock(return_value=True),
+        ),
     ):
         client = TestClient(app)
         response = client.get("/health")
@@ -92,12 +101,15 @@ def test_health_sage_mode_active_when_llm_key_present() -> None:
 def test_health_sage_mode_passive_without_llm_key() -> None:
     """sage_mode is 'passive' when no LLM API key is configured."""
     app = _make_app()
-    with patch(
-        "context_service.api.routes.health.get_settings",
-        return_value=_make_settings(llm_api_key=None),
-    ), patch(
-        "context_service.api.routes.health._postgres_health_check",
-        new=AsyncMock(return_value=True),
+    with (
+        patch(
+            "context_service.api.routes.health.get_settings",
+            return_value=_make_settings(llm_api_key=None),
+        ),
+        patch(
+            "context_service.api.routes.health._postgres_health_check",
+            new=AsyncMock(return_value=True),
+        ),
     ):
         client = TestClient(app)
         response = client.get("/health")
@@ -115,12 +127,15 @@ def test_health_license_populated_from_app_state() -> None:
     license_info.days_remaining = 30
 
     app = _make_app(license_info=license_info)
-    with patch(
-        "context_service.api.routes.health.get_settings",
-        return_value=_make_settings(),
-    ), patch(
-        "context_service.api.routes.health._postgres_health_check",
-        new=AsyncMock(return_value=True),
+    with (
+        patch(
+            "context_service.api.routes.health.get_settings",
+            return_value=_make_settings(),
+        ),
+        patch(
+            "context_service.api.routes.health._postgres_health_check",
+            new=AsyncMock(return_value=True),
+        ),
     ):
         client = TestClient(app)
         response = client.get("/health")
@@ -136,12 +151,15 @@ def test_health_license_populated_from_app_state() -> None:
 def test_health_license_null_when_not_set() -> None:
     """License field is null when no license_info in app state."""
     app = _make_app()
-    with patch(
-        "context_service.api.routes.health.get_settings",
-        return_value=_make_settings(),
-    ), patch(
-        "context_service.api.routes.health._postgres_health_check",
-        new=AsyncMock(return_value=True),
+    with (
+        patch(
+            "context_service.api.routes.health.get_settings",
+            return_value=_make_settings(),
+        ),
+        patch(
+            "context_service.api.routes.health._postgres_health_check",
+            new=AsyncMock(return_value=True),
+        ),
     ):
         client = TestClient(app)
         response = client.get("/health")

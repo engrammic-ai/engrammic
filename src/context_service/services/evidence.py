@@ -36,7 +36,7 @@ def _is_private_ip(hostname: str) -> bool:
     try:
         # Resolve hostname to IP
         addr_info = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC)
-        for family, _, _, _, sockaddr in addr_info:
+        for _family, _, _, _, sockaddr in addr_info:
             ip_str = sockaddr[0]
             try:
                 ip = ipaddress.ip_address(ip_str)
