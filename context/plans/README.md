@@ -2,7 +2,7 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-25)
+## Current state (2026-05-26)
 
 **Shipped:**
 - v2.28 Engagement Plan E — Hooks and Distribution (session ID config, engage hook, skill, AGENTS.md, docs)
@@ -48,6 +48,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
+| [2026-05-26-self-hosted-distribution-phase1.md](./2026-05-26-self-hosted-distribution-phase1.md) | Self-hosted distribution: license, Docker bundle, installer | Ready to execute |
 | [2026-05-20-self-hosted-rest-api-phase1.md](./2026-05-20-self-hosted-rest-api-phase1.md) | Self-hosted REST API: auth + Memory/Knowledge endpoints | Ready to execute |
 
 ## Future work

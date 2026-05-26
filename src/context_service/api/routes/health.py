@@ -5,11 +5,12 @@ from collections.abc import Awaitable
 from typing import Literal
 
 from fastapi import APIRouter, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 
 from context_service import __version__
 from context_service.config.logging import get_logger
+from context_service.config.settings import get_settings
 from context_service.db.postgres import get_session
 
 logger = get_logger(__name__)
@@ -35,6 +36,23 @@ class ServiceLatency(BaseModel):
     postgres_ms: float
 
 
+class LicenseStatus(BaseModel):
+    """License status in health response."""
+
+    valid: bool
+    customer: str | None = None
+    expires_at: str | None = None
+    days_remaining: int | None = None
+
+
+class MemoryUsage(BaseModel):
+    """Memory usage for a service (placeholder for future Docker socket integration)."""
+
+    used_mb: int | None = None
+    limit_mb: int | None = None
+    percent: int | None = None
+
+
 class HealthResponse(BaseModel):
     """Health check response model."""
 
@@ -43,6 +61,10 @@ class HealthResponse(BaseModel):
     services: ServiceStatus
     latency: ServiceLatency | None = None
     uptime_seconds: float | None = None
+    license: LicenseStatus | None = None
+    sage_mode: Literal["active", "passive"] = "passive"
+    memory: dict[str, MemoryUsage] | None = None
+    recent_restarts: list[str] = Field(default_factory=list)
 
 
 async def _timed_check(coro: Awaitable[bool]) -> tuple[bool, float]:
@@ -111,6 +133,27 @@ async def health_check(
     else:
         status = "unhealthy"
 
+    # License info from app state
+    license_info = getattr(request.app.state, "license_info", None)
+    license_status = None
+    if license_info:
+        import datetime as dt
+
+        license_status = LicenseStatus(
+            valid=True,
+            customer=license_info.customer,
+            expires_at=dt.datetime.fromtimestamp(
+                license_info.expires_at, tz=dt.UTC
+            ).isoformat(),
+            days_remaining=license_info.days_remaining,
+        )
+
+    # SAGE mode based on LLM config
+    settings = get_settings()
+    sage_mode: Literal["active", "passive"] = (
+        "active" if settings.llm.api_key else "passive"
+    )
+
     response = HealthResponse(
         status=status,
         version=__version__,
@@ -120,6 +163,8 @@ async def health_check(
             qdrant="connected" if qdrant_healthy else "disconnected",
             postgres="connected" if postgres_healthy else "disconnected",
         ),
+        license=license_status,
+        sage_mode=sage_mode,
     )
 
     if detail:

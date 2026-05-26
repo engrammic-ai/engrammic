@@ -976,6 +976,19 @@ class Settings(BaseSettings):
     dev_user_id: str = Field(default="dev-user")
     dev_agent_id: str = Field(default="dev-agent")
 
+    # =========================================================================
+    # License Settings (Self-Hosted)
+    # =========================================================================
+
+    license_key: str | None = Field(
+        default=None,
+        description="License key for self-hosted deployments (ENGRAMMIC_LICENSE_KEY)",
+    )
+    license_validation_enabled: bool = Field(
+        default=True,
+        description="Enable license validation on startup (disable for hosted)",
+    )
+
     # MCP settings
     default_icp_preset: str = Field(default="coding")
 

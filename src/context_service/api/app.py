@@ -15,12 +15,14 @@ from context_service.api.metrics import REGISTRY, metrics_endpoint
 from context_service.api.middleware import PrometheusTimingMiddleware, RateLimitMiddleware
 from context_service.api.routes import admin, health
 from context_service.api.routes.gdpr import router as gdpr_router
+from context_service.api.routes.license import router as license_router
 from context_service.api.routes.oauth import router as oauth_router
 from context_service.api.routes.skills import router as skills_router
 from context_service.api.routes.source_rules import router as source_rules_router
 from context_service.config.logging import configure_logging, get_logger
 from context_service.config.settings import get_settings
 from context_service.core.service_registry import ServiceRegistry
+from context_service.license import check_license_on_startup
 from context_service.stores import (
     MemgraphClient,
     QdrantClient,
@@ -42,6 +44,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
 
     app.state.start_time = time.monotonic()
+
+    license_info = check_license_on_startup()
+    app.state.license_info = license_info
+
+    # Start renewal background task if license is expiring soon
+    if license_info and license_info.is_expiring_soon:
+        from context_service.license.renewal import attempt_license_renewal
+        asyncio.create_task(attempt_license_renewal())
 
     logger.info("creating_database_connections")
 
@@ -274,6 +284,7 @@ def create_app() -> ASGIApp:
     app.include_router(oauth_router)
     app.include_router(skills_router)
     app.include_router(source_rules_router)
+    app.include_router(license_router)
     app.add_route("/metrics", metrics_endpoint, include_in_schema=False)
 
     if settings.mcp_enabled:
