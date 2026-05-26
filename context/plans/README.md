@@ -49,6 +49,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
+| [2026-05-26-self-hosted-phase2.md](./2026-05-26-self-hosted-phase2.md) | Self-hosted Phase 2: version deprecation warnings + quickstart docs | Ready to execute |
 | [2026-05-20-self-hosted-rest-api-phase1.md](./2026-05-20-self-hosted-rest-api-phase1.md) | Self-hosted REST API: auth + Memory/Knowledge endpoints | Ready to execute |
 
 ## Future work
