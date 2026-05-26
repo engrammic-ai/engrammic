@@ -69,7 +69,7 @@ Self-hosted customers have no way to know when they're running outdated or depre
 WARN  Running deprecated version 0.2.3. Upgrade to 0.3.0: docker compose pull && docker compose up -d
 ```
 
-**Periodic check:** Background task runs every 24 hours, repeats the check, logs warnings if still deprecated. Uses existing Dagster scheduler or asyncio background task.
+**Periodic check:** asyncio background task started in app lifespan, runs every 24 hours, repeats the check, logs warnings if still deprecated.
 
 ### 3. Documentation
 
@@ -119,8 +119,8 @@ WARN  Running deprecated version 0.2.3. Upgrade to 0.3.0: docker compose pull &&
 
 | Location | Change |
 |----------|--------|
-| `beacon/src/routes/versions.py` | New: `/versions` endpoint |
-| `beacon/config.py` | Add version thresholds config |
+| `src/beacon_service/main.py` | Add `/versions` endpoint |
+| `src/beacon_service/config.py` | Add version thresholds config |
 | `src/context_service/license/version_check.py` | New: version check logic |
 | `src/context_service/api/app.py` | Call version check on startup |
 | `docs/self-hosted/quickstart.md` | New: quickstart guide |
@@ -128,7 +128,7 @@ WARN  Running deprecated version 0.2.3. Upgrade to 0.3.0: docker compose pull &&
 ### 5. Beacon Endpoint Implementation
 
 ```python
-# beacon/src/routes/versions.py
+# src/beacon_service/main.py (add to existing file)
 from fastapi import APIRouter
 from pydantic import BaseModel
 
