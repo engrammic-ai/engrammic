@@ -12,6 +12,9 @@ class BeaconConfig:
 
     database_url: str
     log_level: str = "INFO"
+    version_latest: str = "0.1.0"
+    version_minimum: str = "0.1.0"
+    version_deprecated: str = "0.1.0"
 
     @classmethod
     def from_env(cls) -> BeaconConfig:
@@ -23,4 +26,7 @@ class BeaconConfig:
         return cls(
             database_url=database_url,
             log_level=os.environ.get("LOG_LEVEL", "INFO"),
+            version_latest=os.environ.get("VERSION_LATEST", "0.1.0"),
+            version_minimum=os.environ.get("VERSION_MINIMUM", "0.1.0"),
+            version_deprecated=os.environ.get("VERSION_DEPRECATED", "0.1.0"),
         )
