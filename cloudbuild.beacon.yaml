@@ -1,7 +1,15 @@
 steps:
+  # Pull existing image for cache (ignore failure if not exists)
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args: ['-c', 'docker pull ${_IMAGE}:latest || true']
+
+  # Build with BuildKit and cache-from
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
+      - '--build-arg=BUILDKIT_INLINE_CACHE=1'
+      - '--cache-from=${_IMAGE}:latest'
       - '-f'
       - 'docker/Dockerfile.beacon'
       - '-t'
@@ -9,6 +17,8 @@ steps:
       - '-t'
       - '${_IMAGE}:${SHORT_SHA}'
       - '.'
+    env:
+      - 'DOCKER_BUILDKIT=1'
 
 images:
   - '${_IMAGE}:latest'
