@@ -1,7 +1,7 @@
 """create service telemetry tables
 
 Revision ID: 0014
-Revises: 0013_seed_hosted_beacon_secret
+Revises: 0013
 Create Date: 2026-05-27
 
 """
@@ -16,7 +16,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "0014"
-down_revision: str = "0013_seed_hosted_beacon_secret"
+down_revision: str = "0013"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
