@@ -17,7 +17,7 @@ from context_service.retention.queries import (
     FIND_TOMBSTONE_CANDIDATES,
     HARD_DELETE_NODE,
     MARK_HEAT_DIRTY,
-    TOMBSTONE_NODE,
+    TOMBSTONE_NODES_BATCH,
 )
 
 if TYPE_CHECKING:
@@ -82,23 +82,24 @@ class RetentionService:
         run_id: str,
     ) -> int:
         """Tombstone nodes by setting tombstoned_at timestamp."""
-        now = datetime.now(UTC)
-        count = 0
-        tombstoned_ids: list[str] = []
+        if not node_ids:
+            return 0
 
-        for node_id in node_ids:
-            result = await self._store.execute_query(
-                TOMBSTONE_NODE,
-                {
-                    "id": node_id,
-                    "silo_id": silo_id,
-                    "tombstoned_at": now.isoformat(),
-                    "run_id": run_id,
-                },
-            )
-            if result:
-                count += 1
-                tombstoned_ids.append(node_id)
+        now = datetime.now(UTC)
+
+        # Batch tombstone in single query (fixes N+1)
+        result = await self._store.execute_query(
+            TOMBSTONE_NODES_BATCH,
+            {
+                "node_ids": node_ids,
+                "silo_id": silo_id,
+                "tombstoned_at": now.isoformat(),
+                "run_id": run_id,
+            },
+        )
+
+        tombstoned_ids = [row["id"] for row in result] if result else []
+        count = len(tombstoned_ids)
 
         if tombstoned_ids:
             await self._store.execute_query(

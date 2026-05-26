@@ -19,6 +19,16 @@ SET n.tombstoned_at = $tombstoned_at,
 RETURN n.id AS id
 """
 
+# Batch tombstone query to avoid N+1 pattern in retention sweeps.
+TOMBSTONE_NODES_BATCH = """
+UNWIND $node_ids AS nid
+MATCH (n {id: nid, silo_id: $silo_id})
+WHERE n.tombstoned_at IS NULL
+SET n.tombstoned_at = $tombstoned_at,
+    n.retention_run_id = $run_id
+RETURN n.id AS id
+"""
+
 FIND_HARD_DELETE_CANDIDATES = """
 MATCH (n {silo_id: $silo_id})
 WHERE n.tombstoned_at IS NOT NULL
