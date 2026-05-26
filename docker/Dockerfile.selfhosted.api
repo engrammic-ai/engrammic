@@ -1,0 +1,49 @@
+# Self-hosted API image - bytecode compiled for distribution
+# Internal use: docker/Dockerfile.api (keeps .py source)
+
+FROM python:3.13-slim AS builder
+
+WORKDIR /app
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+COPY pyproject.toml uv.lock README.md ./
+
+# Install production dependencies with auth group
+RUN uv sync --frozen --no-dev --no-install-project --group auth
+
+FROM python:3.13-slim
+
+WORKDIR /app
+
+RUN groupadd -g 1000 engrammic && useradd -u 1000 -g engrammic -m engrammic
+
+# Copy virtual environment from builder
+COPY --from=builder /app/.venv /app/.venv
+
+# Copy application code
+COPY pyproject.toml uv.lock README.md ./
+COPY config/ /app/config/
+COPY src/ /app/src/
+COPY alembic.ini /app/alembic.ini
+COPY alembic/ /app/alembic/
+COPY skills/ /app/skills/
+
+# Compile to bytecode and remove source
+RUN python -m compileall -b -q /app/src && \
+    find /app/src -name "*.py" -type f -delete && \
+    find /app/alembic -name "*.py" -type f ! -name "env.py" -exec sh -c 'python -m py_compile "$1" && rm "$1"' _ {} \;
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app/src"
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+USER engrammic
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+
+CMD ["python", "-m", "context_service.entrypoint"]
