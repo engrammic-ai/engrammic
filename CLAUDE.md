@@ -97,22 +97,37 @@ sage.synthesizer weak synthesis -> ProposedBelief -> accept/reject -> Belief
 
 Agent-facing verbs: `hypothesize` then `commit`. ProposedBelief acceptance/rejection is handled internally by SAGE, not via agent-facing MCP tools.
 
-## Using EAG (for agents)
+## Memory (Engrammic MCP)
 
-When interacting with Engrammic MCP tools, use the `engrammic:eag-guide` skill for cognitive guidance on when/how to use each layer.
+**At session start:** `recall` what's relevant to today's work.
 
-**Quick heuristics:**
+**Store proactively (don't wait to be asked):**
+- User preferences or corrections → `remember`
+- Codebase discoveries with file evidence → `learn`
+- Bug fixes (what was wrong, why, how fixed) → `learn`
+- Decisions or conclusions from multiple facts → `believe`
+- Changed understanding or mistakes → `reflect`
+
+**Always `recall` before storing** — supersede existing nodes, don't duplicate.
+
+**Skip:** debug output, terminal logs, obvious-from-code things, speculation.
+
+### Layer selection
+
+| Layer | When | Evidence? |
+|-------|------|-----------|
+| Memory (`remember`) | Raw observation, preference | No |
+| Knowledge (`learn`) | Verifiable claim, discovery | Yes (file://, https://) |
+| Wisdom (`believe`) | Conclusion from facts | Links to supporting nodes |
+| Meta (`reflect`) | Understanding changed | Links to affected nodes |
+
+### Quick heuristics
+
 - Memory: "Would I tell a colleague tomorrow?" If no, don't store.
 - Knowledge: "Do I have evidence?" If no, use Memory instead.
 - Wisdom: "Based on [facts], I believe [conclusion]." If you can't fill in [facts], it's a hunch, not a belief.
-- Meta: Record when your understanding changes.
 
-**Belief formation flow:**
-```
-Observe → Memory → Claim (with evidence) → Knowledge → Fact (corroborated) → Belief (synthesized) → Wisdom
-```
-
-See `context/brainstorm/2026-05-10-eag-agent-instructions.md` for full documentation.
+See `context/brainstorm/2026-05-10-eag-agent-instructions.md` or the `engrammic:eag-guide` skill for full documentation.
 
 ## Performance targets
 

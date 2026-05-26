@@ -436,7 +436,7 @@ class OAuthConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     issuer: str = "https://api.engrammic.ai"
-    access_token_ttl_seconds: int = 3600  # 1 hour
+    access_token_ttl_seconds: int = 2592000  # 30 days - harness refresh is unreliable
     refresh_token_ttl_days: int = 90
     authorization_code_ttl_seconds: int = 600  # 10 minutes
     allowed_redirect_hosts: list[str] = Field(
