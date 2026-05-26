@@ -9,8 +9,18 @@ from typing import Any
 import asyncpg  # type: ignore[import-untyped]
 import structlog
 from fastapi import FastAPI, Header, HTTPException, Request
+from pydantic import BaseModel
 
 from beacon_service.config import BeaconConfig
+
+
+class VersionInfo(BaseModel):
+    """Version information for self-hosted instances."""
+
+    latest: str
+    minimum_supported: str
+    deprecation_threshold: str
+
 
 log = structlog.get_logger()
 
@@ -68,3 +78,14 @@ async def receive_beacon(
 async def health() -> dict[str, str]:
     """Health check endpoint."""
     return {"status": "healthy"}
+
+
+@app.get("/versions")
+async def get_versions() -> VersionInfo:
+    """Return version thresholds for self-hosted instances."""
+    config = BeaconConfig.from_env()
+    return VersionInfo(
+        latest=config.version_latest,
+        minimum_supported=config.version_minimum,
+        deprecation_threshold=config.version_deprecated,
+    )
