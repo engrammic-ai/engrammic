@@ -92,6 +92,8 @@ jobs:
       contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@v4
+
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
@@ -123,8 +125,6 @@ jobs:
           gcloud run services update-traffic engrammic-beta-api \
             --region ${{ env.REGION }} \
             --to-latest
-
-      - uses: actions/checkout@v4
 
       - name: Sync compose file to VM
         run: |
