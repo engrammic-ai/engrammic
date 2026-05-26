@@ -3,22 +3,6 @@
 # For scaling guidance, see comments below.
 
 services:
-  migrate:
-    image: europe-north1-docker.pkg.dev/engrammic/releases/engrammic-api:v0.1.0
-    container_name: engrammic-migrate
-    env_file:
-      - .env
-    environment:
-      - POSTGRES_HOST=postgres
-      - POSTGRES_USER=engrammic
-      - POSTGRES_DB=engrammic
-      - LICENSE_VALIDATION_ENABLED=false
-    command: ["python", "-m", "alembic", "upgrade", "head"]
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: "no"
-
   app:
     image: europe-north1-docker.pkg.dev/engrammic/releases/engrammic-api:v0.1.0
     container_name: engrammic-app
@@ -33,9 +17,9 @@ services:
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
       - LICENSE_VALIDATION_ENABLED=true
+      # Migrations run automatically on startup. Set to false to disable:
+      # - RUN_MIGRATIONS=false
     depends_on:
-      migrate:
-        condition: service_completed_successfully
       memgraph:
         condition: service_healthy
       qdrant:
