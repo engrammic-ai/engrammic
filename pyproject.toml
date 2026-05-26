@@ -125,6 +125,11 @@ ignore_missing_imports = true
 module = ["workos", "workos.*"]
 ignore_missing_imports = true
 
+# asyncpg lacks type stubs
+[[tool.mypy.overrides]]
+module = ["asyncpg", "asyncpg.*"]
+ignore_missing_imports = true
+
 # MCP tools use untyped @mcp.tool decorator from fastmcp
 [[tool.mypy.overrides]]
 module = ["context_service.mcp.tools.*", "context_service.mcp.server"]
