@@ -126,6 +126,7 @@ def extraction(
                 source_uri: str | None = row.get("source_uri")
                 if not content:
                     context.log.warning(f"doc {doc_id} has no content; skipping")
+                    extracted_doc_ids.append(doc_id)
                     continue
 
                 try:
