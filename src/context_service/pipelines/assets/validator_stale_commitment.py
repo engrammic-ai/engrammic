@@ -16,7 +16,6 @@ Metrics emitted per run:
     errors               -- unexpected exceptions per commitment
 """
 
-import contextlib
 import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -205,7 +204,7 @@ def validator_stale_commitment_asset(
                 if undermines and confidence >= _STALE_CONFIDENCE_THRESHOLD:
                     evidence_ids = [e["id"] for e in evidence if e["id"]]
                     about_ids = [commitment_id, *evidence_ids]
-                    with contextlib.suppress(Exception):
+                    try:
                         await create_stale_commitment(
                             store=store,
                             redis=redis_client,
@@ -214,7 +213,13 @@ def validator_stale_commitment_asset(
                             evidence_ids=evidence_ids,
                             about_ids=about_ids,
                         )
-                    stale_detected += 1
+                        stale_detected += 1
+                    except Exception as exc:  # noqa: BLE001
+                        errors += 1
+                        context.log.warning(
+                            f"validator_stale_commitment: failed to create stale marker "
+                            f"commitment={commitment_id}: {exc!r}"
+                        )
                     context.log.info(
                         f"validator_stale_commitment: stale detected "
                         f"commitment={commitment_id} confidence={confidence:.3f} silo={silo_id}"

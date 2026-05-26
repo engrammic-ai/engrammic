@@ -51,6 +51,14 @@ MERGE (c:EdgeHeatCursor {silo_id: $silo_id})
 SET c.last_id = $last_id, c.updated_at = $now
 """
 
+_FETCH_EXISTING_EDGE_HEAT_CYPHER = """
+UNWIND $link_ids AS lid
+MATCH (w:WeakLink {id: lid, silo_id: $silo_id})
+RETURN w.id AS link_id,
+       coalesce(w.edge_heat, 0.0) AS edge_heat,
+       w.heat_updated_at AS heat_updated_at
+"""
+
 
 def _run_async(coro: Any) -> Any:
     """Run a coroutine, handling cases where an event loop is already running."""
@@ -135,16 +143,45 @@ def edge_heat_asset(
                 )
             return 0, total_events, new_last_id
 
-        # Normalise raw counts to [0, 1] heat scores
-        updates = [
-            {
-                "link_id": eid,
-                "heat_score": min(1.0, math.log1p(count) / math.log1p(XREAD_COUNT)),
-            }
-            for eid, count in heat_acc.items()
-        ]
+        # Fetch existing edge heat scores so we can apply time decay before
+        # combining with the new contribution from this batch.
+        existing_heat: dict[str, float] = {}
+        existing_updated_at: dict[str, str | None] = {}
+        existing_rows = await mg_client.execute_query(
+            _FETCH_EXISTING_EDGE_HEAT_CYPHER,
+            {"silo_id": silo_id, "link_ids": list(heat_acc.keys())},
+        )
+        for row in existing_rows:
+            lid = row["link_id"]
+            existing_heat[lid] = float(row["edge_heat"])
+            existing_updated_at[lid] = row.get("heat_updated_at")
 
-        now_iso = datetime.now(UTC).isoformat()
+        now_dt = datetime.now(UTC)
+        now_iso = now_dt.isoformat()
+
+        # Convert raw counts to decay-weighted heat scores, blending with
+        # time-decayed existing values.
+        updates: list[dict[str, Any]] = []
+        for eid, count in heat_acc.items():
+            # New contribution: normalise log(1 + count) / log(1 + XREAD_COUNT).
+            new_contribution = min(1.0, math.log1p(count) / math.log1p(XREAD_COUNT))
+
+            # Decay the existing score based on time since last update.
+            prior_heat = existing_heat.get(eid, 0.0)
+            prior_updated_at = existing_updated_at.get(eid)
+            if prior_heat > 0.0 and prior_updated_at is not None:
+                try:
+                    prior_dt = datetime.fromisoformat(prior_updated_at)
+                    age_seconds = (now_dt - prior_dt).total_seconds()
+                    decayed_prior = prior_heat * _decay_factor(max(0.0, age_seconds))
+                except (ValueError, TypeError):
+                    decayed_prior = 0.0
+            else:
+                decayed_prior = prior_heat
+
+            heat_score = min(1.0, decayed_prior + new_contribution)
+            updates.append({"link_id": eid, "heat_score": heat_score})
+
         await mg_client.execute_write(
             APPLY_EDGE_HEAT_CYPHER,
             {"silo_id": silo_id, "updates": updates, "now": now_iso},
