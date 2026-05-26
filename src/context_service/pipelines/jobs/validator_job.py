@@ -11,9 +11,9 @@ import dagster as dg
 sage_validator_job = dg.define_asset_job(
     name="sage_validator_job",
     selection=dg.AssetSelection.assets(
-        "validator_contradiction_asset",
-        "validator_stale_commitment_asset",
-        "marker_cleanup_asset",
+        "validator_contradiction",
+        "validator_stale_commitment",
+        "marker_cleanup",
     ),
     description="SAGE Validator: contradiction confirmation, stale commitment detection, and marker cleanup.",
 )

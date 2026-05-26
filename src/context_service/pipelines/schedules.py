@@ -392,9 +392,9 @@ def groundskeeper_gc_schedule(context: ScheduleEvaluationContext) -> dg.RunReque
     cron_schedule="*/5 * * * *",
     name="sage_validator_schedule",
     target=dg.AssetSelection.assets(
-        "validator_contradiction_asset",
-        "validator_stale_commitment_asset",
-        "marker_cleanup_asset",
+        "validator_contradiction",
+        "validator_stale_commitment",
+        "marker_cleanup",
     ),
     description="SAGE Validator (every 5m): contradiction confirmation, stale commitment detection, and marker cleanup.",
     execution_timezone="UTC",
