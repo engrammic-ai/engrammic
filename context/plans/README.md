@@ -5,6 +5,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 ## Current state (2026-05-26)
 
 **Shipped:**
+- v2.30 Self-Hosted Distribution Phase 2 — Version deprecation warnings, /versions endpoint, quickstart docs
 - v2.29 Self-Hosted Distribution Phase 1 — License validation, Docker bundle, installer CLI (docker/doctor/scale commands)
 - v2.28 Engagement Plan E — Hooks and Distribution (session ID config, engage hook, skill, AGENTS.md, docs)
 - v2.27 Engagement Plan D — Hard Checkpoint (touch counter, soft-to-hard escalation, empty results on hard mode)
@@ -49,7 +50,6 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
-| [2026-05-26-self-hosted-phase2.md](./2026-05-26-self-hosted-phase2.md) | Self-hosted Phase 2: version deprecation warnings + quickstart docs | Ready to execute |
 | [2026-05-20-self-hosted-rest-api-phase1.md](./2026-05-20-self-hosted-rest-api-phase1.md) | Self-hosted REST API: auth + Memory/Knowledge endpoints | Ready to execute |
 
 ## Future work
@@ -96,6 +96,7 @@ Specced or checkpointed for later implementation:
 ## Archive
 
 Completed plans in `archive/`:
+- Self-Hosted Distribution Phase 2 (2026-05-26) - version deprecation warnings, /versions endpoint, quickstart docs
 - Self-Hosted Distribution Phase 1 (2026-05-26) - license validation, Docker bundle, installer CLI
 - Engagement Plan E (2026-05-26) - session ID config, engage hook, skill, AGENTS.md, docs
 - Engagement Plan D (2026-05-25) - touch counter, soft-to-hard escalation, empty results on hard mode
