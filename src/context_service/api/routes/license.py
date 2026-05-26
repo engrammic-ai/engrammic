@@ -11,6 +11,7 @@ from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
 from context_service.config.logging import get_logger
+from context_service.license.validator import LicenseError, validate_license_key
 
 logger = get_logger(__name__)
 
@@ -35,25 +36,26 @@ async def renew_license(authorization: str = Header(...)) -> RenewalResponse:
         raise HTTPException(status_code=401, detail="Invalid authorization")
 
     old_key = authorization[7:]
-    if old_key.startswith(KEY_PREFIX):
-        old_key = old_key[len(KEY_PREFIX):]
 
+    # Verify the license signature before renewing (prevents forged licenses)
     try:
-        payload = jwt.decode(old_key, options={"verify_signature": False})
-    except jwt.DecodeError as e:
-        raise HTTPException(status_code=400, detail="Invalid license key") from e
+        license_info = validate_license_key(old_key)
+    except LicenseError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
-    customer = payload.get("sub")
-    if not customer:
-        raise HTTPException(status_code=400, detail="Invalid license key")
+    customer = license_info.customer
 
     # TODO: Check customer status in database (payment active, not revoked)
-    # For MVP, always renew if key format is valid
+    # For MVP, always renew if key is cryptographically valid
 
-    private_key = cast(
-        Ed25519PrivateKey,
-        serialization.load_pem_private_key(private_key_pem.encode(), password=None),
-    )
+    try:
+        private_key = cast(
+            Ed25519PrivateKey,
+            serialization.load_pem_private_key(private_key_pem.encode(), password=None),
+        )
+    except Exception:
+        logger.error("license_private_key_invalid")
+        raise HTTPException(status_code=503, detail="Renewal not configured") from None
 
     now = datetime.now(UTC)
     new_payload = {
@@ -61,8 +63,8 @@ async def renew_license(authorization: str = Header(...)) -> RenewalResponse:
         "iss": ISSUER,
         "iat": int(now.timestamp()),
         "exp": int((now + timedelta(days=90)).timestamp()),
-        "tier": payload.get("tier", "self-hosted"),
-        "features": payload.get("features", ["mcp", "rest-api", "sage"]),
+        "tier": license_info.tier,
+        "features": license_info.features,
     }
 
     new_token = jwt.encode(new_payload, private_key, algorithm="EdDSA")
