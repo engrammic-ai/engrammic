@@ -16,6 +16,8 @@ services:
       - QDRANT_HOST=qdrant
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
+      - POSTGRES_USER=engrammic
+      - POSTGRES_DATABASE=engrammic
       - LICENSE_VALIDATION_ENABLED=true
       # Migrations run automatically on startup. Set to false to disable:
       # - RUN_MIGRATIONS=false
