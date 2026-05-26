@@ -28,7 +28,7 @@ _BATCH_SIZE = 50
 
 _PENDING_DOCUMENTS = """
 MATCH (d:Document {silo_id: $silo_id})
-WHERE d.extracted_at IS NULL
+WHERE d.extracted_at IS NULL AND d.content IS NOT NULL
 RETURN d.id AS id, d.content AS content, d.source_uri AS source_uri
 LIMIT $batch
 """

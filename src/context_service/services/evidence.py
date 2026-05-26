@@ -205,7 +205,7 @@ class EvidenceValidator:
 
         query = """
         MERGE (d:Node:Document {id: $doc_id, silo_id: $silo_id})
-        ON CREATE SET d.uri = $uri, d.created_at = datetime()
+        ON CREATE SET d.uri = $uri, d.created_at = datetime(), d.extracted_at = datetime()
         RETURN d.id AS id
         """
         await self._store.execute_query(
