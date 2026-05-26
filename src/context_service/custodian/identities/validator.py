@@ -25,6 +25,14 @@ OPTIONAL MATCH (n {id: pid, silo_id: $silo_id})
 RETURN pid AS premise_id, n IS NOT NULL AS exists
 """
 
+# Batched query to get premises for multiple hypotheses in one round-trip.
+# Filters by silo_id to prevent cross-tenant data leakage.
+GET_HYPOTHESIS_PREMISES_BATCH = """
+UNWIND $hypothesis_ids AS hid
+MATCH (h:WorkingHypothesis {id: hid, silo_id: $silo_id})-[:DERIVED_FROM]->(p)
+RETURN p.id AS premise_id
+"""
+
 
 @dataclass
 class ValidatorIdentity:
@@ -59,12 +67,15 @@ class ValidatorIdentity:
         # For now, just validate premises exist
         # TODO: Add LLM-based reasoning structure validation
 
-        all_premises = []
-        for hid in hypothesis_ids:
-            rows = await self.store.execute_query(
-                "MATCH (h:WorkingHypothesis {id: $id})-[:DERIVED_FROM]->(p) RETURN p.id AS premise_id",
-                {"id": hid},
-            )
-            all_premises.extend([r["premise_id"] for r in rows])
+        if not hypothesis_ids:
+            return ValidationResult(valid=True)
+
+        # Batch query to get all premises in one round-trip (fixes N+1)
+        # Also filters by silo_id to prevent cross-tenant leakage
+        rows = await self.store.execute_query(
+            GET_HYPOTHESIS_PREMISES_BATCH,
+            {"hypothesis_ids": hypothesis_ids, "silo_id": self.silo_id},
+        )
+        all_premises = [r["premise_id"] for r in rows]
 
         return await self.validate_premises(all_premises)
