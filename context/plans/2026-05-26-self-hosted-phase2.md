@@ -428,10 +428,9 @@ Add import at top with other license imports:
 from context_service.license.version_check import check_version
 ```
 
-Add after the license check block (around line 48-54), inside the lifespan function:
+Add after the license check block (around line 48-54), inside the lifespan function. Note: use the existing `settings` variable from line 44, don't call `get_settings()` again:
 ```python
     # Version deprecation check (non-blocking on failure)
-    settings = get_settings()
     if settings.telemetry.enabled:
         try:
             await check_version()
@@ -462,7 +461,7 @@ git commit -m "feat(api): check version on startup"
 
 - [ ] **Step 1: Create background task function**
 
-Add after the imports, before `logger = get_logger(__name__)`:
+Add after `logger = get_logger(__name__)` (around line 38), before the `lifespan` function:
 ```python
 async def _periodic_version_check(interval_hours: int = 24) -> None:
     """Background task to periodically check version."""
@@ -480,12 +479,13 @@ async def _periodic_version_check(interval_hours: int = 24) -> None:
 
 - [ ] **Step 2: Start background task in lifespan**
 
-Add after the initial version check block:
+Add immediately after the version check block from Task 5 (uses existing `settings` variable):
 ```python
-    # Start periodic version check (every 24h)
-    if settings.telemetry.enabled:
+        # Start periodic version check (every 24h)
         asyncio.create_task(_periodic_version_check())
 ```
+
+Note: This goes inside the `if settings.telemetry.enabled:` block, so no need to check again.
 
 - [ ] **Step 3: Run linter**
 
