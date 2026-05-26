@@ -15,12 +15,13 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 
-def _anonymize_silo_id(silo_id: str) -> str:
+def _anonymize_silo_id(silo_id: str | object) -> str:
     """Hash silo_id for metrics labels to prevent tenant enumeration.
 
     Uses first 8 chars of SHA256 - sufficient for cardinality, not reversible.
     """
-    return hashlib.sha256(silo_id.encode()).hexdigest()[:8]
+    silo_str = str(silo_id) if not isinstance(silo_id, str) else silo_id
+    return hashlib.sha256(silo_str.encode()).hexdigest()[:8]
 
 
 # ---------------------------------------------------------------------------
