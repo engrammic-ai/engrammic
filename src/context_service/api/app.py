@@ -23,6 +23,7 @@ from context_service.config.logging import configure_logging, get_logger
 from context_service.config.settings import get_settings
 from context_service.core.service_registry import ServiceRegistry
 from context_service.license import check_license_on_startup
+from context_service.license.version_check import check_version
 from context_service.stores import (
     MemgraphClient,
     QdrantClient,
@@ -36,6 +37,20 @@ from context_service.telemetry.install_id import get_or_create_install_id
 from context_service.telemetry.tracing import instrument_fastapi, setup_tracing
 
 logger = get_logger(__name__)
+
+
+async def _periodic_version_check(interval_hours: int = 24) -> None:
+    """Background task to periodically check version."""
+    from context_service.license.version_check import check_version
+
+    while True:
+        await asyncio.sleep(interval_hours * 3600)
+        try:
+            await check_version()
+        except SystemExit:
+            logger.critical("unsupported_version_detected_runtime")
+        except Exception as e:
+            logger.warning("periodic_version_check_failed", error=str(e))
 
 
 @asynccontextmanager
@@ -52,6 +67,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if license_info and license_info.is_expiring_soon:
         from context_service.license.renewal import attempt_license_renewal
         asyncio.create_task(attempt_license_renewal())
+
+    # Version deprecation check (non-blocking on failure)
+    if settings.telemetry.enabled:
+        try:
+            await check_version()
+        except SystemExit:
+            raise
+        except Exception as e:
+            logger.warning("version_check_startup_failed", error=str(e))
 
     logger.info("creating_database_connections")
 
@@ -208,6 +232,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             interval_hours=settings.telemetry.beacon_interval_hours,
         )
         await beacon.start()
+
+        # Start periodic version check (every 24h)
+        asyncio.create_task(_periodic_version_check())
 
     yield
 
