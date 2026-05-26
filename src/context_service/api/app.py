@@ -23,6 +23,7 @@ from context_service.config.logging import configure_logging, get_logger
 from context_service.config.settings import get_settings
 from context_service.core.service_registry import ServiceRegistry
 from context_service.license import check_license_on_startup
+from context_service.license.version_check import check_version
 from context_service.stores import (
     MemgraphClient,
     QdrantClient,
@@ -52,6 +53,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if license_info and license_info.is_expiring_soon:
         from context_service.license.renewal import attempt_license_renewal
         asyncio.create_task(attempt_license_renewal())
+
+    # Version deprecation check (non-blocking on failure)
+    if settings.telemetry.enabled:
+        try:
+            await check_version()
+        except SystemExit:
+            raise
+        except Exception as e:
+            logger.warning("version_check_startup_failed", error=str(e))
 
     logger.info("creating_database_connections")
 
