@@ -21,6 +21,7 @@ from context_service.api.routes.source_rules import router as source_rules_route
 from context_service.config.logging import configure_logging, get_logger
 from context_service.config.settings import get_settings
 from context_service.core.service_registry import ServiceRegistry
+from context_service.license import check_license_on_startup
 from context_service.stores import (
     MemgraphClient,
     QdrantClient,
@@ -42,6 +43,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
 
     app.state.start_time = time.monotonic()
+
+    license_info = check_license_on_startup()
+    app.state.license_info = license_info
 
     logger.info("creating_database_connections")
 
