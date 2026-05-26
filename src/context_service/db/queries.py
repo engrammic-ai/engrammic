@@ -1669,6 +1669,7 @@ RETURN deleted_contradictions, deleted_stale_commitments
 # Atomic delete+return for marker cleanup (race-condition safe)
 # Combines GET_EXPIRED_MARKERS and DELETE_EXPIRED_MARKERS into single atomic query.
 # Returns about_ids for Redis cleanup before deleting the nodes.
+# Uses single CALL with UNION ALL inside for Memgraph compatibility.
 DELETE_EXPIRED_MARKERS_ATOMIC = """
 CALL {
     MATCH (c:Contradiction {silo_id: $silo_id})
@@ -1676,10 +1677,7 @@ CALL {
     WITH c, c.id AS id, c.about_ids AS about_ids
     DETACH DELETE c
     RETURN id, 'Contradiction' AS marker_type, about_ids
-}
-RETURN id, marker_type, about_ids
-UNION ALL
-CALL {
+    UNION ALL
     MATCH (sc:StaleCommitment {silo_id: $silo_id})
     WHERE sc.expires_at IS NOT NULL AND sc.expires_at < $now
     WITH sc, sc.id AS id, sc.about_ids AS about_ids

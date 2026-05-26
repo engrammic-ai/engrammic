@@ -214,16 +214,16 @@ def validator_stale_commitment_asset(
                             about_ids=about_ids,
                         )
                         stale_detected += 1
+                        context.log.info(
+                            f"validator_stale_commitment: stale detected "
+                            f"commitment={commitment_id} confidence={confidence:.3f} silo={silo_id}"
+                        )
                     except Exception as exc:  # noqa: BLE001
                         errors += 1
                         context.log.warning(
                             f"validator_stale_commitment: failed to create stale marker "
                             f"commitment={commitment_id}: {exc!r}"
                         )
-                    context.log.info(
-                        f"validator_stale_commitment: stale detected "
-                        f"commitment={commitment_id} confidence={confidence:.3f} silo={silo_id}"
-                    )
                 else:
                     false_positives += 1
                     context.log.debug(
