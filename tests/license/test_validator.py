@@ -8,16 +8,21 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import (
     Encoding,
-    NoEncryption,
     PublicFormat,
-    PrivateFormat,
 )
 
 from context_service.license.validator import (
     LicenseError,
     LicenseInfo,
+    _get_public_key,
     validate_license_key,
 )
+
+
+@pytest.fixture(autouse=True)
+def clear_public_key_cache() -> None:
+    """Clear the public key cache before each test for isolation."""
+    _get_public_key.cache_clear()
 
 
 def test_validate_license_key_missing_prefix() -> None:
@@ -58,9 +63,8 @@ def test_validate_license_key_expired() -> None:
     with patch(
         "context_service.license.validator.get_public_key_pem",
         return_value=public_key_pem,
-    ):
-        with pytest.raises(LicenseError, match="expired"):
-            validate_license_key(expired_key)
+    ), pytest.raises(LicenseError, match="expired"):
+        validate_license_key(expired_key)
 
 
 def test_license_info_days_remaining() -> None:
