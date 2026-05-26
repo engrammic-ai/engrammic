@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+from collections.abc import Generator
+from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 import dagster as dg
@@ -16,6 +18,7 @@ from pydantic import PrivateAttr
 from context_service.config.settings import Settings, get_settings
 
 if TYPE_CHECKING:
+    import asyncpg
     from neo4j import AsyncDriver
     from qdrant_client import AsyncQdrantClient
     from redis.asyncio import Redis
@@ -60,6 +63,41 @@ def _build_embedding_service() -> EmbeddingService:
     from context_service.embeddings import build_embedding_service
 
     return build_embedding_service()
+
+
+class PostgresResource(dg.ConfigurableResource):  # type: ignore[type-arg]
+    """Wraps asyncpg connection pool for Dagster jobs.
+
+    Uses asyncio.run() to create pool in sync context. This works because Dagster
+    ops run without an existing event loop. Pool is reused across calls within
+    a single job execution.
+    """
+
+    database_url: str
+
+    _pool: asyncpg.Pool | None = PrivateAttr(default=None)
+
+    @contextmanager
+    def get_pool(self) -> Generator[asyncpg.Pool, None, None]:
+        """Get or create asyncpg pool."""
+        import asyncpg as _asyncpg
+
+        async def _create() -> asyncpg.Pool:
+            return await _asyncpg.create_pool(self.database_url)
+
+        if self._pool is None:
+            self._pool = asyncio.run(_create())
+
+        try:
+            yield self._pool
+        finally:
+            pass  # Pool stays open for resource lifetime
+
+    def teardown_after_execution(self, _context: dg.InitResourceContext) -> None:
+        if self._pool is not None:
+            pool = self._pool
+            self._pool = None
+            _close_async(pool.close())
 
 
 class MemgraphResource(dg.ConfigurableResource):  # type: ignore[type-arg]
@@ -233,6 +271,7 @@ def build_default_resources() -> dict[str, dg.ConfigurableResource]:  # type: ig
     qdrant_api_key = settings.qdrant_api_key.get_secret_value() if settings.qdrant_api_key else ""
 
     return {
+        "postgres": PostgresResource(database_url=settings.postgres_dsn),
         "memgraph": MemgraphResource(
             uri=settings.memgraph_uri,
             user=settings.memgraph_user,
@@ -255,6 +294,7 @@ __all__ = [
     "EmbeddingResource",
     "LLMResource",
     "MemgraphResource",
+    "PostgresResource",
     "QdrantResource",
     "RedisResource",
     "build_default_resources",

@@ -32,12 +32,6 @@ dependencies = [
     # Observability
     "structlog>=24.1",
     "prometheus-client>=0.20",
-    "opentelemetry-api>=1.25",
-    "opentelemetry-sdk>=1.25",
-    "opentelemetry-exporter-otlp>=1.25",
-    "opentelemetry-instrumentation-fastapi>=0.46b0",
-    "opentelemetry-instrumentation-httpx>=0.46b0",
-    "opentelemetry-instrumentation-redis>=0.46b0",
     # Redis
     "redis>=5.0",
     # Postgres (tag config)
@@ -104,6 +98,8 @@ ignore = ["E501"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["ARG001", "ARG002"]
 "src/context_service/pipelines/jobs/*.py" = ["ARG001"]  # Dagster ops require context param
+"src/context_service/telemetry/recorder.py" = ["ARG001"]  # API compat: args unused in PG impl
+"src/context_service/telemetry/tracing.py" = ["ARG001"]  # API compat: no-op stubs
 
 [tool.mypy]
 python_version = "3.12"
@@ -123,6 +119,11 @@ ignore_missing_imports = true
 # workos lacks type stubs (no types-workos on PyPI)
 [[tool.mypy.overrides]]
 module = ["workos", "workos.*"]
+ignore_missing_imports = true
+
+# asyncpg lacks type stubs
+[[tool.mypy.overrides]]
+module = ["asyncpg", "asyncpg.*"]
 ignore_missing_imports = true
 
 # MCP tools use untyped @mcp.tool decorator from fastmcp

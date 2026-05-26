@@ -24,6 +24,8 @@ from typing import Any
 import dagster as dg
 from dagster import ScheduleEvaluationContext
 
+from context_service.pipelines.jobs.telemetry_gauges import telemetry_gauges_job
+from context_service.pipelines.jobs.telemetry_prune import telemetry_prune_job
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import MemgraphResource
 
@@ -415,6 +417,18 @@ def sage_validator_schedule(
         )
 
 
+telemetry_gauges_schedule = dg.ScheduleDefinition(
+    job=telemetry_gauges_job,
+    cron_schedule="0 * * * *",  # hourly
+    default_status=dg.DefaultScheduleStatus.RUNNING,
+)
+
+telemetry_prune_schedule = dg.ScheduleDefinition(
+    job=telemetry_prune_job,
+    cron_schedule="0 3 * * *",  # daily at 3am
+    default_status=dg.DefaultScheduleStatus.RUNNING,
+)
+
 all_schedules: list[Any] = [
     # SAGE pipelines
     sage_custodian_schedule,
@@ -428,6 +442,9 @@ all_schedules: list[Any] = [
     reconciliation_gc_schedule,
     proposal_cleanup_schedule,
     groundskeeper_gc_schedule,
+    # Telemetry
+    telemetry_gauges_schedule,
+    telemetry_prune_schedule,
 ]
 
 __all__ = [
@@ -442,4 +459,6 @@ __all__ = [
     "reconciliation_gc_schedule",
     "proposal_cleanup_schedule",
     "groundskeeper_gc_schedule",
+    "telemetry_gauges_schedule",
+    "telemetry_prune_schedule",
 ]

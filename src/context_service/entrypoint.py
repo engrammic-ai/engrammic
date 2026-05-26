@@ -22,9 +22,8 @@ def run_migrations() -> bool:
 if __name__ == "__main__":
     run_migrations_flag = os.environ.get("RUN_MIGRATIONS", "true").lower()
 
-    if run_migrations_flag in ("true", "1", "yes"):
-        if not run_migrations():
-            sys.exit(1)
+    if run_migrations_flag in ("true", "1", "yes") and not run_migrations():
+        sys.exit(1)
 
     port = os.environ.get("PORT", "8000")
     print(f"Starting server on port {port}...")

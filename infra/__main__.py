@@ -13,7 +13,6 @@ from components import (
     MigrationJob,
     NetworkStack,
     SecretsStack,
-    SignozHost,
     StatefulHost,
     StorageStack,
 )
@@ -75,13 +74,6 @@ stateful_host = StatefulHost(
     postgres_host=postgres_host,
 )
 
-# SigNoz observability host
-signoz_host = SignozHost(
-    "engrammic-signoz",
-    network=network.vpc,
-    subnet=network.private_subnet,
-    service_account_email=iam.stateful_host.email,  # reuse SA for now
-)
 # Set postgres_host from StatefulHost if not using Cloud SQL
 if not use_cloudsql:
     postgres_host = stateful_host.instance.network_interfaces[0].network_ip
@@ -91,7 +83,6 @@ internal_dns = InternalDNS(
     "engrammic-dns",
     vpc_id=network.vpc.id,
     stateful_host_ip=stateful_host.instance.network_interfaces[0].network_ip,
-    signoz_ip=signoz_host.instance.network_interfaces[0].network_ip,
 )
 stateful_hostname = internal_dns.hostname
 
@@ -126,11 +117,6 @@ context_service = ContextServiceRun(
         # Telemetry beacon (URL set via config, secret from Pulumi secrets)
         "TELEMETRY__BEACON_SECRET": config.get_secret("beacon_secret") or "",
         "TELEMETRY__BEACON_URL": f"https://tel.engrammic.ai/v1/beacon" if env in ("beta", "prod") else "",
-        # OTEL / SigNoz
-        "OTEL_ENABLED": "true",
-        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://signoz.engrammic.internal:4317",
-        "OTEL_SERVICE_NAME": "engrammic",
-        "OTEL_EXPORTER_OTLP_INSECURE": "true",
         # Feature flags
         **feature_flags.get(env, {}),
     },
@@ -196,7 +182,6 @@ if use_cloudsql:
 pulumi.export("vpc_id", network.vpc.id)
 pulumi.export("stateful_host_ip", stateful_host.instance.network_interfaces[0].network_ip)
 pulumi.export("stateful_hostname", stateful_hostname)
-pulumi.export("signoz_hostname", "signoz.engrammic.internal")
 pulumi.export("backup_bucket_name", storage.backup_bucket.name)
 pulumi.export(
     "service_account_emails",

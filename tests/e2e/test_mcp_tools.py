@@ -360,6 +360,7 @@ class TestReasoningChain:
     async def test_already_closed_chain(self, mcp_client: Any) -> None:
         """Calling close_session twice on the same chain should return already_closed error."""
         from context_service.mcp.tools.context_admin import close_reasoning_chain
+
         from tests.fakes.fake_graph_store import FakeGraphStore
 
         store = FakeGraphStore()
@@ -377,6 +378,7 @@ class TestReasoningChain:
     async def test_close_nonexistent_chain(self, mcp_client: Any) -> None:
         """Closing a chain that does not exist returns chain_not_found."""
         from context_service.mcp.tools.context_admin import close_reasoning_chain
+
         from tests.fakes.fake_graph_store import FakeGraphStore
 
         store = FakeGraphStore()

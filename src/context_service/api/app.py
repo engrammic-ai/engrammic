@@ -3,9 +3,10 @@
 import asyncio
 import time
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
+import asyncpg
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp
@@ -33,8 +34,9 @@ from context_service.stores import (
 )
 from context_service.telemetry.beacon import BeaconService
 from context_service.telemetry.collector import TelemetryCollector, mark_start_time
+from context_service.telemetry.flush import flush_metrics_to_db
 from context_service.telemetry.install_id import get_or_create_install_id
-from context_service.telemetry.tracing import instrument_fastapi, setup_tracing
+from context_service.telemetry.metrics import get_buffer, set_db_pool, setup_metrics
 
 logger = get_logger(__name__)
 
@@ -81,6 +83,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("creating_database_connections")
 
     registry = ServiceRegistry()
+    pg_pool: asyncpg.Pool | None = None
+    flush_task: asyncio.Task[None] | None = None
 
     try:
         memgraph_driver = await create_memgraph_driver(settings)
@@ -113,6 +117,25 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         await init_postgres()
         logger.info("postgres_connected")
+
+        pg_pool = await asyncpg.create_pool(settings.postgres_dsn)
+
+        # Initialize telemetry
+        setup_metrics()
+        set_db_pool(pg_pool)
+
+        # Start background flush task
+        async def periodic_flush() -> None:
+            while True:
+                await asyncio.sleep(60)
+                buffer = get_buffer()
+                if buffer is not None:
+                    try:
+                        await flush_metrics_to_db(pg_pool, buffer)
+                    except Exception:
+                        logger.exception("metrics_flush_failed")
+
+        flush_task = asyncio.create_task(periodic_flush())
 
         async def rebuild_memgraph() -> MemgraphClient:
             driver = await create_memgraph_driver(settings)
@@ -245,6 +268,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield
 
+    # Cancel flush task
+    if flush_task is not None:
+        flush_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await flush_task
+
+    # Final flush before shutdown
+    if pg_pool is not None:
+        buffer = get_buffer()
+        if buffer is not None:
+            await flush_metrics_to_db(pg_pool, buffer)
+        await pg_pool.close()
+        logger.info("pg_pool_closed")
+
     if beacon:
         await beacon.stop()
         logger.info("telemetry_beacon_stopped")
@@ -283,8 +320,6 @@ def create_app() -> ASGIApp:
     json_format = settings.environment != "development"
     configure_logging(log_level=log_level, json_format=json_format)
 
-    setup_tracing()
-
     docs_enabled = settings.environment not in ("production", "staging")
 
     app = FastAPI(
@@ -310,7 +345,6 @@ def create_app() -> ASGIApp:
 
     app.add_middleware(PrometheusTimingMiddleware)
     app.add_middleware(RateLimitMiddleware, redis=None)  # Redis injected at startup
-    instrument_fastapi(app)
 
     app.include_router(health.router)
     app.include_router(admin.router)
