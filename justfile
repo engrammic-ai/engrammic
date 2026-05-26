@@ -152,6 +152,11 @@ build sha="latest":
     gcloud builds submit --config=cloudbuild.dagster.yaml \
         --substitutions=SHORT_SHA={{sha}} --region={{region}} .
 
+# Build partners image (bytecode-only distribution)
+build-partners sha="latest":
+    gcloud builds submit --config=cloudbuild.partners.yaml \
+        --substitutions=SHORT_SHA={{sha}} --project={{project}} .
+
 # Deploy specific SHA to beta
 deploy-beta sha="latest":
     gcloud run services update engrammic-beta-api \

@@ -11,7 +11,7 @@ steps:
       - '--build-arg=BUILDKIT_INLINE_CACHE=1'
       - '--cache-from=${_IMAGE}:latest'
       - '-f'
-      - 'context-service/Dockerfile.partners'
+      - 'Dockerfile.partners'
       - '-t'
       - '${_IMAGE}:latest'
       - '-t'
@@ -29,4 +29,5 @@ substitutions:
 
 options:
   logging: CLOUD_LOGGING_ONLY
-  serviceAccount: 'projects/engrammic/serviceAccounts/cloudbuild-dev@engrammic.iam.gserviceaccount.com'
+
+serviceAccount: 'projects/engrammic/serviceAccounts/cloudbuild-dev@engrammic.iam.gserviceaccount.com'

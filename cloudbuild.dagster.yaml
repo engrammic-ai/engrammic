@@ -29,4 +29,5 @@ substitutions:
 
 options:
   logging: CLOUD_LOGGING_ONLY
-  serviceAccount: 'projects/engrammic/serviceAccounts/cloudbuild-dev@engrammic.iam.gserviceaccount.com'
+
+serviceAccount: 'projects/engrammic/serviceAccounts/cloudbuild-dev@engrammic.iam.gserviceaccount.com'
