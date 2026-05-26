@@ -20,7 +20,7 @@ RETURN
 """
 
 _COUNT_EDGES = """
-MATCH ()-[r]-()
+MATCH ()-[r]->()
 WHERE r.silo_id = $silo_id OR startNode(r).silo_id = $silo_id
 RETURN count(r) AS edges
 """
