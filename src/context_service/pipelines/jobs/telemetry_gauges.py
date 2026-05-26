@@ -26,7 +26,7 @@ RETURN count(r) AS edges
 
 
 @dg.op(required_resource_keys={"postgres", "memgraph", "qdrant"})
-def snapshot_storage_gauges(context: dg.OpExecutionContext) -> dict[str, Any]:
+def snapshot_storage_gauges(context) -> dict[str, Any]:
     """Snapshot storage metrics for all silos."""
     from context_service.pipelines.resources import (
         MemgraphResource,

@@ -8,7 +8,7 @@ import dagster as dg
 
 
 @dg.op(required_resource_keys={"postgres"})
-def prune_service_metrics(context: dg.OpExecutionContext) -> int:
+def prune_service_metrics(context) -> int:
     """Delete service_metrics older than 90 days."""
     from context_service.pipelines.resources import PostgresResource
 
@@ -29,7 +29,7 @@ def prune_service_metrics(context: dg.OpExecutionContext) -> int:
 
 
 @dg.op(required_resource_keys={"postgres"})
-def prune_service_errors(context: dg.OpExecutionContext) -> int:
+def prune_service_errors(context) -> int:
     """Delete expired service_errors."""
     from context_service.pipelines.resources import PostgresResource
 
@@ -48,7 +48,7 @@ def prune_service_errors(context: dg.OpExecutionContext) -> int:
 
 
 @dg.op(required_resource_keys={"postgres"})
-def prune_service_gauges(context: dg.OpExecutionContext) -> int:
+def prune_service_gauges(context) -> int:
     """Delete service_gauges older than 1 year."""
     from context_service.pipelines.resources import PostgresResource
 
@@ -69,7 +69,7 @@ def prune_service_gauges(context: dg.OpExecutionContext) -> int:
 
 
 @dg.op(required_resource_keys={"postgres"})
-def prune_beacon_events(context: dg.OpExecutionContext) -> int:
+def prune_beacon_events(context) -> int:
     """Delete beacon_events older than 90 days."""
     from context_service.pipelines.resources import PostgresResource
 
