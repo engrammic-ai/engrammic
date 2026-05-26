@@ -985,8 +985,8 @@ class Settings(BaseSettings):
         description="License key for self-hosted deployments (ENGRAMMIC_LICENSE_KEY)",
     )
     license_validation_enabled: bool = Field(
-        default=True,
-        description="Enable license validation on startup (disable for hosted)",
+        default=False,
+        description="Enable license validation on startup (self-hosted sets True)",
     )
 
     # MCP settings
