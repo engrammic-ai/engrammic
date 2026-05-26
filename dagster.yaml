@@ -11,7 +11,10 @@ storage:
         env: POSTGRES_DATABASE
 
 scheduler:
-  max_catchup_runs: 1
+  module: dagster._core.scheduler
+  class: DagsterDaemonScheduler
+  config:
+    max_catchup_runs: 1
 
 run_queue:
   max_concurrent_runs: 10
