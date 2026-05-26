@@ -57,3 +57,22 @@ async def test_flush_clears_buffer_after_insert() -> None:
     await flush_metrics_to_db(pool, buffer)
 
     assert buffer.flush() == []
+
+
+@pytest.mark.asyncio
+async def test_flush_preserves_data_on_db_error() -> None:
+    """Buffer should not be cleared if DB write fails."""
+    buffer = MetricsBuffer()
+    buffer.record("tool.remember", "silo-1")
+
+    conn = AsyncMock()
+    conn.executemany.side_effect = Exception("DB connection lost")
+    pool = _make_pool(conn)
+
+    with pytest.raises(Exception, match="DB connection lost"):
+        await flush_metrics_to_db(pool, buffer)
+
+    # Buffer should still have the data
+    rows = buffer.peek()
+    assert len(rows) == 1
+    assert rows[0]["metric_name"] == "tool.remember"

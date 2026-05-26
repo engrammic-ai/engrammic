@@ -101,8 +101,8 @@ def record_llm_tokens(model: str, input_tokens: int, output_tokens: int) -> None
     """Record LLM token usage."""
     if _buffer is None:
         return
-    _buffer.record(metric_name=f"llm.tokens.{model}.input", silo_id="system")
-    _buffer.record(metric_name=f"llm.tokens.{model}.output", silo_id="system")
+    _buffer.record(metric_name=f"llm.tokens.{model}.input", silo_id="system", count=input_tokens)
+    _buffer.record(metric_name=f"llm.tokens.{model}.output", silo_id="system", count=output_tokens)
 
 
 def record_llm_call(

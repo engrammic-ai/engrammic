@@ -66,7 +66,12 @@ def _build_embedding_service() -> EmbeddingService:
 
 
 class PostgresResource(dg.ConfigurableResource):  # type: ignore[type-arg]
-    """Wraps asyncpg connection pool for Dagster jobs."""
+    """Wraps asyncpg connection pool for Dagster jobs.
+
+    Uses asyncio.run() to create pool in sync context. This works because Dagster
+    ops run without an existing event loop. Pool is reused across calls within
+    a single job execution.
+    """
 
     database_url: str
 

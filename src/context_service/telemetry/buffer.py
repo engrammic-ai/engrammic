@@ -36,21 +36,30 @@ class MetricsBuffer:
         silo_id: str,
         latency_ms: float | None = None,
         error: bool = False,
+        count: int = 1,
     ) -> None:
-        """Record a metric observation."""
+        """Record a metric observation.
+
+        Args:
+            metric_name: Name of the metric
+            silo_id: Silo identifier
+            latency_ms: Optional latency in milliseconds
+            error: Whether this is an error event
+            count: Number of occurrences (default 1, use for batch counts like tokens)
+        """
         bucket_time = self._truncate_to_minute(time.time())
         key = (bucket_time, silo_id, metric_name)
 
         with self._lock:
             bucket = self._buckets[key]
-            bucket.count += 1
+            bucket.count += count
             if error:
-                bucket.error_count += 1
+                bucket.error_count += count
             if latency_ms is not None:
                 bucket.latencies.append(latency_ms)
 
-    def flush(self) -> list[dict[str, Any]]:
-        """Return aggregated metrics and clear buffer."""
+    def peek(self) -> list[dict[str, Any]]:
+        """Return aggregated metrics without clearing buffer."""
         with self._lock:
             results: list[dict[str, Any]] = []
             for (bucket_time, silo_id, metric_name), bucket in self._buckets.items():
@@ -68,8 +77,21 @@ class MetricsBuffer:
                         "latency_max_ms": max(latencies) if latencies else None,
                     }
                 )
-            self._buckets.clear()
             return results
+
+    def clear(self) -> None:
+        """Clear all buffered metrics. Call only after successful DB write."""
+        with self._lock:
+            self._buckets.clear()
+
+    def flush(self) -> list[dict[str, Any]]:
+        """Return aggregated metrics and clear buffer.
+
+        For atomic peek-then-clear with error handling, use peek() and clear() separately.
+        """
+        rows = self.peek()
+        self.clear()
+        return rows
 
     def _truncate_to_minute(self, ts: float) -> str:
         """Truncate timestamp to minute boundary, return ISO string."""

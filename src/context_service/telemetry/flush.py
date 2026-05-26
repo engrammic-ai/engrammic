@@ -16,8 +16,14 @@ logger = structlog.get_logger(__name__)
 
 
 async def flush_metrics_to_db(pool: asyncpg.Pool, buffer: MetricsBuffer) -> None:
-    """Flush buffered metrics to service_metrics table."""
-    rows = buffer.flush()
+    """Flush buffered metrics to service_metrics table.
+
+    Uses peek/clear pattern to avoid data loss: buffer is only cleared after
+    successful DB write. On conflict, counts and latency_sum are accumulated;
+    percentiles reflect the first write to that bucket (acceptable tradeoff
+    given 60s flush interval).
+    """
+    rows = buffer.peek()
     if not rows:
         return
 
@@ -50,6 +56,7 @@ async def flush_metrics_to_db(pool: asyncpg.Pool, buffer: MetricsBuffer) -> None
             ],
         )
 
+    buffer.clear()
     logger.debug("metrics_flushed", row_count=len(rows))
 
 
