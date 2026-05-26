@@ -373,19 +373,63 @@ LLM_MODEL=gpt-4o-mini        # Optional: override default model
 
 **Resource limits:** Compose file includes memory limits. If exceeded, container is OOM-killed and restarted.
 
-**Health degradation:** `/health` endpoint returns `degraded` status if:
-- Any service restarted in the last 5 minutes
-- Memory usage exceeds 80% of limit
-
-**Diagnostic detection:** `engrammic doctor` checks:
-```bash
-# Check for recent OOM events
-docker events --filter 'event=oom' --since 1h --until now
-
-# Output if OOM detected:
-⚠ Container engrammic-memgraph was OOM-killed 23 minutes ago
-  Recommendation: Increase memory limit in docker-compose.yml
+**Proactive memory monitoring:** `/health` endpoint includes memory usage:
+```json
+{
+  "memory": {
+    "memgraph": {"used_mb": 890, "limit_mb": 1024, "percent": 87},
+    "qdrant": {"used_mb": 320, "limit_mb": 512, "percent": 62},
+    "app": {"used_mb": 380, "limit_mb": 512, "percent": 74}
+  }
+}
 ```
+
+**Health degradation:** Returns `degraded` status if:
+- Any service memory exceeds 80% of limit
+- Any service restarted in the last 5 minutes
+
+**Log warnings:** At 80% memory: "memgraph memory at 87%, run 'engrammic scale up' to increase limits"
+
+**One-command scaling:**
+```bash
+engrammic scale up      # Bump all limits by 20%
+engrammic scale down    # Reduce all limits by 20%
+engrammic scale status  # Show current usage vs limits
+```
+
+Example output:
+```
+Current resource usage:
+
+  Container         Used     Limit    Usage
+  memgraph          890MB    1024MB   87% ⚠
+  qdrant            320MB    512MB    62%
+  app               380MB    512MB    74%
+  dagster           180MB    256MB    70%
+  redis             95MB     128MB    74%
+  postgres          210MB    256MB    82% ⚠
+
+Recommendation: Run 'engrammic scale up' to increase limits by 20%
+```
+
+After `engrammic scale up`:
+```
+Scaling up all containers by 20%...
+  memgraph:  1024MB → 1228MB
+  qdrant:    512MB  → 614MB
+  app:       512MB  → 614MB
+  dagster:   256MB  → 307MB
+  redis:     128MB  → 153MB
+  postgres:  256MB  → 307MB
+
+Restarting containers...
+Done. New limits active.
+```
+
+**Diagnostic detection:** `engrammic doctor` shows:
+- Current memory usage per container
+- Recent OOM events with recommendations
+- Disk space warnings
 
 **Graceful degradation:** If Dagster (SAGE) crashes, core API continues serving memory/recall. SAGE features return 503 until Dagster recovers.
 
@@ -398,9 +442,10 @@ docker events --filter 'event=oom' --since 1h --until now
 - [ ] Add auto-renewal endpoint (`license.engrammic.ai/renew`)
 - [ ] Create internal CLI repo with license generation
 - [ ] Extend installer for Docker flow + license key input
-- [ ] Add health endpoint with license status + SAGE mode + restart detection
+- [ ] Add health endpoint with license status + SAGE mode + memory usage
 - [ ] Add SAGE passive mode (graceful degradation when no LLM keys)
 - [ ] Add `engrammic doctor` diagnostic command with OOM detection
+- [ ] Add `engrammic scale up/down/status` for one-command resource scaling
 
 ### Phase 2: Polish
 - [ ] Documentation for self-hosted setup
