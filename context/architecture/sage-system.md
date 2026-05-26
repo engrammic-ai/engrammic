@@ -114,4 +114,4 @@ Each job emits metrics via Dagster:
 - Silos processed
 - Errors encountered
 
-SigNoz dashboards track SAGE health across all sub-agents.
+Metabase dashboards (backed by PostgreSQL telemetry tables) track SAGE health across all sub-agents.
