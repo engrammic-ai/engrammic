@@ -1,9 +1,6 @@
 """Tests for MCP tool registry."""
 
-from context_service.mcp.tools.registry import (
-    get_tool_description,
-    load_tool_config,
-)
+from context_service.mcp.tools.registry import load_tool_config
 
 
 def test_load_tool_config_returns_dict():

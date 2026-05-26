@@ -45,4 +45,6 @@ async def get_auth_context(request: Request) -> AuthContext:
     try:
         return await workos_client.verify_session(token)
     except ValueError as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+        # Log full error internally but return generic message to client
+        logger.warning("auth.session_verification_failed", error=str(exc))
+        raise HTTPException(status_code=401, detail="Session verification failed") from exc

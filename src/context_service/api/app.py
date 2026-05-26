@@ -148,7 +148,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
             logger.info("embedding_config_loading", config_dir=str(CONFIG_DIR))
             embed_config = load_config("embeddings")
-            logger.info("embedding_config_loaded", config=embed_config)
+            # Filter sensitive keys before logging
+            safe_config = {
+                k: v for k, v in embed_config.items()
+                if k.lower() not in ("api_key", "secret", "password", "token", "credential")
+            }
+            logger.info("embedding_config_loaded", config=safe_config)
             embedding_service = build_embedding_service(embedding_cache)
             logger.info(
                 "embedding_service_configured",

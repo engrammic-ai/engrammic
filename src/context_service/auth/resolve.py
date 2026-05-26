@@ -50,5 +50,6 @@ async def resolve_mcp_auth_from_header(authorization: str) -> AuthContext:
     try:
         return await workos_client.verify_session(token)
     except ValueError as exc:
-        logger.error("auth.mcp_token_invalid", hint="bearer token rejected by WorkOS")
-        raise MCPAuthError(f"Bearer token rejected by WorkOS: {exc}") from exc
+        # Log full error internally but return generic message to client
+        logger.error("auth.mcp_token_invalid", hint="bearer token rejected by WorkOS", error=str(exc))
+        raise MCPAuthError("Bearer token verification failed") from exc

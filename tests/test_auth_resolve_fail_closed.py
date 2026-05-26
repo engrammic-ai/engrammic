@@ -44,7 +44,7 @@ class TestResolveMCPAuthFromHeaderFailClosed:
                 "context_service.auth.workos_client.verify_session",
                 new=AsyncMock(side_effect=ValueError("token expired")),
             ),
-            pytest.raises(MCPAuthError, match="rejected by WorkOS"),
+            pytest.raises(MCPAuthError, match="verification failed"),
         ):
             await resolve_mcp_auth_from_header("Bearer bogus")
 

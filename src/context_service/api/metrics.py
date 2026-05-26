@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     CollectorRegistry,
@@ -11,6 +13,14 @@ from prometheus_client import (
 )
 from starlette.requests import Request
 from starlette.responses import Response
+
+
+def _anonymize_silo_id(silo_id: str) -> str:
+    """Hash silo_id for metrics labels to prevent tenant enumeration.
+
+    Uses first 8 chars of SHA256 - sufficient for cardinality, not reversible.
+    """
+    return hashlib.sha256(silo_id.encode()).hexdigest()[:8]
 
 # ---------------------------------------------------------------------------
 # Registry
@@ -120,7 +130,8 @@ def record_edge_confidence(
     Call this from write paths (context_assert, context_link, causal assets)
     after persisting an edge.
     """
-    EDGE_CONFIDENCE_DISTRIBUTION.labels(silo_id=silo_id, edge_type=edge_type).observe(confidence)
+    anon_silo = _anonymize_silo_id(silo_id)
+    EDGE_CONFIDENCE_DISTRIBUTION.labels(silo_id=anon_silo, edge_type=edge_type).observe(confidence)
 
 
 def record_belief_confidence(
@@ -133,20 +144,36 @@ def record_belief_confidence(
 
     Call this from belief-synthesis and commit write paths.
     """
-    BELIEF_CONFIDENCE_DISTRIBUTION.labels(silo_id=silo_id, edge_type=edge_type).observe(confidence)
+    anon_silo = _anonymize_silo_id(silo_id)
+    BELIEF_CONFIDENCE_DISTRIBUTION.labels(silo_id=anon_silo, edge_type=edge_type).observe(confidence)
+
+
+def record_store_latency(
+    latency_seconds: float,
+    *,
+    silo_id: str,
+    layer: str,
+) -> None:
+    """Record latency for context store operations with anonymized silo_id."""
+    anon_silo = _anonymize_silo_id(silo_id)
+    CONTEXT_STORE_LATENCY.labels(silo_id=anon_silo, layer=layer).observe(latency_seconds)
+
+
+def record_extraction_claim(*, silo_id: str) -> None:
+    """Increment extraction claims counter with anonymized silo_id."""
+    anon_silo = _anonymize_silo_id(silo_id)
+    EXTRACTION_CLAIMS_TOTAL.labels(silo_id=anon_silo).inc()
 
 
 __all__ = [
     "REGISTRY",
     "HTTP_REQUEST_LATENCY",
     "HTTP_REQUESTS_TOTAL",
-    "CONTEXT_STORE_LATENCY",
-    "EXTRACTION_CLAIMS_TOTAL",
     "CUSTODIAN_PROMOTIONS_TOTAL",
     "CUSTODIAN_REJECTIONS_TOTAL",
-    "EDGE_CONFIDENCE_DISTRIBUTION",
-    "BELIEF_CONFIDENCE_DISTRIBUTION",
     "record_edge_confidence",
     "record_belief_confidence",
+    "record_store_latency",
+    "record_extraction_claim",
     "metrics_endpoint",
 ]
