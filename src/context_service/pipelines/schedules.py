@@ -36,7 +36,7 @@ RETURN DISTINCT d.silo_id AS silo_id
 
 _SILOS_WITH_PENDING_CUSTODIAN_WORK = """
 MATCH (d:Document)
-WHERE d.processed_at IS NULL
+WHERE d.extracted_at IS NULL
    OR d.embedded_at IS NULL
 RETURN DISTINCT d.silo_id AS silo_id
 """
