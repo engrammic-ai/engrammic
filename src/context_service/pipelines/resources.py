@@ -18,8 +18,7 @@ from pydantic import PrivateAttr
 from context_service.config.settings import Settings, get_settings
 
 if TYPE_CHECKING:
-    import asyncpg  # type: ignore[import-untyped]
-
+    import asyncpg
     from neo4j import AsyncDriver
     from qdrant_client import AsyncQdrantClient
     from redis.asyncio import Redis

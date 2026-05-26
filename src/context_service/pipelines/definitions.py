@@ -24,7 +24,13 @@ causal_tombstone_job = dg.define_asset_job(
 
 defs = dg.Definitions(
     assets=all_assets,
-    jobs=[causal_tombstone_job, groundskeeper_nightly, sage_validator_job, telemetry_gauges_job, telemetry_prune_job],
+    jobs=[
+        causal_tombstone_job,
+        groundskeeper_nightly,
+        sage_validator_job,
+        telemetry_gauges_job,
+        telemetry_prune_job,
+    ],
     schedules=all_schedules,
     sensors=all_sensors,
     resources=build_default_resources(),

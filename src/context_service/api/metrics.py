@@ -155,11 +155,11 @@ def record_belief_confidence(
 def record_store_latency(
     latency_seconds: float,
     *,
-    silo_id: str,
+    silo_id: str | object,
     layer: str,
 ) -> None:
     """Record latency for context store operations with anonymized silo_id."""
-    anon_silo = _anonymize_silo_id(silo_id)
+    anon_silo = _anonymize_silo_id(str(silo_id) if not isinstance(silo_id, str) else silo_id)
     CONTEXT_STORE_LATENCY.labels(silo_id=anon_silo, layer=layer).observe(latency_seconds)
 
 

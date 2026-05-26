@@ -3,11 +3,10 @@
 import asyncio
 import time
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 
 import asyncpg
-
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp
@@ -272,10 +271,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Cancel flush task
     if flush_task is not None:
         flush_task.cancel()
-        try:
+        with suppress(asyncio.CancelledError):
             await flush_task
-        except asyncio.CancelledError:
-            pass
 
     # Final flush before shutdown
     if pg_pool is not None:

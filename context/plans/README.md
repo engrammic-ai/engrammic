@@ -50,6 +50,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
+| [2026-05-26-pg-telemetry.md](./2026-05-26-pg-telemetry.md) | Consolidate telemetry to PostgreSQL, remove SigNoz/OTEL | Ready to execute |
 | [2026-05-20-self-hosted-rest-api-phase1.md](./2026-05-20-self-hosted-rest-api-phase1.md) | Self-hosted REST API: auth + Memory/Knowledge endpoints | Ready to execute |
 
 ## Future work
@@ -102,7 +103,7 @@ Completed plans in `archive/`:
 - Engagement Plan D (2026-05-25) - touch counter, soft-to-hard escalation, empty results on hard mode
 - Engagement Plan C (2026-05-25) - engagement field in recall, dismiss/tick verbs
 - Engagement Plan B (2026-05-25) - sage.validator, Contradiction/StaleCommitment markers, inline flagging, Redis index
-- Telemetry & Observability (2026-05-25) - SigNoz infra, OTEL metrics for cache/recall/epistemic health
+- Telemetry & Observability (2026-05-25) - SigNoz infra, OTEL metrics (superseded by pg-telemetry)
 - Verb Promotion Plan A (2026-05-25) - accept/reject promoted to agent-facing in reasoning profile
 - Rate Limiting (2026-05-23) - tiered rate limiting for MCP tools and REST routes
 - Beacon Telemetry Pipeline (2026-05-23) - Metabase dashboards, replaces Cloud Trace

@@ -38,9 +38,7 @@ def prune_service_errors(context: dg.OpExecutionContext) -> int:
     async def _run() -> int:
         with postgres.get_pool() as pool:
             async with pool.acquire() as conn:
-                result = await conn.execute(
-                    "DELETE FROM service_errors WHERE expires_at < now()"
-                )
+                result = await conn.execute("DELETE FROM service_errors WHERE expires_at < now()")
                 count = int(result.split()[-1]) if result else 0
                 return count
 

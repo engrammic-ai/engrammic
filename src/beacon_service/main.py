@@ -6,7 +6,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
-import asyncpg  # type: ignore[import-untyped]
+import asyncpg
 import structlog
 from fastapi import FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel

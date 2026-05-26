@@ -6,7 +6,7 @@ import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -73,7 +73,7 @@ class MetricsBuffer:
 
     def _truncate_to_minute(self, ts: float) -> str:
         """Truncate timestamp to minute boundary, return ISO string."""
-        dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+        dt = datetime.fromtimestamp(ts, tz=UTC)
         truncated = dt.replace(second=0, microsecond=0)
         return truncated.isoformat()
 

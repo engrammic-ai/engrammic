@@ -7,7 +7,6 @@ from typing import Any
 
 import dagster as dg
 
-
 _LIST_SILOS = "SELECT DISTINCT silo_id FROM silo_config"
 
 _COUNT_NODES = """
@@ -29,7 +28,11 @@ RETURN count(r) AS edges
 @dg.op(required_resource_keys={"postgres", "memgraph", "qdrant"})
 def snapshot_storage_gauges(context: dg.OpExecutionContext) -> dict[str, Any]:
     """Snapshot storage metrics for all silos."""
-    from context_service.pipelines.resources import MemgraphResource, PostgresResource, QdrantResource
+    from context_service.pipelines.resources import (
+        MemgraphResource,
+        PostgresResource,
+        QdrantResource,
+    )
 
     postgres: PostgresResource = context.resources.postgres
     memgraph: MemgraphResource = context.resources.memgraph

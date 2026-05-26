@@ -98,6 +98,8 @@ ignore = ["E501"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["ARG001", "ARG002"]
 "src/context_service/pipelines/jobs/*.py" = ["ARG001"]  # Dagster ops require context param
+"src/context_service/telemetry/recorder.py" = ["ARG001"]  # API compat: args unused in PG impl
+"src/context_service/telemetry/tracing.py" = ["ARG001"]  # API compat: no-op stubs
 
 [tool.mypy]
 python_version = "3.12"
