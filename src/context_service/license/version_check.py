@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from enum import Enum
 
 import httpx
@@ -51,7 +52,7 @@ async def check_version() -> VersionCheckResult:
         logger.warning("version_check_failed", error=str(e), url=versions_url)
         return VersionCheckResult.CHECK_FAILED
 
-    current = Version(__version__.replace("-dev", ""))
+    current = Version(re.sub(r"[-+].+$", "", __version__))
     minimum = Version(data["minimum_supported"])
     deprecated = Version(data["deprecation_threshold"])
     latest = Version(data["latest"])

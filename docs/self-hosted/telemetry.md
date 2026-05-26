@@ -1,36 +1,28 @@
 # Telemetry
 
-Engrammic collects anonymous telemetry to improve the product and enable support.
+Engrammic collects anonymous usage metrics to improve the product.
 
-## Tiers
+## What's Collected
 
-**Tier 1 (default):** Anonymous aggregate metrics
-- Install ID (random UUID, regenerates if deleted)
-- Version and uptime
-- Total operation counts (no per-tenant breakdown)
-- Global latency percentiles and error rates
+- Startup events (version, configuration flags)
+- Aggregate operation counts (recalls, stores)
+- Error rates and types
 
-**Tier 2 (opt-in):** Per-tenant metrics
-- Everything in Tier 1
-- Per-silo operation counts and latencies
-- Enables Engrammic support to help debug tenant-specific issues
+## What's NOT Collected
+
+- Memory content or user data
+- Queries or search terms
+- Personal information
 
 ## Configuration
 
+Telemetry is enabled by default. To disable:
+
 ```bash
-# Tier 1: anonymous aggregate (default)
-ENGRAMMIC_TELEMETRY__ENABLED=true
-
-# Disable all telemetry
-ENGRAMMIC_TELEMETRY__ENABLED=false
-
-# Tier 2: specific tenants
-ENGRAMMIC_TELEMETRY__SILOS=tenant-a,tenant-b
-
-# Tier 2: all tenants
-ENGRAMMIC_TELEMETRY__SILOS=*
+# In engrammic/.env
+TELEMETRY_ENABLED=false
 ```
 
-## Local Metrics
+## Data Destination
 
-Regardless of beacon settings, all metrics are available at `/metrics` in Prometheus format with `silo_id` labels for your own monitoring.
+Metrics are sent to `tel.engrammic.ai`. No data is shared with third parties.

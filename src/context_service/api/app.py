@@ -48,7 +48,7 @@ async def _periodic_version_check(interval_hours: int = 24) -> None:
         try:
             await check_version()
         except SystemExit:
-            pass  # Don't exit from background task, just log
+            logger.critical("unsupported_version_detected_runtime")
         except Exception as e:
             logger.warning("periodic_version_check_failed", error=str(e))
 

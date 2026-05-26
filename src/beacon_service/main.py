@@ -31,6 +31,7 @@ SECRET_TO_SILO: dict[str, str] = {}
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage database connection pool lifecycle."""
     config = BeaconConfig.from_env()
+    app.state.config = config
     app.state.pool = await asyncpg.create_pool(config.database_url)
 
     async with app.state.pool.acquire() as conn:
@@ -81,9 +82,13 @@ async def health() -> dict[str, str]:
 
 
 @app.get("/versions")
-async def get_versions() -> VersionInfo:
-    """Return version thresholds for self-hosted instances."""
-    config = BeaconConfig.from_env()
+async def get_versions(request: Request) -> VersionInfo:
+    """Return version thresholds for self-hosted instances.
+
+    Intentionally unauthenticated: allows pre-auth version checks from
+    self-hosted instances. Only exposes version thresholds, no sensitive data.
+    """
+    config = request.app.state.config
     return VersionInfo(
         latest=config.version_latest,
         minimum_supported=config.version_minimum,
