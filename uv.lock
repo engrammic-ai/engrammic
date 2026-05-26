@@ -1041,14 +1041,14 @@ wheels = [
 
 [[package]]
 name = "engrammic-primitives"
-version = "0.1.1"
+version = "0.1.3"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pydantic" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c5/48/469289522083bd5e9da2b192686aab53c10a045969200e746d56b6479a9a/engrammic_primitives-0.1.1.tar.gz", hash = "sha256:aafa7b8d415d854d54740d484bed8836dfb3bd13abd3fc1602a8faa7c2a9fd13", size = 56791, upload-time = "2026-05-19T06:04:08.805Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/93/7f/0315eae7a2dac2746d212fda44715ff56cced0b2e990ee45230f7ca5f3a1/engrammic_primitives-0.1.3.tar.gz", hash = "sha256:1d1a904dfab779756523ae6515127c630e411ff818c480ab770e2830e125a382", size = 59518, upload-time = "2026-05-26T09:07:29.958Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1a/3a/ac9f13edd0b18d65edeeff6c9fd90c4cb4946bc8253b7b03e8b07ca2136e/engrammic_primitives-0.1.1-py3-none-any.whl", hash = "sha256:f5951d42b14cbe96dd997da4a50866ac94f06688eceb8b0e4597bf1f2b9fd94c", size = 33552, upload-time = "2026-05-19T06:04:07.217Z" },
+    { url = "https://files.pythonhosted.org/packages/26/82/5ed04080a632c1e69a0e8c04db447403f2987f351d567ffc7fa16b85f3a4/engrammic_primitives-0.1.3-py3-none-any.whl", hash = "sha256:e01877ff3e740cf4d450c6811f8770b283353e8e517c8830947c76383e184379", size = 34006, upload-time = "2026-05-26T09:07:28.529Z" },
 ]
 
 [[package]]
