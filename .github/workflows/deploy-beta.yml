@@ -105,31 +105,27 @@ jobs:
 
       - name: Sync all deployment files to VM
         run: |
-          # Clean up stale files from /tmp and fix any corrupted files in /opt/engrammic
+          # Create tarball of deployment files
+          tar czf /tmp/deploy.tar.gz docker-compose.prod.yml dagster.yaml workspace.yaml config skills
+
+          # Copy tarball to VM
+          gcloud compute scp /tmp/deploy.tar.gz \
+            engrammic-beta-stateful:/tmp/deploy.tar.gz \
+            --zone ${{ env.REGION }}-a \
+            --tunnel-through-iap
+
+          # Extract and move into place atomically
           gcloud compute ssh engrammic-beta-stateful \
             --zone ${{ env.REGION }}-a \
             --tunnel-through-iap \
-            --command "sudo rm -rf /tmp/docker-compose.prod.yml /tmp/dagster.yaml /tmp/workspace.yaml /tmp/config /tmp/skills \
-                       /opt/engrammic/dagster.yaml /opt/engrammic/workspace.yaml"
-          # Copy compose and dagster config files
-          gcloud compute scp \
-            docker-compose.prod.yml dagster.yaml workspace.yaml \
-            engrammic-beta-stateful:/tmp/ \
-            --zone ${{ env.REGION }}-a \
-            --tunnel-through-iap
-          # Copy config and skills directories
-          gcloud compute scp --recurse config skills \
-            engrammic-beta-stateful:/tmp/ \
-            --zone ${{ env.REGION }}-a \
-            --tunnel-through-iap
-          # Move everything into place
-          gcloud compute ssh engrammic-beta-stateful \
-            --zone ${{ env.REGION }}-a \
-            --tunnel-through-iap \
-            --command "sudo mv /tmp/docker-compose.prod.yml /opt/engrammic/docker-compose.yml && \
-                       sudo mv /tmp/dagster.yaml /tmp/workspace.yaml /opt/engrammic/ && \
-                       sudo rm -rf /opt/engrammic/config /opt/engrammic/skills && \
-                       sudo mv /tmp/config /tmp/skills /opt/engrammic/"
+            --command "cd /tmp && \
+                       sudo rm -rf deploy-staging && mkdir deploy-staging && \
+                       tar xzf deploy.tar.gz -C deploy-staging && \
+                       sudo rm -rf /opt/engrammic/dagster.yaml /opt/engrammic/workspace.yaml /opt/engrammic/config /opt/engrammic/skills && \
+                       sudo mv deploy-staging/docker-compose.prod.yml /opt/engrammic/docker-compose.yml && \
+                       sudo mv deploy-staging/dagster.yaml deploy-staging/workspace.yaml /opt/engrammic/ && \
+                       sudo mv deploy-staging/config deploy-staging/skills /opt/engrammic/ && \
+                       rm -rf deploy-staging deploy.tar.gz"
 
       - name: Deploy to VM (Dagster + infra)
         run: |
