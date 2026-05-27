@@ -2,9 +2,10 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-26)
+## Current state (2026-05-27)
 
 **Shipped:**
+- v2.32 Dagster Pipeline Deps Fix — Add missing asset dependencies for correct execution order (custodian, synthesizer, groundskeeper)
 - v2.31 PostgreSQL Telemetry — Replace SigNoz/OTEL with PostgreSQL tables, in-process buffer, Dagster jobs
 - v2.30 Self-Hosted Distribution Phase 2 — Version deprecation warnings, /versions endpoint, quickstart docs
 - v2.29 Self-Hosted Distribution Phase 1 — License validation, Docker bundle, installer CLI (docker/doctor/scale commands)
@@ -73,8 +74,6 @@ Specced or checkpointed for later implementation:
 
 | Plan | Status | Description |
 |------|--------|-------------|
-| [2026-05-18-gcp-deployment-improvements.md](./2026-05-18-gcp-deployment-improvements.md) | Draft | Distroless images, vuln scanning, health checks |
-| [2026-05-18-context-checkpoint-hooks.md](./2026-05-18-context-checkpoint-hooks.md) | Spike | Claude Code hooks for context checkpoint/restore via Engrammic |
 | [clustering-algo-eval.md](./clustering-algo-eval.md) | Spike | Evaluate LPA/HDBSCAN as Leiden replacements |
 | [dagger-test-pipeline.md](./dagger-test-pipeline.md) | Draft | Dagger-based test pipeline |
 
@@ -97,6 +96,10 @@ Specced or checkpointed for later implementation:
 ## Archive
 
 Completed plans in `archive/`:
+- Dagster Pipeline Deps Fix (2026-05-27) - add missing asset dependencies for SAGE pipelines
+- Refresh Token Persistence (2026-05-26) - draft, deferred
+- Context Checkpoint Hooks (2026-05-18) - spike, deferred
+- GCP Deployment Improvements (2026-05-18) - draft, deferred
 - PostgreSQL Telemetry (2026-05-27) - replace SigNoz/OTEL with PG tables, MetricsBuffer, Dagster jobs
 - Self-Hosted Distribution Phase 2 (2026-05-26) - version deprecation warnings, /versions endpoint, quickstart docs
 - Self-Hosted Distribution Phase 1 (2026-05-26) - license validation, Docker bundle, installer CLI
