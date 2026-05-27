@@ -44,6 +44,8 @@ logger = structlog.get_logger(__name__)
 INDIVIDUAL_CHECK_TIMEOUT = 0.03  # 30ms
 TOTAL_CHECK_TIMEOUT = 0.08  # 80ms
 
+_TIMEOUT_SENTINEL = object()
+
 
 async def run_parallel_checks(
     checks: dict[str, Coroutine[Any, Any, Any]],
@@ -73,12 +75,15 @@ async def run_parallel_checks(
 
     async def run_with_timeout(
         name: str, coro: Coroutine[Any, Any, Any]
-    ) -> tuple[str, Any | None]:
+    ) -> tuple[str, Any]:
         try:
             result = await asyncio.wait_for(coro, timeout=individual_timeout)
             return (name, result)
-        except (TimeoutError, Exception):
-            return (name, None)
+        except TimeoutError:
+            return (name, _TIMEOUT_SENTINEL)
+        except Exception:
+            logger.warning("parallel_check_failed", check=name, exc_info=True)
+            return (name, _TIMEOUT_SENTINEL)
 
     tasks = [
         asyncio.create_task(run_with_timeout(name, coro))
@@ -86,31 +91,33 @@ async def run_parallel_checks(
     ]
     check_names = list(checks.keys())
 
-    try:
-        done, pending = await asyncio.wait(
-            tasks,
-            timeout=total_timeout,
-            return_when=asyncio.ALL_COMPLETED,
-        )
+    if not tasks:
+        return results, completed, skipped
 
-        for task in pending:
-            task.cancel()
+    done, pending = await asyncio.wait(
+        tasks,
+        timeout=total_timeout,
+        return_when=asyncio.ALL_COMPLETED,
+    )
 
-        for task in done:
-            name, result = task.result()
-            if result is not None:
-                results[name] = result
-                completed.append(name)
-            else:
-                skipped.append(name)
+    # Cancel and await pending tasks for cleanup
+    for task in pending:
+        task.cancel()
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
 
-        completed_and_skipped = set(completed + skipped)
-        for name in check_names:
-            if name not in completed_and_skipped:
-                skipped.append(name)
+    for task in done:
+        name, result = task.result()
+        if result is not _TIMEOUT_SENTINEL:
+            results[name] = result
+            completed.append(name)
+        else:
+            skipped.append(name)
 
-    except TimeoutError:
-        skipped = list(check_names)
+    completed_and_skipped = set(completed + skipped)
+    for name in check_names:
+        if name not in completed_and_skipped:
+            skipped.append(name)
 
     return results, completed, skipped
 

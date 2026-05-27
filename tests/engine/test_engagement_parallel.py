@@ -58,3 +58,42 @@ async def test_parallel_checks_respects_total_timeout():
 
     assert len(completed) == 0
     assert len(skipped) == 2
+
+
+@pytest.mark.asyncio
+async def test_parallel_checks_empty_dict():
+    from context_service.engine.engagement import run_parallel_checks
+
+    results, completed, skipped = await run_parallel_checks({})
+
+    assert results == {}
+    assert completed == []
+    assert skipped == []
+
+
+@pytest.mark.asyncio
+async def test_parallel_checks_handles_exception():
+    from context_service.engine.engagement import run_parallel_checks
+
+    async def failing_check():
+        raise RuntimeError("boom")
+
+    checks = {"failing": failing_check()}
+    results, completed, skipped = await run_parallel_checks(checks)
+
+    assert "failing" in skipped
+    assert "failing" not in completed
+
+
+@pytest.mark.asyncio
+async def test_parallel_checks_none_is_valid_result():
+    from context_service.engine.engagement import run_parallel_checks
+
+    async def returns_none():
+        return None
+
+    checks = {"none_check": returns_none()}
+    results, completed, skipped = await run_parallel_checks(checks)
+
+    assert "none_check" in completed
+    assert results["none_check"] is None
