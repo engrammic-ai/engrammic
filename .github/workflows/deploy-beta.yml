@@ -103,20 +103,27 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Sync compose and config to VM
+      - name: Sync all deployment files to VM
         run: |
-          gcloud compute scp docker-compose.prod.yml \
-            engrammic-beta-stateful:/tmp/docker-compose.yml \
+          # Copy compose and dagster config files
+          gcloud compute scp \
+            docker-compose.prod.yml dagster.yaml workspace.yaml \
+            engrammic-beta-stateful:/tmp/ \
             --zone ${{ env.REGION }}-a \
             --tunnel-through-iap
-          gcloud compute scp --recurse config \
-            engrammic-beta-stateful:/tmp/config \
+          # Copy config and skills directories
+          gcloud compute scp --recurse config skills \
+            engrammic-beta-stateful:/tmp/ \
             --zone ${{ env.REGION }}-a \
             --tunnel-through-iap
+          # Move everything into place
           gcloud compute ssh engrammic-beta-stateful \
             --zone ${{ env.REGION }}-a \
             --tunnel-through-iap \
-            --command "sudo mv /tmp/docker-compose.yml /opt/engrammic/docker-compose.yml && sudo rm -rf /opt/engrammic/config && sudo mv /tmp/config /opt/engrammic/config"
+            --command "sudo mv /tmp/docker-compose.prod.yml /opt/engrammic/docker-compose.yml && \
+                       sudo mv /tmp/dagster.yaml /tmp/workspace.yaml /opt/engrammic/ && \
+                       sudo rm -rf /opt/engrammic/config /opt/engrammic/skills && \
+                       sudo mv /tmp/config /tmp/skills /opt/engrammic/"
 
       - name: Deploy to VM (Dagster + infra)
         run: |
