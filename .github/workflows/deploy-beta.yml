@@ -107,9 +107,10 @@ jobs:
         run: |
           echo "Pulling secrets from GCP Secret Manager..."
           > .env.beta
-          for secret in $(gcloud secrets list --project=${{ env.PROJECT_ID }} --filter="name:engrammic-beta" --format="value(name)"); do
-            key=$(basename "$secret" | sed "s/engrammic-beta-//" | tr '-' '_' | tr '[:lower:]' '[:upper:]')
-            value=$(gcloud secrets versions access latest --secret="$secret" --project=${{ env.PROJECT_ID }} 2>/dev/null || echo "")
+          # Fetch known secrets directly (avoids needing secrets.list permission)
+          for secret_name in workos-api-key workos-client-id workos-cookie-password postgres-password memgraph-password database-url; do
+            key=$(echo "$secret_name" | tr '-' '_' | tr '[:lower:]' '[:upper:]')
+            value=$(gcloud secrets versions access latest --secret="engrammic-beta-$secret_name" --project=${{ env.PROJECT_ID }} 2>/dev/null || echo "")
             if [ -n "$value" ]; then
               echo "$key=$value" >> .env.beta
             fi
