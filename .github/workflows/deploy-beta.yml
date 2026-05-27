@@ -103,10 +103,50 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Generate .env from Secret Manager
+        run: |
+          echo "Pulling secrets from GCP Secret Manager..."
+          > .env.beta
+          for secret in $(gcloud secrets list --project=${{ env.PROJECT_ID }} --filter="name:engrammic-beta" --format="value(name)"); do
+            key=$(basename "$secret" | sed "s/engrammic-beta-//" | tr '-' '_' | tr '[:lower:]' '[:upper:]')
+            value=$(gcloud secrets versions access latest --secret="$secret" --project=${{ env.PROJECT_ID }} 2>/dev/null || echo "")
+            if [ -n "$value" ]; then
+              echo "$key=$value" >> .env.beta
+            fi
+          done
+          # Add static config vars
+          cat >> .env.beta <<EOF
+          ENVIRONMENT=production
+          AUTH_ENABLED=true
+          POSTGRES_USER=engrammic
+          POSTGRES_DATABASE=engrammic
+          POSTGRES_PORT=5432
+          MEMGRAPH_URI=bolt://memgraph:7687
+          QDRANT_URL=http://qdrant:6333
+          REDIS_URL=redis://redis:6379
+          HOST=0.0.0.0
+          PORT=8000
+          LOG_LEVEL=INFO
+          EMBEDDING_PROVIDER=vertex
+          LITELLM_EMBEDDING_MODEL=vertex_ai/text-embedding-005
+          EMBEDDING_DIMENSIONS=768
+          LLM_PROVIDER=vertex_gemini
+          DEFAULT_LLM_MODEL=gemini-2.0-flash
+          VERTEX_PROJECT_ID=engrammic
+          VERTEX_LOCATION=europe-north1
+          CUSTODIAN__ENABLED=true
+          TELEMETRY__ENABLED=true
+          TELEMETRY__BEACON_URL=https://tel.engrammic.ai/v1/beacon
+          EOF
+          # Strip leading whitespace from each line
+          sed -i 's/^[[:space:]]*//' .env.beta
+          echo "Generated .env.beta with $(wc -l < .env.beta) lines"
+
       - name: Sync all deployment files to VM
         run: |
-          # Create tarball of deployment files
-          tar czf /tmp/deploy.tar.gz docker-compose.prod.yml dagster.yaml workspace.yaml config skills
+          # Create tarball of deployment files (including .env.beta as .env)
+          cp .env.beta .env
+          tar czf /tmp/deploy.tar.gz docker-compose.prod.yml dagster.yaml workspace.yaml config skills .env
 
           # Copy tarball to VM
           gcloud compute scp /tmp/deploy.tar.gz \
@@ -125,6 +165,7 @@ jobs:
                        sudo mv deploy-staging/docker-compose.prod.yml /opt/engrammic/docker-compose.yml && \
                        sudo mv deploy-staging/dagster.yaml deploy-staging/workspace.yaml /opt/engrammic/ && \
                        sudo mv deploy-staging/config deploy-staging/skills /opt/engrammic/ && \
+                       sudo mv deploy-staging/.env /opt/engrammic/.env && \
                        rm -rf deploy-staging deploy.tar.gz"
 
       - name: Deploy to VM (Dagster + infra)
