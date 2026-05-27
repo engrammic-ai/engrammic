@@ -112,21 +112,16 @@ jobs:
           gcloud compute ssh engrammic-beta-stateful \
             --zone ${{ env.REGION }}-a \
             --tunnel-through-iap \
-            --command 'cd /opt/engrammic && sudo bash -c "
-              echo \"Fetching secrets from Secret Manager...\"
-              cat > .env << EOF
-              POSTGRES_PASSWORD=\$(gcloud secrets versions access latest --secret=engrammic-beta-postgres-password)
-              POSTGRES_USER=engrammic
-              POSTGRES_DATABASE=engrammic
-              POSTGRES_HOST=postgres
-              POSTGRES_PORT=5432
-              MEMGRAPH_URI=bolt://memgraph:7687
-              QDRANT_URL=http://qdrant:6333
-              REDIS_URL=redis://redis:6379
-              EOF
-              sed -i \"s/^[[:space:]]*//\" .env
-              echo \"Generated .env with \$(wc -l < .env) lines\"
-            "'
+            --command "cd /opt/engrammic && sudo tee .env > /dev/null << 'ENVEOF'
+          POSTGRES_USER=engrammic
+          POSTGRES_DATABASE=engrammic
+          POSTGRES_HOST=postgres
+          POSTGRES_PORT=5432
+          MEMGRAPH_URI=bolt://memgraph:7687
+          QDRANT_URL=http://qdrant:6333
+          REDIS_URL=redis://redis:6379
+          GCP_PROJECT=engrammic
+          ENVEOF"
 
       - name: Deploy to VM
         run: |
