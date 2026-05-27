@@ -37,7 +37,7 @@ LIMIT $batch_size
 @dg.asset(
     name="custodian_finalize",
     partitions_def=silo_partitions,
-    deps=["custodian_visit"],
+    deps=["custodian_visit", "claim_to_fact_promotion"],
     description="Promote :Claim:Commitment nodes to :Finding via R2 consensus per silo.",
     retry_policy=dg.RetryPolicy(max_retries=3, delay=10.0, backoff=dg.Backoff.EXPONENTIAL),
     tags={"dagster/concurrency_key": "custodian_finalize"},
@@ -90,7 +90,13 @@ def custodian_finalize(
             if not commitment_chains:
                 continue
 
-            distinct_agents = len({c.get("produced_by_agent_id") for c in commitment_chains if c.get("produced_by_agent_id")})
+            distinct_agents = len(
+                {
+                    c.get("produced_by_agent_id")
+                    for c in commitment_chains
+                    if c.get("produced_by_agent_id")
+                }
+            )
             if distinct_agents < 2:
                 continue
 

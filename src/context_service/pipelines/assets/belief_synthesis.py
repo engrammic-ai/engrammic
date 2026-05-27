@@ -40,6 +40,7 @@ def _run_async(coro: Any) -> Any:
 @dg.asset(
     name="belief_synthesis",
     partitions_def=silo_partitions,
+    deps=["llm_pattern_detection"],
     description=(
         "Batch synthesise :Belief nodes from qualifying fact clusters. "
         "Processes up to 50 pending clusters per run."

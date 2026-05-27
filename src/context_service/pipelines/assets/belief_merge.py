@@ -50,6 +50,7 @@ def _find_overlapping_pairs(
 @dg.asset(
     name="belief_merge",
     partitions_def=silo_partitions,
+    deps=["belief_synthesis"],
     description=("Batch detect and merge overlapping :Belief nodes using embedding similarity."),
     retry_policy=dg.RetryPolicy(max_retries=1, delay=10.0),
     tags={"dagster/concurrency_key": "belief_merge"},

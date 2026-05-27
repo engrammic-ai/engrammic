@@ -46,7 +46,7 @@ def test_sage_groundskeeper_schedule_cron() -> None:
 
 
 def test_all_schedules_count() -> None:
-    assert len(all_schedules) == 10
+    assert len(all_schedules) == 12
 
 
 def test_schedule_names_in_all_schedules() -> None:
@@ -54,5 +54,8 @@ def test_schedule_names_in_all_schedules() -> None:
     assert "sage_custodian_schedule" in names
     assert "sage_synthesizer_schedule" in names
     assert "sage_groundskeeper_schedule" in names
+    assert "sage_validator_schedule" in names
     assert "auto_tagging_schedule" in names
-    assert "tag_maintenance_schedule" in names
+    assert "daily_maintenance_schedule" in names
+    assert "telemetry_gauges_schedule" in names
+    assert "telemetry_prune_schedule" in names

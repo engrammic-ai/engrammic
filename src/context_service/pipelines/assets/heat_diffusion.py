@@ -27,7 +27,7 @@ def _run_async(coro: Any) -> Any:
 
 @dg.asset(
     name="heat_diffusion",
-    deps=["heat"],
+    deps=["heat", "edge_heat"],
     partitions_def=silo_partitions,
     description="Propagate heat from hot nodes to neighbors via BFS",
     retry_policy=dg.RetryPolicy(max_retries=2, delay=10.0, backoff=dg.Backoff.EXPONENTIAL),

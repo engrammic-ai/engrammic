@@ -54,7 +54,7 @@ def _run_async(coro: Any) -> Any:
 @dg.asset(
     name="llm_pattern_detection",
     partitions_def=silo_partitions,
-    deps=["pattern_detection"],
+    deps=["pattern_detection", "clustering"],
     description=(
         "LLM-based semantic pattern detection for the silo partition.  "
         "Classifies Leiden cluster facts via Haiku and persists accepted patterns "
