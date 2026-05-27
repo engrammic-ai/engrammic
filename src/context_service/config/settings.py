@@ -418,6 +418,16 @@ class AuthConfig(BaseModel):
     workos: WorkosConfig = Field(default_factory=WorkosConfig)
 
 
+def _load_oauth_redirect_hosts() -> list[str]:
+    """Load allowed OAuth redirect hosts from YAML config file."""
+    config_path = Path(__file__).parent / "oauth_redirect_hosts.yaml"
+    if config_path.exists():
+        with open(config_path) as f:
+            data = yaml.safe_load(f)
+            return data.get("hosts", [])
+    return ["localhost", "127.0.0.1"]
+
+
 class OAuthConfig(BaseModel):
     """OAuth 2.0 configuration for MCP client authentication.
 
@@ -426,10 +436,10 @@ class OAuthConfig(BaseModel):
     use custom URL schemes (cursor://, claude://, etc.) with varying paths.
     PKCE provides code injection protection regardless of exact redirect path.
 
-    Default allowlist includes known MCP clients: Claude Desktop/Code, Cursor,
-    VS Code, Windsurf, Zed, and localhost for local development.
+    Default allowlist is loaded from oauth_redirect_hosts.yaml in this directory.
+    To add new hosts, edit that file - no code changes needed.
 
-    To allow additional hosts, set OAUTH__ALLOWED_REDIRECT_HOSTS as a
+    To override at runtime, set OAUTH__ALLOWED_REDIRECT_HOSTS as a
     JSON-encoded list: '["localhost", "127.0.0.1", "myapp.local"]'
     """
 
@@ -440,44 +450,7 @@ class OAuthConfig(BaseModel):
     refresh_token_ttl_days: int = 90
     authorization_code_ttl_seconds: int = 600  # 10 minutes
     allowed_redirect_hosts: list[str] = Field(
-        default_factory=lambda: [
-            # Local development
-            "localhost",
-            "127.0.0.1",
-            # Cursor
-            "anysphere.cursor-mcp",
-            # Claude Desktop / Claude Code
-            "claude.ai",
-            "anthropic.claude-code",
-            # VS Code / GitHub Copilot
-            "vscode.dev",
-            "vscode-redirect.azurewebsites.net",
-            "github.dev",
-            # Windsurf (Codeium)
-            "codeium.windsurf-mcp",
-            # Zed
-            "zed.dev",
-            # JetBrains IDEs
-            "jetbrains.com",
-            # Kiro (AWS)
-            "kiro.dev",
-            # Cline
-            "cline.bot",
-            # Continue.dev
-            "continue.dev",
-            # Replit
-            "replit.com",
-            # Dust.tt (agentic OS)
-            "dust.tt",
-            "eu.dust.tt",
-            # Sourcegraph Cody
-            "sourcegraph.com",
-            # Tabnine
-            "tabnine.com",
-            # Amazon Q
-            "amazon.com",
-            "aws.amazon.com",
-        ],
+        default_factory=_load_oauth_redirect_hosts,
         description="Allowed hostnames for redirect_uri (not full URI validation)",
     )
 

@@ -1,0 +1,128 @@
+# Allowed OAuth redirect URI hosts for MCP client connections.
+# Add new hosts here - no code changes needed.
+# Restart required for changes to take effect.
+
+hosts:
+  # Local development
+  - localhost
+  - "127.0.0.1"
+
+  # Cursor
+  - anysphere.cursor-mcp
+  - anysphere.inc
+
+  # Claude Desktop / Claude Code
+  - claude.ai
+  - anthropic.claude-code
+
+  # VS Code / GitHub Copilot
+  - vscode.dev
+  - vscode-redirect.azurewebsites.net
+  - github.dev
+  - github.com
+  - githubusercontent.com
+
+  # Windsurf (Codeium)
+  - codeium.windsurf-mcp
+  - codeium.com
+
+  # Zed
+  - zed.dev
+
+  # JetBrains IDEs
+  - jetbrains.com
+
+  # Kiro (AWS)
+  - kiro.dev
+
+  # Cline
+  - cline.bot
+
+  # Continue.dev
+  - continue.dev
+
+  # Lovable
+  - api.lovable.dev
+  - lovable.dev
+
+  # Replit
+  - replit.com
+
+  # Bolt.new / StackBlitz
+  - bolt.new
+  - stackblitz.com
+
+  # v0.dev / Vercel
+  - v0.dev
+  - vercel.com
+
+  # Dust.tt
+  - dust.tt
+  - eu.dust.tt
+
+  # Sourcegraph Cody
+  - sourcegraph.com
+
+  # Tabnine
+  - tabnine.com
+
+  # Amazon Q
+  - amazon.com
+  - aws.amazon.com
+
+  # Glitch
+  - glitch.com
+  - glitch.me
+
+  # CodeSandbox
+  - codesandbox.io
+
+  # Gitpod
+  - gitpod.io
+
+  # Warp
+  - warp.dev
+
+  # Raycast
+  - raycast.com
+
+  # Linear
+  - linear.app
+
+  # Notion
+  - notion.so
+  - notion.com
+
+  # Supermaven
+  - supermaven.com
+
+  # Pieces
+  - pieces.app
+
+  # Codestory (Aide)
+  - codestory.ai
+
+  # Aider
+  - aider.chat
+
+  # OpenHands
+  - all-hands.dev
+
+  # Devin / Cognition
+  - devin.ai
+  - cognition.ai
+
+  # Sweep
+  - sweep.dev
+
+  # Codegen
+  - codegen.com
+
+  # Mentat
+  - mentat.ai
+
+  # Poolside
+  - poolside.ai
+
+  # Magic
+  - magic.dev
