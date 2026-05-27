@@ -93,14 +93,30 @@ Move expensive similarity checks to write time, not tick time:
 ```
 learn/remember call:
   → Compute embedding
-  → k-NN check (k=3) against existing nodes
+  → k-NN check (k=3) via Qdrant ANN against existing nodes
   → If similarity > 0.85, store affinity edge
   → 300ms budget available at write time
 ```
 
 tick() just queries pre-computed affinities (fast graph query).
 
+**Affinity edge schema:**
+```cypher
+(:Knowledge)-[:AFFINITY {
+  similarity: float,      // 0.85-1.0
+  created_at: datetime,
+  source_embedding_model: string
+}]->(:Knowledge)
+```
+
+**Embedding model:** Uses same model as main embeddings (currently `text-embedding-3-small`). Threshold may need tuning if model changes.
+
 #### tick() Flow
+
+**Performance target:** < 100ms p95, 100ms hard timeout (not 150ms)
+
+All rule checks run **in parallel** via asyncio.gather with individual timeouts.
+If any check times out, skip it and continue with others.
 
 ```
 tick() request
@@ -112,8 +128,11 @@ tick() request
       |
       v
 +------------------+
-| Rule checks      |  < 50ms total, 100ms hard timeout
-| (parallel)       |
+| Rule checks      |  ALL IN PARALLEL (asyncio.gather)
+| - markers        |  Individual timeout: 30ms each
+| - hypotheses     |  Total timeout: 80ms
+| - affinities     |  Skip on timeout, don't block
+| - session state  |
 +------------------+
       |
       v
@@ -132,7 +151,69 @@ tick() request
 +------------------+
       |
       v
-tick() response (always non-empty: "context is current" if nothing)
+tick() response (always non-empty)
+```
+
+#### Session State Storage
+
+Session state stored in Redis with TTL:
+
+```
+Key: session:{session_id}
+TTL: 4 hours (session timeout)
+Value: {
+  "last_store_turn": int,
+  "shown_nudges": {"form_belief": [turn_nums], ...},
+  "ignored_nudges": {"form_belief": count, ...},
+  "turn_count": int
+}
+```
+
+Session boundary: explicit `session_id` from agent, or auto-generated on first tick() and returned in response for agent to reuse.
+
+#### Response Schema
+
+**Success:**
+```json
+{
+  "status": "ok",
+  "session_id": "sess_abc123",
+  "markers": [...],
+  "context": [...],
+  "nudges": [...],
+  "meta": {
+    "checks_completed": ["markers", "hypotheses", "affinities"],
+    "checks_skipped": [],
+    "latency_ms": 45
+  }
+}
+```
+
+**Partial failure (some checks timed out):**
+```json
+{
+  "status": "partial",
+  "session_id": "sess_abc123",
+  "markers": [...],
+  "nudges": [...],
+  "meta": {
+    "checks_completed": ["markers", "hypotheses"],
+    "checks_skipped": ["affinities"],
+    "latency_ms": 82
+  }
+}
+```
+
+**Empty (nothing to nudge):**
+```json
+{
+  "status": "current",
+  "session_id": "sess_abc123",
+  "markers": [],
+  "context": [],
+  "nudges": [],
+  "meta": {"checks_completed": [...], "latency_ms": 23}
+}
 ```
 
 #### Rule Checks
@@ -149,23 +230,24 @@ tick() response (always non-empty: "context is current" if nothing)
 #### Reliability Features
 
 **Timeouts:**
-- Embedding search: 100ms hard timeout
-- Graph queries: 50ms timeout each
-- Total tick(): 150ms hard cap
+- Individual check: 30ms timeout each
+- Total tick(): 100ms hard cap (80ms for checks + 20ms overhead)
+- All checks run in parallel, timeout individually
 
 **Caching:**
-- Marker existence: 30s TTL
+- Marker existence: 30s TTL (Redis)
 - Embedding search results: 60s TTL (keyed by recent_context hash)
+- Affinity edges: read from graph (already computed at write time)
 
 **Debouncing:**
-- Track `shown_nudges` in session state
+- Track `shown_nudges` in session state (Redis)
 - Don't repeat same nudge type within 3 ticks
 - If agent ignores nudge 3x, suppress for session
 
 **Fallbacks:**
-- If any query times out, skip that check (don't block)
-- Always return at least `{"status": "context is current"}`
-- Log timeouts/failures for monitoring
+- If any check times out, skip it and continue (don't block others)
+- Always return response with `status` field
+- Log timeouts/failures for monitoring with check name
 
 #### Future: LLM Phrasing (Optional)
 
@@ -320,9 +402,19 @@ Verify: engrammic doctor
 ## Open Questions
 
 1. What's the right debounce window? (3 ticks proposed, may need tuning)
-2. What similarity threshold for affinity edges? (0.85 proposed)
-3. Should session_id be auto-generated server-side if not provided?
+2. What similarity threshold for affinity edges? (0.85 proposed, may need tuning per embedding model)
+3. ~~Should session_id be auto-generated server-side if not provided?~~ **Resolved:** Yes, auto-generate and return in response
 4. How many ignored nudges before session suppression? (3 proposed)
+
+## Resolved During Review
+
+- **Performance targets:** 100ms p95, 100ms hard cap (not 150ms)
+- **Parallel execution:** All checks run via asyncio.gather, timeout individually
+- **Session state:** Redis with 4hr TTL
+- **Affinity schema:** AFFINITY edge with similarity score
+- **Error handling:** Partial failure returns completed checks, skips timed-out
+- **about_hint:** Optional parameter for scoping checks to specific topics (existing in current tick())
+- **Existing tick():** Additive changes - new parameters optional, new response fields added
 
 ## References
 
