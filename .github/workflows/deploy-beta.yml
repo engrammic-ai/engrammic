@@ -107,27 +107,6 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Fetch secrets
-        run: |
-          echo "POSTGRES_PASSWORD=$(gcloud secrets versions access latest --secret=engrammic-beta-postgres-password)" >> $GITHUB_ENV
-
-      - name: Generate .env on VM
-        run: |
-          gcloud compute ssh engrammic-beta-stateful \
-            --zone ${{ env.REGION }}-a \
-            --tunnel-through-iap \
-            --command "cd /opt/engrammic && sudo tee .env > /dev/null << 'ENVEOF'
-          POSTGRES_USER=engrammic
-          POSTGRES_PASSWORD=${{ env.POSTGRES_PASSWORD }}
-          POSTGRES_DATABASE=engrammic
-          POSTGRES_HOST=postgres
-          POSTGRES_PORT=5432
-          MEMGRAPH_URI=bolt://memgraph:7687
-          QDRANT_URL=http://qdrant:6333
-          REDIS_URL=redis://redis:6379
-          GCP_PROJECT=engrammic
-          ENVEOF"
-
       - name: Deploy to VM
         run: |
           gcloud compute ssh engrammic-beta-stateful \
@@ -141,7 +120,7 @@ jobs:
           gcloud compute ssh engrammic-beta-stateful \
             --zone ${{ env.REGION }}-a \
             --tunnel-through-iap \
-            --command "docker ps --format '{{.Names}}: {{.Status}}' | grep -E 'qdrant|memgraph|redis|postgres'"
+            --command "docker ps --format '{{.Names}}: {{.Status}}' | grep -E 'qdrant|memgraph|redis'"
 
       - name: Deploy API to Cloud Run
         run: |
