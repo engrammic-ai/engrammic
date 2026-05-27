@@ -50,6 +50,10 @@ class SessionState(BaseModel):
 
 
 def _session_key(silo_id: str, session_id: str) -> str:
+    """Build the Redis key for a session.
+
+    Format: session:<silo_id>:<session_id>
+    """
     return f"session:{silo_id}:{session_id}"
 
 
@@ -84,7 +88,11 @@ async def save_session(redis: Redis, session: SessionState, silo_id: str) -> Non
 
 
 async def increment_turn(redis: Redis, session: SessionState, silo_id: str) -> SessionState:
-    """Increment turn count and save."""
+    """Increment turn count and save.
+
+    Mutates the passed session object in-place (turn_count += 1), persists it
+    to Redis, and returns the same object for chaining.
+    """
     session.turn_count += 1
     await save_session(redis, session, silo_id)
     return session
