@@ -13,4 +13,9 @@ elif [ -f "$GCLOUD_SRC" ]; then
     echo "Warning: gcloud credentials exist but are not readable" >&2
 fi
 
+# Fetch secrets from GCP Secret Manager if env vars missing
+if [ -f /app/scripts/fetch_secrets.py ]; then
+    eval "$(python /app/scripts/fetch_secrets.py 2>/dev/null)" || true
+fi
+
 exec "$@"
