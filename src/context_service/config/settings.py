@@ -1398,6 +1398,10 @@ class Settings(BaseSettings):
         default=True,
         description="Enable inline contradiction candidate flagging during writes",
     )
+    affinity_computation_enabled: bool = Field(
+        default=True,
+        description="Enable inline affinity edge computation after Knowledge node writes",
+    )
 
     # =========================================================================
     # Signals — heat / freshness / priority
