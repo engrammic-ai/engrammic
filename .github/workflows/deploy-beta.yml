@@ -106,13 +106,20 @@ jobs:
       - name: Generate .env from Secret Manager
         run: |
           echo "Pulling secrets from GCP Secret Manager..."
+          echo "Authenticated as: $(gcloud auth list --filter=status:ACTIVE --format='value(account)')"
           > .env.beta
           # Fetch known secrets directly (avoids needing secrets.list permission)
           for secret_name in workos-api-key workos-client-id workos-cookie-password postgres-password memgraph-password database-url; do
             key=$(echo "$secret_name" | tr '-' '_' | tr '[:lower:]' '[:upper:]')
-            value=$(gcloud secrets versions access latest --secret="engrammic-beta-$secret_name" --project=${{ env.PROJECT_ID }} 2>/dev/null || echo "")
-            if [ -n "$value" ]; then
+            echo "Fetching engrammic-beta-$secret_name..."
+            value=$(gcloud secrets versions access latest --secret="engrammic-beta-$secret_name" --project=${{ env.PROJECT_ID }} 2>&1) || true
+            if [[ "$value" == ERROR* ]]; then
+              echo "  FAILED: $value"
+            elif [ -n "$value" ]; then
+              echo "  OK (${#value} chars)"
               echo "$key=$value" >> .env.beta
+            else
+              echo "  EMPTY"
             fi
           done
           # Add static config vars
