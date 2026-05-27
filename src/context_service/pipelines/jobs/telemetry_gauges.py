@@ -38,40 +38,42 @@ def snapshot_storage_gauges(context) -> dict[str, Any]:
     memgraph: MemgraphResource = context.resources.memgraph
     qdrant: QdrantResource = context.resources.qdrant
 
-    async def _run() -> dict[str, int]:
-        store = await memgraph.store()
-        qd_client = qdrant.client()
+    # Get pool before entering async context to avoid nested asyncio.run()
+    with postgres.get_pool() as pool:
 
-        with postgres.get_pool() as pool:
+        async def _run() -> dict[str, int]:
+            store = await memgraph.store()
+            qd_client = qdrant.client()
             async with pool.acquire() as conn:
                 rows = await conn.fetch(_LIST_SILOS)
                 silo_ids = [str(row["silo_id"]) for row in rows]
 
-            total = 0
-            for silo_id in silo_ids:
-                # Query Memgraph for node counts
-                try:
-                    node_rows = await store.execute_query(_COUNT_NODES, {"silo_id": silo_id})
-                    node_row = node_rows[0] if node_rows else {}
-                except Exception:
-                    node_row = {}
-                    context.log.warning(f"telemetry_gauges: memgraph query failed for silo={silo_id}")
+                total = 0
+                for silo_id in silo_ids:
+                    # Query Memgraph for node counts
+                    try:
+                        node_rows = await store.execute_query(_COUNT_NODES, {"silo_id": silo_id})
+                        node_row = node_rows[0] if node_rows else {}
+                    except Exception:
+                        node_row = {}
+                        context.log.warning(
+                            f"telemetry_gauges: memgraph query failed for silo={silo_id}"
+                        )
 
-                try:
-                    edge_rows = await store.execute_query(_COUNT_EDGES, {"silo_id": silo_id})
-                    edge_count = edge_rows[0].get("edges", 0) if edge_rows else 0
-                except Exception:
-                    edge_count = 0
+                    try:
+                        edge_rows = await store.execute_query(_COUNT_EDGES, {"silo_id": silo_id})
+                        edge_count = edge_rows[0].get("edges", 0) if edge_rows else 0
+                    except Exception:
+                        edge_count = 0
 
-                # Query Qdrant for collection stats
-                try:
-                    collection_info = await qd_client.get_collection(f"silo_{silo_id}")
-                    qd_points = collection_info.points_count or 0
-                except Exception:
-                    qd_points = 0
+                    # Query Qdrant for collection stats
+                    try:
+                        collection_info = await qd_client.get_collection(f"silo_{silo_id}")
+                        qd_points = collection_info.points_count or 0
+                    except Exception:
+                        qd_points = 0
 
-                # Insert gauge
-                async with pool.acquire() as conn:
+                    # Insert gauge
                     await conn.execute(
                         """
                         INSERT INTO service_gauges (
@@ -88,12 +90,12 @@ def snapshot_storage_gauges(context) -> dict[str, Any]:
                         qd_points,
                     )
 
-                context.log.info(f"telemetry_gauges: silo={silo_id}")
-                total += 1
+                    context.log.info(f"telemetry_gauges: silo={silo_id}")
+                    total += 1
 
-            return {"silos_processed": total}
+                return {"silos_processed": total}
 
-    return asyncio.run(_run())
+        return asyncio.run(_run())
 
 
 @dg.job(name="telemetry_gauges", tags={"schedule_type": "maintenance"})

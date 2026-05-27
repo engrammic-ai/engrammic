@@ -57,7 +57,9 @@ def proposal_detection(
             try:
                 data: dict[str, Any] = json.loads(raw) if isinstance(raw, str) else raw
             except json.JSONDecodeError:
-                context.log.warning(f"proposal_detection: malformed silo config for {silo_id}, using defaults")
+                context.log.warning(
+                    f"proposal_detection: malformed silo config for {silo_id}, using defaults"
+                )
                 data = {}
             silo_config = SiloConfig.from_metadata_dict(data)
         else:
