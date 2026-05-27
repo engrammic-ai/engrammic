@@ -81,3 +81,35 @@ async def test_compute_affinities_excludes_self():
 
     assert len(edges) == 1
     assert edges[0].target_id == NODE_B
+
+
+@pytest.mark.asyncio
+async def test_store_affinity_edges_creates_relationships():
+    from context_service.engine.affinity import store_affinity_edges
+
+    mock_store = MagicMock()
+    mock_store.execute_write = AsyncMock(return_value=[])
+
+    edges = [
+        AffinityEdge(
+            source_id=uuid.uuid4(),
+            target_id=uuid.uuid4(),
+            similarity=0.92,
+            source_embedding_model="text-embedding-3-small",
+        ),
+        AffinityEdge(
+            source_id=uuid.uuid4(),
+            target_id=uuid.uuid4(),
+            similarity=0.88,
+            source_embedding_model="text-embedding-3-small",
+        ),
+    ]
+
+    await store_affinity_edges(store=mock_store, edges=edges, silo_id="test_silo")
+
+    assert mock_store.execute_write.call_count == 2
+    # Verify Cypher query structure
+    call_args = mock_store.execute_write.call_args_list[0]
+    query = call_args[0][0]
+    assert "AFFINITY" in query
+    assert "similarity" in query

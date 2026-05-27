@@ -8,10 +8,14 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel, Field
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+if TYPE_CHECKING:
+    from context_service.engine.protocols import HyperGraphStore
 
 AFFINITY_THRESHOLD = 0.85
 AFFINITY_K = 3
@@ -83,3 +87,38 @@ async def compute_affinities(
         )
 
     return edges
+
+
+STORE_AFFINITY_QUERY = """
+MATCH (a {id: $source_id, silo_id: $silo_id})
+MATCH (b {id: $target_id, silo_id: $silo_id})
+MERGE (a)-[r:AFFINITY]->(b)
+SET r.similarity = $similarity,
+    r.created_at = $created_at,
+    r.source_embedding_model = $embedding_model
+RETURN r
+"""
+
+
+async def store_affinity_edges(
+    store: HyperGraphStore,
+    edges: list[AffinityEdge],
+    silo_id: str,
+) -> None:
+    """Store affinity edges in the graph.
+
+    Creates AFFINITY relationships between Knowledge nodes using Cypher MERGE,
+    so repeated calls are idempotent.
+    """
+    for edge in edges:
+        await store.execute_write(
+            STORE_AFFINITY_QUERY,
+            {
+                "source_id": str(edge.source_id),
+                "target_id": str(edge.target_id),
+                "silo_id": silo_id,
+                "similarity": edge.similarity,
+                "created_at": edge.created_at.isoformat(),
+                "embedding_model": edge.source_embedding_model,
+            },
+        )
