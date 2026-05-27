@@ -103,6 +103,32 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Sync compose file to VM
+        run: |
+          gcloud compute scp docker-compose.prod.yml \
+            engrammic-beta-stateful:/tmp/docker-compose.yml \
+            --zone ${{ env.REGION }}-a \
+            --tunnel-through-iap
+          gcloud compute ssh engrammic-beta-stateful \
+            --zone ${{ env.REGION }}-a \
+            --tunnel-through-iap \
+            --command "sudo mv /tmp/docker-compose.yml /opt/engrammic/docker-compose.yml"
+
+      - name: Deploy to VM (Dagster + infra)
+        run: |
+          gcloud compute ssh engrammic-beta-stateful \
+            --zone ${{ env.REGION }}-a \
+            --tunnel-through-iap \
+            --command "cd /opt/engrammic && sudo docker compose down --remove-orphans && sudo docker compose pull && sudo docker compose up -d"
+
+      - name: Wait for VM services to be healthy
+        run: |
+          sleep 30
+          gcloud compute ssh engrammic-beta-stateful \
+            --zone ${{ env.REGION }}-a \
+            --tunnel-through-iap \
+            --command "docker ps --format '{{.Names}}: {{.Status}}' | grep -E 'qdrant|memgraph|redis|postgres'"
+
       - name: Deploy API to Cloud Run
         run: |
           gcloud run deploy engrammic-beta-api \
@@ -125,21 +151,3 @@ jobs:
           gcloud run services update-traffic engrammic-beta-api \
             --region ${{ env.REGION }} \
             --to-latest
-
-      - name: Sync compose file to VM
-        run: |
-          gcloud compute scp docker-compose.prod.yml \
-            engrammic-beta-stateful:/tmp/docker-compose.yml \
-            --zone ${{ env.REGION }}-a \
-            --tunnel-through-iap
-          gcloud compute ssh engrammic-beta-stateful \
-            --zone ${{ env.REGION }}-a \
-            --tunnel-through-iap \
-            --command "sudo mv /tmp/docker-compose.yml /opt/engrammic/docker-compose.yml"
-
-      - name: Deploy to VM (Dagster + infra)
-        run: |
-          gcloud compute ssh engrammic-beta-stateful \
-            --zone ${{ env.REGION }}-a \
-            --tunnel-through-iap \
-            --command "cd /opt/engrammic && sudo docker compose down --remove-orphans && sudo docker compose pull && sudo docker compose up -d"
