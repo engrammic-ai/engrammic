@@ -80,45 +80,101 @@ The skill becomes the "extension" - it's prompt instructions any MCP-aware agent
 | resolve_contradiction | New finding conflicts with existing | "This contradicts belief X. Reflect?" |
 | checkpoint | Long session, nothing stored recently | "20 turns without storing. Checkpoint with remember()?" |
 
-### tick() Implementation (Hybrid)
+### tick() Implementation
 
-Two-layer implementation balancing speed and intelligence:
+Pure rule-based with templates. No LLM in tick() initially - add later only if agents need more natural phrasing.
 
-**Layer 1: Rule-based (< 50ms)**
-- Pending markers (contradictions, stale commitments)
-- Stale hypotheses (open > N turns)
-- Session storage gaps (nothing stored in > 10 turns)
-- Open reasoning chains (started but not concluded)
+**Performance target:** < 100ms p95
 
-**Layer 2: LLM-powered (when needed, ~100-200ms)**
+#### Write-Time Affinity (Critical)
 
-Triggers when rule layer detects potential:
-- 3+ Knowledge nodes with overlapping tags/content, no linking Wisdom node - prompt belief formation
-- `recent_context` provided and graph has > 5 nodes on related topics - surface relevant context
-- Session has > 3 turns of back-and-forth on same topic without reason() calls - prompt reasoning capture
+Move expensive similarity checks to write time, not tick time:
 
-Uses `gemini-3.1-flash-lite` for LLM layer (cheap, fast). LLM generates natural language nudges from structured trigger data.
+```
+learn/remember call:
+  → Compute embedding
+  → k-NN check (k=3) against existing nodes
+  → If similarity > 0.85, store affinity edge
+  → 300ms budget available at write time
+```
+
+tick() just queries pre-computed affinities (fast graph query).
+
+#### tick() Flow
 
 ```
 tick() request
       |
       v
 +------------------+
-| Rule-based layer |  < 50ms
-| (always runs)    |
-+------------------+
-      |
-      | if potential detected
-      v
-+------------------+
-| LLM layer        |  ~100-200ms
-| (conditional)    |
-| flash-lite       |
+| Check caches     |  (markers cached 30s, embeddings 60s)
 +------------------+
       |
       v
-tick() response
++------------------+
+| Rule checks      |  < 50ms total, 100ms hard timeout
+| (parallel)       |
++------------------+
+      |
+      v
++------------------+
+| Debounce filter  |  (skip if shown in last N ticks)
++------------------+
+      |
+      v
++------------------+
+| Template nudges  |  (no LLM)
++------------------+
+      |
+      v
++------------------+
+| Cap at 3 nudges  |  Priority: markers > stale > gaps > suggestions
++------------------+
+      |
+      v
+tick() response (always non-empty: "context is current" if nothing)
 ```
+
+#### Rule Checks
+
+| Check | Query | Template |
+|-------|-------|----------|
+| Pending markers | Graph: Contradiction/StaleCommitment nodes | "You have N markers to address." |
+| Stale hypotheses | Graph: Hypothesis where age > N turns | "Hypothesis X open for N turns. Commit or revise?" |
+| Storage gap | Session state: last_store_turn | "Nothing stored in N turns. Consider checkpointing." |
+| Related Knowledge | Graph: pre-computed affinity edges, no linking Wisdom | "3 related observations about X. Consider believe()." |
+| Relevant context | Embedding search (cached) | "Relevant to your work: [node summaries]" |
+| Open reasoning | Graph: ReasoningStep without conclusion | "Reasoning chain open. Conclude with reason()?" |
+
+#### Reliability Features
+
+**Timeouts:**
+- Embedding search: 100ms hard timeout
+- Graph queries: 50ms timeout each
+- Total tick(): 150ms hard cap
+
+**Caching:**
+- Marker existence: 30s TTL
+- Embedding search results: 60s TTL (keyed by recent_context hash)
+
+**Debouncing:**
+- Track `shown_nudges` in session state
+- Don't repeat same nudge type within 3 ticks
+- If agent ignores nudge 3x, suppress for session
+
+**Fallbacks:**
+- If any query times out, skip that check (don't block)
+- Always return at least `{"status": "context is current"}`
+- Log timeouts/failures for monitoring
+
+#### Future: LLM Phrasing (Optional)
+
+If agents complain nudges aren't actionable, add LLM phrasing layer:
+- Rules still detect what to nudge
+- LLM batches content-based nudges into natural language
+- 500ms timeout, fall back to template if fails
+
+Start without this. Add based on feedback.
 
 ### Model Migration
 
@@ -126,7 +182,7 @@ Migrate from deprecated gemini-2.5-* to gemini-3.1-*:
 
 | Component | Current | New |
 |-----------|---------|-----|
-| tick() nudges | N/A (new) | gemini-3.1-flash-lite |
+| tick() nudges | N/A | None (templates only, LLM future) |
 | Custodian analysis | gemini-2.5-flash | gemini-3.1-flash-lite |
 | Synthesizer beliefs | gemini-2.5-pro | gemini-3.1-pro |
 | Summarization | gemini-2.5-flash | gemini-3.1-flash-lite |
@@ -203,42 +259,70 @@ Verify: engrammic doctor
 
 ## Implementation Tasks
 
-### Phase 1: tick() Enhancement
-1. Add `session_id`, `recent_context` parameters to tick()
-2. Implement rule-based nudge detection
-3. Add LLM layer for complex nudge generation
-4. Update tick() response schema with `context` and `nudges` fields
+### Phase 1: Write-Time Affinity
+1. Add k-NN check (k=3, threshold=0.85) to learn/remember handlers
+2. Store affinity edges in graph when similarity detected
+3. Index affinity edges for fast lookup
+4. Add latency instrumentation
 
-### Phase 2: Model Migration
+### Phase 2: tick() Enhancement
+1. Add `session_id`, `recent_context` parameters to tick()
+2. Implement rule-based nudge detection (all checks)
+3. Add caching layer (markers 30s, embeddings 60s)
+4. Add debounce tracking in session state
+5. Implement template responses for all nudge types
+6. Cap nudges at 3, prioritize by type
+7. Add timeout handling (100ms hard cap)
+8. Ensure non-empty response always returned
+9. Add metrics instrumentation
+
+### Phase 3: Model Migration
 1. Update settings.py defaults to gemini-3.1-*
 2. Update identities.yaml model references
 3. Test SAGE pipeline with new models
 4. Update documentation
 
-### Phase 3: Skill Updates
+### Phase 4: Skill Updates
 1. Update engrammic-onboarding skill with tick() discipline
 2. Add tick() frequency guidance (every 3-5 turns)
 3. Document nudge handling behavior
 4. Test across harnesses (CC, Pi, direct MCP)
 
-### Phase 4: Distribution Updates
+### Phase 5: Distribution Updates
 1. Simplify installer (remove harness detection)
 2. Update skill installation path to ~/.agents/skills/
 3. Add `engrammic doctor` CLI command
 4. Update documentation site
 
+### Phase 6 (Future): LLM Phrasing
+1. Add optional LLM layer for content-based nudges
+2. Implement 500ms timeout with template fallback
+3. Only pursue if agent feedback indicates need
+
 ## Success Criteria
 
-1. tick() returns useful nudges within performance budget (< 300ms p95)
-2. Agents following skill discipline store/recall appropriately
-3. Works identically across CC, Pi, pydantic-ai, custom agents
-4. No per-harness code to maintain
+1. tick() returns within performance budget (< 100ms p95)
+2. Write-time affinity computation completes within 300ms p95
+3. Agents following skill discipline store/recall appropriately
+4. Works identically across CC, Pi, pydantic-ai, custom agents
+5. No per-harness code to maintain
+6. Nudge debouncing prevents repeated nagging
+
+## Metrics to Instrument
+
+- tick() latency (p50, p95, p99)
+- Nudge counts by type per session
+- Debounce hit rate (nudges suppressed)
+- Cache hit rates (markers, embeddings)
+- Timeout rates by check type
+- Write-time affinity computation latency
 
 ## Open Questions
 
-1. Should tick() support a `max_nudges` parameter to limit response size?
-2. How aggressively should LLM layer trigger? (cost vs intelligence tradeoff)
+1. What's the right debounce window? (3 ticks proposed, may need tuning)
+2. What similarity threshold for affinity edges? (0.85 proposed)
 3. Should session_id be auto-generated server-side if not provided?
+4. How many ignored nudges before session suppression? (3 proposed)
 
 ## References
 
