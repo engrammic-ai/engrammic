@@ -105,6 +105,11 @@ jobs:
 
       - name: Sync all deployment files to VM
         run: |
+          # Clean up any stale files from previous runs
+          gcloud compute ssh engrammic-beta-stateful \
+            --zone ${{ env.REGION }}-a \
+            --tunnel-through-iap \
+            --command "sudo rm -rf /tmp/docker-compose.prod.yml /tmp/dagster.yaml /tmp/workspace.yaml /tmp/config /tmp/skills"
           # Copy compose and dagster config files
           gcloud compute scp \
             docker-compose.prod.yml dagster.yaml workspace.yaml \
