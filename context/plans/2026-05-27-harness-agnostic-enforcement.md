@@ -585,8 +585,8 @@ class SessionState(BaseModel):
         self.ignored_nudges[nudge_type] = self.ignored_nudges.get(nudge_type, 0) + 1
 
 
-def _session_key(session_id: str) -> str:
-    return f"session:{session_id}"
+def _session_key(silo_id: str, session_id: str) -> str:
+    return f"session:{silo_id}:{session_id}"
 
 
 async def get_or_create_session(
@@ -596,7 +596,7 @@ async def get_or_create_session(
 ) -> SessionState:
     """Get existing session or create new one."""
     if session_id:
-        data = await redis.get(_session_key(session_id))
+        data = await redis.get(_session_key(silo_id, session_id))
         if data:
             return SessionState.model_validate_json(data)
     
@@ -900,11 +900,16 @@ async def run_parallel_checks(
         except Exception:
             return (name, None)
     
-    tasks = [run_with_timeout(name, coro) for name, coro in checks.items()]
+    # Create tasks directly - don't create list of coroutines first
+    tasks = [
+        asyncio.create_task(run_with_timeout(name, coro))
+        for name, coro in checks.items()
+    ]
+    check_names = list(checks.keys())
     
     try:
         done, pending = await asyncio.wait(
-            [asyncio.create_task(t) for t in tasks],
+            tasks,
             timeout=total_timeout,
             return_when=asyncio.ALL_COMPLETED,
         )
@@ -913,7 +918,7 @@ async def run_parallel_checks(
         for task in pending:
             task.cancel()
             
-        # Collect results
+        # Collect results from completed tasks
         for task in done:
             name, result = task.result()
             if result is not None:
@@ -922,10 +927,11 @@ async def run_parallel_checks(
             else:
                 skipped.append(name)
                 
-        # Add pending to skipped
-        for task in pending:
-            # We can't easily get the name from a cancelled task
-            pass
+        # Add names from pending tasks to skipped
+        completed_names = set(completed + skipped)
+        for name in check_names:
+            if name not in completed_names:
+                skipped.append(name)
             
     except asyncio.TimeoutError:
         skipped = list(checks.keys())
@@ -1266,12 +1272,18 @@ git commit -m "test: update tests for gemini-3.1 model migration"
 
 ## Phase 4: Skill Updates
 
-### Task 4.1: Update engrammic-onboarding Skill
+### Task 4.1: Create/Update engrammic-onboarding Skill
 
 **Files:**
-- Modify: `skills/engrammic-onboarding/engrammic-onboarding.md`
+- Create: `skills/engrammic-onboarding/engrammic-onboarding.md` (if not exists)
 
-- [ ] **Step 1: Update skill with tick() discipline**
+- [ ] **Step 1: Create skill directory if needed**
+
+```bash
+mkdir -p skills/engrammic-onboarding
+```
+
+- [ ] **Step 2: Write skill with tick() discipline**
 
 ```markdown
 # skills/engrammic-onboarding/engrammic-onboarding.md
@@ -1325,17 +1337,17 @@ tick() is lightweight (< 100ms) and helps you:
 - Maintain epistemic hygiene across sessions
 ```
 
-- [ ] **Step 2: Copy to user skills directory**
+- [ ] **Step 3: Copy to user skills directory**
 
 ```bash
 cp -r skills/engrammic-onboarding ~/.claude/skills/
 ```
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add skills/engrammic-onboarding/
-git commit -m "docs(skills): update engrammic-onboarding with tick() discipline"
+git commit -m "docs(skills): add engrammic-onboarding with tick() discipline"
 ```
 
 ---
@@ -1345,10 +1357,18 @@ git commit -m "docs(skills): update engrammic-onboarding with tick() discipline"
 ### Task 5.1: Add engrammic doctor Command
 
 **Files:**
+- Create: `src/context_service/cli/__init__.py`
 - Create: `src/context_service/cli/doctor.py`
-- Modify: `pyproject.toml` (if CLI entrypoint needed)
+- Modify: `pyproject.toml` (CLI entrypoint)
 
-- [ ] **Step 1: Create doctor command**
+- [ ] **Step 1: Create CLI directory**
+
+```bash
+mkdir -p src/context_service/cli
+touch src/context_service/cli/__init__.py
+```
+
+- [ ] **Step 2: Create doctor command**
 
 ```python
 # src/context_service/cli/doctor.py
@@ -1432,14 +1452,14 @@ if __name__ == "__main__":
     main()
 ```
 
-- [ ] **Step 2: Add CLI entrypoint to pyproject.toml**
+- [ ] **Step 3: Add CLI entrypoint to pyproject.toml**
 
 ```toml
 [project.scripts]
 engrammic-doctor = "context_service.cli.doctor:main"
 ```
 
-- [ ] **Step 3: Test the command**
+- [ ] **Step 4: Test the command**
 
 Run: `uv run engrammic-doctor`
 Expected: Shows check results
