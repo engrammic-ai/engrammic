@@ -74,8 +74,8 @@ class CustodianSettings(BaseModel):
     concurrent_visit_limit: int = Field(default=4)
     per_visit_timeout_seconds: int = Field(default=120)
 
-    flash_model: str = Field(default="google-vertex:gemini-2.5-flash")
-    pro_model: str = Field(default="google-vertex:gemini-2.5-pro")
+    flash_model: str = Field(default="google-vertex:gemini-3.1-flash-lite")
+    pro_model: str = Field(default="google-vertex:gemini-3.1-pro")
     pro_escalation_ab_sample_ratio: float = Field(default=0.10)
 
     min_edge_confidence: float = Field(
@@ -90,7 +90,7 @@ class CustodianIdentityConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     enabled: bool = True
-    model: str = "google-vertex:gemini-2.5-flash"
+    model: str = "google-vertex:gemini-3.1-flash-lite"
     timeout_seconds: int = 30
     batch_size: int = 5
     batch_window_seconds: float = 2.0
@@ -101,7 +101,7 @@ class SynthesizerIdentityConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     enabled: bool = True
-    model: str = "google-vertex:gemini-2.5-pro"
+    model: str = "google-vertex:gemini-3.1-pro"
     timeout_seconds: int = 60
     threshold_pending_nodes: int = 50
     schedule_cron: str = "0 * * * *"
@@ -168,7 +168,7 @@ class ValidatorIdentityConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     enabled: bool = True
-    model: str = "google-vertex:gemini-2.5-pro"
+    model: str = "google-vertex:gemini-3.1-pro"
     timeout_seconds: int = 5
     fail_open: bool = True
 
@@ -1076,7 +1076,7 @@ class Settings(BaseSettings):
     # =========================================================================
 
     llm_provider: str = Field(default="")
-    default_llm_model: str = Field(default="gemini-2.5-flash")
+    default_llm_model: str = Field(default="gemini-3.1-flash-lite")
 
     # Per-provider API keys (used by llm/ providers)
     anthropic_api_key: SecretStr | None = Field(default=None)
@@ -1314,7 +1314,7 @@ class Settings(BaseSettings):
     # =========================================================================
 
     summarization_provider: str = Field(default="vertex")
-    summarization_model: str = Field(default="gemini-2.5-flash")
+    summarization_model: str = Field(default="gemini-3.1-flash-lite")
     summarization_max_tokens: int = Field(default=500)
 
     # =========================================================================
@@ -1397,6 +1397,19 @@ class Settings(BaseSettings):
     contradiction_flagging_enabled: bool = Field(
         default=True,
         description="Enable inline contradiction candidate flagging during writes",
+    )
+    affinity_computation_enabled: bool = Field(
+        default=True,
+        description="Enable inline affinity edge computation after Knowledge node writes",
+    )
+
+    # =========================================================================
+    # tick() engagement
+    # =========================================================================
+
+    storage_gap_threshold: int = Field(
+        default=10,
+        description="Number of turns without storage before showing storage_gap nudge",
     )
 
     # =========================================================================

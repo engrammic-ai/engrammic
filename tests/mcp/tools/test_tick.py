@@ -24,6 +24,9 @@ def mock_redis_client():
     pipe.zrange = MagicMock(return_value=pipe)
     pipe.execute = AsyncMock(return_value=[])
     raw_redis.pipeline = MagicMock(return_value=pipe)
+    # Support session state calls
+    raw_redis.get = AsyncMock(return_value=None)
+    raw_redis.setex = AsyncMock(return_value=True)
     redis_client._redis = raw_redis
     return redis_client
 
@@ -253,6 +256,302 @@ class TestTickInternal:
 
         # resolved marker should be filtered out -> no engagement
         assert result["engagement"] is None
+
+
+class TestTickEnhanced:
+    """Tests for enhanced tick() with session_id, recent_context, and nudges."""
+
+    @pytest.mark.asyncio
+    async def test_tick_returns_session_id(self, mock_context_service, mock_redis_client):
+        """tick() should return session_id in response."""
+        with (
+            patch(
+                "context_service.mcp.server.get_context_service",
+                return_value=mock_context_service,
+            ),
+            patch(
+                "context_service.mcp.server.get_redis",
+                return_value=mock_redis_client,
+            ),
+            patch(
+                "context_service.engine.engagement.get_engagement_for_silo",
+                new=AsyncMock(return_value=None),
+            ),
+        ):
+            from context_service.mcp.tools.tick import _tick
+
+            result = await _tick(
+                about_hint=None,
+                silo_id="silo-1",
+                session_id=None,
+                recent_context=None,
+            )
+
+        assert "session_id" in result
+        assert result["session_id"].startswith("sess_")
+
+    @pytest.mark.asyncio
+    async def test_tick_returns_nudges_field(self, mock_context_service, mock_redis_client):
+        """tick() should include nudges, status, and meta in response."""
+        with (
+            patch(
+                "context_service.mcp.server.get_context_service",
+                return_value=mock_context_service,
+            ),
+            patch(
+                "context_service.mcp.server.get_redis",
+                return_value=mock_redis_client,
+            ),
+            patch(
+                "context_service.engine.engagement.get_engagement_for_silo",
+                new=AsyncMock(return_value=None),
+            ),
+        ):
+            from context_service.mcp.tools.tick import _tick
+
+            result = await _tick(
+                about_hint=None,
+                silo_id="silo-1",
+                session_id=None,
+                recent_context="working on authentication",
+            )
+
+        assert "nudges" in result
+        assert "status" in result
+        assert "meta" in result
+        assert "checks_completed" in result["meta"]
+        assert isinstance(result["nudges"], list)
+
+    @pytest.mark.asyncio
+    async def test_tick_preserves_session_id_across_calls(
+        self, mock_context_service, mock_redis_client
+    ):
+        """When session_id provided, same session is returned."""
+        import json
+
+        session_data = {
+            "session_id": "sess_existing123",
+            "turn_count": 3,
+            "last_store_turn": 1,
+            "shown_nudges": {},
+            "ignored_nudges": {},
+            "created_at": "2026-05-27T00:00:00+00:00",
+        }
+        mock_redis_client._redis.get = AsyncMock(
+            return_value=json.dumps(session_data).encode()
+        )
+
+        with (
+            patch(
+                "context_service.mcp.server.get_context_service",
+                return_value=mock_context_service,
+            ),
+            patch(
+                "context_service.mcp.server.get_redis",
+                return_value=mock_redis_client,
+            ),
+            patch(
+                "context_service.engine.engagement.get_engagement_for_silo",
+                new=AsyncMock(return_value=None),
+            ),
+        ):
+            from context_service.mcp.tools.tick import _tick
+
+            result = await _tick(
+                about_hint=None,
+                silo_id="silo-1",
+                session_id="sess_existing123",
+                recent_context=None,
+            )
+
+        assert result["session_id"] == "sess_existing123"
+
+    @pytest.mark.asyncio
+    async def test_tick_storage_gap_nudge(self, mock_context_service, mock_redis_client):
+        """tick() should emit a storage_gap nudge when last_store_turn is far back."""
+        import json
+
+        session_data = {
+            "session_id": "sess_gaptest",
+            "turn_count": 15,
+            "last_store_turn": 0,
+            "shown_nudges": {},
+            "ignored_nudges": {},
+            "created_at": "2026-05-27T00:00:00+00:00",
+        }
+        mock_redis_client._redis.get = AsyncMock(
+            return_value=json.dumps(session_data).encode()
+        )
+
+        with (
+            patch(
+                "context_service.mcp.server.get_context_service",
+                return_value=mock_context_service,
+            ),
+            patch(
+                "context_service.mcp.server.get_redis",
+                return_value=mock_redis_client,
+            ),
+            patch(
+                "context_service.engine.engagement.get_engagement_for_silo",
+                new=AsyncMock(return_value=None),
+            ),
+        ):
+            from context_service.mcp.tools.tick import _tick
+
+            result = await _tick(
+                about_hint=None,
+                silo_id="silo-1",
+                session_id="sess_gaptest",
+                recent_context=None,
+            )
+
+        nudge_types = [n["type"] for n in result["nudges"]]
+        assert "storage_gap" in nudge_types
+
+    @pytest.mark.asyncio
+    async def test_tick_pending_markers_nudge(self, mock_context_service, mock_redis_client):
+        """tick() should emit a pending_markers nudge when markers are present."""
+        engagement_with_markers = {
+            "mode": "soft",
+            "markers": [
+                {
+                    "marker_id": "m1",
+                    "marker_type": "Contradiction",
+                    "summary": "Contradiction detected",
+                    "node_ids": ["n1", "n2"],
+                    "detected_at": "2026-05-27T00:00:00Z",
+                    "decision_required": "dismiss",
+                }
+            ],
+        }
+
+        with (
+            patch(
+                "context_service.mcp.server.get_context_service",
+                return_value=mock_context_service,
+            ),
+            patch(
+                "context_service.mcp.server.get_redis",
+                return_value=mock_redis_client,
+            ),
+            patch(
+                "context_service.engine.engagement.get_engagement_for_silo",
+                new=AsyncMock(return_value=engagement_with_markers),
+            ),
+        ):
+            from context_service.mcp.tools.tick import _tick
+
+            result = await _tick(
+                about_hint=None,
+                silo_id="silo-1",
+                session_id=None,
+                recent_context=None,
+            )
+
+        nudge_types = [n["type"] for n in result["nudges"]]
+        assert "pending_markers" in nudge_types
+
+    @pytest.mark.asyncio
+    async def test_tick_status_is_ok_with_nudges(self, mock_context_service, mock_redis_client):
+        """tick() should return status='ok' when nudges or markers are present."""
+        engagement_with_markers = {
+            "mode": "soft",
+            "markers": [
+                {
+                    "marker_id": "m1",
+                    "marker_type": "Contradiction",
+                    "summary": "Contradiction",
+                    "node_ids": ["n1"],
+                    "detected_at": "2026-05-27T00:00:00Z",
+                    "decision_required": "dismiss",
+                }
+            ],
+        }
+
+        with (
+            patch(
+                "context_service.mcp.server.get_context_service",
+                return_value=mock_context_service,
+            ),
+            patch(
+                "context_service.mcp.server.get_redis",
+                return_value=mock_redis_client,
+            ),
+            patch(
+                "context_service.engine.engagement.get_engagement_for_silo",
+                new=AsyncMock(return_value=engagement_with_markers),
+            ),
+        ):
+            from context_service.mcp.tools.tick import _tick
+
+            result = await _tick(
+                about_hint=None,
+                silo_id="silo-1",
+                session_id=None,
+                recent_context=None,
+            )
+
+        assert result["status"] in ("ok", "partial")
+
+    @pytest.mark.asyncio
+    async def test_tick_status_current_when_nothing_pending(
+        self, mock_context_service, mock_redis_client
+    ):
+        """tick() should return status='current' when nothing needs attention."""
+        with (
+            patch(
+                "context_service.mcp.server.get_context_service",
+                return_value=mock_context_service,
+            ),
+            patch(
+                "context_service.mcp.server.get_redis",
+                return_value=mock_redis_client,
+            ),
+            patch(
+                "context_service.engine.engagement.get_engagement_for_silo",
+                new=AsyncMock(return_value=None),
+            ),
+        ):
+            from context_service.mcp.tools.tick import _tick
+
+            result = await _tick(
+                about_hint=None,
+                silo_id="silo-1",
+                session_id=None,
+                recent_context=None,
+            )
+
+        assert result["status"] in ("current", "partial")
+
+    @pytest.mark.asyncio
+    async def test_tick_meta_has_latency(self, mock_context_service, mock_redis_client):
+        """tick() meta should include latency_ms."""
+        with (
+            patch(
+                "context_service.mcp.server.get_context_service",
+                return_value=mock_context_service,
+            ),
+            patch(
+                "context_service.mcp.server.get_redis",
+                return_value=mock_redis_client,
+            ),
+            patch(
+                "context_service.engine.engagement.get_engagement_for_silo",
+                new=AsyncMock(return_value=None),
+            ),
+        ):
+            from context_service.mcp.tools.tick import _tick
+
+            result = await _tick(
+                about_hint=None,
+                silo_id="silo-1",
+                session_id=None,
+                recent_context=None,
+            )
+
+        assert "latency_ms" in result["meta"]
+        assert isinstance(result["meta"]["latency_ms"], (int, float))
 
 
 class TestTickToolRegistration:

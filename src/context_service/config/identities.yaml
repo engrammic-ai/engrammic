@@ -11,7 +11,7 @@ identities:
   # Custodian: contradiction detection and fact supersession
   custodian:
     enabled: true
-    model: "google-vertex:gemini-2.5-flash"  # LLM for contradiction analysis
+    model: "google-vertex:gemini-3.1-flash-lite"  # LLM for contradiction analysis
     timeout_seconds: 30                       # LLM call timeout
     batch_size: 5                             # nodes per batch trigger
     batch_window_seconds: 2.0                 # batch collection window
@@ -20,7 +20,7 @@ identities:
   # Synthesizer: cluster-to-belief synthesis
   synthesizer:
     enabled: true
-    model: "google-vertex:gemini-2.5-pro"     # LLM for belief synthesis
+    model: "google-vertex:gemini-3.1-pro"     # LLM for belief synthesis
     timeout_seconds: 60                        # LLM call timeout
     threshold_pending_nodes: 50                # uncovered clusters to trigger synthesis run
     schedule_cron: "0 * * * *"                 # hourly check for pending clusters
@@ -49,6 +49,6 @@ identities:
   # Validator: reasoning structure validation
   validator:
     enabled: true
-    model: "google-vertex:gemini-2.5-pro"
+    model: "google-vertex:gemini-3.1-pro"
     timeout_seconds: 5
     fail_open: true                            # allow chains on LLM failure
