@@ -103,16 +103,20 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Sync compose file to VM
+      - name: Sync compose and config to VM
         run: |
           gcloud compute scp docker-compose.prod.yml \
             engrammic-beta-stateful:/tmp/docker-compose.yml \
             --zone ${{ env.REGION }}-a \
             --tunnel-through-iap
+          gcloud compute scp --recurse config \
+            engrammic-beta-stateful:/tmp/config \
+            --zone ${{ env.REGION }}-a \
+            --tunnel-through-iap
           gcloud compute ssh engrammic-beta-stateful \
             --zone ${{ env.REGION }}-a \
             --tunnel-through-iap \
-            --command "sudo mv /tmp/docker-compose.yml /opt/engrammic/docker-compose.yml"
+            --command "sudo mv /tmp/docker-compose.yml /opt/engrammic/docker-compose.yml && sudo rm -rf /opt/engrammic/config && sudo mv /tmp/config /opt/engrammic/config"
 
       - name: Deploy to VM (Dagster + infra)
         run: |
