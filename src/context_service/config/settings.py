@@ -24,6 +24,19 @@ from context_service.config.models import ModelsConfig
 load_dotenv(override=False)
 
 
+def _fetch_secret(secret_id: str, project: str = "engrammic") -> str | None:
+    """Fetch secret from GCP Secret Manager. Returns None if unavailable."""
+    try:
+        from google.cloud import secretmanager  # type: ignore[import-untyped]
+
+        client = secretmanager.SecretManagerServiceClient()
+        name = f"projects/{project}/secrets/{secret_id}/versions/latest"
+        response = client.access_secret_version(request={"name": name})
+        return str(response.payload.data.decode("UTF-8"))
+    except Exception:
+        return None
+
+
 class CustodianSettings(BaseModel):
     """Custodian phase settings: budgets, flags, and model identifiers."""
 
@@ -424,7 +437,8 @@ def _load_oauth_redirect_hosts() -> list[str]:
     if config_path.exists():
         with open(config_path) as f:
             data = yaml.safe_load(f)
-            return data.get("hosts", [])
+            hosts: list[str] = data.get("hosts", [])
+            return hosts
     return ["localhost", "127.0.0.1"]
 
 
@@ -1083,6 +1097,39 @@ class Settings(BaseSettings):
     # Sealed-session secret used by WorkOS SDK v6 to seal/unseal session
     # cookies (32-byte URL-safe base64). Required for authenticate_with_session_cookie.
     workos_cookie_password: SecretStr | None = Field(default=None)
+
+    @model_validator(mode="after")
+    def _fetch_secrets_from_gcp(self) -> Settings:
+        """Populate missing secrets from GCP Secret Manager when auth is enabled."""
+        if not self.auth_enabled:
+            return self
+
+        # Map of field -> (secret_id, is_secret_str)
+        secret_mapping: dict[str, tuple[str, bool]] = {
+            "workos_api_key": ("engrammic-beta-workos-api-key", True),
+            "workos_client_id": ("engrammic-beta-workos-client-id", False),
+            "workos_cookie_password": ("engrammic-beta-workos-cookie-password", True),
+            "postgres_password": ("engrammic-beta-postgres-password", True),
+        }
+
+        for field_name, (secret_id, is_secret) in secret_mapping.items():
+            current_value = getattr(self, field_name)
+            # Skip if already set (non-None, and for SecretStr not empty)
+            if current_value is not None:
+                if is_secret:
+                    if current_value.get_secret_value():
+                        continue
+                else:
+                    continue
+
+            fetched = _fetch_secret(secret_id)
+            if fetched:
+                if is_secret:
+                    object.__setattr__(self, field_name, SecretStr(fetched))
+                else:
+                    object.__setattr__(self, field_name, fetched)
+
+        return self
 
     @model_validator(mode="after")
     def _validate_auth(self) -> Settings:

@@ -4,8 +4,6 @@ services:
     container_name: engrammic-app
     ports:
       - "8000:8000"
-    env_file:
-      - .env
     environment:
       - ENVIRONMENT=production
       - MEMGRAPH_HOST=memgraph
@@ -14,7 +12,6 @@ services:
       - POSTGRES_HOST=postgres
     volumes:
       - ~/.config/gcloud:/mnt/gcloud:ro
-      - ./config:/app/config:ro
       - ./skills:/app/skills:ro
     depends_on:
       memgraph:
@@ -131,9 +128,6 @@ services:
       - QDRANT_HOST=qdrant
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
-    volumes:
-      - ./dagster.yaml:/app/dagster.yaml:ro
-      - ./config:/app/config:ro
     depends_on:
       - postgres
       - memgraph
@@ -165,10 +159,6 @@ services:
       - QDRANT_HOST=qdrant
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
-    volumes:
-      - ./workspace.yaml:/app/workspace.yaml:ro
-      - ./dagster.yaml:/app/dagster.yaml:ro
-      - ./config:/app/config:ro
     depends_on:
       dagster-code-server:
         condition: service_healthy
@@ -194,10 +184,6 @@ services:
       - QDRANT_HOST=qdrant
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
-    volumes:
-      - ./workspace.yaml:/app/workspace.yaml:ro
-      - ./dagster.yaml:/app/dagster.yaml:ro
-      - ./config:/app/config:ro
     depends_on:
       dagster-code-server:
         condition: service_healthy
