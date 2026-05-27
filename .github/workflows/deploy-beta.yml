@@ -107,6 +107,10 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Fetch secrets
+        run: |
+          echo "POSTGRES_PASSWORD=$(gcloud secrets versions access latest --secret=engrammic-beta-postgres-password)" >> $GITHUB_ENV
+
       - name: Generate .env on VM
         run: |
           gcloud compute ssh engrammic-beta-stateful \
@@ -114,6 +118,7 @@ jobs:
             --tunnel-through-iap \
             --command "cd /opt/engrammic && sudo tee .env > /dev/null << 'ENVEOF'
           POSTGRES_USER=engrammic
+          POSTGRES_PASSWORD=${{ env.POSTGRES_PASSWORD }}
           POSTGRES_DATABASE=engrammic
           POSTGRES_HOST=postgres
           POSTGRES_PORT=5432
