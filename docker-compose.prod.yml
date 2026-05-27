@@ -12,8 +12,6 @@ services:
       - QDRANT_HOST=qdrant
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
-      - OTEL_ENABLED=${OTEL_ENABLED:-true}
-      - OTEL_SERVICE_NAME=engrammic
     volumes:
       - ~/.config/gcloud:/mnt/gcloud:ro
       - ./config:/app/config:ro
@@ -27,8 +25,6 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
-      otel-collector:
-        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
@@ -220,21 +216,6 @@ services:
       resources:
         limits:
           memory: 1G
-    restart: unless-stopped
-
-  otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.152.0
-    container_name: engrammic-otel
-    ports:
-      - "4317:4317"
-      - "4318:4318"
-    volumes:
-      - ./config/otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
-    command: ["--config=/etc/otelcol-contrib/config.yaml"]
-    deploy:
-      resources:
-        limits:
-          memory: 256M
     restart: unless-stopped
 
 volumes:
