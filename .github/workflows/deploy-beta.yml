@@ -105,23 +105,26 @@ jobs:
 
       - name: Generate .env from Secret Manager
         run: |
+          set -euo pipefail
           echo "Pulling secrets from GCP Secret Manager..."
           echo "Authenticated as: $(gcloud auth list --filter=status:ACTIVE --format='value(account)')"
           > .env.beta
-          # Fetch known secrets directly (avoids needing secrets.list permission)
+          failed=0
           for secret_name in workos-api-key workos-client-id workos-cookie-password postgres-password memgraph-password database-url; do
             key=$(echo "$secret_name" | tr '-' '_' | tr '[:lower:]' '[:upper:]')
             echo "Fetching engrammic-beta-$secret_name..."
-            value=$(gcloud secrets versions access latest --secret="engrammic-beta-$secret_name" --project=${{ env.PROJECT_ID }} 2>&1) || true
-            if [[ "$value" == ERROR* ]]; then
-              echo "  FAILED: $value"
-            elif [ -n "$value" ]; then
+            if value=$(gcloud secrets versions access latest --secret="engrammic-beta-$secret_name" --project=${{ env.PROJECT_ID }} 2>&1); then
               echo "  OK (${#value} chars)"
               echo "$key=$value" >> .env.beta
             else
-              echo "  EMPTY"
+              echo "  FAILED: $value"
+              failed=1
             fi
           done
+          if [ "$failed" -eq 1 ]; then
+            echo "::error::One or more secrets failed to fetch. Check IAM permissions."
+            exit 1
+          fi
           # Add static config vars
           cat >> .env.beta <<EOF
           ENVIRONMENT=production
