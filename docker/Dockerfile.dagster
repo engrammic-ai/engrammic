@@ -30,7 +30,9 @@ COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /app/src /app/src
 COPY --from=builder /app/config /app/config
 COPY --from=builder /app/pyproject.toml /app/dagster.yaml /app/workspace.yaml ./
-COPY scripts/validate_imports.py /app/scripts/
+COPY scripts/validate_imports.py scripts/fetch_secrets.py /app/scripts/
+COPY scripts/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app/src"
@@ -42,3 +44,5 @@ RUN BUILD_TARGET=dagster python /app/scripts/validate_imports.py
 RUN chown -R dagster:dagster /app
 
 USER dagster
+
+ENTRYPOINT ["/entrypoint.sh"]
