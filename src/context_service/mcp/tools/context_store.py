@@ -438,57 +438,58 @@ async def _context_assert(
                 "Use a different claim text or omit supersedes.",
             }
 
+    # Fetch embedding once for both contradiction and affinity checks
+    settings = get_settings()
+    node_embedding: list[float] | None = None
+    if settings.contradiction_flagging_enabled or settings.affinity_computation_enabled:
+        try:
+            emb_result = await ctx_svc.graph_store.execute_query(
+                _GET_NODE_EMBEDDING,
+                {"node_id": str(node.id), "silo_id": str(expected_silo_id)},
+            )
+            if emb_result and emb_result[0].get("embedding"):
+                node_embedding = emb_result[0]["embedding"]
+        except Exception as exc:
+            logger.debug("embedding_fetch_failed", error=str(exc))
+
     # Inline contradiction flagging (non-blocking, best-effort)
     contradiction_candidates: list[str] = []
-    try:
-        from context_service.engine.contradiction import maybe_flag_contradiction
+    if settings.contradiction_flagging_enabled and node_embedding:
+        try:
+            from context_service.engine.contradiction import maybe_flag_contradiction
 
-        settings = get_settings()
-        if settings.contradiction_flagging_enabled:
-            emb_result = await ctx_svc.graph_store.execute_query(
-                _GET_NODE_EMBEDDING,
-                {"node_id": str(node.id), "silo_id": str(expected_silo_id)},
+            contradiction_candidates = await maybe_flag_contradiction(
+                store=ctx_svc.graph_store,
+                silo_id=str(expected_silo_id),
+                node_id=str(node.id),
+                embedding=node_embedding,
             )
-            if emb_result and emb_result[0].get("embedding"):
-                contradiction_candidates = await maybe_flag_contradiction(
-                    store=ctx_svc.graph_store,
-                    silo_id=str(expected_silo_id),
-                    node_id=str(node.id),
-                    embedding=emb_result[0]["embedding"],
-                )
-    except Exception as exc:
-        logger.debug("contradiction_check_skipped", error=str(exc))
+        except Exception as exc:
+            logger.debug("contradiction_check_skipped", error=str(exc))
 
     # Inline affinity computation (non-blocking, best-effort)
-    # Runs after contradiction check so both reuse the same embedding fetch.
-    try:
-        from context_service.engine.affinity import compute_affinities, store_affinity_edges
+    if settings.affinity_computation_enabled and node_embedding:
+        try:
+            from context_service.engine.affinity import compute_affinities, store_affinity_edges
 
-        settings = get_settings()
-        if settings.affinity_computation_enabled:
-            emb_result = await ctx_svc.graph_store.execute_query(
-                _GET_NODE_EMBEDDING,
-                {"node_id": str(node.id), "silo_id": str(expected_silo_id)},
+            raw_client = await ctx_svc._qdrant._get_client()
+            collection_name = f"ctx_{expected_silo_id}"
+            affinity_edges = await compute_affinities(
+                qdrant=raw_client,
+                source_id=node.id,
+                embedding=node_embedding,
+                silo_id=str(expected_silo_id),
+                collection_name=collection_name,
+                embedding_model=settings.litellm_embedding_model,
             )
-            if emb_result and emb_result[0].get("embedding"):
-                raw_client = await ctx_svc._qdrant._get_client()
-                collection_name = f"ctx_{expected_silo_id}"
-                affinity_edges = await compute_affinities(
-                    qdrant=raw_client,
-                    source_id=node.id,
-                    embedding=emb_result[0]["embedding"],
+            if affinity_edges:
+                await store_affinity_edges(
+                    store=ctx_svc.graph_store,
+                    edges=affinity_edges,
                     silo_id=str(expected_silo_id),
-                    collection_name=collection_name,
-                    embedding_model=settings.litellm_embedding_model,
                 )
-                if affinity_edges:
-                    await store_affinity_edges(
-                        store=ctx_svc.graph_store,
-                        edges=affinity_edges,
-                        silo_id=str(expected_silo_id),
-                    )
-    except Exception as exc:
-        logger.warning("affinity_computation_failed", error=str(exc), node_id=str(node.id))
+        except Exception as exc:
+            logger.warning("affinity_computation_failed", error=str(exc), node_id=str(node.id))
 
     response: dict[str, Any] = {
         "node_id": str(node.id),

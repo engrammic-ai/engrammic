@@ -41,8 +41,9 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
-INDIVIDUAL_CHECK_TIMEOUT = 0.03  # 30ms
-TOTAL_CHECK_TIMEOUT = 0.08  # 80ms
+# Timeouts for parallel checks in tick() - keeps total tick latency under 100ms target
+INDIVIDUAL_CHECK_TIMEOUT = 0.03  # 30ms per check - fast-fail slow queries
+TOTAL_CHECK_TIMEOUT = 0.08  # 80ms total - leaves 20ms buffer for response assembly
 
 _TIMEOUT_SENTINEL = object()
 

@@ -1404,6 +1404,15 @@ class Settings(BaseSettings):
     )
 
     # =========================================================================
+    # tick() engagement
+    # =========================================================================
+
+    storage_gap_threshold: int = Field(
+        default=10,
+        description="Number of turns without storage before showing storage_gap nudge",
+    )
+
+    # =========================================================================
     # Signals — heat / freshness / priority
     # =========================================================================
 

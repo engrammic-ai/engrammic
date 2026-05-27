@@ -22,6 +22,7 @@ async def _tick(
     recent_context: str | None = None,  # noqa: ARG001 - reserved for embedding search (future)
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
+    from context_service.config.settings import get_settings
     from context_service.engine.engagement import (
         get_engagement_for_about_set,
         get_engagement_for_silo,
@@ -42,6 +43,7 @@ async def _tick(
 
     start_time = time.perf_counter()
 
+    settings = get_settings()
     ctx = get_context_service()
     store = ctx.graph_store
     redis_client = get_redis()
@@ -75,7 +77,8 @@ async def _tick(
 
     async def check_storage_gap() -> dict[str, Any]:
         gap = session.turn_count - session.last_store_turn
-        return {"storage_gap": gap if gap > 10 else 0}
+        threshold = settings.storage_gap_threshold
+        return {"storage_gap": gap if gap > threshold else 0}
 
     checks: dict[str, Any] = {
         "markers": check_markers(),
@@ -97,7 +100,7 @@ async def _tick(
 
     gap_result = results.get("storage_gap", {})
     gap = gap_result.get("storage_gap", 0) if isinstance(gap_result, dict) else 0
-    if gap > 10 and session.should_show_nudge(NudgeType.STORAGE_GAP):
+    if gap > settings.storage_gap_threshold and session.should_show_nudge(NudgeType.STORAGE_GAP):
         nudges.append(format_nudge(NudgeType.STORAGE_GAP, turns=gap))
         session.record_nudge_shown(NudgeType.STORAGE_GAP)
 
