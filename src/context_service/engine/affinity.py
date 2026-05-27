@@ -6,6 +6,7 @@ for fast lookup during tick().
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 
 from pydantic import BaseModel, Field
@@ -17,8 +18,8 @@ AFFINITY_K = 3
 class AffinityEdge(BaseModel):
     """Edge representing semantic affinity between Knowledge nodes."""
 
-    source_id: str
-    target_id: str
+    source_id: uuid.UUID
+    target_id: uuid.UUID
     similarity: float = Field(ge=0.85, le=1.0)
     source_embedding_model: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
