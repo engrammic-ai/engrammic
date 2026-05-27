@@ -81,9 +81,6 @@ splade = [
     "transformers>=4.40",
 ]
 
-[project.scripts]
-engrammic-doctor = "context_service.cli.doctor:main"
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
