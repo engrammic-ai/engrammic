@@ -9,7 +9,14 @@ from __future__ import annotations
 import dagster as dg
 
 from context_service.pipelines.assets import all_assets
-from context_service.pipelines.jobs import groundskeeper_nightly, sage_validator_job
+from context_service.pipelines.jobs import (
+    groundskeeper_nightly,
+    orphan_chain_recovery_job,
+    orphan_recovery_schedule,
+    sage_validator_job,
+    usage_retention_job,
+    usage_retention_schedule,
+)
 from context_service.pipelines.jobs.telemetry_gauges import telemetry_gauges_job
 from context_service.pipelines.jobs.telemetry_prune import telemetry_prune_job
 from context_service.pipelines.resources import build_default_resources
@@ -27,11 +34,13 @@ defs = dg.Definitions(
     jobs=[
         causal_tombstone_job,
         groundskeeper_nightly,
+        orphan_chain_recovery_job,
         sage_validator_job,
         telemetry_gauges_job,
         telemetry_prune_job,
+        usage_retention_job,
     ],
-    schedules=all_schedules,
+    schedules=[*all_schedules, orphan_recovery_schedule, usage_retention_schedule],
     sensors=all_sensors,
     resources=build_default_resources(),
 )
