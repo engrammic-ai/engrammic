@@ -64,7 +64,7 @@ A split-screen web app that visualizes the knowledge graph updating in real-time
 
 ## Scenarios
 
-Three vignettes demonstrating memory failures and fixes:
+Three vignettes demonstrating memory in action. Each scenario shows only the "with memory" path - the presenter verbally contrasts with what would happen without memory.
 
 ### Scenario 1: "I already told you that"
 
@@ -72,9 +72,9 @@ Three vignettes demonstrating memory failures and fixes:
 
 **Test:** Few exchanges later, user asks "Write me a React component for a user card"
 
-**Without memory:** Agent writes class component
+**Presenter note:** "Without memory, the agent would write a class component here. Watch what happens..."
 
-**With memory:** Agent writes functional component, graph shows recall path to preference node
+**Demo shows:** Agent writes functional component, graph shows recall path to preference node
 
 **Graph events:**
 - Preference node created on initial statement
@@ -86,9 +86,9 @@ Three vignettes demonstrating memory failures and fixes:
 
 **Test:** Later asks "How should I handle global state?"
 
-**Without memory:** Agent suggests Redux
+**Presenter note:** "A vanilla agent would suggest Redux here. But watch..."
 
-**With memory:** Agent suggests Zustand/Jotai, avoids Redux
+**Demo shows:** Agent suggests Zustand, explicitly avoids Redux
 
 **Graph events:**
 - Rejection node created
@@ -100,9 +100,9 @@ Three vignettes demonstrating memory failures and fixes:
 
 **Test:** Later asks "What's the best way to deploy this?"
 
-**Without memory:** Agent suggests expensive stack (Vercel Pro + PlanetScale)
+**Presenter note:** "Without memory, you'd get Vercel Pro, PlanetScale, the whole expensive stack..."
 
-**With memory:** Agent suggests Railway free tier, stays within budget
+**Demo shows:** Agent suggests Railway free tier, stays within budget
 
 **Graph events:**
 - Constraint node created
@@ -128,7 +128,14 @@ Three vignettes demonstrating memory failures and fixes:
 
 - **Default:** Charcoal, thin (1-2px)
 - **New edge:** Draw animation (line extends from source to target)
-- **Recalled path:** Shifts to oxide red, slightly thicker
+- **Recalled path:** Shifts to oxide red, slightly thicker (2-3px)
+
+### Edge Labels
+
+- **Font:** System sans-serif, 10px, charcoal
+- **Position:** Centered on edge, slight offset above line
+- **Background:** Bone white with subtle padding (prevents overlap with edge)
+- **Optional:** Most edges unlabeled for cleanliness; only key relationships labeled (e.g., "stated", "contradicts", "supports")
 
 ### Animations
 
@@ -142,9 +149,24 @@ Keep minimal - no constant motion, only on state changes:
 ## Graph Constraints
 
 - **Max 25 nodes** at any time per scenario
-- **Pre-existing:** ~15 nodes (context, prior knowledge)
+- **Pre-existing:** ~15 nodes (see below)
 - **Added during demo:** ~8 nodes (new preferences, reasoning)
 - **Reset between scenarios** - each vignette has its own graph state
+- **Scenario switching:** Instant reset, no confirmation. Dropdown always accessible.
+
+### Pre-existing Nodes (per scenario)
+
+Each scenario starts with ~15 nodes representing prior context. Example composition:
+
+| Category | Count | Examples |
+|----------|-------|----------|
+| Project context | 3 | "React project", "TypeScript codebase", "E-commerce app" |
+| Prior preferences | 4 | "Prefers Tailwind", "Uses pnpm", "Likes small PRs", "Test-first" |
+| Codebase facts | 4 | "Uses Next.js 14", "Postgres database", "Deployed on Vercel", "Monorepo" |
+| Prior decisions | 2 | "Chose REST over GraphQL", "Using Stripe for payments" |
+| User context | 2 | "Senior developer", "Working solo" |
+
+These create a believable "lived-in" graph before the demo begins.
 
 ## Node Types
 
@@ -154,6 +176,8 @@ Keep minimal - no constant motion, only on state changes:
 | Knowledge | Rounded square | Verified facts with evidence |
 | Belief | Diamond | Conclusions, decisions |
 | Constraint | Hexagon | Boundaries, limits |
+
+**Implementation note:** D3 only has circles built-in. Rounded squares, diamonds, and hexagons require custom SVG path generators. Keep shapes simple (no gradients, no 3D effects).
 
 ## Data Model
 
@@ -244,9 +268,12 @@ interface RecallData {
 
 ### Backend Integration
 
-- Calls real Engrammic MCP endpoints for authenticity
-- Can fall back to mocked responses if backend unavailable
-- WebSocket not required - scripted timing is sufficient for demo
+**Fully mocked for reliability.** Investor demos cannot fail due to network issues or backend variance.
+
+- All responses are scripted in scenario JSON
+- Graph events are predetermined, not derived from real MCP calls
+- No network dependency during presentation
+- Future: could add "live mode" toggle that hits real backend, but not for Antler MVP
 
 ### Deployment
 
@@ -259,12 +286,13 @@ interface RecallData {
 | Task | Time |
 |------|------|
 | Layout + chat panel | 0.5 day |
-| Graph rendering (D3) | 1 day |
+| Graph rendering (D3) + custom node shapes | 1.25 days |
 | Animations (node/edge/glow) | 0.5 day |
-| Scenario data authoring | 0.5 day |
-| Backend integration | 0.5 day |
+| Scenario data authoring (3 scenarios) | 0.5 day |
 | Polish + testing | 0.5 day |
-| **Total** | **3-4 days** |
+| **Total** | **3.25 days** |
+
+Note: "Backend integration" removed since demo is fully mocked.
 
 ## Out of Scope
 
