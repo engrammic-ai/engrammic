@@ -43,7 +43,7 @@ logger = structlog.get_logger(__name__)
 MIN_CONTENT_FOR_EMBEDDING = 10
 
 # Knowledge-layer node types that trigger Custodian identity
-_KNOWLEDGE_LAYER_TYPES: frozenset[str] = frozenset({"Fact", "Claim"})
+_KNOWLEDGE_LAYER_TYPES: frozenset[str] = frozenset({"Fact", "Claim", "Commitment"})
 
 # Module-level singleton for Custodian trigger
 _custodian_trigger: Any = None
@@ -146,6 +146,7 @@ class ContextService:
         source_uri: str | None = None,
         expansion: str | None = None,
         content_hash: str | None = None,
+        extra_labels: list[str] | None = None,
     ) -> Node:
         """Store context node to Memgraph + Qdrant.
 
@@ -159,6 +160,11 @@ class ContextService:
             expansion: Optional predicted-query expansion text stored as a
                 Qdrant payload field for SPLADE encoding.
             content_hash: Pre-computed SHA256 hash. If None, computed from content.
+            extra_labels: Optional additional Cypher labels to attach beyond
+                ``Node:{node_type}``. Each entry must be a valid label name
+                (alphanumeric/underscore). Use this to apply dual-label
+                semantics required by Cypher queries (e.g. ``["Claim"]`` for
+                Commitment nodes so custodian Cypher finds them via ``:Claim``).
 
         Returns:
             Created or existing node.
@@ -223,9 +229,12 @@ class ContextService:
                     return winner
 
         # node_type is validated against _ALLOWED_NODE_TYPES above — f-string is safe.
+        # extra_labels entries are alphanumeric/underscore only (no user-supplied
+        # values reach this point without validation at the call site).
+        extra_label_str = "".join(f":{lbl}" for lbl in (extra_labels or []))
         extra_props = {k: v for k, v in (properties or {}).items() if k not in _CREATE_PROPS}
         create_query = f"""
-            CREATE (n:Node:{node_type} {{
+            CREATE (n:Node:{node_type}{extra_label_str} {{
                 id: $id,
                 type: $type,
                 content: $content,
@@ -1198,6 +1207,7 @@ class ContextService:
             content=belief,
             node_type="Commitment",
             properties=props,
+            extra_labels=["Claim"],
         )
 
         await self._memgraph.execute_write(
