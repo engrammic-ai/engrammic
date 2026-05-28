@@ -3,7 +3,7 @@
 SAGE (Synthesis, Aggregation, and Graph Evolution) schedules:
 - sage_custodian_schedule: ingestion pipeline (every 2h, pending-work gated)
 - sage_synthesizer_schedule: belief formation (hourly, pending-work gated)
-- sage_groundskeeper_schedule: heat and maintenance (hourly, pending-work gated)
+- sage_groundskeeper_schedule: heat and maintenance (every 15 minutes, pending-work gated)
 - sage_validator_schedule: contradiction + stale commitment checks (every 5m, pending-work gated)
 
 Maintenance schedules:
@@ -246,7 +246,7 @@ def sage_synthesizer_schedule(
 
 
 @dg.schedule(
-    cron_schedule="0 * * * *",
+    cron_schedule="*/15 * * * *",
     name="sage_groundskeeper_schedule",
     target=dg.AssetSelection.assets(
         "heat",
@@ -254,7 +254,7 @@ def sage_synthesizer_schedule(
         "heat_diffusion",
         "prewarm_sweep",
     ),
-    description="SAGE Groundskeeper (hourly): heat and maintenance.",
+    description="SAGE Groundskeeper (every 15 minutes): heat and maintenance.",
     execution_timezone="UTC",
 )
 def sage_groundskeeper_schedule(
