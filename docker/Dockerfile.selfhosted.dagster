@@ -1,0 +1,58 @@
+# Self-hosted Dagster image - bytecode compiled for distribution
+# Runs SAGE pipelines: custodian, synthesizer, groundskeeper
+
+FROM python:3.13-slim AS builder
+
+WORKDIR /app
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+COPY pyproject.toml uv.lock README.md ./
+
+# Install production dependencies
+RUN uv sync --frozen --no-dev --no-install-project
+
+# Copy application code
+COPY src/ /app/src/
+COPY config/ /app/config/
+COPY dagster.yaml workspace.yaml ./
+
+# Install the project
+RUN uv sync --frozen --no-dev
+
+FROM python:3.13-slim
+
+WORKDIR /app
+
+RUN groupadd -g 1000 dagster && useradd -u 1000 -g dagster -m dagster
+
+# Copy virtual environment from builder
+COPY --from=builder /app/.venv /app/.venv
+
+# Copy application code and config
+COPY --from=builder /app/src /app/src
+COPY --from=builder /app/config /app/config
+COPY --from=builder /app/pyproject.toml /app/dagster.yaml /app/workspace.yaml ./
+COPY scripts/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Compile to bytecode and remove source
+RUN python -m compileall -b -q /app/src && \
+    find /app/src -name "*.py" -type f -delete
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app/src"
+ENV DAGSTER_HOME="/app"
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+RUN chown -R dagster:dagster /app
+
+USER dagster
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:3000/server_info')"
+
+ENTRYPOINT ["/entrypoint.sh"]

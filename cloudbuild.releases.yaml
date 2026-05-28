@@ -8,6 +8,10 @@ steps:
     entrypoint: 'bash'
     args: ['-c', 'docker pull ${_REGISTRY}/engrammic-beacon:latest || true']
 
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args: ['-c', 'docker pull ${_REGISTRY}/engrammic-dagster:latest || true']
+
   # Build API with BuildKit and cache-from
   - name: 'gcr.io/cloud-builders/docker'
     args:
@@ -44,6 +48,24 @@ steps:
     env:
       - 'DOCKER_BUILDKIT=1'
 
+  # Build Dagster (SAGE pipelines) with BuildKit and cache-from
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--build-arg=BUILDKIT_INLINE_CACHE=1'
+      - '--cache-from=${_REGISTRY}/engrammic-dagster:latest'
+      - '-f'
+      - 'docker/Dockerfile.selfhosted.dagster'
+      - '-t'
+      - '${_REGISTRY}/engrammic-dagster:latest'
+      - '-t'
+      - '${_REGISTRY}/engrammic-dagster:v${_VERSION}'
+      - '-t'
+      - '${_REGISTRY}/engrammic-dagster:v${_VERSION}-${SHORT_SHA}'
+      - '.'
+    env:
+      - 'DOCKER_BUILDKIT=1'
+
 images:
   - '${_REGISTRY}/engrammic-api:latest'
   - '${_REGISTRY}/engrammic-api:v${_VERSION}'
@@ -51,6 +73,9 @@ images:
   - '${_REGISTRY}/engrammic-beacon:latest'
   - '${_REGISTRY}/engrammic-beacon:v${_VERSION}'
   - '${_REGISTRY}/engrammic-beacon:v${_VERSION}-${SHORT_SHA}'
+  - '${_REGISTRY}/engrammic-dagster:latest'
+  - '${_REGISTRY}/engrammic-dagster:v${_VERSION}'
+  - '${_REGISTRY}/engrammic-dagster:v${_VERSION}-${SHORT_SHA}'
 
 substitutions:
   _REGISTRY: 'europe-north1-docker.pkg.dev/engrammic/releases'

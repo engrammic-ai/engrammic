@@ -1,10 +1,10 @@
 # docker/docker-compose.selfhosted.yml
-# Engrammic Self-Hosted - Lite defaults (~3GB RAM total)
+# Engrammic Self-Hosted - includes SAGE pipelines (~4GB RAM total)
 # For scaling guidance, see comments below.
 
 services:
   app:
-    image: europe-north1-docker.pkg.dev/engrammic/releases/engrammic-api:v0.1.0
+    image: europe-north1-docker.pkg.dev/engrammic/releases/engrammic-api:latest
     container_name: engrammic-app
     ports:
       - "8000:8000"
@@ -40,6 +40,42 @@ services:
       resources:
         limits:
           memory: 512M
+    restart: unless-stopped
+
+  dagster:
+    image: europe-north1-docker.pkg.dev/engrammic/releases/engrammic-dagster:latest
+    container_name: engrammic-dagster
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - ENVIRONMENT=self-hosted
+      - MEMGRAPH_HOST=memgraph
+      - QDRANT_HOST=qdrant
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=engrammic
+      - POSTGRES_DATABASE=engrammic
+    depends_on:
+      memgraph:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3000/server_info')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 768M
     restart: unless-stopped
 
   memgraph:
