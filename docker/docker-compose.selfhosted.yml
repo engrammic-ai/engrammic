@@ -152,6 +152,24 @@ services:
           memory: 256M
     restart: unless-stopped
 
+  # Optional: Telemetry beacon (anonymized usage stats sent to Engrammic)
+  # Uncomment to opt-in to telemetry
+  # beacon:
+  #   image: europe-north1-docker.pkg.dev/engrammic/releases/engrammic-beacon:latest
+  #   container_name: engrammic-beacon
+  #   environment:
+  #     - POSTGRES_HOST=postgres
+  #     - POSTGRES_USER=engrammic
+  #     - POSTGRES_DATABASE=engrammic
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 128M
+  #   restart: unless-stopped
+
 volumes:
   memgraph-data:
   qdrant-data:
