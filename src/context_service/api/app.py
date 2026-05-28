@@ -389,28 +389,21 @@ def create_app() -> ASGIApp:
             """Health check for MCP server."""
             return {"status": "ok", "server": mcp_server.name}
 
-        from collections.abc import Awaitable, Callable
-
-        from starlette.middleware.base import BaseHTTPMiddleware
-        from starlette.responses import Response
-
-        class MCPTrailingSlashMiddleware(BaseHTTPMiddleware):
-            """Normalize /mcp to /mcp/ internally for clients that omit trailing slash."""
-
-            async def dispatch(
-                self,
-                request: Request,
-                call_next: Callable[[Request], Awaitable[Response]],
-            ) -> Response:
-                if request.url.path == "/mcp":
-                    # Rewrite scope path to include trailing slash
-                    scope = dict(request.scope)
-                    scope["path"] = "/mcp/"
-                    request = Request(scope, request.receive)
-                return await call_next(request)
-
-        app.add_middleware(MCPTrailingSlashMiddleware)
         app.mount("/mcp", mcp_app)
         logger.info("mcp_server_mounted", path="/mcp", transport="http")
 
-    return app
+    # Wrap app with path normalizer to prevent 307 redirects on /mcp
+    # Some HTTP clients (Claude web connectors) don't follow POST redirects correctly
+    class MCPPathNormalizer:
+        """ASGI middleware to normalize /mcp to /mcp/ before routing."""
+
+        def __init__(self, wrapped_app: ASGIApp) -> None:
+            self.app = wrapped_app
+
+        async def __call__(self, scope: dict[str, object], receive: object, send: object) -> None:
+            if scope["type"] == "http" and scope.get("path") == "/mcp":
+                scope = dict(scope)
+                scope["path"] = "/mcp/"
+            await self.app(scope, receive, send)  # type: ignore[arg-type]
+
+    return MCPPathNormalizer(app)  # type: ignore[return-value]
