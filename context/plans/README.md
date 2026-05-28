@@ -2,9 +2,12 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-27)
+## Current state (2026-05-29)
 
 **Shipped:**
+- v2.35 Multi-Format Skill Installation — Cursor .mdc and Gemini GEMINI.md formats for installer CLI
+- v2.34 Harness-Agnostic Enforcement — Write-time affinity, tick() enhancement, session state, nudges
+- v2.33 Codebase Audit Fixes — Orphan jobs, commitment label, mcp-client sync, dead code cleanup
 - v2.32 Dagster Pipeline Deps Fix — Add missing asset dependencies for correct execution order (custodian, synthesizer, groundskeeper)
 - v2.31 PostgreSQL Telemetry — Replace SigNoz/OTEL with PostgreSQL tables, in-process buffer, Dagster jobs
 - v2.30 Self-Hosted Distribution Phase 2 — Version deprecation warnings, /versions endpoint, quickstart docs
@@ -52,7 +55,6 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
-| [2026-05-27-harness-agnostic-enforcement.md](./2026-05-27-harness-agnostic-enforcement.md) | Harness-agnostic memory enforcement via skill + tick() | Ready to execute |
 | [2026-05-20-self-hosted-rest-api-phase1.md](./2026-05-20-self-hosted-rest-api-phase1.md) | Self-hosted REST API: auth + Memory/Knowledge endpoints | Ready to execute |
 
 ## Future work
@@ -97,6 +99,9 @@ Specced or checkpointed for later implementation:
 ## Archive
 
 Completed plans in `archive/`:
+- Multi-Format Skill Installation (2026-05-28) - Cursor .mdc and Gemini GEMINI.md formats for installer CLI
+- Harness-Agnostic Enforcement (2026-05-28) - write-time affinity, tick() enhancement, session state, nudges
+- Codebase Audit Fixes (2026-05-28) - orphan jobs, commitment label, mcp-client sync, dead code cleanup
 - Dagster Pipeline Deps Fix (2026-05-27) - add missing asset dependencies for SAGE pipelines
 - Refresh Token Persistence (2026-05-26) - draft, deferred
 - Context Checkpoint Hooks (2026-05-18) - spike, deferred
@@ -143,6 +148,8 @@ Completed plans in `archive/`:
 - Heat Diffusion (2026-05-15) - Dagster asset, edge heat propagation, prewarm sweep
 - Self-Hosted Telemetry (2026-05-13) - two-tier beacon, install ID, collector
 - Telemetry Expansion (2026-05-13) - OTEL metrics for storage backends, LLM tokens
+- OSS Engine (2026-05-28) - engine repo shipped v0.1.1, SQLite store, all MCP tools
+- OSS Master (2026-05-28) - W1 shipped; W2/W3 deferred post-fundraise
 - Reasoning Chain Applicability (2026-05-12) - three-layer matching, DTW, implicit feedback
 - Custodian Identity Split (2026-05-12) - 4 identities with LLM wiring + Dagster jobs
 - OSS Adoption Helpers (2026-05-11)
