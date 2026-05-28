@@ -6,7 +6,7 @@ import asyncio
 import time
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any
 
 import structlog
 
@@ -18,7 +18,6 @@ from context_service.mcp.server import (
     get_evidence_validator,
     get_mcp_auth_context,
     get_postgres_store,
-    get_redis,
     get_silo_service,
 )
 from context_service.models.mcp import (
@@ -32,17 +31,12 @@ from context_service.models.mcp import (
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 from context_service.services.source_tier_resolver import resolve_source_tier
-from context_service.signals import emit_access_event
-from context_service.telemetry.metrics import record_mcp_tool
 
 # Query to get embedding for contradiction check
 _GET_NODE_EMBEDDING = """
 MATCH (n {id: $node_id, silo_id: $silo_id})
 RETURN n.embedding AS embedding
 """
-
-if TYPE_CHECKING:
-    from fastmcp import FastMCP
 
 logger = structlog.get_logger(__name__)
 
@@ -1111,114 +1105,3 @@ async def _context_store(
     }
 
 
-def register(mcp: FastMCP) -> None:
-    """Register the context_store tool."""
-
-    @mcp.tool(
-        name="context_store",
-        description=(
-            "Unified write tool for all EAG layers. "
-            "Routes to memory, knowledge, wisdom, intelligence, meta, or belief based on layer. "
-            "knowledge requires evidence + source_type. "
-            "wisdom requires about. "
-            "intelligence requires steps. "
-            "meta requires observation_type + about. "
-            "belief requires about + session_id."
-        ),
-    )
-    async def context_store(
-        content: str,
-        layer: Literal["memory", "knowledge", "wisdom", "intelligence", "meta", "belief"],
-        evidence: list[str] | None = None,
-        source_type: str | None = None,
-        confidence: float = 0.8,
-        about: list[str] | None = None,
-        reasoning: str | None = None,
-        steps: list[dict[str, Any]] | None = None,
-        observation_type: str | None = None,
-        metadata: dict[str, Any] | None = None,
-        tags: list[str] | None = None,
-        decay_class: str = "standard",
-        silo_id: str | None = None,
-        parent_chain_id: str | None = None,
-        session_id: str | None = None,
-    ) -> dict[str, Any]:
-        """Store to any EAG layer.
-
-        Args:
-            content: The content to store. For intelligence layer, this is the conclusion.
-            layer: Target layer: memory|knowledge|wisdom|intelligence|meta|belief.
-            evidence: Evidence refs (node:<uuid> or URI). Required for knowledge layer.
-            source_type: Source type for knowledge layer: document|user|external|agent.
-            confidence: 0.0-1.0, agent's confidence (default 0.8). Guidelines:
-                0.95+ = near certain, verified from multiple sources
-                0.8-0.95 = confident, single reliable source or strong reasoning
-                0.6-0.8 = probable, reasonable inference with some uncertainty
-                0.4-0.6 = uncertain, plausible but unverified
-                <0.4 = speculative, weak evidence or tentative hypothesis
-            about: Node IDs this content concerns. Required for wisdom, meta, and belief layers.
-            reasoning: Reasoning behind a wisdom-layer belief.
-            steps: Reasoning steps for intelligence layer. List of {step, reasoning, confidence?}.
-            observation_type: Meta-observation type. Required for meta layer.
-            metadata: Optional metadata dict.
-            tags: Optional tags for filtering.
-            decay_class: ephemeral|standard|durable|permanent (memory layer only).
-            silo_id: UUID of the silo. Optional; defaults to the org's primary silo
-                derived from auth.
-            parent_chain_id: Intelligence layer only. UUID of an existing ReasoningChain
-                in the same silo that this chain continues. Creates a CONTINUES edge
-                (child_chain -> parent_chain). One chain can continue only one parent.
-            session_id: Belief layer only. ID of the ReasoningSession the WorkingBelief
-                belongs to. Required for belief layer; ignored for all other layers.
-
-        Returns:
-            Layer-specific response dict with at minimum {node_id, layer, created_at}.
-            Intelligence layer includes continues_chain_id when parent_chain_id is set.
-            Belief layer returns {belief_id, layer, session_id, created_at} and includes
-            potential_conflicts when other beliefs in the session target the same nodes.
-        """
-        start = time.perf_counter()
-        success = True
-        try:
-            auth = await get_mcp_auth_context()
-            resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
-            result = await _context_store(
-                silo_id=resolved_silo_id,
-                content=content,
-                layer=layer,
-                evidence=evidence,
-                source_type=source_type,
-                confidence=confidence,
-                about=about,
-                reasoning=reasoning,
-                steps=steps,
-                observation_type=observation_type,
-                metadata=metadata,
-                tags=tags,
-                decay_class=decay_class,
-                parent_chain_id=parent_chain_id,
-                session_id=session_id,
-            )
-
-            if "error" not in result and get_settings().write_events_enabled:
-                redis = get_redis()
-                if redis is not None:
-                    node_id = (
-                        result.get("node_id") or result.get("chain_id") or result.get("belief_id")
-                    )
-                    if node_id:
-                        node_label = _layer_to_label(layer)
-                        await emit_access_event(
-                            redis,
-                            resolved_silo_id,
-                            str(node_id),
-                            event_type="write",
-                            layer=node_label,
-                        )
-
-            return result
-        except Exception:
-            success = False
-            raise
-        finally:
-            record_mcp_tool("context_store", (time.perf_counter() - start) * 1000, success=success)

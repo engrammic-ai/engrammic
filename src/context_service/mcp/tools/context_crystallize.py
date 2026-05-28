@@ -3,16 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import time
 import uuid
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
-
-from context_service.services.models import derive_silo_id
-from context_service.telemetry.metrics import record_mcp_tool
-
-if TYPE_CHECKING:
-    from fastmcp import FastMCP
+from typing import Any
 
 
 async def _crystallize_one(
@@ -119,64 +112,3 @@ async def _context_crystallize(
     if not_found:
         response["not_found"] = not_found
     return response
-
-
-def register(mcp: FastMCP) -> None:
-    """Register the context_crystallize tool."""
-
-    @mcp.tool(
-        name="context_crystallize",
-        description=(
-            "Promote one or more WorkingHypothesiss to durable Commitments. "
-            "Each crystallized belief creates a Commitment node with SUPERSEDES edges "
-            "to any prior active Commitments about the same nodes."
-        ),
-    )
-    async def context_crystallize(
-        belief_ids: list[str],
-        reason: str | None = None,
-        silo_id: str | None = None,
-        chain_id: str | None = None,
-    ) -> dict[str, Any]:
-        """Crystallize WorkingHypothesiss into Commitments.
-
-        Args:
-            belief_ids: List of WorkingHypothesis IDs to promote.
-            reason: Optional reason stored on SUPERSEDES edges.
-            silo_id: UUID of the silo. Optional; defaults to the org's primary silo
-                derived from auth.
-            chain_id: Optional reasoning chain ID (ReasoningChain node) that motivated
-                this crystallization. Stored as rationale_chain_id on each resulting
-                Commitment node.
-
-        Returns:
-            {commitment_ids: list[str], crystallized_belief_ids: list[str], not_found?: list[str]}
-            where crystallized_belief_ids lists the belief_ids that were successfully promoted
-            and not_found lists any IDs that did not match a WorkingHypothesis in the silo.
-        """
-        from context_service.mcp.server import get_mcp_auth_context, get_silo_service
-        from context_service.services.silo import validate_silo_ownership
-
-        auth = await get_mcp_auth_context()
-        if silo_id is not None:
-            err = await validate_silo_ownership(get_silo_service(), silo_id, auth.org_id)
-            if err is not None:
-                return err
-        resolved_silo_id = silo_id or str(derive_silo_id(auth.org_id))
-        start = time.perf_counter()
-        success = True
-        try:
-            result = await _context_crystallize(
-                belief_ids=belief_ids,
-                silo_id=resolved_silo_id,
-                reason=reason,
-                chain_id=chain_id,
-            )
-            return result
-        except Exception:
-            success = False
-            raise
-        finally:
-            record_mcp_tool(
-                "context_crystallize", (time.perf_counter() - start) * 1000, success=success
-            )
