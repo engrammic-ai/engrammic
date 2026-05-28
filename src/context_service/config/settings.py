@@ -855,11 +855,6 @@ def _load_models_config() -> ModelsConfig:
 class FeatureFlags(BaseModel):
     """Feature flags for gradual rollout."""
 
-    use_epistemic_store: bool = Field(
-        default=False,
-        description="Use EpistemicStore abstraction for synthesis operations",
-    )
-
 
 class UsageRetentionConfig(BaseModel):
     """Configuration for ToolUsage row retention."""
