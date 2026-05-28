@@ -13,6 +13,7 @@ from context_service.mcp.tools import (
     believe,
     commit,
     dismiss,
+    forget,
     hypothesize,
     learn,
     link,
@@ -54,6 +55,7 @@ __all__ = [
     "revise",
     "commit",
     "dismiss",
+    "forget",
     "tick",
     "patterns",
 ]
