@@ -131,6 +131,7 @@ jobs:
             --no-cpu-throttling \
             --session-affinity \
             --timeout 3600 \
+            --update-secrets=LICENSE_PRIVATE_KEY=license-private-key:latest \
             --no-traffic
 
       - name: Run migrations via Cloud Run Job

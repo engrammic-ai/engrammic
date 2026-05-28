@@ -1,7 +1,7 @@
 """Embedded public key for license validation."""
 
 PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAP6oGZYYU9c8ZmbH5npbIPMpQ041S/AnGBBwFc+xX9m0=
+MCowBQYDK2VwAyEAhBOyf9EQFrXkTJh+YuLFZKcp4Bd9HPNXRfe9BBunhwM=
 -----END PUBLIC KEY-----
 """
 
