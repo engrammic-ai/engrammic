@@ -30,8 +30,6 @@ jobs:
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
-        with:
-          version: '567.0.0'
 
       - name: Build API image with Cloud Build
         run: |
@@ -58,8 +56,6 @@ jobs:
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
-        with:
-          version: '567.0.0'
 
       - name: Build Beacon image with Cloud Build
         run: |
@@ -86,8 +82,6 @@ jobs:
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
-        with:
-          version: '567.0.0'
 
       - name: Build Dagster image with Cloud Build
         run: |
@@ -112,8 +106,6 @@ jobs:
 
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
-        with:
-          version: '567.0.0'
 
       - name: Deploy to VM
         run: |
@@ -139,7 +131,6 @@ jobs:
             --no-cpu-throttling \
             --session-affinity \
             --timeout 3600 \
-            --set-secrets=WORKOS_API_KEY=engrammic-beta-workos-api-key:latest,WORKOS_CLIENT_ID=engrammic-beta-workos-client-id:latest,WORKOS_COOKIE_PASSWORD=engrammic-beta-workos-cookie-password:latest,MEMGRAPH_PASSWORD=engrammic-beta-memgraph-password:latest,POSTGRES_PASSWORD=engrammic-beta-postgres-password:latest,LICENSE_PRIVATE_KEY=license-private-key:latest \
             --no-traffic
 
       - name: Run migrations via Cloud Run Job

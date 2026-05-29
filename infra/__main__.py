@@ -16,6 +16,7 @@ from components import (
     StatefulHost,
     StorageStack,
 )
+from pulumi_gcp import secretmanager
 
 config = pulumi.Config()
 use_cloudsql = config.get_bool("use_cloudsql") or False
@@ -52,6 +53,9 @@ storage = StorageStack("engrammic-storage", stateful_host_email=iam.stateful_hos
 
 # Secrets - Secret Manager resources
 secrets = SecretsStack("engrammic-secrets")
+
+# License signing key (shared across environments)
+license_private_key = secretmanager.get_secret_output(secret_id="license-private-key")
 
 # Cloud SQL (if enabled) - define postgres_host early for StatefulHost
 cloudsql = None
@@ -126,6 +130,7 @@ context_service = ContextServiceRun(
         "WORKOS_API_KEY": secrets.secrets["workos-api-key"].id,
         "WORKOS_CLIENT_ID": secrets.secrets["workos-client-id"].id,
         "WORKOS_COOKIE_PASSWORD": secrets.secrets["workos-cookie-password"].id,
+        "LICENSE_PRIVATE_KEY": license_private_key.id,
     },
 )
 
