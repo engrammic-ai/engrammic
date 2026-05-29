@@ -64,22 +64,36 @@ jobs:
             -f docker/Dockerfile.selfhosted.api \
             -t "${IMAGE_BASE}:v${VERSION}" \
             -t "${IMAGE_BASE}:v${VERSION}-${SHORT_SHA}" \
+            -t "${IMAGE_BASE}:latest" \
             .
 
           docker push "${IMAGE_BASE}:v${VERSION}"
           docker push "${IMAGE_BASE}:v${VERSION}-${SHORT_SHA}"
+          docker push "${IMAGE_BASE}:latest"
 
-  build-selfhosted-beacon:
+  build-selfhosted-dagster:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
-    needs: build-selfhosted-api
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Set short SHA
         run: echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
@@ -93,23 +107,25 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
-      - name: Build and push Beacon image
+      - name: Build and push Dagster image
         run: |
-          IMAGE_BASE=${{ env.REGISTRY }}/engrammic-beacon
-          VERSION=${{ needs.build-selfhosted-api.outputs.version }}
+          IMAGE_BASE=${{ env.REGISTRY }}/engrammic-dagster
+          VERSION=${{ steps.version.outputs.version }}
           SHORT_SHA=${{ env.SHORT_SHA }}
 
           docker build \
-            -f docker/Dockerfile.selfhosted.beacon \
+            -f docker/Dockerfile.selfhosted.dagster \
             -t "${IMAGE_BASE}:v${VERSION}" \
             -t "${IMAGE_BASE}:v${VERSION}-${SHORT_SHA}" \
+            -t "${IMAGE_BASE}:latest" \
             .
 
           docker push "${IMAGE_BASE}:v${VERSION}"
           docker push "${IMAGE_BASE}:v${VERSION}-${SHORT_SHA}"
+          docker push "${IMAGE_BASE}:latest"
 
   verify:
-    needs: [build-selfhosted-api, build-selfhosted-beacon]
+    needs: [build-selfhosted-api, build-selfhosted-dagster]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -118,4 +134,4 @@ jobs:
         run: |
           VERSION=${{ needs.build-selfhosted-api.outputs.version }}
           docker pull ${{ env.REGISTRY }}/engrammic-api:v${VERSION}
-          docker pull ${{ env.REGISTRY }}/engrammic-beacon:v${VERSION}
+          docker pull ${{ env.REGISTRY }}/engrammic-dagster:v${VERSION}
