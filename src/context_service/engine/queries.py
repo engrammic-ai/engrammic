@@ -1205,6 +1205,16 @@ RETURN n.id AS node_id
 LIMIT $limit
 """
 
+# Fetch updated_at timestamps for a list of evidence node IDs.
+# No silo filter: callers have already verified accessibility via
+# get_accessible_evidence(). No committed filter: we want to detect
+# modifications even on uncommitted (recently updated) nodes.
+GET_EVIDENCE_UPDATED_AT = f"""
+MATCH (n) WHERE {content_union_predicate("n")}
+  AND n.id IN $ids
+RETURN n.id AS id, n.updated_at AS updated_at
+"""
+
 # ---------------------------------------------------------------------------
 # Stub-retention queries (data lifecycle management)
 # ---------------------------------------------------------------------------

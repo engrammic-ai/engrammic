@@ -13,6 +13,7 @@ is returned; if none pass, returns None.
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -20,6 +21,7 @@ import structlog
 
 from context_service.config.settings import get_settings
 from context_service.engine.dtw import dtw_similarity
+from context_service.engine.protocols import HyperGraphStore
 from context_service.telemetry.metrics import record_chain_evidence_modified, record_chain_lookup
 
 log = structlog.get_logger()
@@ -356,9 +358,11 @@ async def find_applicable_chain(
         )
 
         # Monitoring: check if evidence was modified after chain creation (non-blocking)
+        ctx_svc = get_context_service()
         await record_evidence_modification(
             list(evidence_used),
             chain.get("payload", {}).get("created_at"),
+            ctx_svc._memgraph,
         )
 
         latency_ms = (time.perf_counter() - start_time) * 1000
@@ -394,15 +398,60 @@ async def find_applicable_chain(
 async def record_evidence_modification(
     evidence_ids: list[str],
     chain_created_at: str | None,
+    store: HyperGraphStore,
 ) -> None:
     """Emit a metric if any evidence was modified after chain creation.
 
-    This is a non-blocking monitoring signal. Failures are silently ignored.
+    Queries the graph for the updated_at timestamp of each evidence node and
+    compares against chain_created_at. Calls record_chain_evidence_modified()
+    when any evidence node was updated after the chain was created.
 
-    Full implementation requires querying the graph store for the updated_at
-    timestamp of each evidence node and comparing against chain_created_at.
+    This is a non-blocking monitoring signal. Failures are silently ignored.
     """
     if not evidence_ids or not chain_created_at:
         return
-    # Stub: full implementation wires into the graph store.
-    record_chain_evidence_modified()
+
+    try:
+        chain_dt = datetime.fromisoformat(chain_created_at)
+        if chain_dt.tzinfo is None:
+            chain_dt = chain_dt.replace(tzinfo=UTC)
+    except (ValueError, TypeError):
+        log.warning("record_evidence_modification_bad_timestamp", chain_created_at=chain_created_at)
+        return
+
+    try:
+        from context_service.engine import queries
+
+        rows = await store.execute_query(
+            queries.GET_EVIDENCE_UPDATED_AT,
+            {"ids": evidence_ids},
+        )
+    except Exception as e:
+        log.warning("record_evidence_modification_query_failed", error=str(e))
+        return
+
+    for row in rows:
+        raw = row.get("updated_at")
+        if raw is None:
+            continue
+        try:
+            if isinstance(raw, (int, float)):
+                updated_dt = datetime.fromtimestamp(raw / 1_000_000.0, tz=UTC)
+            elif isinstance(raw, datetime):
+                updated_dt = raw if raw.tzinfo is not None else raw.replace(tzinfo=UTC)
+            else:
+                updated_dt = datetime.fromisoformat(str(raw))
+                if updated_dt.tzinfo is None:
+                    updated_dt = updated_dt.replace(tzinfo=UTC)
+        except (ValueError, TypeError, OSError):
+            continue
+
+        if updated_dt > chain_dt:
+            log.info(
+                "chain_evidence_modified",
+                node_id=row.get("id"),
+                updated_at=updated_dt.isoformat(),
+                chain_created_at=chain_dt.isoformat(),
+            )
+            record_chain_evidence_modified()
+            return

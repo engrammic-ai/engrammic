@@ -39,6 +39,7 @@ class LiteLLMEmbeddingService:
         self,
         model: str,
         dimensions: int = 768,
+        max_input_chars: int = 30000,
         _embedding_cache: EmbeddingCache | None = None,
     ) -> None:
         """Initialize the LiteLLM embedding service.
@@ -46,10 +47,14 @@ class LiteLLMEmbeddingService:
         Args:
             model: LiteLLM model identifier (e.g., "openai/text-embedding-3-small").
             dimensions: Output embedding dimensions.
+            max_input_chars: Maximum input length in characters before truncation.
+                Defaults to 30000 (~8000 tokens). Inputs exceeding this are truncated
+                with a warning to avoid silent model-side truncation.
             _embedding_cache: Optional Redis-backed embedding cache.
         """
         self._model = model
         self._dimensions = dimensions
+        self._max_input_chars = max_input_chars
         self._embedding_cache = _embedding_cache
 
     @property
@@ -73,6 +78,7 @@ class LiteLLMEmbeddingService:
         return cls(
             model=config["model"],
             dimensions=config["dimensions"],
+            max_input_chars=config.get("max_input_chars", 30000),
             _embedding_cache=_embedding_cache,
         )
 
@@ -149,6 +155,20 @@ class LiteLLMEmbeddingService:
         Raises:
             LiteLLMEmbeddingError: If embedding generation fails.
         """
+        truncated: list[str] = []
+        for text in texts:
+            if len(text) > self._max_input_chars:
+                logger.warning(
+                    "embedding_input_truncated",
+                    original_length=len(text),
+                    max_chars=self._max_input_chars,
+                    model=self._model,
+                )
+                truncated.append(text[: self._max_input_chars])
+            else:
+                truncated.append(text)
+        texts = truncated
+
         with tracer.start_as_current_span(
             "embedding.litellm",
             attributes={"model": self._model, "batch_size": len(texts)},

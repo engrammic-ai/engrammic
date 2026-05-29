@@ -48,7 +48,7 @@ RETURN DISTINCT c.silo_id AS silo_id
 UNION
 MATCH (b:Belief)
 WHERE b.wisdom_status IS NULL OR b.wisdom_status <> 'stale'
-WITH b, [word IN split(toLower(b.content), ' ') WHERE size(word) > 4] AS words
+WITH b, [word IN split(toLower(b.content), ' ') WHERE size(word) > 4 AND NOT word IN ['their', 'which', 'about', 'would', 'these', 'there', 'where', 'could', 'should', 'being', 'having', 'other', 'after', 'before', 'under', 'between', 'through', 'during', 'without', 'within', 'against', 'among', 'along', 'around', 'behind', 'below', 'beside', 'beyond', 'inside', 'outside', 'since', 'until', 'while', 'because', 'although', 'though', 'unless', 'whether', 'either', 'neither', 'every', 'another', 'those', 'above', 'using', 'based', 'given']] AS words
 UNWIND words AS subject
 WITH b.silo_id AS silo_id, subject, count(b) AS cnt
 WHERE cnt >= 2
