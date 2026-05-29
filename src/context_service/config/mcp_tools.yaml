@@ -31,6 +31,12 @@ mcp_instructions: |
   - Reference existing nodes when forming beliefs
   - Recall before storing to check for supersession opportunities
 
+  Reasoning flow (hypothesize/commit):
+  - hypothesize creates session-scoped tentative beliefs
+  - commit promotes them to permanent wisdom WITHIN THE SAME SESSION
+  - If session ends without commit, hypotheses are garbage collected
+  - For cross-session conclusions, use believe directly instead
+
   Onboarding:
   - At session start, call patterns(action='get', name='onboarding') for your workflow guide
 
@@ -68,15 +74,15 @@ tools:
     maps_to: meta
 
   hypothesize:
-    description: "Form a tentative belief during reasoning. Use commit to finalize."
+    description: "Form a tentative belief during reasoning. SESSION-SCOPED: must call commit within the same session to persist. For cross-session conclusions, use believe instead."
     maps_to: belief
 
   revise:
-    description: "Update a tentative hypothesis when new information arrives."
+    description: "Update a tentative hypothesis when new information arrives. Only works within the session that created the hypothesis."
     maps_to: update_belief
 
   commit:
-    description: "Promote tentative hypotheses to permanent commitments."
+    description: "Promote tentative hypotheses to permanent commitments. MUST be called in the same session as hypothesize - hypotheses do not survive session boundaries."
     maps_to: crystallize
 
   forget:
