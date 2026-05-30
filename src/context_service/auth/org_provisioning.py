@@ -13,8 +13,10 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from context_service.config.settings import get_settings
+from context_service.services.user import UserService
 
 logger = structlog.get_logger(__name__)
 
@@ -110,3 +112,30 @@ def resolve_workspace_name(name: str | None, email: str) -> str:
         # No usable name and no email local-part (e.g. "@x.com"); neutral default.
         return "New workspace"
     return f"{base}'s workspace"
+
+
+async def resolve_or_create_org(
+    session: AsyncSession,
+    *,
+    workos_user_id: str,
+    session_org_id: str | None,
+    name: str | None,
+    email: str,
+) -> str:
+    """Resolve the effective org id for an identity, provisioning if needed.
+
+    Precedence:
+      1. The org id carried by the current session/token, if any.
+      2. The org id already stored on the user record (fast indexed read) -
+         unless it equals the workos_user_id, which marks a legacy user-id
+         fallback that should be upgraded to a real org.
+      3. A newly-created personal org (the only branch that calls WorkOS).
+    """
+    if session_org_id:
+        return session_org_id
+
+    user = await UserService(session).get_user_by_workos_id(workos_user_id)
+    if user is not None and user.org_id and user.org_id != workos_user_id:
+        return str(user.org_id)
+
+    return ensure_personal_org(workos_user_id, resolve_workspace_name(name, email))

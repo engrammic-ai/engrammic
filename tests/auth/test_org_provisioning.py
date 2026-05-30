@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import sys
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import SecretStr
 
-from context_service.auth.org_provisioning import ensure_personal_org, resolve_workspace_name
+from context_service.auth.org_provisioning import (
+    ensure_personal_org,
+    resolve_or_create_org,
+    resolve_workspace_name,
+)
 from context_service.config.settings import Settings
 
 _SETTINGS = Settings(
@@ -156,3 +160,67 @@ class TestResolveWorkspaceName:
 
     def test_neutral_default_when_no_name_and_no_local_part(self) -> None:
         assert resolve_workspace_name(None, "@example.com") == "New workspace"
+
+
+class TestResolveOrCreateOrg:
+    async def test_returns_session_org_id_without_db_or_workos(self) -> None:
+        session = AsyncMock()
+        with patch("context_service.auth.org_provisioning.ensure_personal_org") as ensure:
+            result = await resolve_or_create_org(
+                session,
+                workos_user_id="wos-1",
+                session_org_id="org-from-session",
+                name="Alice",
+                email="alice@x.com",
+            )
+        assert result == "org-from-session"
+        ensure.assert_not_called()
+
+    async def test_returns_stored_org_id_when_session_has_none(self) -> None:
+        stored = MagicMock()
+        stored.org_id = "org-stored"
+        session = AsyncMock()
+        with (
+            patch("context_service.auth.org_provisioning.UserService") as MockSvc,
+            patch("context_service.auth.org_provisioning.ensure_personal_org") as ensure,
+        ):
+            MockSvc.return_value.get_user_by_workos_id = AsyncMock(return_value=stored)
+            result = await resolve_or_create_org(
+                session, workos_user_id="wos-1", session_org_id=None, name="Alice", email="a@x.com"
+            )
+        assert result == "org-stored"
+        ensure.assert_not_called()
+
+    async def test_creates_when_no_session_and_no_stored_org(self) -> None:
+        session = AsyncMock()
+        with (
+            patch("context_service.auth.org_provisioning.UserService") as MockSvc,
+            patch(
+                "context_service.auth.org_provisioning.ensure_personal_org",
+                return_value="org-new",
+            ) as ensure,
+        ):
+            MockSvc.return_value.get_user_by_workos_id = AsyncMock(return_value=None)
+            result = await resolve_or_create_org(
+                session, workos_user_id="wos-1", session_org_id=None, name=None, email="bob@x.com"
+            )
+        assert result == "org-new"
+        ensure.assert_called_once_with("wos-1", "bob's workspace")
+
+    async def test_creates_when_stored_org_is_legacy_userid_fallback(self) -> None:
+        stored = MagicMock()
+        stored.org_id = "wos-1"  # legacy fallback wrote org_id == workos_user_id
+        session = AsyncMock()
+        with (
+            patch("context_service.auth.org_provisioning.UserService") as MockSvc,
+            patch(
+                "context_service.auth.org_provisioning.ensure_personal_org",
+                return_value="org-new",
+            ) as ensure,
+        ):
+            MockSvc.return_value.get_user_by_workos_id = AsyncMock(return_value=stored)
+            result = await resolve_or_create_org(
+                session, workos_user_id="wos-1", session_org_id=None, name="Al", email="al@x.com"
+            )
+        assert result == "org-new"
+        ensure.assert_called_once()
