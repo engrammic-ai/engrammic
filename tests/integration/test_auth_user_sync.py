@@ -238,3 +238,32 @@ class TestAuthUserSync:
         resolve_mock.assert_awaited_once()
         assert ctx.org_id == "org-provisioned"
         assert upsert_mock.await_args.kwargs["org_id"] == "org-provisioned"
+
+    async def test_verify_session_fails_closed_when_no_org_and_db_down(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A genuinely-new no-org user that cannot be provisioned (DB down) must
+        fail CLOSED: no valid silo can be derived from a None org id."""
+        monkeypatch.setattr(
+            "context_service.auth.workos_client.get_settings", lambda: _WORKOS_SETTINGS
+        )
+
+        # no organization_id on the session, and the DB session is unavailable
+        no_org_response = _make_workos_response()
+        no_org_response.organization_id = None
+        fake_workos = _make_workos_module(no_org_response)
+
+        @asynccontextmanager
+        async def _failing_get_session():  # type: ignore[return]
+            raise OSError("Connection refused: Postgres unavailable")
+            yield  # pragma: no cover
+
+        with (
+            patch.dict(sys.modules, {"workos": fake_workos}),
+            patch(
+                "context_service.db.postgres.get_session",
+                return_value=_failing_get_session(),
+            ),
+        ):
+            with pytest.raises(ValueError, match="organization"):
+                await verify_session("sealed-token-no-org-db-down")

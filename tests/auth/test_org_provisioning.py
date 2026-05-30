@@ -25,18 +25,26 @@ _SETTINGS = Settings(
 
 
 def _not_found() -> Exception:
-    """Construct a real WorkOS NotFoundError (6.0.8 ctor treats a non-str first
-    arg as the response object)."""
+    """Construct a real WorkOS NotFoundError. In 6.0.8 a non-str first arg is the
+    response object (status/headers are read off it); ``code`` is passed explicitly."""
     from workos import NotFoundError
 
-    return NotFoundError(MagicMock(headers={}, status_code=404, response_dict={"code": "not_found"}))
+    return NotFoundError(MagicMock(headers={}, status_code=404), code="not_found")
 
 
 def _conflict() -> Exception:
     """Construct a real WorkOS ConflictError (HTTP 409 duplicate external_id)."""
     from workos import ConflictError
 
-    return ConflictError(MagicMock(headers={}, status_code=409, response_dict={"code": "conflict"}))
+    return ConflictError(MagicMock(headers={}, status_code=409), code="conflict")
+
+
+def _unprocessable() -> Exception:
+    """Construct a real WorkOS UnprocessableEntityError (HTTP 422); some WorkOS
+    versions return this instead of 409 for an already-existing membership."""
+    from workos import UnprocessableEntityError
+
+    return UnprocessableEntityError(MagicMock(headers={}, status_code=422), code="unprocessable")
 
 
 def _make_client() -> MagicMock:
@@ -114,6 +122,25 @@ class TestEnsurePersonalOrg:
         found.id = "org-existing"
         client.organizations.get_organization_by_external_id.return_value = found
         client.user_management.create_organization_membership.side_effect = _conflict()
+
+        with patch.dict(sys.modules, {"workos": _wrap(client)}):
+            org_id = ensure_personal_org("wos-user-1", "Alice's workspace")  # must not raise
+
+        assert org_id == "org-existing"
+
+    def test_tolerates_unprocessable_entity_on_membership(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """B2: some WorkOS versions raise UnprocessableEntityError (not Conflict)
+        for an already-existing membership; that must be swallowed too."""
+        monkeypatch.setattr(
+            "context_service.auth.org_provisioning.get_settings", lambda: _SETTINGS
+        )
+        client = _make_client()
+        found = MagicMock()
+        found.id = "org-existing"
+        client.organizations.get_organization_by_external_id.return_value = found
+        client.user_management.create_organization_membership.side_effect = _unprocessable()
 
         with patch.dict(sys.modules, {"workos": _wrap(client)}):
             org_id = ensure_personal_org("wos-user-1", "Alice's workspace")  # must not raise
