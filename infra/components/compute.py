@@ -3,7 +3,7 @@
 import pulumi
 from pulumi_gcp import compute
 
-DOCKER_COMPOSE_TEMPLATE = '''
+DOCKER_COMPOSE_TEMPLATE = """
 services:
   memgraph:
     image: memgraph/memgraph:3.10.1
@@ -39,9 +39,9 @@ services:
 {postgres_service}{dagster_services}
 volumes:
   redis-data:
-'''
+"""
 
-DAGSTER_SERVICES = '''
+DAGSTER_SERVICES = """
   dagster-code-server:
     image: europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-dagster:latest
     container_name: engrammic-dagster-code
@@ -116,9 +116,9 @@ DAGSTER_SERVICES = '''
     depends_on:
       - dagster-code-server
     restart: unless-stopped
-'''
+"""
 
-POSTGRES_SERVICE = '''
+POSTGRES_SERVICE = """
   postgres:
     image: postgres:16-alpine
     container_name: postgres
@@ -131,7 +131,7 @@ POSTGRES_SERVICE = '''
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=engrammic
     restart: unless-stopped
-'''
+"""
 
 
 class StatefulHost(pulumi.ComponentResource):
@@ -224,7 +224,8 @@ class StatefulHost(pulumi.ComponentResource):
         )
 
         # Startup script - formats disks if needed, mounts with nofail
-        startup_script = """#!/bin/bash
+        startup_script = (
+            """#!/bin/bash
 set -e
 
 ENV="{env}"
@@ -346,7 +347,12 @@ systemctl enable engrammic-stateful.service
 systemctl start engrammic-stateful.service
 
 echo "Stateful host ready"
-""".replace("{env}", env).replace("{disks}", disk_config).replace("{project}", project).replace("{use_cloudsql}", str(use_cloudsql).lower()).replace("{compose_content}", compose_content)
+""".replace("{env}", env)
+            .replace("{disks}", disk_config)
+            .replace("{project}", project)
+            .replace("{use_cloudsql}", str(use_cloudsql).lower())
+            .replace("{compose_content}", compose_content)
+        )
 
         # GCE Instance
         self.instance = compute.Instance(
@@ -403,9 +409,11 @@ echo "Stateful host ready"
             opts=pulumi.ResourceOptions(parent=self),
         )
 
-        self.register_outputs({
-            "instance_id": self.instance.id,
-            "instance_name": self.instance.name,
-            "internal_ip": self.instance.network_interfaces[0].network_ip,
-            "health_check_id": self.health_check.id,
-        })
+        self.register_outputs(
+            {
+                "instance_id": self.instance.id,
+                "instance_name": self.instance.name,
+                "internal_ip": self.instance.network_interfaces[0].network_ip,
+                "health_check_id": self.health_check.id,
+            }
+        )

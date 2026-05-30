@@ -37,11 +37,15 @@ def test_affinity_edge_rejects_low_similarity():
 @pytest.mark.asyncio
 async def test_compute_affinities_finds_similar_nodes():
     mock_qdrant = MagicMock()
-    mock_qdrant.query_points = AsyncMock(return_value=MagicMock(points=[
-        MagicMock(id=str(NODE_B), score=0.92),
-        MagicMock(id=str(NODE_C), score=0.88),
-        MagicMock(id=str(NODE_D), score=0.75),  # Below threshold
-    ]))
+    mock_qdrant.query_points = AsyncMock(
+        return_value=MagicMock(
+            points=[
+                MagicMock(id=str(NODE_B), score=0.92),
+                MagicMock(id=str(NODE_C), score=0.88),
+                MagicMock(id=str(NODE_D), score=0.75),  # Below threshold
+            ]
+        )
+    )
 
     embedding = [0.1] * 1536
 
@@ -63,10 +67,14 @@ async def test_compute_affinities_finds_similar_nodes():
 @pytest.mark.asyncio
 async def test_compute_affinities_excludes_self():
     mock_qdrant = MagicMock()
-    mock_qdrant.query_points = AsyncMock(return_value=MagicMock(points=[
-        MagicMock(id=str(NODE_A), score=1.0),  # Self - should be excluded
-        MagicMock(id=str(NODE_B), score=0.90),
-    ]))
+    mock_qdrant.query_points = AsyncMock(
+        return_value=MagicMock(
+            points=[
+                MagicMock(id=str(NODE_A), score=1.0),  # Self - should be excluded
+                MagicMock(id=str(NODE_B), score=0.90),
+            ]
+        )
+    )
 
     embedding = [0.1] * 1536
 

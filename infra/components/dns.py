@@ -54,7 +54,9 @@ class InternalDNS(pulumi.ComponentResource):
 
         self.hostname = f"stateful.{env}.engrammic.internal"
 
-        self.register_outputs({
-            "zone_name": self.zone.name,
-            "stateful_hostname": self.hostname,
-        })
+        self.register_outputs(
+            {
+                "zone_name": self.zone.name,
+                "stateful_hostname": self.hostname,
+            }
+        )

@@ -92,8 +92,10 @@ class CloudSQLPostgres(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self),
         )
 
-        self.register_outputs({
-            "instance_name": self.instance.name,
-            "connection_name": self.instance.connection_name,
-            "private_ip": self.instance.private_ip_address,
-        })
+        self.register_outputs(
+            {
+                "instance_name": self.instance.name,
+                "connection_name": self.instance.connection_name,
+                "private_ip": self.instance.private_ip_address,
+            }
+        )

@@ -36,6 +36,4 @@ class SecretsStack(pulumi.ComponentResource):
                 opts=pulumi.ResourceOptions(parent=self),
             )
 
-        self.register_outputs({
-            f"{k.replace('-', '_')}_id": v.id for k, v in self.secrets.items()
-        })
+        self.register_outputs({f"{k.replace('-', '_')}_id": v.id for k, v in self.secrets.items()})

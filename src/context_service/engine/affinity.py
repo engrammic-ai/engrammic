@@ -63,9 +63,7 @@ async def compute_affinities(
         collection_name=collection_name,
         query=embedding,
         limit=k + 1,
-        query_filter=Filter(
-            must=[FieldCondition(key="silo_id", match=MatchValue(value=silo_id))]
-        ),
+        query_filter=Filter(must=[FieldCondition(key="silo_id", match=MatchValue(value=silo_id))]),
     )
 
     edges: list[AffinityEdge] = []

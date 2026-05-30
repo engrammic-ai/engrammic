@@ -142,8 +142,10 @@ class NetworkStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self),
         )
 
-        self.register_outputs({
-            "vpc_id": self.vpc.id,
-            "private_subnet_id": self.private_subnet.id,
-            "connector_subnet_id": self.vpc_connector.id,
-        })
+        self.register_outputs(
+            {
+                "vpc_id": self.vpc.id,
+                "private_subnet_id": self.private_subnet.id,
+                "connector_subnet_id": self.vpc_connector.id,
+            }
+        )

@@ -96,7 +96,9 @@ class MetabaseRun(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self),
         )
 
-        self.register_outputs({
-            "service_url": self.service.uri,
-            "service_name": self.service.name,
-        })
+        self.register_outputs(
+            {
+                "service_url": self.service.uri,
+                "service_name": self.service.name,
+            }
+        )

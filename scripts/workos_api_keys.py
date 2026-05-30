@@ -106,31 +106,23 @@ def create_user_api_key(
     if org_id:
         body["organization_id"] = org_id
 
-    result = make_request(
-        "POST", f"/user_management/users/{user_id}/api_keys", json_body=body
-    )
+    result = make_request("POST", f"/user_management/users/{user_id}/api_keys", json_body=body)
     return result or {}
 
 
 def list_org_api_keys(org_id: str, limit: int = 10) -> dict:
     """List API keys for an organization."""
-    result = make_request(
-        "GET", f"/organizations/{org_id}/api_keys", params={"limit": limit}
-    )
+    result = make_request("GET", f"/organizations/{org_id}/api_keys", params={"limit": limit})
     return result or {}
 
 
-def list_user_api_keys(
-    user_id: str, org_id: str | None = None, limit: int = 10
-) -> dict:
+def list_user_api_keys(user_id: str, org_id: str | None = None, limit: int = 10) -> dict:
     """List API keys for a user."""
     params: dict = {"limit": limit}
     if org_id:
         params["organization_id"] = org_id
 
-    result = make_request(
-        "GET", f"/user_management/users/{user_id}/api_keys", params=params
-    )
+    result = make_request("GET", f"/user_management/users/{user_id}/api_keys", params=params)
     return result or {}
 
 

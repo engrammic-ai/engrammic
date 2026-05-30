@@ -96,16 +96,18 @@ async def evaluate_model(model: str) -> dict:
             top_index = ranked[0]["index"]
             passed = top_index == tc["expected_top"]
 
-            results["details"].append({
-                "name": tc["name"],
-                "query": tc["query"],
-                "passed": passed,
-                "expected": tc["expected_top"],
-                "got": top_index,
-                "expected_doc": tc["documents"][tc["expected_top"]][:50],
-                "got_doc": tc["documents"][top_index][:50],
-                "scores": [(r["index"], round(r["score"], 3)) for r in ranked],
-            })
+            results["details"].append(
+                {
+                    "name": tc["name"],
+                    "query": tc["query"],
+                    "passed": passed,
+                    "expected": tc["expected_top"],
+                    "got": top_index,
+                    "expected_doc": tc["documents"][tc["expected_top"]][:50],
+                    "got_doc": tc["documents"][top_index][:50],
+                    "scores": [(r["index"], round(r["score"], 3)) for r in ranked],
+                }
+            )
 
             if passed:
                 results["passed"] += 1
@@ -113,10 +115,12 @@ async def evaluate_model(model: str) -> dict:
                 results["failed"] += 1
 
         except Exception as e:
-            results["details"].append({
-                "name": tc["name"],
-                "error": str(e),
-            })
+            results["details"].append(
+                {
+                    "name": tc["name"],
+                    "error": str(e),
+                }
+            )
             results["failed"] += 1
 
     return results
@@ -124,10 +128,10 @@ async def evaluate_model(model: str) -> dict:
 
 def print_results(results: dict) -> None:
     """Print evaluation results."""
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Model: {results['model']}")
     print(f"Passed: {results['passed']}/{results['passed'] + results['failed']}")
-    print(f"{'='*60}\n")
+    print(f"{'=' * 60}\n")
 
     for detail in results["details"]:
         if "error" in detail:
@@ -146,7 +150,9 @@ def print_results(results: dict) -> None:
 
 async def main():
     # Ensure Vertex AI credentials are available
-    if not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") and not os.environ.get("GOOGLE_CLOUD_PROJECT"):
+    if not os.environ.get("GOOGLE_APPLICATION_CREDENTIALS") and not os.environ.get(
+        "GOOGLE_CLOUD_PROJECT"
+    ):
         print("Warning: GOOGLE_APPLICATION_CREDENTIALS or GOOGLE_CLOUD_PROJECT not set")
         print("Make sure you're authenticated with gcloud or have credentials configured\n")
 

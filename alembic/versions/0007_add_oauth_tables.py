@@ -53,7 +53,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("state"),
     )
-    op.create_index("ix_oauth_auth_requests_workos_state", "oauth_authorization_requests", ["workos_state"])
+    op.create_index(
+        "ix_oauth_auth_requests_workos_state", "oauth_authorization_requests", ["workos_state"]
+    )
 
     # oauth_authorization_codes: single-use authorization codes
     op.create_table(
@@ -66,9 +68,7 @@ def upgrade() -> None:
         ),
         sa.Column("code", sa.String(255), nullable=False),
         sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=False),
-        sa.Column(
-            "authorization_request_id", postgresql.UUID(as_uuid=True), nullable=True
-        ),
+        sa.Column("authorization_request_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -78,9 +78,7 @@ def upgrade() -> None:
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("used_at", sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
-        sa.ForeignKeyConstraint(
-            ["authorization_request_id"], ["oauth_authorization_requests.id"]
-        ),
+        sa.ForeignKeyConstraint(["authorization_request_id"], ["oauth_authorization_requests.id"]),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("code"),
     )
@@ -100,12 +98,8 @@ def upgrade() -> None:
         sa.Column("scope", sa.Text(), nullable=True),
         sa.Column("client_id", sa.String(255), nullable=True),
         sa.Column("client_name", sa.String(255), nullable=True),
-        sa.Column(
-            "access_token_expires_at", sa.DateTime(timezone=True), nullable=False
-        ),
-        sa.Column(
-            "refresh_token_expires_at", sa.DateTime(timezone=True), nullable=True
-        ),
+        sa.Column("access_token_expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("refresh_token_expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
@@ -117,12 +111,8 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_oauth_tokens_user_id", "oauth_tokens", ["user_id"])
-    op.create_index(
-        "ix_oauth_tokens_access_token_hash", "oauth_tokens", ["access_token_hash"]
-    )
-    op.create_index(
-        "ix_oauth_tokens_refresh_token_hash", "oauth_tokens", ["refresh_token_hash"]
-    )
+    op.create_index("ix_oauth_tokens_access_token_hash", "oauth_tokens", ["access_token_hash"])
+    op.create_index("ix_oauth_tokens_refresh_token_hash", "oauth_tokens", ["refresh_token_hash"])
 
 
 def downgrade() -> None:

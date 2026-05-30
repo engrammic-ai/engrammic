@@ -337,9 +337,7 @@ class TestTickEnhanced:
             "ignored_nudges": {},
             "created_at": "2026-05-27T00:00:00+00:00",
         }
-        mock_redis_client._redis.get = AsyncMock(
-            return_value=json.dumps(session_data).encode()
-        )
+        mock_redis_client._redis.get = AsyncMock(return_value=json.dumps(session_data).encode())
 
         with (
             patch(
@@ -379,9 +377,7 @@ class TestTickEnhanced:
             "ignored_nudges": {},
             "created_at": "2026-05-27T00:00:00+00:00",
         }
-        mock_redis_client._redis.get = AsyncMock(
-            return_value=json.dumps(session_data).encode()
-        )
+        mock_redis_client._redis.get = AsyncMock(return_value=json.dumps(session_data).encode())
 
         with (
             patch(

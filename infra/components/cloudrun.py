@@ -98,7 +98,9 @@ class ContextServiceRun(pulumi.ComponentResource):
 
         # Note: Public access (allUsers) blocked by org policy. Access via identity token.
 
-        self.register_outputs({
-            "service_url": self.service.uri,
-            "service_name": self.service.name,
-        })
+        self.register_outputs(
+            {
+                "service_url": self.service.uri,
+                "service_name": self.service.name,
+            }
+        )

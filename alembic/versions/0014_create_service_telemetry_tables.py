@@ -50,7 +50,9 @@ def upgrade() -> None:
     )
     op.create_index("idx_service_metrics_bucket", "service_metrics", ["bucket"])
     op.create_index("idx_service_metrics_silo_bucket", "service_metrics", ["silo_id", "bucket"])
-    op.create_index("idx_service_metrics_metric_bucket", "service_metrics", ["metric_name", "bucket"])
+    op.create_index(
+        "idx_service_metrics_metric_bucket", "service_metrics", ["metric_name", "bucket"]
+    )
 
     op.create_table(
         "service_errors",

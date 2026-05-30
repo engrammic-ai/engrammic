@@ -41,8 +41,13 @@ def sync_secret(project: str, env: str, secret_name: str, value: str) -> bool:
     try:
         result = subprocess.run(
             [
-                "gcloud", "secrets", "versions", "add", full_name,
-                "--project", project,
+                "gcloud",
+                "secrets",
+                "versions",
+                "add",
+                full_name,
+                "--project",
+                project,
                 "--data-file=-",
             ],
             input=value.encode(),

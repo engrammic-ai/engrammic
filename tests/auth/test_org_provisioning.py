@@ -68,9 +68,7 @@ class TestEnsurePersonalOrg:
     def test_creates_org_and_membership_when_none_exists(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        monkeypatch.setattr(
-            "context_service.auth.org_provisioning.get_settings", lambda: _SETTINGS
-        )
+        monkeypatch.setattr("context_service.auth.org_provisioning.get_settings", lambda: _SETTINGS)
         client = _make_client()
         client.organizations.get_organization_by_external_id.side_effect = _not_found()
         created = MagicMock()
@@ -93,9 +91,7 @@ class TestEnsurePersonalOrg:
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         """B2: reuse path must (re)ensure membership, not assume it exists."""
-        monkeypatch.setattr(
-            "context_service.auth.org_provisioning.get_settings", lambda: _SETTINGS
-        )
+        monkeypatch.setattr("context_service.auth.org_provisioning.get_settings", lambda: _SETTINGS)
         client = _make_client()
         found = MagicMock()
         found.id = "org-existing"
@@ -110,13 +106,9 @@ class TestEnsurePersonalOrg:
             user_id="wos-user-1", organization_id="org-existing"
         )
 
-    def test_tolerates_already_a_member_conflict(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_tolerates_already_a_member_conflict(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """B2: an already-a-member ConflictError on the membership call is swallowed."""
-        monkeypatch.setattr(
-            "context_service.auth.org_provisioning.get_settings", lambda: _SETTINGS
-        )
+        monkeypatch.setattr("context_service.auth.org_provisioning.get_settings", lambda: _SETTINGS)
         client = _make_client()
         found = MagicMock()
         found.id = "org-existing"
@@ -133,9 +125,7 @@ class TestEnsurePersonalOrg:
     ) -> None:
         """B2: some WorkOS versions raise UnprocessableEntityError (not Conflict)
         for an already-existing membership; that must be swallowed too."""
-        monkeypatch.setattr(
-            "context_service.auth.org_provisioning.get_settings", lambda: _SETTINGS
-        )
+        monkeypatch.setattr("context_service.auth.org_provisioning.get_settings", lambda: _SETTINGS)
         client = _make_client()
         found = MagicMock()
         found.id = "org-existing"
@@ -147,13 +137,9 @@ class TestEnsurePersonalOrg:
 
         assert org_id == "org-existing"
 
-    def test_create_conflict_refetches_race_winner(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_create_conflict_refetches_race_winner(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """B3: a duplicate-external_id ConflictError on create -> re-fetch and reuse."""
-        monkeypatch.setattr(
-            "context_service.auth.org_provisioning.get_settings", lambda: _SETTINGS
-        )
+        monkeypatch.setattr("context_service.auth.org_provisioning.get_settings", lambda: _SETTINGS)
         client = _make_client()
         winner = MagicMock()
         winner.id = "org-winner"

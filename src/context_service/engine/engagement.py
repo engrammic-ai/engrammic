@@ -74,9 +74,7 @@ async def run_parallel_checks(
     completed: list[str] = []
     skipped: list[str] = []
 
-    async def run_with_timeout(
-        name: str, coro: Coroutine[Any, Any, Any]
-    ) -> tuple[str, Any]:
+    async def run_with_timeout(name: str, coro: Coroutine[Any, Any, Any]) -> tuple[str, Any]:
         try:
             result = await asyncio.wait_for(coro, timeout=individual_timeout)
             return (name, result)
@@ -86,10 +84,7 @@ async def run_parallel_checks(
             logger.warning("parallel_check_failed", check=name, exc_info=True)
             return (name, _TIMEOUT_SENTINEL)
 
-    tasks = [
-        asyncio.create_task(run_with_timeout(name, coro))
-        for name, coro in checks.items()
-    ]
+    tasks = [asyncio.create_task(run_with_timeout(name, coro)) for name, coro in checks.items()]
     check_names = list(checks.keys())
 
     if not tasks:

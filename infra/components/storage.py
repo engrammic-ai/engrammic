@@ -39,13 +39,13 @@ class StorageStack(pulumi.ComponentResource):
                 f"{name}-backup-writer",
                 bucket=self.backup_bucket.name,
                 role="roles/storage.objectAdmin",
-                member=stateful_host_email.apply(
-                    lambda email: f"serviceAccount:{email}"
-                ),
+                member=stateful_host_email.apply(lambda email: f"serviceAccount:{email}"),
                 opts=pulumi.ResourceOptions(parent=self),
             )
 
-        self.register_outputs({
-            "backup_bucket_name": self.backup_bucket.name,
-            "backup_bucket_url": self.backup_bucket.url,
-        })
+        self.register_outputs(
+            {
+                "backup_bucket_name": self.backup_bucket.name,
+                "backup_bucket_url": self.backup_bucket.url,
+            }
+        )

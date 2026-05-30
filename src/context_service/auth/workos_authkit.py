@@ -81,9 +81,7 @@ async def exchange_code_for_user(code: str) -> dict[str, Any]:
         raise ValueError("WorkOS code exchange response missing user")
 
     org_id: str | None = response.organization_id
-    full_name: str | None = (
-        " ".join(filter(None, [user.first_name, user.last_name])) or None
-    )
+    full_name: str | None = " ".join(filter(None, [user.first_name, user.last_name])) or None
 
     logger.info(
         "workos_authkit_exchange_success",

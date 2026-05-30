@@ -1103,5 +1103,3 @@ async def _context_store(
         "error": "invalid_layer",
         "valid": ["memory", "knowledge", "wisdom", "intelligence", "meta", "belief"],
     }
-
-

@@ -33,9 +33,7 @@ def upgrade() -> None:
     # Check if we can create databases (won't work in most managed envs)
     try:
         # Use raw connection to check for database
-        result = connection.execute(
-            text("SELECT 1 FROM pg_database WHERE datname = 'metabase'")
-        )
+        result = connection.execute(text("SELECT 1 FROM pg_database WHERE datname = 'metabase'"))
         if result.fetchone() is None:
             # Can't create database from within a transaction
             # Log instruction for manual creation

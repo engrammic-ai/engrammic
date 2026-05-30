@@ -64,12 +64,9 @@ class IAMStack(pulumi.ComponentResource):
                 f"{name}-gce-{role_suffix}",
                 project=project,
                 role=role,
-                member=self.stateful_host.email.apply(
-                    lambda email: f"serviceAccount:{email}"
-                ),
+                member=self.stateful_host.email.apply(lambda email: f"serviceAccount:{email}"),
                 opts=pulumi.ResourceOptions(parent=self),
             )
-
 
         # Cloud Build service account
         self.cloud_build = serviceaccount.Account(
@@ -81,9 +78,9 @@ class IAMStack(pulumi.ComponentResource):
 
         # Cloud Build roles
         cloud_build_roles = [
-            "roles/storage.objectAdmin",        # Upload source to GCS
-            "roles/artifactregistry.writer",    # Push images to AR
-            "roles/logging.logWriter",          # Write build logs
+            "roles/storage.objectAdmin",  # Upload source to GCS
+            "roles/artifactregistry.writer",  # Push images to AR
+            "roles/logging.logWriter",  # Write build logs
         ]
         for role in cloud_build_roles:
             role_suffix = role.split("/")[1].replace(".", "-")
@@ -91,14 +88,14 @@ class IAMStack(pulumi.ComponentResource):
                 f"{name}-cloudbuild-{role_suffix}",
                 project=project,
                 role=role,
-                member=self.cloud_build.email.apply(
-                    lambda email: f"serviceAccount:{email}"
-                ),
+                member=self.cloud_build.email.apply(lambda email: f"serviceAccount:{email}"),
                 opts=pulumi.ResourceOptions(parent=self),
             )
 
-        self.register_outputs({
-            "context_service_run_email": self.context_service_run.email,
-            "stateful_host_email": self.stateful_host.email,
-            "cloud_build_email": self.cloud_build.email,
-        })
+        self.register_outputs(
+            {
+                "context_service_run_email": self.context_service_run.email,
+                "stateful_host_email": self.stateful_host.email,
+                "cloud_build_email": self.cloud_build.email,
+            }
+        )

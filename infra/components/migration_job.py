@@ -68,7 +68,9 @@ class MigrationJob(pulumi.ComponentResource):
             ),
         )
 
-        self.register_outputs({
-            "job_name": self.job.name,
-            "job_id": self.job.id,
-        })
+        self.register_outputs(
+            {
+                "job_name": self.job.name,
+                "job_id": self.job.id,
+            }
+        )

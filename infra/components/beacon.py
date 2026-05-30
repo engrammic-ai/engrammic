@@ -79,7 +79,9 @@ class BeaconServiceRun(pulumi.ComponentResource):
             ),
         )
 
-        self.register_outputs({
-            "service_url": self.service.uri,
-            "service_name": self.service.name,
-        })
+        self.register_outputs(
+            {
+                "service_url": self.service.uri,
+                "service_name": self.service.name,
+            }
+        )

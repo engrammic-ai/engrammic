@@ -117,10 +117,14 @@ context_service = ContextServiceRun(
         "AUTH_ENABLED": "false" if env == "dev" else "true",
         "CUSTODIAN__ENABLED": "true",
         "LOG_LEVEL": "INFO",
-        "OAUTH__ISSUER": "https://api.engrammic.ai" if env == "prod" else f"https://{env}.engrammic.ai",
+        "OAUTH__ISSUER": "https://api.engrammic.ai"
+        if env == "prod"
+        else f"https://{env}.engrammic.ai",
         # Telemetry beacon (URL set via config, secret from Pulumi secrets)
         "TELEMETRY__BEACON_SECRET": config.get_secret("beacon_secret") or "",
-        "TELEMETRY__BEACON_URL": f"https://tel.engrammic.ai/v1/beacon" if env in ("beta", "prod") else "",
+        "TELEMETRY__BEACON_URL": f"https://tel.engrammic.ai/v1/beacon"
+        if env in ("beta", "prod")
+        else "",
         # Feature flags
         **feature_flags.get(env, {}),
     },
@@ -143,7 +147,11 @@ if use_cloudsql:
     database_url_sqlalchemy = pulumi.Output.all(
         postgres_host,
         config.require_secret("postgres_password"),
-    ).apply(lambda args: f"postgresql+asyncpg://context:{quote(args[1], safe='')}@{args[0]}:5432/engrammic")
+    ).apply(
+        lambda args: (
+            f"postgresql+asyncpg://context:{quote(args[1], safe='')}@{args[0]}:5432/engrammic"
+        )
+    )
 
     # Plain asyncpg format for beacon (uses asyncpg directly)
     database_url_asyncpg = pulumi.Output.all(

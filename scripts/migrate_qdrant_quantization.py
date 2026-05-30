@@ -138,7 +138,9 @@ async def run_migration(
     await client.close()
 
     if dry_run:
-        log.info("migration_dry_run_complete", would_update=updated, skipped=len(targeted) - updated)
+        log.info(
+            "migration_dry_run_complete", would_update=updated, skipped=len(targeted) - updated
+        )
     else:
         log.info(
             "migration_complete",
