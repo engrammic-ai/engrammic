@@ -140,6 +140,26 @@ infra-refresh:
     cd infra && pulumi refresh
 
 # =============================================================================
+# Dev box (engrammic-dev-box: personal dev VM, Tailscale SSH, spot)
+# =============================================================================
+
+# Manage the dev box: ssh (default) | iap | start | stop | status
+dev-box action="ssh":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    name=engrammic-dev-box
+    loc=(--zone={{zone}} --project={{project}})
+    case "{{action}}" in
+      ssh)    tailscale ssh dev@$name ;;
+      iap)    gcloud compute ssh $name "${loc[@]}" --tunnel-through-iap ;;
+      start)  gcloud compute instances start $name "${loc[@]}" ;;
+      stop)   gcloud compute instances stop $name "${loc[@]}" ;;
+      status) gcloud compute instances describe $name "${loc[@]}" --format="value(status)"
+              tailscale status | grep $name || echo "not on tailnet" ;;
+      *) echo "unknown action '{{action}}' (ssh|iap|start|stop|status)" >&2; exit 1 ;;
+    esac
+
+# =============================================================================
 # Build & Deploy
 # =============================================================================
 
