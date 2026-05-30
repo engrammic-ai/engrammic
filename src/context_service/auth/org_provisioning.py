@@ -138,4 +138,15 @@ async def resolve_or_create_org(
     if user is not None and user.org_id and user.org_id != workos_user_id:
         return str(user.org_id)
 
+    if user is not None and user.org_id == workos_user_id:
+        # Legacy fallback: the old code keyed the org (and thus the silo) to the
+        # workos_user_id. Upgrading to a real org changes derive_silo_id, so any
+        # data written under the old user-id-keyed silo is orphaned. Log it so
+        # the silo change is observable; backfill/migration is handled by ops.
+        logger.warning(
+            "org_provisioning.legacy_silo_upgrade",
+            workos_user_id=workos_user_id,
+            legacy_org_id=user.org_id,
+        )
+
     return ensure_personal_org(workos_user_id, resolve_workspace_name(name, email))

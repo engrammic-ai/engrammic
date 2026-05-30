@@ -251,3 +251,26 @@ class TestResolveOrCreateOrg:
             )
         assert result == "org-new"
         ensure.assert_called_once()
+
+    async def test_legacy_upgrade_changes_derived_silo(self) -> None:
+        """The legacy-fallback upgrade returns a real org whose derived silo
+        differs from the old user-id-keyed silo (data-orphaning guard, finding #1)."""
+        from context_service.services.models import derive_silo_id
+
+        stored = MagicMock()
+        stored.org_id = "wos-1"  # legacy fallback: org_id == workos_user_id
+        session = AsyncMock()
+        with (
+            patch("context_service.auth.org_provisioning.UserService") as MockSvc,
+            patch(
+                "context_service.auth.org_provisioning.ensure_personal_org",
+                return_value="org-new",
+            ),
+        ):
+            MockSvc.return_value.get_user_by_workos_id = AsyncMock(return_value=stored)
+            result = await resolve_or_create_org(
+                session, workos_user_id="wos-1", session_org_id=None, name="Al", email="al@x.com"
+            )
+        assert result == "org-new"
+        # The silo genuinely moves on upgrade - this is what strands old data.
+        assert derive_silo_id(result) != derive_silo_id("wos-1")

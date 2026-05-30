@@ -51,6 +51,11 @@ class UserService:
                 name=name,
                 last_active_at=now,
             )
+            # NOTE: org_id/silo_id are last-write-wins on conflict. This is safe
+            # only under the current single-org invariant (one personal org per
+            # user; multi-silo deferred). If a user ever belongs to multiple
+            # orgs, this would flip their stored silo by most-recent session and
+            # must be revisited alongside the resolver's stored-org fallback.
             .on_conflict_do_update(
                 index_elements=["workos_user_id"],
                 set_={
