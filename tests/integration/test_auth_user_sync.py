@@ -200,3 +200,41 @@ class TestAuthUserSync:
         assert ctx.org_id == _ORG_ID
         assert ctx.email == _WORKOS_USER["email"]
         assert ctx.is_dev is False
+
+    async def test_verify_session_provisions_org_when_session_has_none(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """No-org sealed session should provision an org, not raise."""
+        monkeypatch.setattr(
+            "context_service.auth.workos_client.get_settings", lambda: _WORKOS_SETTINGS
+        )
+
+        fake_db_user = _make_fake_db_user()
+        session_mock = AsyncMock()
+        upsert_mock = AsyncMock(return_value=fake_db_user)
+
+        # session response WITHOUT an organization_id
+        no_org_response = _make_workos_response()
+        no_org_response.organization_id = None
+        fake_workos = _make_workos_module(no_org_response)
+
+        with (
+            patch.dict(sys.modules, {"workos": fake_workos}),
+            patch(
+                "context_service.db.postgres.get_session",
+                return_value=_fake_get_session(session_mock),
+            ),
+            patch(
+                "context_service.services.user.UserService",
+            ) as MockUserService,
+            patch(
+                "context_service.auth.workos_client.resolve_or_create_org",
+                AsyncMock(return_value="org-provisioned"),
+            ) as resolve_mock,
+        ):
+            MockUserService.return_value.upsert_user = upsert_mock
+            ctx = await verify_session("sealed-token-no-org")
+
+        resolve_mock.assert_awaited_once()
+        assert ctx.org_id == "org-provisioned"
+        assert upsert_mock.await_args.kwargs["org_id"] == "org-provisioned"
