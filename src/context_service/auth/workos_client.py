@@ -18,6 +18,7 @@ from uuid import UUID
 import structlog
 
 from context_service.auth.context import AuthContext
+from context_service.auth.org_provisioning import resolve_or_create_org
 from context_service.config.settings import get_settings
 
 logger = structlog.get_logger(__name__)
@@ -58,27 +59,34 @@ async def verify_session(token: str) -> AuthContext:
     if user is None:
         raise ValueError("WorkOS session response missing user")
 
-    org_id = response.organization_id
-    if org_id is None:
-        raise ValueError("WorkOS session response missing organization_id")
+    session_org_id = response.organization_id
+
+    first_name: str | None = user.get("first_name")
+    last_name: str | None = user.get("last_name")
+    full_name: str | None = " ".join(filter(None, [first_name, last_name])) or None
+    email = user.get("email", "")
 
     db_user_id: UUID | None = None
+    effective_org_id: str | None = session_org_id
     try:
         from context_service.db.postgres import get_session
         from context_service.services.models import derive_silo_id
         from context_service.services.user import UserService
 
-        first_name: str | None = user.get("first_name")
-        last_name: str | None = user.get("last_name")
-        full_name: str | None = " ".join(filter(None, [first_name, last_name])) or None
-
         async with get_session() as session:
+            effective_org_id = await resolve_or_create_org(
+                session,
+                workos_user_id=user["id"],
+                session_org_id=session_org_id,
+                name=full_name,
+                email=email,
+            )
             user_service = UserService(session)
             db_user = await user_service.upsert_user(
                 workos_user_id=user["id"],
-                org_id=org_id,
-                silo_id=str(derive_silo_id(org_id)),
-                email=user.get("email", ""),
+                org_id=effective_org_id,
+                silo_id=str(derive_silo_id(effective_org_id)),
+                email=email,
                 name=full_name,
             )
             db_user_id = db_user.id
@@ -90,10 +98,17 @@ async def verify_session(token: str) -> AuthContext:
             workos_user_id=user["id"],
         )
 
+    # Fail open only when the user already had an org (existing contract): a
+    # transient DB error still yields a valid AuthContext with db_user_id=None.
+    # A genuinely-new no-org user that could not be provisioned has no valid
+    # silo, so fail closed rather than emit a None org id.
+    if effective_org_id is None:
+        raise ValueError("Could not resolve or provision an organization for the user")
+
     return AuthContext(
-        org_id=org_id,
+        org_id=effective_org_id,
         user_id=user["id"],
-        email=user.get("email", ""),
+        email=email,
         is_dev=False,
         db_user_id=db_user_id,
     )
