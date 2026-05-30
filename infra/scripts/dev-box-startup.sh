@@ -19,6 +19,11 @@ apt-get update -y
 apt-get install -y --no-install-recommends \
     ca-certificates curl gnupg git build-essential
 
+# Memgraph (memgraph-mage image) requires an elevated vm.max_map_count or it
+# crashes on boot. Mirrors the StatefulHost provisioning (infra/components/compute.py).
+sysctl -w vm.max_map_count=524288
+grep -q '^vm.max_map_count' /etc/sysctl.conf || echo 'vm.max_map_count=524288' >> /etc/sysctl.conf
+
 # --- gh CLI ------------------------------------------------------------------
 if ! command -v gh &>/dev/null; then
     log "Installing GitHub CLI..."
