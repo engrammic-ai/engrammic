@@ -24,6 +24,7 @@ from fastapi import APIRouter, Form, HTTPException, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import select
 
+from context_service.auth.org_provisioning import resolve_or_create_org
 from context_service.auth.workos_authkit import exchange_code_for_user, get_authorization_url
 from context_service.config.settings import get_settings
 from context_service.db.postgres import get_session
@@ -297,8 +298,16 @@ async def callback(
 
             workos_user_id: str = user_info["id"]
             email: str = user_info.get("email", "")
-            org_id: str | None = user_info.get("organization_id")
-            effective_org_id = org_id or workos_user_id
+            name: str | None = user_info.get("name")
+            session_org_id: str | None = user_info.get("organization_id")
+
+            effective_org_id = await resolve_or_create_org(
+                session,
+                workos_user_id=workos_user_id,
+                session_org_id=session_org_id,
+                name=name,
+                email=email,
+            )
             silo_id = str(derive_silo_id(effective_org_id))
 
             user_svc = UserService(session)
@@ -307,6 +316,7 @@ async def callback(
                 org_id=effective_org_id,
                 silo_id=silo_id,
                 email=email,
+                name=name,
             )
 
         logger.info("oauth.callback.direct_signup_success", workos_user_id=user_info["id"])
@@ -335,11 +345,18 @@ async def callback(
 
         workos_user_id = user_info["id"]
         email = user_info.get("email", "")
-        org_id = user_info.get("organization_id")
+        name = user_info.get("name")
+        session_org_id = user_info.get("organization_id")
 
         from context_service.services.models import derive_silo_id
 
-        effective_org_id = org_id or workos_user_id
+        effective_org_id = await resolve_or_create_org(
+            session,
+            workos_user_id=workos_user_id,
+            session_org_id=session_org_id,
+            name=name,
+            email=email,
+        )
         silo_id = str(derive_silo_id(effective_org_id))
 
         user_svc = UserService(session)
@@ -348,6 +365,7 @@ async def callback(
             org_id=effective_org_id,
             silo_id=silo_id,
             email=email,
+            name=name,
         )
 
         oauth_svc = OAuthService(session)
