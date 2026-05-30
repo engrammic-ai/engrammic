@@ -263,7 +263,6 @@ class TestAuthUserSync:
             patch(
                 "context_service.db.postgres.get_session",
                 return_value=_failing_get_session(),
-            ),
+            ),pytest.raises(ValueError, match="organization")
         ):
-            with pytest.raises(ValueError, match="organization"):
-                await verify_session("sealed-token-no-org-db-down")
+            await verify_session("sealed-token-no-org-db-down")
