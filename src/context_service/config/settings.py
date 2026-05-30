@@ -27,7 +27,7 @@ load_dotenv(override=False)
 def _fetch_secret(secret_id: str, project: str = "engrammic") -> str | None:
     """Fetch secret from GCP Secret Manager. Returns None if unavailable."""
     try:
-        from google.cloud import secretmanager  # type: ignore[import-untyped]
+        from google.cloud import secretmanager
 
         client = secretmanager.SecretManagerServiceClient()
         name = f"projects/{project}/secrets/{secret_id}/versions/latest"
