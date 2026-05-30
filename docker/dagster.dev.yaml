@@ -1,0 +1,40 @@
+# Dev-only Dagster instance config.
+#
+# Identical to ../dagster.yaml except Dagster's run/event/schedule storage uses
+# a DEDICATED database (DAGSTER_POSTGRES_DB), separate from the app's
+# POSTGRES_DATABASE. Both Dagster and the app run alembic and write to an
+# `alembic_version` table; sharing one database makes them clobber each other's
+# migration state (Dagster stamps its hash-style head, the app's 0001-0014
+# history then can't locate it and crash-loops on boot).
+#
+# The SAGE pipeline code still connects to POSTGRES_DATABASE (engrammic) for app
+# data -- only Dagster's own bookkeeping moves here.
+storage:
+  postgres:
+    postgres_db:
+      hostname:
+        env: POSTGRES_HOST
+      username:
+        env: POSTGRES_USER
+      password:
+        env: POSTGRES_PASSWORD
+      db_name:
+        env: DAGSTER_POSTGRES_DB
+
+scheduler:
+  module: dagster._core.scheduler
+  class: DagsterDaemonScheduler
+  config:
+    max_catchup_runs: 1
+
+run_queue:
+  max_concurrent_runs: 10
+  dequeue_interval_seconds: 5
+  tag_concurrency_limits:
+    - key: "schedule_type"
+      value: "maintenance"
+      limit: 3
+
+code_servers:
+  local_startup_timeout: 180
+  reload_timeout: 120

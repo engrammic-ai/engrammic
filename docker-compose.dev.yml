@@ -117,6 +117,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
     env_file:
       - .env
     environment:
@@ -158,9 +159,10 @@ services:
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
       - HOME=/home/dagster
+      - DAGSTER_POSTGRES_DB=engrammic_dagster
     volumes:
       - ./src:/app/src
-      - ./dagster.yaml:/app/dagster.yaml:ro
+      - ./docker/dagster.dev.yaml:/app/dagster.yaml:ro
       - ./config:/app/config:ro
       - ~/.config/gcloud:/mnt/gcloud:ro
     depends_on:
@@ -196,10 +198,11 @@ services:
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
       - HOME=/home/dagster
+      - DAGSTER_POSTGRES_DB=engrammic_dagster
     volumes:
       - ./src:/app/src
       - ./workspace.yaml:/app/workspace.yaml:ro
-      - ./dagster.yaml:/app/dagster.yaml:ro
+      - ./docker/dagster.dev.yaml:/app/dagster.yaml:ro
       - ./config:/app/config:ro
       - ~/.config/gcloud:/mnt/gcloud:ro
     depends_on:
@@ -229,10 +232,11 @@ services:
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
       - HOME=/home/dagster
+      - DAGSTER_POSTGRES_DB=engrammic_dagster
     volumes:
       - ./src:/app/src
       - ./workspace.yaml:/app/workspace.yaml:ro
-      - ./dagster.yaml:/app/dagster.yaml:ro
+      - ./docker/dagster.dev.yaml:/app/dagster.yaml:ro
       - ./config:/app/config:ro
       - ~/.config/gcloud:/mnt/gcloud:ro
     depends_on:
