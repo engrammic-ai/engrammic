@@ -1,8 +1,8 @@
 services:
   app:
     build:
-      context: ..
-      dockerfile: context-service/docker/Dockerfile.api
+      context: .
+      dockerfile: docker/Dockerfile.api
     container_name: engrammic-app
     ports:
       - "8000:8000"
@@ -142,8 +142,8 @@ services:
 
   dagster-code-server:
     build:
-      context: ..
-      dockerfile: context-service/Dockerfile.dagster
+      context: .
+      dockerfile: docker/Dockerfile.dagster
       args:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
@@ -178,8 +178,8 @@ services:
 
   dagster-webserver:
     build:
-      context: ..
-      dockerfile: context-service/Dockerfile.dagster
+      context: .
+      dockerfile: docker/Dockerfile.dagster
       args:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
@@ -213,8 +213,8 @@ services:
 
   dagster-daemon:
     build:
-      context: ..
-      dockerfile: context-service/Dockerfile.dagster
+      context: .
+      dockerfile: docker/Dockerfile.dagster
       args:
         UID: ${UID:-1000}
         GID: ${GID:-1000}
