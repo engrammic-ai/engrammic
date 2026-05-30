@@ -57,6 +57,8 @@ class UserService:
                     "last_active_at": now,
                     "email": email,
                     "name": name,
+                    "org_id": org_id,
+                    "silo_id": silo_id,
                 },
             )
             .returning(User)
