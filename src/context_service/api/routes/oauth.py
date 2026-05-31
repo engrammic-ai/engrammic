@@ -116,7 +116,7 @@ def _success_page_html(email: str) -> str:
         </div>
         <h1>You're all set</h1>
         <p class="email">{email}</p>
-        <a href="https://docs.engrammic.ai/docs/guides/quickstart" class="cta">Continue to onboarding guide</a>
+        <a href="https://join.engrammic.ai" class="cta">Get started</a>
     </div>
 </body>
 </html>"""
