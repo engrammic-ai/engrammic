@@ -1464,10 +1464,8 @@ ORDER BY fact_count DESC
 """
 
 GET_PENDING_PROPOSED_BELIEFS_FOR_CLAIMS = """
-OPTIONAL MATCH (pb:ProposedBelief {silo_id: $silo_id, status: 'pending'})
+MATCH (pb:ProposedBelief {silo_id: $silo_id, status: 'pending'})
 WHERE pb.expires_at IS NULL OR pb.expires_at > datetime()
-WITH pb
-WHERE pb IS NOT NULL
 MATCH (pb)-[:SYNTHESIZED_FROM]->(f:Fact)
 WHERE f.id IN $about_ids OR (f.silo_id = $silo_id AND EXISTS {
     MATCH (f)<-[:ABOUT]-(other)
