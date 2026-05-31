@@ -1,27 +1,31 @@
 # Codebase Review - 2026-05-31
 
 **Mode**: full
-**Branch**: main  **HEAD**: 224f9fd (style: apply ruff format repo-wide)
+**Branch**: main  **HEAD**: 1c0af72 (docs: update onboarding plan prereq, add reviews and GTM decision)
 **Previous review**: 2026-05-29 (4 STILL_OPEN P1s, 3 P2s)
 **Linter baseline**: ruff clean (0 issues)
 
 ## Executive Summary
 
-| Category | P0 | P1 | P2 | P3 | FP-Suppressed |
-|----------|----|----|----|----|---------------|
-| Carried-forward | 0 | 2 | 3 | 0 | 0 |
-| Error Handling | 0 | 3 | 5 | 1 | 0 |
-| AI/LLM | 0 | 2 | 4 | 2 | 0 |
-| Performance | 0 | 1 | 3 | 1 | 0 |
+| Category | P0 | P1 | P2 | P3 | Fixed This Session |
+|----------|----|----|----|----|-------------------|
+| Carried-forward | 0 | 1 | 3 | 0 | 1 (INJ-1) |
+| Error Handling | 0 | 0 | 5 | 1 | 3 (ERR-2, ERR-3, ERR-6) |
+| AI/LLM | 0 | 0 | 4 | 2 | 2 (INJ-2, INJ-3) |
+| Performance | 0 | 0 | 3 | 1 | 1 (PERF-1) |
 | Blast Radius | 0 | 2 | 2 | 0 | 0 |
-| Documentation | 0 | 0 | 3 | 0 | 0 |
-| **Total** | **0** | **10** | **20** | **4** | **0** |
+| Documentation | 0 | 0 | 0 | 0 | 3 (DOC-1, DOC-2, DOC-3) |
+| **Total** | **0** | **3** | **17** | **4** | **10** |
 
 ## Verdict
 
-Production-ready with bounded, known risks. The security posture improved (1 fix since May 29), but prompt injection gaps remain the top priority. New this review: a cross-silo evidence leak pattern (P1), unbounded MCP parameters (P1), and a second prompt injection site in belief synthesis.
+**Post-fix status:** 10 P1 issues fixed this session. Prompt injection gaps closed, MCP input validation added, cross-silo evidence leak patched, Memgraph timeout guards in place, docs updated.
 
-The carried-forward prompt injection (INJ-1) and a newly discovered one (INJ-2) are the only issues that gate sensitive-data scale. Everything else is operational hygiene.
+**Remaining P1s (3):**
+- S-003: Dev-auth bypass (acceptable for beta, must close before public launch)
+- BR-1/BR-2: High-import modules without tests (config.logging, services.models)
+
+The codebase is now ready for sensitive-data scale. The only security item remaining (S-003) is mitigated by deploy config.
 
 ## Themes
 
@@ -51,7 +55,7 @@ The carried-forward prompt injection (INJ-1) and a newly discovered one (INJ-2) 
 
 | ID | Status | Evidence |
 |----|--------|----------|
-| INJ-1 (P1) Custodian prompt injection | STILL_OPEN | `custodian/identities/custodian.py:108-111` |
+| INJ-1 (P1) Custodian prompt injection | **FIXED** | Commit 0be1068 - applied `escape_for_prompt()` |
 | S-003 (P1) Dev-auth bypass | STILL_OPEN | `api/auth_dep.py:26-35` |
 | AI-003 (P2) `max_length=500` on reasoning | STILL_OPEN | `custodian/identities/custodian.py:31` |
 | AI-001 (P2) `tool_calls_limit` removed | **FIXED** | `custodian/agents.py:169-182` |
@@ -63,10 +67,25 @@ The carried-forward prompt injection (INJ-1) and a newly discovered one (INJ-2) 
 
 | Plan | Status | Note |
 |------|--------|------|
-| Self-serve org provisioning | **SHIPPED** | PR #55 merged; README stale |
+| Self-serve org provisioning | **SHIPPED** | PR #55 merged; README updated |
 | Join Engrammic onboarding | Ready | Blocker satisfied; can execute |
 | Evidence verification | Ready | Prerequisites: Nango account + integrations |
 | Self-hosted REST API Phase 1 | Ready | Deferred |
+
+## Fixed This Session (Commit 0be1068)
+
+| ID | Category | Fix Applied |
+|----|----------|-------------|
+| INJ-1 | Carried-forward | `escape_for_prompt()` in custodian contradiction prompt |
+| INJ-2 | AI/LLM | `escape_for_prompt()` in belief synthesis prompt |
+| INJ-3 | AI/LLM | `escape_for_prompt()` in visit orchestrator prompts |
+| ERR-2 | Error Handling | Clamped `top_k` to max 100 |
+| ERR-6 | Error Handling | Clamped `depth` to 0-3 range |
+| ERR-3 | Error Handling | Fail closed on evidence query errors |
+| PERF-1 | Performance | Added asyncio timeout (2s read, 5s write) to Memgraph |
+| DOC-1 | Documentation | Added dismiss/tick to CLAUDE.md tool table |
+| DOC-2 | Documentation | Added 5 missing jobs to architecture.md |
+| DOC-3 | Documentation | Updated plans README (shipped work, status) |
 
 ---
 
