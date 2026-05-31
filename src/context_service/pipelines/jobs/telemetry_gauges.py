@@ -38,10 +38,14 @@ def snapshot_storage_gauges(context) -> dict[str, Any]:
     memgraph: MemgraphResource = context.resources.memgraph
     qdrant: QdrantResource = context.resources.qdrant
 
-    # Get pool before entering async context to avoid nested asyncio.run()
-    with postgres.get_pool() as pool:
+    async def _run() -> dict[str, int]:
+        import asyncpg as _asyncpg
 
-        async def _run() -> dict[str, int]:
+        # Create pool inside asyncio.run() so it's bound to this event loop.
+        # Using get_pool() (which calls asyncio.run internally) would bind the
+        # pool to a different, already-closed loop.
+        pool = await _asyncpg.create_pool(postgres.database_url)
+        try:
             store = await memgraph.store()
             qd_client = qdrant.client()
             async with pool.acquire() as conn:
@@ -94,8 +98,10 @@ def snapshot_storage_gauges(context) -> dict[str, Any]:
                     total += 1
 
                 return {"silos_processed": total}
+        finally:
+            await pool.close()
 
-        return asyncio.run(_run())
+    return asyncio.run(_run())
 
 
 @dg.job(name="telemetry_gauges", tags={"schedule_type": "maintenance"})
