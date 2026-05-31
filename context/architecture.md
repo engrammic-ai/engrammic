@@ -233,6 +233,11 @@ src/context_service/pipelines/
 | `groundskeeper_nightly` | Decay, cleanup, maintenance | Schedule (nightly) |
 | `causal_tombstone_job` | Cascade deletes from source | Manual |
 | SAGE ingestion | Process extraction batches | Sensor (on batch ready) |
+| `orphan_recovery` | Recover orphaned nodes without valid silos | Schedule |
+| `telemetry_gauges` | Update telemetry gauge metrics | Schedule |
+| `telemetry_prune` | Prune old telemetry data | Schedule |
+| `usage_retention` | Apply usage-based retention policies | Schedule |
+| `validator_job` | Run SAGE validator checks | Schedule |
 
 ### Resources
 

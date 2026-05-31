@@ -80,6 +80,8 @@ Source of truth: `src/context_service/config/mcp_tools.yaml`. Names and descript
 | `commit` | crystallize hypotheses |
 | `forget` | request node deletion |
 | `patterns` | skills / workflow templates |
+| `dismiss` | dismiss engagement marker |
+| `tick` | acknowledge engagement without action |
 
 ## Belief architecture
 

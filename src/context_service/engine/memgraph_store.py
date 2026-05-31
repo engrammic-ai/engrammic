@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 import uuid as uuid_mod
@@ -43,6 +44,9 @@ _PATH_LABEL_SET: frozenset[str] = _CONTENT_LABEL_SET
 
 _SUPERSESSION_LOCK_PREFIX = "lock:supersession:"
 _SUPERSESSION_LOCK_TTL_SECONDS = 30
+
+MEMGRAPH_READ_TIMEOUT = 2.0
+MEMGRAPH_WRITE_TIMEOUT = 5.0
 
 
 def _node_to_knowledge_node(node: Node) -> KnowledgeNode:
@@ -1244,7 +1248,18 @@ class MemgraphStore(EAGKnowledgeStore):
         """Delegate a read-only Cypher query to the underlying MemgraphClient."""
         start = time.perf_counter()
         try:
-            return await self._client.execute_query(cypher, params)
+            try:
+                return await asyncio.wait_for(
+                    self._client.execute_query(cypher, params),
+                    timeout=MEMGRAPH_READ_TIMEOUT,
+                )
+            except TimeoutError:
+                logger.warning(
+                    "memgraph_execute_query_timeout",
+                    query_prefix=cypher[:100],
+                    timeout=MEMGRAPH_READ_TIMEOUT,
+                )
+                raise
         finally:
             record_db_query("memgraph.query", (time.perf_counter() - start) * 1000)
 
@@ -1254,7 +1269,18 @@ class MemgraphStore(EAGKnowledgeStore):
         params: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         """Delegate a write Cypher query to the underlying MemgraphClient."""
-        return await self._client.execute_write(cypher, params)
+        try:
+            return await asyncio.wait_for(
+                self._client.execute_write(cypher, params),
+                timeout=MEMGRAPH_WRITE_TIMEOUT,
+            )
+        except TimeoutError:
+            logger.warning(
+                "memgraph_execute_write_timeout",
+                query_prefix=cypher[:100],
+                timeout=MEMGRAPH_WRITE_TIMEOUT,
+            )
+            raise
 
     def session(self) -> AbstractAsyncContextManager[Any]:
         """Return an async context manager yielding a MemgraphClient session."""

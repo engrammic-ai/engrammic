@@ -2,9 +2,10 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-29)
+## Current state (2026-05-31)
 
 **Shipped:**
+- v2.36 Self-Serve Org Provisioning - Auto-provision personal org for no-org signups (PR #55)
 - v2.35 Multi-Format Skill Installation — Cursor .mdc and Gemini GEMINI.md formats for installer CLI
 - v2.34 Harness-Agnostic Enforcement — Write-time affinity, tick() enhancement, session state, nudges
 - v2.33 Codebase Audit Fixes — Orphan jobs, commitment label, mcp-client sync, dead code cleanup
@@ -55,8 +56,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
-| [2026-05-30-join-engrammic-onboarding-plan.md](./2026-05-30-join-engrammic-onboarding-plan.md) ([design](./2026-05-30-join-engrammic-onboarding-design.md)) | join.engrammic.ai onboarding app: install hero + searchable harness catalog, docs-quickstart slim, post-signup CTA re-point (web/join, own Cloud Run) | Ready to execute; blocked on self-serve org provisioning |
-| [2026-05-30-self-serve-org-provisioning.md](./2026-05-30-self-serve-org-provisioning.md) | Auto-provision a personal org for no-org self-serve signups so every identity resolves to a real silo | Ready to execute |
+| [2026-05-30-join-engrammic-onboarding-plan.md](./2026-05-30-join-engrammic-onboarding-plan.md) ([design](./2026-05-30-join-engrammic-onboarding-design.md)) | join.engrammic.ai onboarding app: install hero + searchable harness catalog, docs-quickstart slim, post-signup CTA re-point (web/join, own Cloud Run) | Ready to execute |
 | [2026-05-20-self-hosted-rest-api-phase1.md](./2026-05-20-self-hosted-rest-api-phase1.md) | Self-hosted REST API: auth + Memory/Knowledge endpoints | Ready to execute |
 
 ## Future work

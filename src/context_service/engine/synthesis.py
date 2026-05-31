@@ -38,6 +38,7 @@ from context_service.db.queries import (
     MARK_BELIEF_STALE,
     UPDATE_BELIEF_CENTROID,
 )
+from context_service.llm.sanitize import escape_for_prompt
 
 if TYPE_CHECKING:
     from context_service.embeddings.base import EmbeddingService
@@ -79,7 +80,8 @@ def _build_synthesis_prompt(facts: list[dict[str, Any]]) -> str:
     lines = ["Facts:"]
     for i, f in enumerate(facts, start=1):
         conf = f.get("confidence", 1.0)
-        lines.append(f"  {i}. [{conf:.2f}] {f.get('content', '')}")
+        content = escape_for_prompt(f.get("content", ""))
+        lines.append(f"  {i}. [{conf:.2f}] {content}")
     return "\n".join(lines)
 
 

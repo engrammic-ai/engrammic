@@ -172,9 +172,13 @@ async def get_accessible_evidence(silo_id: str, session_id: str) -> set[str]:
             return await _get_silo_wide_evidence(silo_id, store)
         return accessible
     except Exception as e:
-        log.warning("accessible_evidence_query_failed", error=str(e))
-        # On failure, permissive fallback
-        return await _get_silo_wide_evidence(silo_id, store)
+        log.warning(
+            "accessible_evidence_query_failed_closed",
+            error=str(e),
+            silo_id=silo_id,
+            session_id=session_id,
+        )
+        return set()
 
 
 async def _get_silo_wide_evidence(silo_id: str, store: Any) -> set[str]:

@@ -64,6 +64,7 @@ from context_service.custodian.traces import UsageBreakdown, VisitTrace, VisitTr
 from context_service.custodian.validators import CitationValidator
 from context_service.custodian.write_path import WritePath, WritePathResult
 from context_service.db import custodian_read_queries as read_q
+from context_service.llm.sanitize import escape_for_prompt
 
 if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
@@ -160,11 +161,11 @@ def _fast_pass_prompt(
         f"Member count: {cluster_member_count}",
     ]
     if naive_summary:
-        parts.append(f"Naive summary: {naive_summary}")
+        parts.append(f"Naive summary: {escape_for_prompt(naive_summary)}")
     if child_finding_summaries:
         parts.append("Child finding summaries:")
         for i, s in enumerate(child_finding_summaries, 1):
-            parts.append(f"  {i}. {s}")
+            parts.append(f"  {i}. {escape_for_prompt(s)}")
     parts.append(
         "Perform a fast reconnaissance of this cluster. "
         "Use fetch_members to scan the first page of members, "

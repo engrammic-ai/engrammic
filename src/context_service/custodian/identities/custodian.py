@@ -9,6 +9,7 @@ from pydantic_ai import Agent
 
 from context_service.config.logging import get_logger
 from context_service.config.settings import get_settings
+from context_service.llm.sanitize import escape_for_prompt
 from context_service.telemetry.metrics import record_supersession_used
 
 if TYPE_CHECKING:
@@ -105,10 +106,10 @@ class CustodianIdentity:
         if not new_fact:
             return ContradictionResult(has_contradiction=False)
 
-        prompt = f"""NEW FACT: {new_fact[0]["content"]}
+        prompt = f"""NEW FACT: {escape_for_prompt(new_fact[0]["content"])}
 
 EXISTING FACTS:
-{chr(10).join(f"- [{f['fact_id']}]: {f['content']}" for f in similar)}
+{chr(10).join(f"- [{f['fact_id']}]: {escape_for_prompt(f['content'])}" for f in similar)}
 
 Analyze for contradiction."""
 

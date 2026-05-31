@@ -47,6 +47,9 @@ async def _recall_impl(
     await track_tool_usage(auth, "recall")
     silo_id = str(derive_silo_id(auth.org_id))
 
+    MAX_DEPTH = 3
+    depth = max(0, min(depth, MAX_DEPTH))
+
     effective_top_k = top_k
     if effective_top_k is None:
         effective_top_k = 10
@@ -57,6 +60,9 @@ async def _recall_impl(
                 effective_top_k = override
         except RuntimeError:
             pass
+
+    MAX_TOP_K = 100
+    effective_top_k = min(effective_top_k, MAX_TOP_K)
 
     start = time.perf_counter()
     result = await _context_recall(
