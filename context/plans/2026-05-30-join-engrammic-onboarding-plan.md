@@ -10,15 +10,25 @@
 
 ---
 
-## Blocking prerequisite (not a task here)
+## Blocking prerequisite (SATISFIED 2026-05-31)
 
-Every install path ends in an MCP connect that triggers OAuth. For a brand-new
-no-org user, `verify_session` (`context-service/src/context_service/auth/workos_client.py:61-63`)
-raises `"missing organization_id"`, and it does not self-heal. So
-`context/plans/2026-05-30-self-serve-org-provisioning.md` must ship before this page
-is announced, or first-time users cannot complete first connect regardless of how
-they installed. This plan does not implement org provisioning; it assumes it lands
-first.
+Every install path ends in an MCP connect that triggers OAuth. This page was gated on
+self-serve org provisioning, because a brand-new no-org user previously could not
+complete first connect: `verify_session` raised `"missing organization_id"` and it did
+not self-heal.
+
+That gate is now lifted. `2026-05-30-self-serve-org-provisioning.md` shipped (PR #55,
+merged to `main` as `d54652a`, 2026-05-31). `verify_session` and the OAuth callback now
+call `resolve_or_create_org`, which silently provisions a personal `"{name}'s
+workspace"` org for a no-org identity, so first connect succeeds regardless of install
+path. This plan can proceed.
+
+Context: this page also serves Vic's direct CTO-invite outbound motion, not only the
+event-QR self-serve path it was first framed for. "The invite" is simply the
+`join.engrammic.ai` URL sent to a named lead; no new backend primitive. Each person who
+connects gets their own personal workspace (team/shared-silo via WorkOS org invites is
+explicitly deferred, per the single-org invariant noted in the provisioning work). See
+`context/decisions/2026-05-29-icp-and-gtm-strategy.md` for the GTM framing this feeds.
 
 ## File structure
 
@@ -45,7 +55,7 @@ Edits elsewhere:
 
 - `web/.github/workflows/deploy-join.yml` — new deploy workflow.
 - `web/docs/content/docs/guides/quickstart.mdx` — slim to post-install + join pointer.
-- `context-service/src/context_service/api/routes/oauth.py:118` — success-page CTA → join.
+- `context-service/src/context_service/api/routes/oauth.py:119` — success-page CTA → join.
 - `context-service/context/plans/2026-05-30-self-serve-org-provisioning.md` — update point 6.
 
 ---
@@ -745,11 +755,24 @@ export function InstallHero() {
         <div className="mt-5">
           <CurlBox />
         </div>
+        <Link
+          href="https://docs.engrammic.ai/docs/reference/self-hosting"
+          className="mt-4 inline-block text-sm text-muted-foreground underline underline-offset-4 hover:text-foreground"
+        >
+          Need to self-host for compliance? -&gt;
+        </Link>
       </div>
     </section>
   );
 }
 ```
+
+Note: the self-host link is a deliberate, quiet link-out (decision: "mention
+self-host, link out"). join stays SaaS-first for the 5-minute path; standing up your
+own Memgraph/Qdrant/Redis/Postgres is not a 5-minute experience, so self-hosting is a
+separate concierge-guided track. The link only acknowledges the compliance-sensitive
+buyer (e.g. Swedish industrial CTOs) and points at the existing
+`reference/self-hosting` docs. It is one `<Link>` in the right column, not a path.
 
 - [ ] **Step 2: Replace `page.tsx`**
 
@@ -1098,7 +1121,7 @@ git commit -m "docs(quickstart): defer install to join.engrammic.ai"
 ## Task 15: Re-point the success-page CTA
 
 **Files:**
-- Modify: `context-service/src/context_service/api/routes/oauth.py:118`
+- Modify: `context-service/src/context_service/api/routes/oauth.py:119`
 - Modify: `context-service/context/plans/2026-05-30-self-serve-org-provisioning.md`
 
 Note: this is in the `context-service` repo, on a separate branch from the `web` work.
@@ -1106,12 +1129,12 @@ Note: this is in the `context-service` repo, on a separate branch from the `web`
 - [ ] **Step 1: Confirm no test pins the old URL**
 
 Run: `cd context-service && grep -rn "guides/quickstart\|Continue to onboarding" src tests`
-Expected: only the one hit in `oauth.py:118` (no test references it). If a test
+Expected: only the one hit in `oauth.py:119` (no test references it). If a test
 appears, update it in this task.
 
 - [ ] **Step 2: Edit the CTA**
 
-In `oauth.py`, change line 118 from:
+In `oauth.py`, change line 119 (inside `_success_page_html`) from:
 ```python
         <a href="https://docs.engrammic.ai/docs/guides/quickstart" class="cta">Continue to onboarding guide</a>
 ```
