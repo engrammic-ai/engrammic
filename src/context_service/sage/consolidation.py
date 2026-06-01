@@ -23,11 +23,13 @@ from context_service.sage.confidence import SOURCE_TIER_WEIGHTS
 from context_service.sage.transactions import (
     ConflictStatus,
     SupersedeReason,
+    store_claim,
     supersede,
 )
 
 if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
+    from context_service.llm.base import LLMProvider
 
 logger = structlog.get_logger(__name__)
 
@@ -36,6 +38,8 @@ class ResolutionAction(StrEnum):
     """Actions available after conflict resolution."""
 
     SUPERSEDE = "supersede"
+    MERGE = "merge"
+    COEXIST = "coexist"
     DEFER = "defer"
 
 
@@ -60,12 +64,15 @@ class ResolutionResult:
 
     For DEFER, winner_id and loser_id are None.
     For SUPERSEDE, both are set.
+    For MERGE, merged_content is set and both nodes will be superseded.
+    For COEXIST, neither supersedes; edge weight is reduced.
     """
 
     action: ResolutionAction
     winner_id: str | None
     loser_id: str | None
     rationale: str
+    merged_content: str | None = None
 
 
 class Resolver(Protocol):
@@ -174,12 +181,164 @@ class DeterministicResolver:
         return winner, loser
 
 
+CONSOLIDATION_PROMPT_TEMPLATE = """You are resolving a conflict between two claims in an epistemic memory system.
+
+Claim A: {claim_a_content}
+  - Credibility: {claim_a_credibility:.2f}
+  - Confidence: {claim_a_confidence:.2f}
+  - Recency: {claim_a_created_at}
+  - Corroboration: {claim_a_corroboration}
+  - Agent: {claim_a_agent_id}
+
+Claim B: {claim_b_content}
+  - Credibility: {claim_b_credibility:.2f}
+  - Confidence: {claim_b_confidence:.2f}
+  - Recency: {claim_b_created_at}
+  - Corroboration: {claim_b_corroboration}
+  - Agent: {claim_b_agent_id}
+
+Context: {context}
+
+Decide:
+1. Which claim should be the winner (if either)?
+2. Should they be merged (both partially true)?
+3. Should they coexist (different scopes/contexts)?
+
+Return JSON with your decision."""
+
+CONSOLIDATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "action": {
+            "type": "string",
+            "enum": ["supersede", "merge", "coexist", "defer"],
+            "description": "The resolution action to take",
+        },
+        "winner": {
+            "type": ["string", "null"],
+            "enum": ["a", "b", None],
+            "description": "Which claim wins (if supersede), null for merge/coexist/defer",
+        },
+        "rationale": {
+            "type": "string",
+            "description": "Explanation of the decision",
+        },
+        "merged_content": {
+            "type": ["string", "null"],
+            "description": "Merged content if action=merge, null otherwise",
+        },
+    },
+    "required": ["action", "rationale"],
+}
+
+
+class LLMResolver:
+    """LLM-based conflict resolver using structured extraction.
+
+    Calls an LLM to analyze conflicting claims and decide resolution action.
+    Requires an LLMProvider to be injected at construction.
+    """
+
+    def __init__(self, llm: LLMProvider) -> None:
+        self._llm = llm
+
+    async def resolve(
+        self,
+        node_a: ConflictSignals,
+        node_b: ConflictSignals,
+        claim_a_content: str,
+        claim_b_content: str,
+        context: str = "",
+    ) -> ResolutionResult:
+        """Resolve conflict via LLM structured extraction.
+
+        Args:
+            node_a: Signals for first claim.
+            node_b: Signals for second claim.
+            claim_a_content: Text content of first claim.
+            claim_b_content: Text content of second claim.
+            context: Optional surrounding context to inform decision.
+
+        Returns:
+            ResolutionResult with action and rationale.
+        """
+        prompt = CONSOLIDATION_PROMPT_TEMPLATE.format(
+            claim_a_content=claim_a_content,
+            claim_a_credibility=node_a.credibility,
+            claim_a_confidence=node_a.credibility,
+            claim_a_created_at=node_a.created_at.isoformat(),
+            claim_a_corroboration=node_a.corroboration_count,
+            claim_a_agent_id=node_a.agent_id,
+            claim_b_content=claim_b_content,
+            claim_b_credibility=node_b.credibility,
+            claim_b_confidence=node_b.credibility,
+            claim_b_created_at=node_b.created_at.isoformat(),
+            claim_b_corroboration=node_b.corroboration_count,
+            claim_b_agent_id=node_b.agent_id,
+            context=context or "No additional context provided.",
+        )
+
+        messages = [{"role": "user", "content": prompt}]
+
+        try:
+            result, _ = await self._llm.extract_structured(
+                messages, CONSOLIDATION_SCHEMA, max_tokens=1024
+            )
+        except Exception as e:
+            logger.warning("llm_consolidation_failed", error=str(e))
+            return ResolutionResult(
+                action=ResolutionAction.DEFER,
+                winner_id=None,
+                loser_id=None,
+                rationale=f"LLM call failed: {e}",
+            )
+
+        action_str = result.get("action", "defer")
+        try:
+            action = ResolutionAction(action_str)
+        except ValueError:
+            action = ResolutionAction.DEFER
+
+        winner = result.get("winner")
+        rationale = result.get("rationale", "No rationale provided")
+        merged_content = result.get("merged_content")
+
+        if action == ResolutionAction.SUPERSEDE:
+            if winner == "a":
+                return ResolutionResult(
+                    action=action,
+                    winner_id=node_a.node_id,
+                    loser_id=node_b.node_id,
+                    rationale=rationale,
+                )
+            elif winner == "b":
+                return ResolutionResult(
+                    action=action,
+                    winner_id=node_b.node_id,
+                    loser_id=node_a.node_id,
+                    rationale=rationale,
+                )
+            else:
+                return ResolutionResult(
+                    action=ResolutionAction.DEFER,
+                    winner_id=None,
+                    loser_id=None,
+                    rationale=f"Supersede without winner specified: {rationale}",
+                )
+
+        return ResolutionResult(
+            action=action,
+            winner_id=None,
+            loser_id=None,
+            rationale=rationale,
+            merged_content=merged_content if action == ResolutionAction.MERGE else None,
+        )
+
+
 class LLMResolverStub:
     """LLM resolver stub that always defers.
 
-    Placeholder for Phase 7 integration. Keeps the same interface
-    as DeterministicResolver so it can be swapped in via constructor
-    injection on ConsolidationWorker.
+    For testing without an LLM. Keeps the same interface as DeterministicResolver.
     """
 
     def resolve(
@@ -191,7 +350,7 @@ class LLMResolverStub:
             action=ResolutionAction.DEFER,
             winner_id=None,
             loser_id=None,
-            rationale="deferred to LLM resolver (not yet implemented)",
+            rationale="deferred to LLM resolver (stub mode)",
         )
 
 
@@ -239,7 +398,9 @@ class ConsolidationWorker:
                 silo_id=silo_id,
                 reason=SupersedeReason.CONTRADICTION,
             )
-            await self._set_resolved_status(store, node_a_id, node_b_id, silo_id)
+            await self._set_resolved_status(
+                store, node_a_id, node_b_id, silo_id, ConflictStatus.RESOLVED_SUPERSEDE
+            )
 
             logger.info(
                 "conflict_resolved_supersede",
@@ -248,6 +409,57 @@ class ConsolidationWorker:
                 silo_id=silo_id,
                 rationale=result.rationale,
             )
+
+        elif result.action == ResolutionAction.COEXIST:
+            await self._set_coexist(store, node_a_id, node_b_id, silo_id)
+            logger.info(
+                "conflict_resolved_coexist",
+                node_a_id=node_a_id,
+                node_b_id=node_b_id,
+                silo_id=silo_id,
+                rationale=result.rationale,
+            )
+
+        elif result.action == ResolutionAction.MERGE and result.merged_content:
+            merged_claim, _ = await store_claim(
+                store=store,
+                content=result.merged_content,
+                evidence_refs=[f"node:{node_a_id}", f"node:{node_b_id}"],
+                silo_id=silo_id,
+                agent_id="system:consolidation",
+                source_tier="validated",
+                confidence=max(signals_a.credibility, signals_b.credibility),
+                metadata={"merged_from": [node_a_id, node_b_id]},
+            )
+
+            merged_node_id = str(merged_claim.node_id)
+            await supersede(
+                store,
+                winner_id=merged_node_id,
+                loser_id=node_a_id,
+                silo_id=silo_id,
+                reason=SupersedeReason.CONTRADICTION,
+            )
+            await supersede(
+                store,
+                winner_id=merged_node_id,
+                loser_id=node_b_id,
+                silo_id=silo_id,
+                reason=SupersedeReason.CONTRADICTION,
+            )
+            await self._set_resolved_status(
+                store, node_a_id, node_b_id, silo_id, ConflictStatus.RESOLVED_MERGE
+            )
+
+            logger.info(
+                "conflict_resolved_merge",
+                merged_node_id=merged_node_id,
+                node_a_id=node_a_id,
+                node_b_id=node_b_id,
+                silo_id=silo_id,
+                rationale=result.rationale,
+            )
+
         else:
             logger.debug(
                 "conflict_deferred",
@@ -310,8 +522,9 @@ class ConsolidationWorker:
         node_a_id: str,
         node_b_id: str,
         silo_id: str,
+        status: ConflictStatus = ConflictStatus.RESOLVED_SUPERSEDE,
     ) -> None:
-        """Set conflict_status=resolved_supersede on both nodes."""
+        """Set conflict_status on both nodes."""
         cypher = """
         MATCH (n {silo_id: $silo_id})
         WHERE n.id IN $node_ids
@@ -322,6 +535,28 @@ class ConsolidationWorker:
             {
                 "silo_id": silo_id,
                 "node_ids": [node_a_id, node_b_id],
-                "status": ConflictStatus.RESOLVED_SUPERSEDE.value,
+                "status": status.value,
             },
+        )
+
+    async def _set_coexist(
+        self,
+        store: HyperGraphStore,
+        node_a_id: str,
+        node_b_id: str,
+        silo_id: str,
+    ) -> None:
+        """Mark both nodes as coexisting and reduce CONTRADICTS edge weight to 0.3."""
+        await self._set_resolved_status(
+            store, node_a_id, node_b_id, silo_id, ConflictStatus.RESOLVED_COEXIST
+        )
+
+        cypher = """
+        MATCH (a {id: $node_a_id, silo_id: $silo_id})-[e:CONTRADICTS]-(b {id: $node_b_id, silo_id: $silo_id})
+        SET e.weight = 0.3
+        RETURN count(e) AS updated
+        """
+        await store.execute_write(
+            cypher,
+            {"silo_id": silo_id, "node_a_id": node_a_id, "node_b_id": node_b_id},
         )

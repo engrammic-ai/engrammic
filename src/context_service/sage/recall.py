@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from context_service.sage.epistemology import ppr_cache
 from context_service.sage.transactions import ClusterState, NodeState, SynthesisState
 
 if TYPE_CHECKING:
@@ -26,6 +27,8 @@ MEMORY_DECAY_SIGMA = 90  # days; half-life for temporal decay
 MAX_GRAPH_DEPTH = 3
 MAX_NEIGHBORS_PER_NODE = 20
 LAZY_SYNTHESIS_TIMEOUT_MS = 2000
+PPR_TOP_K_ANCHORS = 5
+PPR_DEFAULT_SCORE = 0.1
 
 
 class Layer(StrEnum):
@@ -48,6 +51,20 @@ class RecallOptions:
     include_synthesis: bool = True
     min_confidence: float = 0.0
     depth: int = 0
+
+
+@dataclass
+class ConfidenceBreakdown:
+    """Breakdown of factors contributing to a node's confidence score.
+
+    For transparency in epistemic-aware retrieval per CITE v2 spec Section 5.2.
+    """
+
+    credibility: float
+    support_contribution: float
+    contradiction_penalty: float
+    corroboration_boost: float
+    final_confidence: float
 
 
 @dataclass
@@ -74,6 +91,8 @@ class RecallResultItem:
     properties: dict[str, Any] = field(default_factory=dict)
     related: list[RelatedNode] = field(default_factory=list)
     synthesized: bool = False
+    conflict_status: str = "none"
+    confidence_breakdown: ConfidenceBreakdown | None = None
 
 
 @dataclass
@@ -84,6 +103,7 @@ class RecallResult:
     total_candidates: int
     synthesis_pending: bool
     query_time_ms: float
+    has_unresolved_conflicts: bool = False
 
 
 def gaussian_decay(age_days: float, sigma: float = MEMORY_DECAY_SIGMA) -> float:
@@ -122,7 +142,9 @@ def compute_recall_score(node: dict[str, Any], similarity: float, heat: float = 
         layer_score = similarity * gaussian_decay(age_days)
     elif layer == Layer.KNOWLEDGE:
         corroboration_count = int(node.get("corroboration_count", 0))
-        corroboration_boost = math.log10(1 + corroboration_count) if corroboration_count > 0 else 0.0
+        corroboration_boost = (
+            math.log10(1 + corroboration_count) if corroboration_count > 0 else 0.0
+        )
         layer_score = similarity * confidence * (1 + corroboration_boost * 0.2)
     elif layer == Layer.WISDOM:
         synthesis_state = node.get("synthesis_state", "")
@@ -134,6 +156,84 @@ def compute_recall_score(node: dict[str, Any], similarity: float, heat: float = 
 
     final_score = layer_score * (1 + heat * 0.1)
     return max(0.0, min(1.0, final_score))
+
+
+async def _get_ppr_scores(
+    store: HyperGraphStore,
+    silo_id: str,
+    anchor_node_ids: list[str],
+) -> dict[str, float]:
+    """Get PPR scores for candidate nodes, using cache if available.
+
+    Args:
+        store: Graph store instance.
+        silo_id: Tenant isolation ID.
+        anchor_node_ids: Top-K anchor nodes to seed PPR.
+
+    Returns:
+        Dict of node_id -> PPR score.
+    """
+    from context_service.db import queries as q
+    from context_service.sage.epistemology import (
+        build_adjacency_matrices,
+        personalized_pagerank,
+    )
+
+    if not anchor_node_ids:
+        return {}
+
+    cached = ppr_cache.get(silo_id, anchor_node_ids)
+    if cached is not None:
+        logger.debug("ppr_cache_hit", silo_id=silo_id, anchor_count=len(anchor_node_ids))
+        return cached
+
+    results = await store.execute_query(
+        q.GET_GRAPH_FOR_PROPAGATION,
+        {"silo_id": silo_id},
+    )
+
+    if not results:
+        return {}
+
+    row = results[0]
+    nodes = row.get("nodes", [])
+    supports = row.get("supports", [])
+    contradictions = row.get("contradictions", [])
+
+    if not nodes:
+        return {}
+
+    node_ids = [n["id"] for n in nodes if n.get("id")]
+    support_edges = [
+        (e["source"], e["target"], e.get("weight", 1.0))
+        for e in supports
+        if e.get("source") and e.get("target")
+    ]
+    contra_edges = [
+        (e["source"], e["target"], e.get("weight", 1.0))
+        for e in contradictions
+        if e.get("source") and e.get("target")
+    ]
+
+    support_matrix, contra_matrix = build_adjacency_matrices(node_ids, support_edges, contra_edges)
+
+    combined_adjacency = support_matrix - 0.5 * contra_matrix
+
+    ppr_scores = personalized_pagerank(
+        node_ids=node_ids,
+        adjacency=combined_adjacency,
+        query_node_ids=anchor_node_ids,
+    )
+
+    ppr_cache.set(silo_id, anchor_node_ids, ppr_scores)
+    logger.debug(
+        "ppr_cache_miss",
+        silo_id=silo_id,
+        anchor_count=len(anchor_node_ids),
+        graph_nodes=len(node_ids),
+    )
+
+    return ppr_scores
 
 
 async def recall(
@@ -241,7 +341,21 @@ async def recall(
         score = compute_recall_score(node, similarity, heat)
         scored.append((node, score))
 
-    # Sort by score descending, take top_k
+    # 5. Apply PPR transitive scoring
+    scored.sort(key=lambda x: x[1], reverse=True)
+    anchor_ids: list[str] = [
+        nid for node, _ in scored[:PPR_TOP_K_ANCHORS] if (nid := node.get("id")) is not None
+    ]
+
+    if anchor_ids:
+        ppr_scores = await _get_ppr_scores(store, silo_id, anchor_ids)
+        if ppr_scores:
+            scored = [
+                (node, score * ppr_scores.get(node.get("id", ""), PPR_DEFAULT_SCORE))
+                for node, score in scored
+            ]
+
+    # Sort by final score descending, take top_k
     scored.sort(key=lambda x: x[1], reverse=True)
     top_results = scored[: options.top_k]
 
@@ -273,6 +387,8 @@ async def recall(
         except ValueError:
             layer = Layer.MEMORY
 
+        conflict_status = node.get("conflict_status", "none") or "none"
+
         results.append(
             RecallResultItem(
                 node_id=node_id,
@@ -284,6 +400,7 @@ async def recall(
                 properties=node.get("properties", {}),
                 related=related,
                 synthesized=False,
+                conflict_status=conflict_status,
             )
         )
 
@@ -308,7 +425,10 @@ async def recall(
             cluster_state = cluster.get("state")
             current_belief_id = cluster.get("current_belief_id")
 
-            if cluster_state in (ClusterState.READY.value, ClusterState.STALE.value) and current_belief_id is None:
+            if (
+                cluster_state in (ClusterState.READY.value, ClusterState.STALE.value)
+                and current_belief_id is None
+            ):
                 try:
                     belief_result, _ = await asyncio.wait_for(
                         tx4_synthesize(
@@ -351,11 +471,14 @@ async def recall(
 
     elapsed_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
+    has_unresolved = any(r.conflict_status == "unresolved" for r in results)
+
     return RecallResult(
         results=results,
         total_candidates=len(candidates),
         synthesis_pending=synthesis_pending,
         query_time_ms=elapsed_ms,
+        has_unresolved_conflicts=has_unresolved,
     )
 
 

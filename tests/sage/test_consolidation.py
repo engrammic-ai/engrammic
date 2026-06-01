@@ -12,6 +12,7 @@ from context_service.sage.consolidation import (
     ConflictSignals,
     ConsolidationWorker,
     DeterministicResolver,
+    LLMResolver,
     LLMResolverStub,
     ResolutionAction,
     ResolutionResult,
@@ -317,6 +318,154 @@ class TestLLMResolverStub:
         stub = LLMResolverStub()
         result = stub.resolve(make_signals(), make_signals())
         assert result.rationale
+
+
+# ---------------------------------------------------------------------------
+# LLMResolver prompt parsing
+# ---------------------------------------------------------------------------
+
+
+class TestLLMResolverParsing:
+    """Tests for LLMResolver structured output parsing."""
+
+    @pytest.fixture
+    def mock_llm(self) -> AsyncMock:
+        return AsyncMock()
+
+    @pytest.fixture
+    def signals_a(self) -> ConflictSignals:
+        return make_signals(node_id="node-a", source_tier="authoritative")
+
+    @pytest.fixture
+    def signals_b(self) -> ConflictSignals:
+        return make_signals(node_id="node-b", source_tier="community")
+
+    @pytest.mark.asyncio
+    async def test_parses_supersede_a_wins(
+        self, mock_llm: AsyncMock, signals_a: ConflictSignals, signals_b: ConflictSignals
+    ) -> None:
+        mock_llm.extract_structured.return_value = (
+            {"action": "supersede", "winner": "a", "rationale": "A has better evidence"},
+            {},
+        )
+
+        resolver = LLMResolver(mock_llm)
+        result = await resolver.resolve(signals_a, signals_b, "Claim A", "Claim B")
+
+        assert result.action == ResolutionAction.SUPERSEDE
+        assert result.winner_id == "node-a"
+        assert result.loser_id == "node-b"
+        assert "better evidence" in result.rationale
+
+    @pytest.mark.asyncio
+    async def test_parses_supersede_b_wins(
+        self, mock_llm: AsyncMock, signals_a: ConflictSignals, signals_b: ConflictSignals
+    ) -> None:
+        mock_llm.extract_structured.return_value = (
+            {"action": "supersede", "winner": "b", "rationale": "B is more recent"},
+            {},
+        )
+
+        resolver = LLMResolver(mock_llm)
+        result = await resolver.resolve(signals_a, signals_b, "Claim A", "Claim B")
+
+        assert result.action == ResolutionAction.SUPERSEDE
+        assert result.winner_id == "node-b"
+        assert result.loser_id == "node-a"
+
+    @pytest.mark.asyncio
+    async def test_parses_merge_with_content(
+        self, mock_llm: AsyncMock, signals_a: ConflictSignals, signals_b: ConflictSignals
+    ) -> None:
+        merged = "Combined claim incorporating both perspectives"
+        mock_llm.extract_structured.return_value = (
+            {
+                "action": "merge",
+                "winner": None,
+                "rationale": "Both have valid points",
+                "merged_content": merged,
+            },
+            {},
+        )
+
+        resolver = LLMResolver(mock_llm)
+        result = await resolver.resolve(signals_a, signals_b, "Claim A", "Claim B")
+
+        assert result.action == ResolutionAction.MERGE
+        assert result.winner_id is None
+        assert result.loser_id is None
+        assert result.merged_content == merged
+
+    @pytest.mark.asyncio
+    async def test_parses_coexist(
+        self, mock_llm: AsyncMock, signals_a: ConflictSignals, signals_b: ConflictSignals
+    ) -> None:
+        mock_llm.extract_structured.return_value = (
+            {"action": "coexist", "winner": None, "rationale": "Different valid perspectives"},
+            {},
+        )
+
+        resolver = LLMResolver(mock_llm)
+        result = await resolver.resolve(signals_a, signals_b, "Claim A", "Claim B")
+
+        assert result.action == ResolutionAction.COEXIST
+        assert result.winner_id is None
+        assert result.loser_id is None
+
+    @pytest.mark.asyncio
+    async def test_parses_defer(
+        self, mock_llm: AsyncMock, signals_a: ConflictSignals, signals_b: ConflictSignals
+    ) -> None:
+        mock_llm.extract_structured.return_value = (
+            {"action": "defer", "rationale": "Need more information"},
+            {},
+        )
+
+        resolver = LLMResolver(mock_llm)
+        result = await resolver.resolve(signals_a, signals_b, "Claim A", "Claim B")
+
+        assert result.action == ResolutionAction.DEFER
+        assert result.winner_id is None
+
+    @pytest.mark.asyncio
+    async def test_llm_error_returns_defer(
+        self, mock_llm: AsyncMock, signals_a: ConflictSignals, signals_b: ConflictSignals
+    ) -> None:
+        mock_llm.extract_structured.side_effect = RuntimeError("LLM unavailable")
+
+        resolver = LLMResolver(mock_llm)
+        result = await resolver.resolve(signals_a, signals_b, "Claim A", "Claim B")
+
+        assert result.action == ResolutionAction.DEFER
+        assert "LLM call failed" in result.rationale
+
+    @pytest.mark.asyncio
+    async def test_unknown_action_defaults_to_defer(
+        self, mock_llm: AsyncMock, signals_a: ConflictSignals, signals_b: ConflictSignals
+    ) -> None:
+        mock_llm.extract_structured.return_value = (
+            {"action": "unknown_action", "rationale": "Something"},
+            {},
+        )
+
+        resolver = LLMResolver(mock_llm)
+        result = await resolver.resolve(signals_a, signals_b, "Claim A", "Claim B")
+
+        assert result.action == ResolutionAction.DEFER
+
+    @pytest.mark.asyncio
+    async def test_supersede_missing_winner_returns_defer(
+        self, mock_llm: AsyncMock, signals_a: ConflictSignals, signals_b: ConflictSignals
+    ) -> None:
+        mock_llm.extract_structured.return_value = (
+            {"action": "supersede", "winner": None, "rationale": "Missing winner"},
+            {},
+        )
+
+        resolver = LLMResolver(mock_llm)
+        result = await resolver.resolve(signals_a, signals_b, "Claim A", "Claim B")
+
+        assert result.action == ResolutionAction.DEFER
 
 
 # ---------------------------------------------------------------------------

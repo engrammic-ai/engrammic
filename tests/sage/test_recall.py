@@ -172,9 +172,7 @@ class TestRecall:
         node_id = make_uuid()
         node = self._make_node(node_id=node_id)
 
-        mock_vector_store.search = AsyncMock(
-            return_value=[{"id": node_id, "score": 0.85}]
-        )
+        mock_vector_store.search = AsyncMock(return_value=[{"id": node_id, "score": 0.85}])
         mock_store.execute_query = AsyncMock(side_effect=[[node], []])
 
         result = await recall(
@@ -199,9 +197,7 @@ class TestRecall:
         node_id = make_uuid()
         tombstoned = self._make_node(node_id=node_id, state="TOMBSTONED")
 
-        mock_vector_store.search = AsyncMock(
-            return_value=[{"id": node_id, "score": 0.9}]
-        )
+        mock_vector_store.search = AsyncMock(return_value=[{"id": node_id, "score": 0.9}])
         mock_store.execute_query = AsyncMock(side_effect=[[tombstoned], []])
 
         result = await recall(
@@ -233,9 +229,7 @@ class TestRecall:
             ]
         )
         # First call is batch query returning all nodes, second is GET_CLUSTERS_FOR_NODES
-        mock_store.execute_query = AsyncMock(
-            side_effect=[[memory_node, wisdom_node], []]
-        )
+        mock_store.execute_query = AsyncMock(side_effect=[[memory_node, wisdom_node], []])
 
         options = RecallOptions(layers=[Layer.WISDOM])
         result = await recall(
@@ -269,9 +263,7 @@ class TestRecall:
             ]
         )
         # First call is batch query returning all nodes, second is GET_CLUSTERS_FOR_NODES
-        mock_store.execute_query = AsyncMock(
-            side_effect=[[low_conf, high_conf], []]
-        )
+        mock_store.execute_query = AsyncMock(side_effect=[[low_conf, high_conf], []])
 
         options = RecallOptions(min_confidence=0.5)
         result = await recall(
@@ -360,7 +352,14 @@ class TestTraverseGraph:
         # Third call: grandchild's neighbors -> [] (depth exceeded)
         mock_store.execute_query = AsyncMock(
             side_effect=[
-                [{"id": child_id, "edge_type": "RELATED_TO", "direction": "outgoing", "properties": {}}],
+                [
+                    {
+                        "id": child_id,
+                        "edge_type": "RELATED_TO",
+                        "direction": "outgoing",
+                        "properties": {},
+                    }
+                ],
                 [],  # max_depth=1 prevents recursion into child
             ]
         )

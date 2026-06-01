@@ -15,10 +15,10 @@ from context_service.sage.transactions import (
     InvariantViolation,
     ReviseBeliefResult,
     SynthesizeResult,
-    synthesize,
-    revise_belief,
     commit,
     crystallize,
+    revise_belief,
+    synthesize,
 )
 
 

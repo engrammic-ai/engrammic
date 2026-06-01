@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import structlog
 
 from context_service.sage.confidence import compute_credibility
+from context_service.sage.epistemology import propagate_incremental
 
 if TYPE_CHECKING:
     from context_service.embeddings.base import EmbeddingService
@@ -1060,6 +1061,9 @@ async def link(
             )
         )
 
+    if edge_type in (LinkType.SUPPORTS, LinkType.CONTRADICTS):
+        await _run_incremental_propagation(store, target_id, silo_id)
+
     logger.debug(
         "link_complete",
         edge_id=str(edge_id),
@@ -1731,10 +1735,7 @@ async def would_create_cycle(
         },
     )
 
-    if result and result[0].get("would_cycle"):
-        return True
-
-    return False
+    return bool(result and result[0].get("would_cycle"))
 
 
 async def _create_supersedes_edge(
@@ -1999,6 +2000,84 @@ async def _set_conflict_status(
     )
 
 
+async def _run_incremental_propagation(
+    store: HyperGraphStore,
+    node_id: str,
+    silo_id: str,
+) -> int:
+    """Run depth-limited confidence propagation after SUPPORTS/CONTRADICTS edge creation.
+
+    Fetches local neighborhood (depth 2), runs propagation, updates affected nodes.
+    Target: <50ms for write-time budget.
+
+    Returns:
+        Number of nodes updated.
+    """
+    from context_service.db import queries as q
+
+    results = await store.execute_query(
+        q.GET_LOCAL_GRAPH_FOR_PROPAGATION,
+        {"node_id": node_id, "silo_id": silo_id},
+    )
+
+    if not results:
+        return 0
+
+    row = results[0]
+    nodes = row.get("nodes", [])
+    supports = row.get("supports", [])
+    contradictions = row.get("contradictions", [])
+
+    if not nodes:
+        return 0
+
+    node_ids = [n["id"] for n in nodes if n.get("id")]
+    credibility_scores = {n["id"]: n.get("credibility", 0.5) for n in nodes if n.get("id")}
+
+    support_edges = [
+        (e["source"], e["target"], e.get("weight", 1.0))
+        for e in supports
+        if e.get("source") and e.get("target")
+    ]
+    contra_edges = [
+        (e["source"], e["target"], e.get("weight", 1.0))
+        for e in contradictions
+        if e.get("source") and e.get("target")
+    ]
+
+    if not support_edges and not contra_edges:
+        return 0
+
+    updated = propagate_incremental(
+        target_id=node_id,
+        node_ids=node_ids,
+        credibility_scores=credibility_scores,
+        support_edges=support_edges,
+        contradiction_edges=contra_edges,
+        depth=2,
+    )
+
+    updates = [{"node_id": nid, "confidence": conf} for nid, conf in updated.items()]
+
+    if updates:
+        await store.execute_write(
+            q.UPDATE_PROPAGATED_CONFIDENCE,
+            {
+                "updates": updates,
+                "silo_id": silo_id,
+                "updated_at": datetime.now(UTC).isoformat(),
+            },
+        )
+
+    logger.debug(
+        "incremental_propagation_complete",
+        node_id=node_id,
+        updated_count=len(updates),
+    )
+
+    return len(updates)
+
+
 async def cascade_staleness(
     store: HyperGraphStore,
     node_id: str,
@@ -2144,9 +2223,7 @@ async def forget(
         cascade_count=cascade_count,
     )
 
-    logger.debug(
-        "forget_complete", node_id=node_id, silo_id=silo_id, cascade_count=cascade_count
-    )
+    logger.debug("forget_complete", node_id=node_id, silo_id=silo_id, cascade_count=cascade_count)
 
     return result, events
 

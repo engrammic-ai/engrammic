@@ -2062,3 +2062,82 @@ WHERE corroborating.properties.subject = c.properties.subject
 OPTIONAL MATCH (corroborating)-[:DERIVED_FROM]->(evidence)
 RETURN count(DISTINCT evidence.id) AS corroboration_count
 """
+
+# --- Epistemology: confidence propagation queries ---
+
+GET_SUPPORT_EDGES = """
+MATCH (source {silo_id: $silo_id})-[e:SUPPORTS]->(target {silo_id: $silo_id})
+WHERE source.properties.state = 'ACTIVE' AND target.properties.state = 'ACTIVE'
+RETURN source.id AS source_id,
+       target.id AS target_id,
+       coalesce(e.weight, 1.0) AS weight
+"""
+
+GET_CONTRADICTION_EDGES = """
+MATCH (source {silo_id: $silo_id})-[e:CONTRADICTS]->(target {silo_id: $silo_id})
+WHERE source.properties.state = 'ACTIVE' AND target.properties.state = 'ACTIVE'
+RETURN source.id AS source_id,
+       target.id AS target_id,
+       coalesce(e.weight, 1.0) AS weight
+"""
+
+GET_GRAPH_FOR_PROPAGATION = """
+MATCH (n {silo_id: $silo_id})
+WHERE n.properties.state = 'ACTIVE'
+  AND n.properties.layer IN ['knowledge', 'wisdom']
+WITH collect({
+    id: n.id,
+    credibility: coalesce(n.properties.credibility, n.properties.confidence, 0.5),
+    layer: n.properties.layer
+}) AS nodes
+OPTIONAL MATCH (s {silo_id: $silo_id})-[sup:SUPPORTS]->(t {silo_id: $silo_id})
+WHERE s.properties.state = 'ACTIVE' AND t.properties.state = 'ACTIVE'
+WITH nodes, collect({source: s.id, target: t.id, weight: coalesce(sup.weight, 1.0)}) AS supports
+OPTIONAL MATCH (s2 {silo_id: $silo_id})-[con:CONTRADICTS]->(t2 {silo_id: $silo_id})
+WHERE s2.properties.state = 'ACTIVE' AND t2.properties.state = 'ACTIVE'
+RETURN nodes,
+       supports,
+       collect({source: s2.id, target: t2.id, weight: coalesce(con.weight, 1.0)}) AS contradictions
+"""
+
+CREATE_WEIGHTED_SUPPORT_EDGE = """
+MATCH (source {id: $source_id, silo_id: $silo_id})
+MATCH (target {id: $target_id, silo_id: $silo_id})
+MERGE (source)-[e:SUPPORTS]->(target)
+ON CREATE SET e.weight = $weight, e.created_at = $created_at
+ON MATCH SET e.weight = $weight
+RETURN source.id AS source_id, target.id AS target_id, e.weight AS weight
+"""
+
+CREATE_WEIGHTED_CONTRADICTION_EDGE = """
+MATCH (source {id: $source_id, silo_id: $silo_id})
+MATCH (target {id: $target_id, silo_id: $silo_id})
+MERGE (source)-[e:CONTRADICTS]->(target)
+ON CREATE SET e.weight = $weight, e.created_at = $created_at
+ON MATCH SET e.weight = $weight
+RETURN source.id AS source_id, target.id AS target_id, e.weight AS weight
+"""
+
+UPDATE_PROPAGATED_CONFIDENCE = """
+UNWIND $updates AS u
+MATCH (n {id: u.node_id, silo_id: $silo_id})
+SET n.properties.confidence = u.confidence,
+    n.properties.confidence_updated_at = $updated_at
+RETURN count(*) AS updated_count
+"""
+
+GET_LOCAL_GRAPH_FOR_PROPAGATION = """
+MATCH path = (center {id: $node_id, silo_id: $silo_id})-[*..2]-(neighbor {silo_id: $silo_id})
+WHERE neighbor.properties.state = 'ACTIVE'
+WITH collect(DISTINCT center) + collect(DISTINCT neighbor) AS all_nodes
+UNWIND all_nodes AS n
+WITH collect(DISTINCT {id: n.id, credibility: coalesce(n.properties.credibility, n.properties.confidence, 0.5)}) AS nodes
+OPTIONAL MATCH (s {silo_id: $silo_id})-[sup:SUPPORTS]->(t {silo_id: $silo_id})
+WHERE s.id IN [node IN nodes | node.id] AND t.id IN [node IN nodes | node.id]
+WITH nodes, collect({source: s.id, target: t.id, weight: coalesce(sup.weight, 1.0)}) AS supports
+OPTIONAL MATCH (s2 {silo_id: $silo_id})-[con:CONTRADICTS]->(t2 {silo_id: $silo_id})
+WHERE s2.id IN [node IN nodes | node.id] AND t2.id IN [node IN nodes | node.id]
+RETURN nodes,
+       supports,
+       collect({source: s2.id, target: t2.id, weight: coalesce(con.weight, 1.0)}) AS contradictions
+"""
