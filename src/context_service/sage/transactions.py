@@ -1704,6 +1704,39 @@ async def _would_create_cycle(
     return results[0]["would_cycle"] if results else False
 
 
+async def would_create_cycle(
+    store: HyperGraphStore,
+    source_id: str,
+    target_id: str,
+    silo_id: str,
+    edge_type: str = "SUPERSEDES",
+) -> bool:
+    """Check if adding edge would create cycle in SUPERSEDES graph.
+
+    Per brain-transactions-pseudocode.md WOULD_CREATE_CYCLE.
+    Only checks SUPERSEDES cycles (INV4).
+    """
+    if edge_type != "SUPERSEDES":
+        return False
+
+    from context_service.db import queries as q
+
+    # Check if path exists from target to source (would create cycle if we add source->target)
+    result = await store.execute_query(
+        q.CHECK_CYCLE_PATH,
+        {
+            "source_id": target_id,  # Start from target
+            "target_id": source_id,  # See if we can reach source
+            "silo_id": silo_id,
+        },
+    )
+
+    if result and result[0].get("would_cycle"):
+        return True
+
+    return False
+
+
 async def _create_supersedes_edge(
     store: HyperGraphStore,
     winner_id: str,
