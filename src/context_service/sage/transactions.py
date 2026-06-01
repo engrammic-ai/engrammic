@@ -239,6 +239,77 @@ class LLMSynthesisResult:
     error: str | None = None
 
 
+def noisy_or_aggregate(confidences: list[float]) -> float:
+    """Compute noisy-or aggregation of confidence values.
+
+    Formula: 1 - product(1 - c_i)
+    Gives higher aggregate when multiple independent sources agree.
+    """
+    if not confidences:
+        return 0.0
+    product = 1.0
+    for c in confidences:
+        product *= 1.0 - max(0.0, min(1.0, c))
+    return 1.0 - product
+
+
+async def llm_synthesize(
+    llm: Any,  # LLMProvider
+    facts: list[dict[str, Any]],
+    timeout: float,
+    previous_belief: str | None = None,
+) -> LLMSynthesisResult:
+    """Call LLM to synthesize a belief from facts.
+
+    Args:
+        llm: LLM provider instance.
+        facts: List of fact dicts with 'content' and 'confidence' keys.
+        timeout: Timeout in seconds.
+        previous_belief: For revisions, the previous belief content.
+
+    Returns:
+        LLMSynthesisResult with synthesis output or error.
+    """
+    import asyncio
+
+    from context_service.engine.synthesis import _SYNTHESIS_SYSTEM_PROMPT, _build_synthesis_prompt
+
+    prompt = _build_synthesis_prompt(facts)
+    if previous_belief:
+        prompt += f"\n\nPrevious belief (now stale): {previous_belief}"
+
+    try:
+        response = await asyncio.wait_for(
+            llm.complete(
+                system_prompt=_SYNTHESIS_SYSTEM_PROMPT,
+                user_prompt=prompt,
+            ),
+            timeout=timeout,
+        )
+        return LLMSynthesisResult(
+            success=True,
+            content=response.strip(),
+            caveats=[],
+            timed_out=False,
+        )
+    except TimeoutError:
+        return LLMSynthesisResult(
+            success=False,
+            content=None,
+            caveats=[],
+            timed_out=True,
+            error="synthesis timed out",
+        )
+    except Exception as e:
+        return LLMSynthesisResult(
+            success=False,
+            content=None,
+            caveats=[],
+            timed_out=False,
+            error=str(e),
+        )
+
+
 @dataclass
 class ReactionEvent:
     """Event emitted for async reaction processing."""
@@ -772,10 +843,13 @@ async def _validate_about_refs(
     if not about_refs:
         return {"error": "EMPTY_ABOUT_REFS", "message": "about_refs must be non-empty"}
 
-    results = await store.execute_query(q.VALIDATE_ABOUT_REFS, {
-        "node_ids": about_refs,
-        "silo_id": silo_id,
-    })
+    results = await store.execute_query(
+        q.VALIDATE_ABOUT_REFS,
+        {
+            "node_ids": about_refs,
+            "silo_id": silo_id,
+        },
+    )
 
     found_ids = {r["id"] for r in results}
     missing = set(about_refs) - found_ids
@@ -887,11 +961,14 @@ async def _validate_hypothesis(
     """Validate hypothesis exists, belongs to session, not crystallized, not tombstoned."""
     from context_service.db import queries as q
 
-    results = await store.execute_query(q.GET_HYPOTHESIS_FOR_CRYSTALLIZE, {
-        "hypothesis_id": hypothesis_id,
-        "silo_id": silo_id,
-        "session_id": session_id,
-    })
+    results = await store.execute_query(
+        q.GET_HYPOTHESIS_FOR_CRYSTALLIZE,
+        {
+            "hypothesis_id": hypothesis_id,
+            "silo_id": silo_id,
+            "session_id": session_id,
+        },
+    )
 
     if not results:
         return {"error": "HYPOTHESIS_NOT_FOUND", "message": "Hypothesis not found or wrong session"}
@@ -931,10 +1008,13 @@ async def tx14_crystallize(
     confidence = float(validation["confidence"])
 
     # Get about_refs from hypothesis
-    about_results = await store.execute_query(q.GET_HYPOTHESIS_ABOUT_REFS, {
-        "hypothesis_id": hypothesis_id,
-        "silo_id": silo_id,
-    })
+    about_results = await store.execute_query(
+        q.GET_HYPOTHESIS_ABOUT_REFS,
+        {
+            "hypothesis_id": hypothesis_id,
+            "silo_id": silo_id,
+        },
+    )
 
     about_refs = [r["id"] for r in about_results]
     tombstoned = [r for r in about_results if r.get("state") == NodeState.TOMBSTONED.value]
@@ -989,10 +1069,20 @@ async def tx14_crystallize(
 
     events: list[ReactionEvent] = [
         ReactionEvent(event_type="compute_embedding", node_id=str(commitment_id), silo_id=silo_id),
-        ReactionEvent(event_type="update_heat", node_id=str(commitment_id), silo_id=silo_id, payload={"access_type": "WRITE"}),
+        ReactionEvent(
+            event_type="update_heat",
+            node_id=str(commitment_id),
+            silo_id=silo_id,
+            payload={"access_type": "WRITE"},
+        ),
     ]
 
-    logger.debug("tx14_crystallize_complete", commitment_id=str(commitment_id), hypothesis_id=hypothesis_id, silo_id=silo_id)
+    logger.debug(
+        "tx14_crystallize_complete",
+        commitment_id=str(commitment_id),
+        hypothesis_id=hypothesis_id,
+        silo_id=silo_id,
+    )
 
     return result, events
 
