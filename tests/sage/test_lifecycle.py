@@ -4,23 +4,21 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
 
 from context_service.sage.transactions import (
-    BrainError,
+    MAX_CASCADE_DEPTH,
     CancelForgetResult,
     ForgetResult,
     HardDeleteResult,
     InvariantViolation,
     NodeState,
-    MAX_CASCADE_DEPTH,
     cascade_staleness,
-    tx10_hard_delete,
-    tx15_forget,
-    tx16_cancel_forget,
+    hard_delete,
+    forget,
+    cancel_forget,
 )
 
 
@@ -46,14 +44,14 @@ class TestTx15Forget:
         """Test that TX15 tombstones an active node."""
         node_id = make_uuid()
 
-        mock_store.execute_query = AsyncMock(return_value=[
-            {"id": node_id, "state": "ACTIVE", "layer": "memory", "cancel_window_expires": None}
-        ])
-        mock_store.execute_write = AsyncMock(return_value=[
-            {"id": node_id, "state": "TOMBSTONED"}
-        ])
+        mock_store.execute_query = AsyncMock(
+            return_value=[
+                {"id": node_id, "state": "ACTIVE", "layer": "memory", "cancel_window_expires": None}
+            ]
+        )
+        mock_store.execute_write = AsyncMock(return_value=[{"id": node_id, "state": "TOMBSTONED"}])
 
-        result, events = await tx15_forget(
+        result, events = await forget(
             store=mock_store,
             node_id=node_id,
             silo_id="test-silo",
@@ -69,12 +67,19 @@ class TestTx15Forget:
         """Test that TX15 rejects already tombstoned nodes."""
         node_id = make_uuid()
 
-        mock_store.execute_query = AsyncMock(return_value=[
-            {"id": node_id, "state": "TOMBSTONED", "layer": "memory", "cancel_window_expires": None}
-        ])
+        mock_store.execute_query = AsyncMock(
+            return_value=[
+                {
+                    "id": node_id,
+                    "state": "TOMBSTONED",
+                    "layer": "memory",
+                    "cancel_window_expires": None,
+                }
+            ]
+        )
 
         with pytest.raises(InvariantViolation) as exc_info:
-            await tx15_forget(
+            await forget(
                 store=mock_store,
                 node_id=node_id,
                 silo_id="test-silo",
@@ -89,7 +94,7 @@ class TestTx15Forget:
         mock_store.execute_query = AsyncMock(return_value=[])
 
         with pytest.raises(InvariantViolation) as exc_info:
-            await tx15_forget(
+            await forget(
                 store=mock_store,
                 node_id=make_uuid(),
                 silo_id="test-silo",
@@ -104,17 +109,24 @@ class TestTx15Forget:
         node_id = make_uuid()
         dependent_id = make_uuid()
 
-        mock_store.execute_query = AsyncMock(side_effect=[
-            # GET_NODE_FOR_FORGET
-            [{"id": node_id, "state": "ACTIVE", "layer": "knowledge", "cancel_window_expires": None}],
-            # GET_DEPENDENTS_FOR_CASCADE
-            [{"id": dependent_id, "layer": "wisdom", "edge_type": "SYNTHESIZED_FROM"}],
-        ])
-        mock_store.execute_write = AsyncMock(return_value=[
-            {"id": node_id, "state": "TOMBSTONED"}
-        ])
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                # GET_NODE_FOR_FORGET
+                [
+                    {
+                        "id": node_id,
+                        "state": "ACTIVE",
+                        "layer": "knowledge",
+                        "cancel_window_expires": None,
+                    }
+                ],
+                # GET_DEPENDENTS_FOR_CASCADE
+                [{"id": dependent_id, "layer": "wisdom", "edge_type": "SYNTHESIZED_FROM"}],
+            ]
+        )
+        mock_store.execute_write = AsyncMock(return_value=[{"id": node_id, "state": "TOMBSTONED"}])
 
-        result, events = await tx15_forget(
+        result, events = await forget(
             store=mock_store,
             node_id=node_id,
             silo_id="test-silo",
@@ -134,14 +146,16 @@ class TestTx16CancelForget:
         node_id = make_uuid()
         future_time = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
 
-        mock_store.execute_query = AsyncMock(return_value=[
-            {"id": node_id, "state": "TOMBSTONED", "cancel_window_expires": future_time}
-        ])
-        mock_store.execute_write = AsyncMock(return_value=[
-            {"id": node_id, "state": "ACTIVE", "previous_state": "ACTIVE"}
-        ])
+        mock_store.execute_query = AsyncMock(
+            return_value=[
+                {"id": node_id, "state": "TOMBSTONED", "cancel_window_expires": future_time}
+            ]
+        )
+        mock_store.execute_write = AsyncMock(
+            return_value=[{"id": node_id, "state": "ACTIVE", "previous_state": "ACTIVE"}]
+        )
 
-        result = await tx16_cancel_forget(
+        result = await cancel_forget(
             store=mock_store,
             node_id=node_id,
             silo_id="test-silo",
@@ -157,12 +171,14 @@ class TestTx16CancelForget:
         node_id = make_uuid()
         past_time = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
 
-        mock_store.execute_query = AsyncMock(return_value=[
-            {"id": node_id, "state": "TOMBSTONED", "cancel_window_expires": past_time}
-        ])
+        mock_store.execute_query = AsyncMock(
+            return_value=[
+                {"id": node_id, "state": "TOMBSTONED", "cancel_window_expires": past_time}
+            ]
+        )
 
         with pytest.raises(InvariantViolation) as exc_info:
-            await tx16_cancel_forget(
+            await cancel_forget(
                 store=mock_store,
                 node_id=node_id,
                 silo_id="test-silo",
@@ -176,12 +192,12 @@ class TestTx16CancelForget:
         """Test that TX16 rejects non-tombstoned nodes."""
         node_id = make_uuid()
 
-        mock_store.execute_query = AsyncMock(return_value=[
-            {"id": node_id, "state": "ACTIVE", "cancel_window_expires": None}
-        ])
+        mock_store.execute_query = AsyncMock(
+            return_value=[{"id": node_id, "state": "ACTIVE", "cancel_window_expires": None}]
+        )
 
         with pytest.raises(InvariantViolation) as exc_info:
-            await tx16_cancel_forget(
+            await cancel_forget(
                 store=mock_store,
                 node_id=node_id,
                 silo_id="test-silo",
@@ -200,9 +216,9 @@ class TestCascadeStaleness:
         node_id = make_uuid()
         belief_id = make_uuid()
 
-        mock_store.execute_query = AsyncMock(return_value=[
-            {"id": belief_id, "layer": "wisdom", "edge_type": "SYNTHESIZED_FROM"}
-        ])
+        mock_store.execute_query = AsyncMock(
+            return_value=[{"id": belief_id, "layer": "wisdom", "edge_type": "SYNTHESIZED_FROM"}]
+        )
 
         count = await cascade_staleness(
             store=mock_store,
@@ -254,12 +270,10 @@ class TestTx10HardDelete:
         """Test that TX10 deletes nodes past cancel window."""
         node_id = make_uuid()
 
-        mock_store.execute_query = AsyncMock(return_value=[
-            {"id": node_id}
-        ])
+        mock_store.execute_query = AsyncMock(return_value=[{"id": node_id}])
         mock_store.execute_write = AsyncMock(return_value=[{"deleted_count": 1}])
 
-        result = await tx10_hard_delete(
+        result = await hard_delete(
             store=mock_store,
             silo_id="test-silo",
             batch_size=100,
@@ -273,7 +287,7 @@ class TestTx10HardDelete:
         """Test that TX10 skips nodes still in cancel window."""
         mock_store.execute_query = AsyncMock(return_value=[])
 
-        result = await tx10_hard_delete(
+        result = await hard_delete(
             store=mock_store,
             silo_id="test-silo",
             batch_size=100,

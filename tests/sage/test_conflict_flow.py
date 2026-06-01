@@ -15,7 +15,7 @@ from context_service.sage.consolidation import (
 )
 from context_service.sage.transactions import (
     ConflictStatus,
-    tx2_store_claim,
+    store_claim,
 )
 
 SILO = "test-silo"
@@ -61,7 +61,7 @@ class TestConflictFlow:
         # --- Step 1: Store first claim (no conflict) ---
         store_first = AsyncMock()
 
-        # execute_query calls during tx2_store_claim for first claim:
+        # execute_query calls during store_claim for first claim:
         #   [0] evidence validation -> returns the memory node
         #   [1] conflict detection  -> returns [] (no conflicts yet)
         store_first.execute_query = AsyncMock(
@@ -71,11 +71,9 @@ class TestConflictFlow:
             ]
         )
         # execute_write calls: CREATE claim, DERIVED_FROM edges, corroboration check
-        store_first.execute_write = AsyncMock(
-            return_value=[{"count": 1, "should_promote": False}]
-        )
+        store_first.execute_write = AsyncMock(return_value=[{"count": 1, "should_promote": False}])
 
-        result_first, events_first = await tx2_store_claim(
+        result_first, events_first = await store_claim(
             store=store_first,
             content="python-version is 3.11",
             evidence_refs=[f"node:{evidence_id_1}"],
@@ -99,7 +97,7 @@ class TestConflictFlow:
         # --- Step 2: Store second claim with same s/p, different object ---
         store_second = AsyncMock()
 
-        # execute_query calls during tx2_store_claim for second claim:
+        # execute_query calls during store_claim for second claim:
         #   [0] evidence validation -> returns the memory node
         #   [1] conflict detection  -> returns first_claim_id (conflict!)
         store_second.execute_query = AsyncMock(
@@ -108,11 +106,9 @@ class TestConflictFlow:
                 [{"id": first_claim_id}],  # Existing claim with different object
             ]
         )
-        store_second.execute_write = AsyncMock(
-            return_value=[{"count": 1, "should_promote": False}]
-        )
+        store_second.execute_write = AsyncMock(return_value=[{"count": 1, "should_promote": False}])
 
-        result_second, events_second = await tx2_store_claim(
+        result_second, events_second = await store_claim(
             store=store_second,
             content="python-version is 3.12",
             evidence_refs=[f"node:{evidence_id_2}"],
@@ -146,9 +142,7 @@ class TestConflictFlow:
         assert len(contradicts_calls) >= 1, "CONTRADICTS edges should be created"
 
         # conflict_status = 'unresolved' should be set on both nodes
-        status_calls = [
-            c for c in write_calls if ConflictStatus.UNRESOLVED.value in str(c)
-        ]
+        status_calls = [c for c in write_calls if ConflictStatus.UNRESOLVED.value in str(c)]
         assert len(status_calls) >= 1, "conflict_status should be set to 'unresolved'"
 
         # --- Step 4: Process conflict via ConsolidationWorker ---
@@ -182,7 +176,7 @@ class TestConflictFlow:
         store_worker.execute_write = AsyncMock(return_value=[])
 
         with patch(
-            "context_service.sage.consolidation.tx3_supersede", new_callable=AsyncMock
+            "context_service.sage.consolidation.supersede", new_callable=AsyncMock
         ) as mock_tx3:
             mock_tx3.return_value = (MagicMock(), [])
 

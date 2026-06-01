@@ -23,7 +23,7 @@ from context_service.sage.confidence import SOURCE_TIER_WEIGHTS
 from context_service.sage.transactions import (
     ConflictStatus,
     SupersedeReason,
-    tx3_supersede,
+    supersede,
 )
 
 if TYPE_CHECKING:
@@ -232,7 +232,7 @@ class ConsolidationWorker:
         result = self._resolver.resolve(signals_a, signals_b)
 
         if result.action == ResolutionAction.SUPERSEDE and result.winner_id and result.loser_id:
-            await tx3_supersede(
+            await supersede(
                 store,
                 winner_id=result.winner_id,
                 loser_id=result.loser_id,

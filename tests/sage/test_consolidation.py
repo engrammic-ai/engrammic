@@ -373,7 +373,7 @@ class TestConsolidationWorker:
         store = _make_store_with_nodes(NODE_A, NODE_B, SILO)
 
         with patch(
-            "context_service.sage.consolidation.tx3_supersede", new_callable=AsyncMock
+            "context_service.sage.consolidation.supersede", new_callable=AsyncMock
         ) as mock_tx3:
             mock_tx3.return_value = (MagicMock(), [])
             worker = ConsolidationWorker()
@@ -393,7 +393,7 @@ class TestConsolidationWorker:
         store = _make_store_with_nodes(NODE_A, NODE_B, SILO)
 
         with patch(
-            "context_service.sage.consolidation.tx3_supersede", new_callable=AsyncMock
+            "context_service.sage.consolidation.supersede", new_callable=AsyncMock
         ) as mock_tx3:
             mock_tx3.return_value = (MagicMock(), [])
             worker = ConsolidationWorker()
@@ -407,7 +407,7 @@ class TestConsolidationWorker:
         store = _make_store_with_nodes(NODE_A, NODE_B, SILO)
 
         with patch(
-            "context_service.sage.consolidation.tx3_supersede", new_callable=AsyncMock
+            "context_service.sage.consolidation.supersede", new_callable=AsyncMock
         ) as mock_tx3:
             worker = ConsolidationWorker(resolver=LLMResolverStub())
             result = await worker.process_conflict(store, NODE_A, NODE_B, SILO)
@@ -419,7 +419,7 @@ class TestConsolidationWorker:
     async def test_defer_does_not_update_conflict_status(self) -> None:
         store = _make_store_with_nodes(NODE_A, NODE_B, SILO)
 
-        with patch("context_service.sage.consolidation.tx3_supersede", new_callable=AsyncMock):
+        with patch("context_service.sage.consolidation.supersede", new_callable=AsyncMock):
             worker = ConsolidationWorker(resolver=LLMResolverStub())
             await worker.process_conflict(store, NODE_A, NODE_B, SILO)
 
@@ -431,7 +431,7 @@ class TestConsolidationWorker:
         store = _make_store_with_nodes(NODE_A, NODE_B, SILO)
 
         with patch(
-            "context_service.sage.consolidation.tx3_supersede", new_callable=AsyncMock
+            "context_service.sage.consolidation.supersede", new_callable=AsyncMock
         ) as mock_tx3:
             mock_tx3.return_value = (MagicMock(), [])
             worker = ConsolidationWorker()
@@ -460,7 +460,7 @@ class TestConsolidationWorker:
         ]
 
         with patch(
-            "context_service.sage.consolidation.tx3_supersede", new_callable=AsyncMock
+            "context_service.sage.consolidation.supersede", new_callable=AsyncMock
         ) as mock_tx3:
             mock_tx3.return_value = (MagicMock(), [])
             worker = ConsolidationWorker()

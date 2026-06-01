@@ -21,10 +21,10 @@ from context_service.sage.transactions import (
     StoreMemoryResult,
     SupersedeReason,
     check_corroboration,
-    tx0_store_memory,
-    tx2_store_claim,
-    tx3_supersede,
-    tx17_link,
+    link,
+    store_claim,
+    store_memory,
+    supersede,
 )
 
 
@@ -48,7 +48,7 @@ class TestTx0StoreMemory:
     @pytest.mark.asyncio
     async def test_basic_store(self, mock_store: AsyncMock) -> None:
         """Test basic memory storage."""
-        result, events = await tx0_store_memory(
+        result, events = await store_memory(
             store=mock_store,
             content="Test observation",
             silo_id="test-silo",
@@ -66,7 +66,7 @@ class TestTx0StoreMemory:
     @pytest.mark.asyncio
     async def test_emits_compute_embedding_event(self, mock_store: AsyncMock) -> None:
         """Test that compute_embedding event is emitted."""
-        result, events = await tx0_store_memory(
+        result, events = await store_memory(
             store=mock_store,
             content="Test",
             silo_id="test-silo",
@@ -79,7 +79,7 @@ class TestTx0StoreMemory:
     @pytest.mark.asyncio
     async def test_emits_update_heat_event(self, mock_store: AsyncMock) -> None:
         """Test that update_heat event is emitted."""
-        result, events = await tx0_store_memory(
+        result, events = await store_memory(
             store=mock_store,
             content="Test",
             silo_id="test-silo",
@@ -95,7 +95,7 @@ class TestTx0StoreMemory:
         """Test that long content triggers extraction check event."""
         long_content = "x" * 600  # Over _EXTRACTION_THRESHOLD (500)
 
-        result, events = await tx0_store_memory(
+        result, events = await store_memory(
             store=mock_store,
             content=long_content,
             silo_id="test-silo",
@@ -108,7 +108,7 @@ class TestTx0StoreMemory:
     @pytest.mark.asyncio
     async def test_with_tags(self, mock_store: AsyncMock) -> None:
         """Test storage with tags."""
-        result, events = await tx0_store_memory(
+        result, events = await store_memory(
             store=mock_store,
             content="Test",
             silo_id="test-silo",
@@ -128,7 +128,7 @@ class TestTx2StoreClaim:
     async def test_rejects_empty_evidence(self, mock_store: AsyncMock) -> None:
         """Test that empty evidence is rejected (INV2)."""
         with pytest.raises(InvariantViolation) as exc_info:
-            await tx2_store_claim(
+            await store_claim(
                 store=mock_store,
                 content="Test claim",
                 evidence_refs=[],
@@ -144,7 +144,7 @@ class TestTx2StoreClaim:
         mock_store.execute_query = AsyncMock(return_value=[])
 
         with pytest.raises(InvariantViolation) as exc_info:
-            await tx2_store_claim(
+            await store_claim(
                 store=mock_store,
                 content="Test claim",
                 evidence_refs=["node:12345678-1234-1234-1234-123456789abc"],
@@ -169,7 +169,7 @@ class TestTx2StoreClaim:
         )
 
         with pytest.raises(InvariantViolation) as exc_info:
-            await tx2_store_claim(
+            await store_claim(
                 store=mock_store,
                 content="Test claim",
                 evidence_refs=["node:12345678-1234-1234-1234-123456789abc"],
@@ -194,7 +194,7 @@ class TestTx2StoreClaim:
         )
 
         with pytest.raises(InvariantViolation) as exc_info:
-            await tx2_store_claim(
+            await store_claim(
                 store=mock_store,
                 content="Test claim",
                 evidence_refs=["node:12345678-1234-1234-1234-123456789abc"],
@@ -219,7 +219,7 @@ class TestTx2StoreClaim:
             ]
         )
 
-        result, events = await tx2_store_claim(
+        result, events = await store_claim(
             store=mock_store,
             content="Test claim",
             evidence_refs=[f"node:{evidence_id}"],
@@ -241,7 +241,7 @@ class TestTx3Supersede:
         mock_store.execute_query = AsyncMock(return_value=[])
 
         with pytest.raises(BrainError) as exc_info:
-            await tx3_supersede(
+            await supersede(
                 store=mock_store,
                 winner_id=make_uuid(),
                 loser_id=make_uuid(),
@@ -266,7 +266,7 @@ class TestTx3Supersede:
         )
 
         with pytest.raises(CrossSiloViolation):
-            await tx3_supersede(
+            await supersede(
                 store=mock_store,
                 winner_id=make_uuid(),
                 loser_id=make_uuid(),
@@ -289,7 +289,7 @@ class TestTx3Supersede:
         )
 
         with pytest.raises(BrainError) as exc_info:
-            await tx3_supersede(
+            await supersede(
                 store=mock_store,
                 winner_id=make_uuid(),
                 loser_id=make_uuid(),
@@ -318,7 +318,7 @@ class TestTx3Supersede:
         mock_store.execute_query = AsyncMock(side_effect=mock_query)
 
         with pytest.raises(CycleError):
-            await tx3_supersede(
+            await supersede(
                 store=mock_store,
                 winner_id=make_uuid(),
                 loser_id=make_uuid(),
@@ -336,7 +336,7 @@ class TestTx17Link:
         mock_store.execute_query = AsyncMock(return_value=[])
 
         with pytest.raises(BrainError) as exc_info:
-            await tx17_link(
+            await link(
                 store=mock_store,
                 source_id=make_uuid(),
                 target_id=make_uuid(),
@@ -362,7 +362,7 @@ class TestTx17Link:
         )
 
         with pytest.raises(CrossSiloViolation):
-            await tx17_link(
+            await link(
                 store=mock_store,
                 source_id=make_uuid(),
                 target_id=make_uuid(),
@@ -390,7 +390,7 @@ class TestTx17Link:
         mock_store.execute_query = AsyncMock(side_effect=mock_query)
 
         with pytest.raises(BrainError) as exc_info:
-            await tx17_link(
+            await link(
                 store=mock_store,
                 source_id=make_uuid(),
                 target_id=make_uuid(),
@@ -421,7 +421,7 @@ class TestTx17Link:
 
         mock_store.execute_query = AsyncMock(side_effect=mock_query)
 
-        result, events = await tx17_link(
+        result, events = await link(
             store=mock_store,
             source_id=source_id,
             target_id=target_id,
@@ -455,7 +455,7 @@ class TestTx17Link:
         mock_store.execute_query = AsyncMock(side_effect=mock_query)
 
         with pytest.raises(CycleError):
-            await tx17_link(
+            await link(
                 store=mock_store,
                 source_id=make_uuid(),
                 target_id=make_uuid(),
@@ -471,10 +471,14 @@ class TestCheckCorroboration:
     @pytest.mark.asyncio
     async def test_returns_count_and_should_promote(self, mock_store: AsyncMock) -> None:
         """Test that corroboration check returns count and promotion flag."""
-        mock_store.execute_write = AsyncMock(return_value=[{
-            "count": 2,
-            "should_promote": False,
-        }])
+        mock_store.execute_write = AsyncMock(
+            return_value=[
+                {
+                    "count": 2,
+                    "should_promote": False,
+                }
+            ]
+        )
 
         count, should_promote = await check_corroboration(
             store=mock_store,
@@ -488,10 +492,14 @@ class TestCheckCorroboration:
     @pytest.mark.asyncio
     async def test_returns_true_when_threshold_met(self, mock_store: AsyncMock) -> None:
         """Test that should_promote is True when count meets threshold."""
-        mock_store.execute_write = AsyncMock(return_value=[{
-            "count": 3,
-            "should_promote": True,
-        }])
+        mock_store.execute_write = AsyncMock(
+            return_value=[
+                {
+                    "count": 3,
+                    "should_promote": True,
+                }
+            ]
+        )
 
         count, should_promote = await check_corroboration(
             store=mock_store,
@@ -505,10 +513,14 @@ class TestCheckCorroboration:
     @pytest.mark.asyncio
     async def test_uses_single_atomic_query(self, mock_store: AsyncMock) -> None:
         """Test that exactly one write query is issued (atomic operation)."""
-        mock_store.execute_write = AsyncMock(return_value=[{
-            "count": 1,
-            "should_promote": False,
-        }])
+        mock_store.execute_write = AsyncMock(
+            return_value=[
+                {
+                    "count": 1,
+                    "should_promote": False,
+                }
+            ]
+        )
 
         await check_corroboration(
             store=mock_store,
@@ -540,16 +552,25 @@ class TestFlagContradiction:
     @pytest.mark.asyncio
     async def test_detects_structural_conflict(self, mock_store: AsyncMock) -> None:
         """Test that TX2 detects conflicting claims and emits ConflictDetected event."""
-        mock_store.execute_query = AsyncMock(side_effect=[
-            # Evidence validation
-            [{"id": "evidence-1", "silo_id": "test-silo", "layer": "memory", "state": "ACTIVE"}],
-            # Conflict detection: existing claim with different object
-            [{"id": "existing-claim"}],
-        ])
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                # Evidence validation
+                [
+                    {
+                        "id": "evidence-1",
+                        "silo_id": "test-silo",
+                        "layer": "memory",
+                        "state": "ACTIVE",
+                    }
+                ],
+                # Conflict detection: existing claim with different object
+                [{"id": "existing-claim"}],
+            ]
+        )
         # Corroboration uses execute_write
         mock_store.execute_write = AsyncMock(return_value=[{"count": 1, "should_promote": False}])
 
-        result, events = await tx2_store_claim(
+        result, events = await store_claim(
             store=mock_store,
             content="test-subject has_value test-value",
             evidence_refs=["node:evidence-1"],
@@ -570,10 +591,12 @@ class TestFlagContradiction:
         """Test no conflict detection when SPO is not provided."""
         evidence_id = "12345678-1234-1234-1234-123456789abc"
         mock_store.execute_query = AsyncMock(
-            return_value=[{"id": evidence_id, "silo_id": "test-silo", "layer": "memory", "state": "ACTIVE"}]
+            return_value=[
+                {"id": evidence_id, "silo_id": "test-silo", "layer": "memory", "state": "ACTIVE"}
+            ]
         )
 
-        result, events = await tx2_store_claim(
+        result, events = await store_claim(
             store=mock_store,
             content="Test claim with no SPO",
             evidence_refs=[f"node:{evidence_id}"],
@@ -588,15 +611,24 @@ class TestFlagContradiction:
     @pytest.mark.asyncio
     async def test_no_conflict_when_no_conflicting_claims(self, mock_store: AsyncMock) -> None:
         """Test no conflict event when conflict query returns empty."""
-        mock_store.execute_query = AsyncMock(side_effect=[
-            # Evidence validation
-            [{"id": "evidence-1", "silo_id": "test-silo", "layer": "memory", "state": "ACTIVE"}],
-            # Conflict detection: no conflicts
-            [],
-        ])
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                # Evidence validation
+                [
+                    {
+                        "id": "evidence-1",
+                        "silo_id": "test-silo",
+                        "layer": "memory",
+                        "state": "ACTIVE",
+                    }
+                ],
+                # Conflict detection: no conflicts
+                [],
+            ]
+        )
         mock_store.execute_write = AsyncMock(return_value=[{"count": 1, "should_promote": False}])
 
-        result, events = await tx2_store_claim(
+        result, events = await store_claim(
             store=mock_store,
             content="test-subject has_value test-value",
             evidence_refs=["node:evidence-1"],
@@ -613,15 +645,24 @@ class TestFlagContradiction:
     @pytest.mark.asyncio
     async def test_creates_bidirectional_contradicts_edges(self, mock_store: AsyncMock) -> None:
         """Test that bidirectional CONTRADICTS edges are created on conflict."""
-        mock_store.execute_query = AsyncMock(side_effect=[
-            # Evidence validation
-            [{"id": "evidence-1", "silo_id": "test-silo", "layer": "memory", "state": "ACTIVE"}],
-            # Conflict detection: one conflict
-            [{"id": "existing-claim"}],
-        ])
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                # Evidence validation
+                [
+                    {
+                        "id": "evidence-1",
+                        "silo_id": "test-silo",
+                        "layer": "memory",
+                        "state": "ACTIVE",
+                    }
+                ],
+                # Conflict detection: one conflict
+                [{"id": "existing-claim"}],
+            ]
+        )
         mock_store.execute_write = AsyncMock(return_value=[{"count": 1, "should_promote": False}])
 
-        await tx2_store_claim(
+        await store_claim(
             store=mock_store,
             content="s p new",
             evidence_refs=["node:evidence-1"],
@@ -644,13 +685,22 @@ class TestFlagContradiction:
     @pytest.mark.asyncio
     async def test_sets_conflict_status_on_both_nodes(self, mock_store: AsyncMock) -> None:
         """Test that conflict_status is set to UNRESOLVED on both nodes."""
-        mock_store.execute_query = AsyncMock(side_effect=[
-            [{"id": "evidence-1", "silo_id": "test-silo", "layer": "memory", "state": "ACTIVE"}],
-            [{"id": "existing-claim"}],
-        ])
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                [
+                    {
+                        "id": "evidence-1",
+                        "silo_id": "test-silo",
+                        "layer": "memory",
+                        "state": "ACTIVE",
+                    }
+                ],
+                [{"id": "existing-claim"}],
+            ]
+        )
         mock_store.execute_write = AsyncMock(return_value=[{"count": 1, "should_promote": False}])
 
-        await tx2_store_claim(
+        await store_claim(
             store=mock_store,
             content="s p new",
             evidence_refs=["node:evidence-1"],
@@ -692,7 +742,7 @@ class TestTx2Credibility:
         evidence_id = "12345678-1234-1234-1234-123456789abc"
         mock_store = self._make_evidence_mock(evidence_id)
 
-        await tx2_store_claim(
+        await store_claim(
             store=mock_store,
             content="Test claim",
             evidence_refs=[f"node:{evidence_id}"],
@@ -718,7 +768,7 @@ class TestTx2Credibility:
         evidence_id = "12345678-1234-1234-1234-123456789abc"
         mock_store = self._make_evidence_mock(evidence_id)
 
-        await tx2_store_claim(
+        await store_claim(
             store=mock_store,
             content="Test claim",
             evidence_refs=[f"node:{evidence_id}"],

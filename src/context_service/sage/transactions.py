@@ -374,7 +374,7 @@ class ReactionEvent:
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
-async def tx4_synthesize(
+async def synthesize(
     store: HyperGraphStore,
     cluster_id: str,
     silo_id: str,
@@ -384,7 +384,7 @@ async def tx4_synthesize(
     mode: Literal["async", "sync"] = "async",
     timeout_seconds: float = 30.0,
 ) -> tuple[SynthesizeResult, list[ReactionEvent]]:
-    """TX4 SYNTHESIZE: Create Belief from fact cluster.
+    """Create Belief from fact cluster (TX4).
 
     Per brain-transactions-pseudocode.md:
     - Modes: ASYNC (30s timeout), SYNC (2s timeout for query-time)
@@ -534,7 +534,7 @@ async def tx4_synthesize(
         ]
 
         logger.debug(
-            "tx4_synthesize_complete",
+            "synthesize_complete",
             belief_id=str(belief_id),
             cluster_id=cluster_id,
             fact_count=fact_count,
@@ -560,7 +560,7 @@ async def tx4_synthesize(
         raise
 
 
-async def tx0_store_memory(
+async def store_memory(
     store: HyperGraphStore,
     content: str,
     silo_id: str,
@@ -571,7 +571,7 @@ async def tx0_store_memory(
     decay_class: str = "standard",
     metadata: dict[str, Any] | None = None,
 ) -> tuple[StoreMemoryResult, list[ReactionEvent]]:
-    """TX0 STORE_MEMORY: Store an observation to Memory layer.
+    """Store an observation to Memory layer (TX0).
 
     Per brain-transactions-pseudocode.md:
     - No invariants beyond silo membership (simplest write path)
@@ -658,7 +658,7 @@ async def tx0_store_memory(
         )
 
     logger.debug(
-        "tx0_store_memory_complete",
+        "store_memory_complete",
         node_id=str(node_id),
         silo_id=silo_id,
         reaction_count=len(events),
@@ -677,7 +677,7 @@ _CONTENT_TYPE_TO_LABEL: dict[str, str] = {
 _EXTRACTION_THRESHOLD = 500
 
 
-async def tx2_store_claim(
+async def store_claim(
     store: HyperGraphStore,
     content: str,
     evidence_refs: list[str],
@@ -693,7 +693,7 @@ async def tx2_store_claim(
     metadata: dict[str, Any] | None = None,
     tags: list[str] | None = None,
 ) -> tuple[StoreClaimResult, list[ReactionEvent]]:
-    """TX2 STORE_CLAIM: Store a claim to Knowledge layer with evidence.
+    """Store a claim to Knowledge layer with evidence (TX2).
 
     Per brain-transactions-pseudocode.md:
     - Enforces INV1: No contradicting ACTIVE claims (same silo, s, p, different o)
@@ -859,7 +859,7 @@ async def tx2_store_claim(
     events.extend(conflict_events)
 
     logger.debug(
-        "tx2_store_claim_complete",
+        "store_claim_complete",
         node_id=str(node_id),
         silo_id=silo_id,
         corroboration_count=corroboration_count,
@@ -870,14 +870,14 @@ async def tx2_store_claim(
     return result, events
 
 
-async def tx3_supersede(
+async def supersede(
     store: HyperGraphStore,
     winner_id: str,
     loser_id: str,
     silo_id: str,
     reason: SupersedeReason,
 ) -> tuple[SupersedeResult, list[ReactionEvent]]:
-    """TX3 SUPERSEDE: Mark a node as superseded by another.
+    """Mark a node as superseded by another (TX3).
 
     Per brain-transactions-pseudocode.md:
     - Enforces INV4: SUPERSEDES edges are acyclic
@@ -933,7 +933,7 @@ async def tx3_supersede(
     ]
 
     logger.debug(
-        "tx3_supersede_complete",
+        "supersede_complete",
         winner_id=winner_id,
         loser_id=loser_id,
         reason=reason.value,
@@ -942,7 +942,7 @@ async def tx3_supersede(
     return result, events
 
 
-async def tx17_link(
+async def link(
     store: HyperGraphStore,
     source_id: str,
     target_id: str,
@@ -953,7 +953,7 @@ async def tx17_link(
     metadata: dict[str, Any] | None = None,
     weight: float = 1.0,
 ) -> tuple[LinkResult, list[ReactionEvent]]:
-    """TX17 LINK: Create a typed relationship between nodes.
+    """Create a typed relationship between nodes (TX17).
 
     Per brain-transactions-pseudocode.md:
     - Enforces INV5: No cross-silo edges
@@ -1061,7 +1061,7 @@ async def tx17_link(
         )
 
     logger.debug(
-        "tx17_link_complete",
+        "link_complete",
         edge_id=str(edge_id),
         source_id=source_id,
         target_id=target_id,
@@ -1109,7 +1109,7 @@ async def _validate_about_refs(
     return {"error": None}
 
 
-async def tx8_commit(
+async def commit(
     store: HyperGraphStore,
     content: str,
     about_refs: list[str],
@@ -1119,7 +1119,7 @@ async def tx8_commit(
     confidence: float = 0.8,
     metadata: dict[str, Any] | None = None,
 ) -> tuple[CommitResult, list[ReactionEvent]]:
-    """TX8 COMMIT: Agent declares a stance directly.
+    """Agent declares a stance directly (TX8).
 
     Per brain-transactions-pseudocode.md:
     - Enforces: about_refs non-empty, all exist in same silo (INV5), not tombstoned
@@ -1182,7 +1182,7 @@ async def tx8_commit(
     ]
 
     logger.debug(
-        "tx8_commit_complete",
+        "commit_complete",
         commitment_id=str(commitment_id),
         silo_id=silo_id,
         about_count=len(about_refs),
@@ -1229,14 +1229,14 @@ async def _validate_hypothesis(
     }
 
 
-async def tx14_crystallize(
+async def crystallize(
     store: HyperGraphStore,
     hypothesis_id: str,
     silo_id: str,
     agent_id: str,
     session_id: str,
 ) -> tuple[CrystallizeResult, list[ReactionEvent]]:
-    """TX14 CRYSTALLIZE: Convert WorkingHypothesis to Commitment."""
+    """Convert WorkingHypothesis to Commitment (TX14)."""
     from context_service.db import queries as q
 
     validation = await _validate_hypothesis(store, hypothesis_id, silo_id, session_id)
@@ -1317,7 +1317,7 @@ async def tx14_crystallize(
     ]
 
     logger.debug(
-        "tx14_crystallize_complete",
+        "crystallize_complete",
         commitment_id=str(commitment_id),
         hypothesis_id=hypothesis_id,
         silo_id=silo_id,
@@ -1326,14 +1326,14 @@ async def tx14_crystallize(
     return result, events
 
 
-async def tx5_revise_belief(
+async def revise_belief(
     store: HyperGraphStore,
     belief_id: str,
     silo_id: str,
     llm: LLMProvider,
     _embedder: EmbeddingService,
 ) -> tuple[ReviseBeliefResult, list[ReactionEvent]]:
-    """TX5 REVISE_BELIEF: Re-synthesize a stale belief."""
+    """Re-synthesize a stale belief (TX5)."""
     from context_service.db import queries as q
 
     # Get belief and validate
@@ -1554,7 +1554,7 @@ async def tx5_revise_belief(
             ]
 
             logger.debug(
-                "tx5_revise_belief_complete",
+                "revise_belief_complete",
                 new_belief_id=str(new_belief_id),
                 old_belief_id=belief_id,
             )
@@ -2029,7 +2029,7 @@ async def cascade_staleness(
     return cascade_count
 
 
-async def tx15_forget(
+async def forget(
     store: HyperGraphStore,
     node_id: str,
     silo_id: str,
@@ -2038,7 +2038,7 @@ async def tx15_forget(
     reason: str | None = None,
     cascade: bool = False,
 ) -> tuple[ForgetResult, list[ReactionEvent]]:
-    """TX15 FORGET: Soft-delete a node with cancel window.
+    """Soft-delete a node with cancel window (TX15).
 
     Per brain-transactions-pseudocode.md:
     - Preconditions: node exists, state is ACTIVE or SUPERSEDED
@@ -2112,19 +2112,19 @@ async def tx15_forget(
     )
 
     logger.debug(
-        "tx15_forget_complete", node_id=node_id, silo_id=silo_id, cascade_count=cascade_count
+        "forget_complete", node_id=node_id, silo_id=silo_id, cascade_count=cascade_count
     )
 
     return result, events
 
 
-async def tx16_cancel_forget(
+async def cancel_forget(
     store: HyperGraphStore,
     node_id: str,
     silo_id: str,
     agent_id: str,
 ) -> CancelForgetResult:
-    """TX16 CANCEL_FORGET: Restore a tombstoned node within cancel window."""
+    """Restore a tombstoned node within cancel window (TX16)."""
     from context_service.db import queries as q
 
     node_result = await store.execute_query(
@@ -2168,7 +2168,7 @@ async def tx16_cancel_forget(
     )
     previous_state = NodeState(previous_state_str)
 
-    logger.debug("tx16_cancel_forget_complete", node_id=node_id, silo_id=silo_id)
+    logger.debug("cancel_forget_complete", node_id=node_id, silo_id=silo_id)
 
     return CancelForgetResult(
         node_id=uuid.UUID(node_id),
@@ -2177,12 +2177,12 @@ async def tx16_cancel_forget(
     )
 
 
-async def tx10_hard_delete(
+async def hard_delete(
     store: HyperGraphStore,
     silo_id: str,
     batch_size: int = 100,
 ) -> HardDeleteResult:
-    """TX10 HARD_DELETE: Permanently remove tombstoned nodes past cancel window.
+    """Permanently remove tombstoned nodes past cancel window (TX10).
 
     Called by scheduled GC job, not by agents directly.
     """
@@ -2232,7 +2232,7 @@ async def tx10_hard_delete(
             skipped_count += 1
 
     logger.info(
-        "tx10_hard_delete_complete",
+        "hard_delete_complete",
         silo_id=silo_id,
         deleted_count=len(deleted_ids),
         skipped_count=skipped_count,

@@ -9,18 +9,16 @@ from unittest.mock import AsyncMock
 import pytest
 
 from context_service.sage.transactions import (
-    BrainError,
     ClusterState,
     CommitResult,
     CrystallizeResult,
     InvariantViolation,
-    NodeState,
     ReviseBeliefResult,
     SynthesizeResult,
-    tx4_synthesize,
-    tx5_revise_belief,
-    tx8_commit,
-    tx14_crystallize,
+    synthesize,
+    revise_belief,
+    commit,
+    crystallize,
 )
 
 
@@ -65,15 +63,19 @@ class TestTx4Synthesize:
         cluster_id = make_uuid()
         fact_ids = [make_uuid() for _ in range(3)]
 
-        mock_store.execute_query = AsyncMock(side_effect=[
-            # GET_CLUSTER_FOR_SYNTHESIS
-            [{"state": "READY", "current_belief_id": None, "synthesis_retry_count": 0}],
-            # GET_FACTS_IN_CLUSTER
-            [{"id": fid, "content": f"Fact {i}", "confidence": 0.8}
-             for i, fid in enumerate(fact_ids)],
-        ])
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                # GET_CLUSTER_FOR_SYNTHESIS
+                [{"state": "READY", "current_belief_id": None, "synthesis_retry_count": 0}],
+                # GET_FACTS_IN_CLUSTER
+                [
+                    {"id": fid, "content": f"Fact {i}", "confidence": 0.8}
+                    for i, fid in enumerate(fact_ids)
+                ],
+            ]
+        )
 
-        result, events = await tx4_synthesize(
+        result, events = await synthesize(
             store=mock_store,
             cluster_id=cluster_id,
             silo_id="test-silo",
@@ -94,15 +96,19 @@ class TestTx4Synthesize:
         """Test that TX4 skips clusters with fewer than SYNTHESIS_THRESHOLD facts."""
         cluster_id = make_uuid()
 
-        mock_store.execute_query = AsyncMock(side_effect=[
-            # GET_CLUSTER_FOR_SYNTHESIS
-            [{"state": "READY", "current_belief_id": None, "synthesis_retry_count": 0}],
-            # GET_FACTS_IN_CLUSTER - only 2 facts
-            [{"id": make_uuid(), "content": "Fact 1", "confidence": 0.8},
-             {"id": make_uuid(), "content": "Fact 2", "confidence": 0.8}],
-        ])
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                # GET_CLUSTER_FOR_SYNTHESIS
+                [{"state": "READY", "current_belief_id": None, "synthesis_retry_count": 0}],
+                # GET_FACTS_IN_CLUSTER - only 2 facts
+                [
+                    {"id": make_uuid(), "content": "Fact 1", "confidence": 0.8},
+                    {"id": make_uuid(), "content": "Fact 2", "confidence": 0.8},
+                ],
+            ]
+        )
 
-        result, events = await tx4_synthesize(
+        result, events = await synthesize(
             store=mock_store,
             cluster_id=cluster_id,
             silo_id="test-silo",
@@ -122,15 +128,19 @@ class TestTx4Synthesize:
         cluster_id = make_uuid()
         fact_ids = [make_uuid() for _ in range(3)]
 
-        mock_store.execute_query = AsyncMock(side_effect=[
-            # GET_CLUSTER_FOR_SYNTHESIS
-            [{"state": "READY", "current_belief_id": None, "synthesis_retry_count": 0}],
-            # GET_FACTS_IN_CLUSTER - low confidence facts
-            [{"id": fid, "content": f"Fact {i}", "confidence": 0.2}
-             for i, fid in enumerate(fact_ids)],
-        ])
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                # GET_CLUSTER_FOR_SYNTHESIS
+                [{"state": "READY", "current_belief_id": None, "synthesis_retry_count": 0}],
+                # GET_FACTS_IN_CLUSTER - low confidence facts
+                [
+                    {"id": fid, "content": f"Fact {i}", "confidence": 0.2}
+                    for i, fid in enumerate(fact_ids)
+                ],
+            ]
+        )
 
-        result, events = await tx4_synthesize(
+        result, events = await synthesize(
             store=mock_store,
             cluster_id=cluster_id,
             silo_id="test-silo",
@@ -153,15 +163,19 @@ class TestTx4Synthesize:
 
         mock_llm.complete = AsyncMock(side_effect=Exception("LLM unavailable"))
 
-        mock_store.execute_query = AsyncMock(side_effect=[
-            # GET_CLUSTER_FOR_SYNTHESIS
-            [{"state": "READY", "current_belief_id": None, "synthesis_retry_count": 0}],
-            # GET_FACTS_IN_CLUSTER
-            [{"id": fid, "content": f"Fact {i}", "confidence": 0.8}
-             for i, fid in enumerate(fact_ids)],
-        ])
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                # GET_CLUSTER_FOR_SYNTHESIS
+                [{"state": "READY", "current_belief_id": None, "synthesis_retry_count": 0}],
+                # GET_FACTS_IN_CLUSTER
+                [
+                    {"id": fid, "content": f"Fact {i}", "confidence": 0.8}
+                    for i, fid in enumerate(fact_ids)
+                ],
+            ]
+        )
 
-        result, events = await tx4_synthesize(
+        result, events = await synthesize(
             store=mock_store,
             cluster_id=cluster_id,
             silo_id="test-silo",
@@ -179,6 +193,7 @@ class TestTx4Synthesize:
     ) -> None:
         """Test that TX4 handles LLM timeout gracefully."""
         import asyncio
+
         cluster_id = make_uuid()
         fact_ids = [make_uuid() for _ in range(3)]
 
@@ -188,15 +203,19 @@ class TestTx4Synthesize:
 
         mock_llm.complete = slow_complete
 
-        mock_store.execute_query = AsyncMock(side_effect=[
-            # GET_CLUSTER_FOR_SYNTHESIS
-            [{"state": "READY", "current_belief_id": None, "synthesis_retry_count": 0}],
-            # GET_FACTS_IN_CLUSTER
-            [{"id": fid, "content": f"Fact {i}", "confidence": 0.8}
-             for i, fid in enumerate(fact_ids)],
-        ])
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                # GET_CLUSTER_FOR_SYNTHESIS
+                [{"state": "READY", "current_belief_id": None, "synthesis_retry_count": 0}],
+                # GET_FACTS_IN_CLUSTER
+                [
+                    {"id": fid, "content": f"Fact {i}", "confidence": 0.8}
+                    for i, fid in enumerate(fact_ids)
+                ],
+            ]
+        )
 
-        result, events = await tx4_synthesize(
+        result, events = await synthesize(
             store=mock_store,
             cluster_id=cluster_id,
             silo_id="test-silo",
@@ -219,7 +238,7 @@ class TestTx8Commit:
         about_ref = make_uuid()
         mock_store.execute_query = AsyncMock(return_value=[{"id": about_ref, "state": "ACTIVE"}])
 
-        result, events = await tx8_commit(
+        result, events = await commit(
             store=mock_store,
             content="I believe X based on evidence",
             about_refs=[about_ref],
@@ -237,7 +256,7 @@ class TestTx8Commit:
     async def test_rejects_empty_about_refs(self, mock_store: AsyncMock) -> None:
         """Test that TX8 rejects empty about_refs (INV: commitment must be about something)."""
         with pytest.raises(InvariantViolation) as exc_info:
-            await tx8_commit(
+            await commit(
                 store=mock_store,
                 content="Belief without references",
                 about_refs=[],
@@ -256,7 +275,7 @@ class TestTx8Commit:
         )
 
         with pytest.raises(InvariantViolation) as exc_info:
-            await tx8_commit(
+            await commit(
                 store=mock_store,
                 content="Belief about tombstoned node",
                 about_refs=[tombstoned_ref],
@@ -273,7 +292,7 @@ class TestTx8Commit:
         mock_store.execute_query = AsyncMock(return_value=[])
 
         with pytest.raises(InvariantViolation) as exc_info:
-            await tx8_commit(
+            await commit(
                 store=mock_store,
                 content="Belief about missing node",
                 about_refs=[missing_ref],
@@ -310,7 +329,7 @@ class TestTx14Crystallize:
             ]
         )
 
-        result, events = await tx14_crystallize(
+        result, events = await crystallize(
             store=mock_store,
             hypothesis_id=hypothesis_id,
             silo_id="test-silo",
@@ -341,7 +360,7 @@ class TestTx14Crystallize:
         )
 
         with pytest.raises(InvariantViolation) as exc_info:
-            await tx14_crystallize(
+            await crystallize(
                 store=mock_store,
                 hypothesis_id=hypothesis_id,
                 silo_id="test-silo",
@@ -357,7 +376,7 @@ class TestTx14Crystallize:
         mock_store.execute_query = AsyncMock(return_value=[])
 
         with pytest.raises(InvariantViolation) as exc_info:
-            await tx14_crystallize(
+            await crystallize(
                 store=mock_store,
                 hypothesis_id=make_uuid(),
                 silo_id="test-silo",
@@ -385,7 +404,7 @@ class TestTx14Crystallize:
         )
 
         with pytest.raises(InvariantViolation) as exc_info:
-            await tx14_crystallize(
+            await crystallize(
                 store=mock_store,
                 hypothesis_id=hypothesis_id,
                 silo_id="test-silo",
@@ -401,16 +420,25 @@ class TestTx14Crystallize:
         hypothesis_id = make_uuid()
         tombstoned_ref = make_uuid()
 
-        mock_store.execute_query = AsyncMock(side_effect=[
-            # GET_HYPOTHESIS_FOR_CRYSTALLIZE
-            [{"id": hypothesis_id, "content": "My hypothesis", "confidence": 0.9,
-              "crystallized": False, "state": "ACTIVE"}],
-            # GET_HYPOTHESIS_ABOUT_REFS - returns tombstoned ref
-            [{"id": tombstoned_ref, "state": "TOMBSTONED"}],
-        ])
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                # GET_HYPOTHESIS_FOR_CRYSTALLIZE
+                [
+                    {
+                        "id": hypothesis_id,
+                        "content": "My hypothesis",
+                        "confidence": 0.9,
+                        "crystallized": False,
+                        "state": "ACTIVE",
+                    }
+                ],
+                # GET_HYPOTHESIS_ABOUT_REFS - returns tombstoned ref
+                [{"id": tombstoned_ref, "state": "TOMBSTONED"}],
+            ]
+        )
 
         with pytest.raises(InvariantViolation) as exc_info:
-            await tx14_crystallize(
+            await crystallize(
                 store=mock_store,
                 hypothesis_id=hypothesis_id,
                 silo_id="test-silo",
@@ -435,19 +463,31 @@ class TestTx5ReviseBelief:
 
         mock_llm.complete = AsyncMock(return_value="New revised belief content")
 
-        mock_store.execute_query = AsyncMock(side_effect=[
-            # GET_BELIEF_FOR_REVISION
-            [{"id": belief_id, "content": "Old belief", "state": "ACTIVE",
-              "synthesis_state": "STALE", "source_cluster_id": cluster_id,
-              "revision_in_progress": False, "confidence": 0.8}],
-            # GET_CLUSTER_FOR_SYNTHESIS
-            [{"state": "STALE", "current_belief_id": belief_id, "synthesis_retry_count": 0}],
-            # GET_FACTS_IN_CLUSTER
-            [{"id": fid, "content": f"Fact {i}", "confidence": 0.8}
-             for i, fid in enumerate(fact_ids)],
-        ])
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                # GET_BELIEF_FOR_REVISION
+                [
+                    {
+                        "id": belief_id,
+                        "content": "Old belief",
+                        "state": "ACTIVE",
+                        "synthesis_state": "STALE",
+                        "source_cluster_id": cluster_id,
+                        "revision_in_progress": False,
+                        "confidence": 0.8,
+                    }
+                ],
+                # GET_CLUSTER_FOR_SYNTHESIS
+                [{"state": "STALE", "current_belief_id": belief_id, "synthesis_retry_count": 0}],
+                # GET_FACTS_IN_CLUSTER
+                [
+                    {"id": fid, "content": f"Fact {i}", "confidence": 0.8}
+                    for i, fid in enumerate(fact_ids)
+                ],
+            ]
+        )
 
-        result, events = await tx5_revise_belief(
+        result, events = await revise_belief(
             store=mock_store,
             belief_id=belief_id,
             silo_id="test-silo",
@@ -472,19 +512,31 @@ class TestTx5ReviseBelief:
 
         mock_llm.complete = AsyncMock(return_value="Old belief")  # Same content
 
-        mock_store.execute_query = AsyncMock(side_effect=[
-            # GET_BELIEF_FOR_REVISION
-            [{"id": belief_id, "content": "Old belief", "state": "ACTIVE",
-              "synthesis_state": "STALE", "source_cluster_id": cluster_id,
-              "revision_in_progress": False, "confidence": 0.8}],
-            # GET_CLUSTER_FOR_SYNTHESIS
-            [{"state": "STALE", "current_belief_id": belief_id, "synthesis_retry_count": 0}],
-            # GET_FACTS_IN_CLUSTER
-            [{"id": fid, "content": f"Fact {i}", "confidence": 0.8}
-             for i, fid in enumerate(fact_ids)],
-        ])
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                # GET_BELIEF_FOR_REVISION
+                [
+                    {
+                        "id": belief_id,
+                        "content": "Old belief",
+                        "state": "ACTIVE",
+                        "synthesis_state": "STALE",
+                        "source_cluster_id": cluster_id,
+                        "revision_in_progress": False,
+                        "confidence": 0.8,
+                    }
+                ],
+                # GET_CLUSTER_FOR_SYNTHESIS
+                [{"state": "STALE", "current_belief_id": belief_id, "synthesis_retry_count": 0}],
+                # GET_FACTS_IN_CLUSTER
+                [
+                    {"id": fid, "content": f"Fact {i}", "confidence": 0.8}
+                    for i, fid in enumerate(fact_ids)
+                ],
+            ]
+        )
 
-        result, events = await tx5_revise_belief(
+        result, events = await revise_belief(
             store=mock_store,
             belief_id=belief_id,
             silo_id="test-silo",
@@ -503,18 +555,28 @@ class TestTx5ReviseBelief:
         belief_id = make_uuid()
         cluster_id = make_uuid()
 
-        mock_store.execute_query = AsyncMock(side_effect=[
-            # GET_BELIEF_FOR_REVISION
-            [{"id": belief_id, "content": "Old belief", "state": "ACTIVE",
-              "synthesis_state": "STALE", "source_cluster_id": cluster_id,
-              "revision_in_progress": False, "confidence": 0.8}],
-            # GET_CLUSTER_FOR_SYNTHESIS
-            [{"state": "STALE", "current_belief_id": belief_id, "synthesis_retry_count": 0}],
-            # GET_FACTS_IN_CLUSTER - only 1 fact now
-            [{"id": make_uuid(), "content": "Lonely fact", "confidence": 0.8}],
-        ])
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                # GET_BELIEF_FOR_REVISION
+                [
+                    {
+                        "id": belief_id,
+                        "content": "Old belief",
+                        "state": "ACTIVE",
+                        "synthesis_state": "STALE",
+                        "source_cluster_id": cluster_id,
+                        "revision_in_progress": False,
+                        "confidence": 0.8,
+                    }
+                ],
+                # GET_CLUSTER_FOR_SYNTHESIS
+                [{"state": "STALE", "current_belief_id": belief_id, "synthesis_retry_count": 0}],
+                # GET_FACTS_IN_CLUSTER - only 1 fact now
+                [{"id": make_uuid(), "content": "Lonely fact", "confidence": 0.8}],
+            ]
+        )
 
-        result, events = await tx5_revise_belief(
+        result, events = await revise_belief(
             store=mock_store,
             belief_id=belief_id,
             silo_id="test-silo",
