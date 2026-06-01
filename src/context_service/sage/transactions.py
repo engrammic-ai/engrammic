@@ -70,6 +70,27 @@ class LinkType(StrEnum):
 HIERARCHICAL_EDGE_TYPES = frozenset({LinkType.REFINES, LinkType.GENERALIZES, LinkType.CAUSED_BY})
 
 PROMOTION_THRESHOLD = 3
+SYNTHESIS_THRESHOLD = 3
+SYNTHESIS_CONFIDENCE_THRESHOLD = 0.6
+MAX_CLUSTER_SIZE = 1000
+MAX_SYNTHESIS_RETRIES = 3
+
+
+class SynthesisState(StrEnum):
+    """Belief synthesis states per brain-transactions-overview.md Section 4."""
+
+    FRESH = "FRESH"
+    STALE = "STALE"
+    INVALIDATED = "INVALIDATED"
+
+
+class ClusterState(StrEnum):
+    """Cluster states per brain-transactions-overview.md Section 4.5."""
+
+    SPARSE = "SPARSE"
+    READY = "READY"
+    SYNTHESIZED = "SYNTHESIZED"
+    STALE = "STALE"
 
 
 class BrainError(Exception):
