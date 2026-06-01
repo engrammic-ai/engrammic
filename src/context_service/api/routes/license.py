@@ -9,8 +9,10 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import text
 
 from context_service.config.logging import get_logger
+from context_service.db.postgres import get_session
 from context_service.license.validator import LicenseError, validate_license_key
 
 logger = get_logger(__name__)
@@ -25,6 +27,58 @@ class RenewalResponse(BaseModel):
     key: str
 
 
+async def check_license_status(customer_id: str) -> tuple[bool, str | None]:
+    """Check if customer's license is eligible for renewal.
+
+    Returns:
+        (eligible, reason) - eligible is True if renewal allowed, reason explains denial
+    """
+    async with get_session() as session:
+        result = await session.execute(
+            text("""
+                SELECT status, subscription_end_date
+                FROM licenses
+                WHERE customer_id = :customer_id
+            """),
+            {"customer_id": customer_id},
+        )
+        row = result.fetchone()
+
+        if row is None:
+            logger.warning("license_customer_not_found", customer_id=customer_id)
+            return False, "Customer not found in license database"
+
+        status, subscription_end = row
+
+        if status == "revoked":
+            return False, "License has been revoked"
+        if status == "suspended":
+            return False, "License is suspended - contact support"
+        if status == "expired":
+            return False, "Subscription has expired - renew your subscription"
+
+        if subscription_end and subscription_end < datetime.now(UTC):
+            return False, "Subscription has expired - renew your subscription"
+
+        return True, None
+
+
+async def record_renewal(customer_id: str) -> None:
+    """Record a successful license renewal."""
+    async with get_session() as session:
+        await session.execute(
+            text("""
+                UPDATE licenses
+                SET last_renewal_at = now(),
+                    renewal_count = renewal_count + 1,
+                    updated_at = now()
+                WHERE customer_id = :customer_id
+            """),
+            {"customer_id": customer_id},
+        )
+        await session.commit()
+
+
 @router.post("/renew", response_model=RenewalResponse)
 async def renew_license(authorization: str = Header(...)) -> RenewalResponse:
     """Renew a license key. Called by self-hosted containers."""
@@ -37,7 +91,6 @@ async def renew_license(authorization: str = Header(...)) -> RenewalResponse:
 
     old_key = authorization[7:]
 
-    # Verify the license signature before renewing (prevents forged licenses)
     try:
         license_info = validate_license_key(old_key)
     except LicenseError as e:
@@ -45,8 +98,10 @@ async def renew_license(authorization: str = Header(...)) -> RenewalResponse:
 
     customer = license_info.customer
 
-    # TODO: Check customer status in database (payment active, not revoked)
-    # For MVP, always renew if key is cryptographically valid
+    eligible, reason = await check_license_status(customer)
+    if not eligible:
+        logger.warning("license_renewal_denied", customer=customer, reason=reason)
+        raise HTTPException(status_code=403, detail=reason)
 
     try:
         private_key = cast(
@@ -68,5 +123,8 @@ async def renew_license(authorization: str = Header(...)) -> RenewalResponse:
     }
 
     new_token = jwt.encode(new_payload, private_key, algorithm="EdDSA")
+
+    await record_renewal(customer)
     logger.info("license_renewed", customer=customer)
+
     return RenewalResponse(key=f"{KEY_PREFIX}{new_token}")

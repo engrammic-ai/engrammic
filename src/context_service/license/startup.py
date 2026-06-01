@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 
 from context_service.config.logging import get_logger
@@ -15,19 +16,31 @@ from context_service.license.validator import (
 logger = get_logger(__name__)
 
 
+def is_selfhosted() -> bool:
+    """Check if running in self-hosted deployment.
+
+    This is determined by ENGRAMMIC_DEPLOYMENT_TYPE env var which is
+    baked into the self-hosted Docker images at build time.
+    """
+    return os.environ.get("ENGRAMMIC_DEPLOYMENT_TYPE") == "selfhosted"
+
+
 def check_license_on_startup() -> LicenseInfo | None:
     """Validate license key at startup.
 
+    For self-hosted deployments, license validation is mandatory and cannot
+    be bypassed. For managed deployments, this returns None (auth is via WorkOS).
+
     Returns:
-        LicenseInfo if valid license, None if validation disabled
+        LicenseInfo if valid license, None if managed deployment
 
     Exits:
-        sys.exit(1) if validation enabled and license invalid/missing
+        sys.exit(1) if self-hosted and license invalid/missing
     """
     settings = get_settings()
 
-    if not settings.license_validation_enabled:
-        logger.info("license_validation_disabled")
+    if not is_selfhosted():
+        logger.info("managed_deployment", msg="License validation skipped (managed)")
         return None
 
     license_key = settings.license_key

@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import hmac
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Literal
 
 import structlog
+import yaml
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
@@ -19,6 +21,18 @@ from context_service.api.deps import get_redis
 from context_service.api.rate_limit import RateLimiter
 from context_service.config.settings import get_settings
 from context_service.stores import RedisClient
+
+CONFIG_DIR = Path(__file__).parent.parent.parent.parent.parent / "config"
+ALLOWED_CONFIGS = frozenset(
+    {
+        "models.yaml",
+        "embeddings.yaml",
+        "clustering.yaml",
+        "extraction.yaml",
+        "extraction_filter.yaml",
+        "diffusion.yaml",
+    }
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -324,3 +338,64 @@ async def admin_seed_proposal(body: SeedProposalRequest, request: Request) -> Se
     )
 
     return SeedProposalResponse(proposal_id=proposal_id, status="created")
+
+
+# ---------------------------------------------------------------------------
+# Config endpoints (self-hosted)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/config",
+    operation_id="admin_list_configs",
+    summary="List available configuration files",
+    dependencies=[Depends(_require_admin_key)],
+)
+async def list_configs() -> dict[str, Any]:
+    """List available configuration files for self-hosted deployments."""
+    available = []
+    for name in sorted(ALLOWED_CONFIGS):
+        path = CONFIG_DIR / name
+        available.append(
+            {
+                "name": name,
+                "exists": path.exists(),
+            }
+        )
+    return {"configs": available}
+
+
+@router.get(
+    "/config/{name}",
+    operation_id="admin_get_config",
+    summary="Get configuration file contents",
+    dependencies=[Depends(_require_admin_key)],
+)
+async def get_config(name: str) -> dict[str, Any]:
+    """Get the contents of a configuration file.
+
+    Only a subset of configuration files are exposed for security:
+    models, embeddings, clustering, extraction, diffusion.
+    """
+    if name not in ALLOWED_CONFIGS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Config '{name}' not found. Available: {sorted(ALLOWED_CONFIGS)}",
+        )
+
+    path = CONFIG_DIR / name
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"Config file '{name}' not found on disk")
+
+    try:
+        content = path.read_text()
+        parsed = yaml.safe_load(content)
+    except yaml.YAMLError as e:
+        logger.error("config_parse_error", name=name, error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to parse config file") from e
+
+    return {
+        "name": name,
+        "content": parsed,
+        "raw": content,
+    }

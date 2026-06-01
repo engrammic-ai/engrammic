@@ -24,6 +24,7 @@ RUN python -m compileall -b -q /app/beacon_service && \
 
 ENV PYTHONPATH="/app"
 ENV PYTHONUNBUFFERED=1
+ENV ENGRAMMIC_DEPLOYMENT_TYPE=selfhosted
 
 USER engrammic
 

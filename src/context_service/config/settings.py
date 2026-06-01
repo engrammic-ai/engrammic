@@ -968,10 +968,6 @@ class Settings(BaseSettings):
         validation_alias="ENGRAMMIC_LICENSE_KEY",
         description="License key for self-hosted deployments",
     )
-    license_validation_enabled: bool = Field(
-        default=False,
-        description="Enable license validation on startup (self-hosted sets True)",
-    )
 
     # MCP settings
     default_icp_preset: str = Field(default="coding")
