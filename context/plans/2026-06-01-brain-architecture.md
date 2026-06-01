@@ -1,6 +1,6 @@
 # Brain Architecture Implementation Plan
 
-**Status:** Phase 4 complete, Phase 5 next  
+**Status:** Phase 5 complete, Phase 6 next  
 **Date:** 2026-06-01  
 **Branch:** `feat/brain-architecture`
 
@@ -58,10 +58,10 @@ Core insight: value is in **retrieval with epistemic awareness**, not **autonomo
 14. [x] TX10 HARD_DELETE - actual deletion (admin/GDPR)
 15. [x] CASCADE_STALENESS helper - depth-limited staleness propagation
 
-### Phase 5: Layer Movement
+### Phase 5: Layer Movement (COMPLETE)
 
-16. [ ] TX18 PROMOTE - fact to belief promotion
-17. [ ] TX19 DEMOTE - belief to fact demotion
+16. [x] TX18 PROMOTE - fact to belief promotion
+17. [x] TX19 DEMOTE - belief to fact demotion
 
 ### Phase 6: Query
 
