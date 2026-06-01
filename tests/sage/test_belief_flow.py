@@ -15,8 +15,10 @@ from context_service.sage.transactions import (
     CrystallizeResult,
     InvariantViolation,
     NodeState,
+    ReviseBeliefResult,
     SynthesizeResult,
     tx4_synthesize,
+    tx5_revise_belief,
     tx8_commit,
     tx14_crystallize,
 )
@@ -326,3 +328,109 @@ class TestTx14Crystallize:
             )
 
         assert exc_info.value.code == "HYPOTHESIS_TOMBSTONED"
+
+
+class TestTx5ReviseBelief:
+    """Tests for TX5 REVISE_BELIEF."""
+
+    @pytest.mark.asyncio
+    async def test_creates_new_belief_on_content_change(
+        self, mock_store: AsyncMock, mock_llm: AsyncMock, mock_embedder: AsyncMock
+    ) -> None:
+        """Test that TX5 creates a new belief when content changes."""
+        belief_id = make_uuid()
+        cluster_id = make_uuid()
+        fact_ids = [make_uuid() for _ in range(3)]
+
+        mock_llm.complete = AsyncMock(return_value="New revised belief content")
+
+        mock_store.execute_query = AsyncMock(side_effect=[
+            # GET_BELIEF_FOR_REVISION
+            [{"id": belief_id, "content": "Old belief", "state": "ACTIVE",
+              "synthesis_state": "STALE", "source_cluster_id": cluster_id,
+              "revision_in_progress": False, "confidence": 0.8}],
+            # GET_CLUSTER_FOR_SYNTHESIS
+            [{"state": "STALE", "current_belief_id": belief_id, "synthesis_retry_count": 0}],
+            # GET_FACTS_IN_CLUSTER
+            [{"id": fid, "content": f"Fact {i}", "confidence": 0.8}
+             for i, fid in enumerate(fact_ids)],
+        ])
+
+        result, events = await tx5_revise_belief(
+            store=mock_store,
+            belief_id=belief_id,
+            silo_id="test-silo",
+            llm=mock_llm,
+            embedder=mock_embedder,
+        )
+
+        assert isinstance(result, ReviseBeliefResult)
+        assert result.new_belief_id is not None
+        assert result.old_belief_id == uuid.UUID(belief_id)
+        assert result.content_changed is True
+        assert result.invalidated is False
+
+    @pytest.mark.asyncio
+    async def test_skips_unchanged_content(
+        self, mock_store: AsyncMock, mock_llm: AsyncMock, mock_embedder: AsyncMock
+    ) -> None:
+        """Test that TX5 skips creating new belief if content unchanged."""
+        belief_id = make_uuid()
+        cluster_id = make_uuid()
+        fact_ids = [make_uuid() for _ in range(3)]
+
+        mock_llm.complete = AsyncMock(return_value="Old belief")  # Same content
+
+        mock_store.execute_query = AsyncMock(side_effect=[
+            # GET_BELIEF_FOR_REVISION
+            [{"id": belief_id, "content": "Old belief", "state": "ACTIVE",
+              "synthesis_state": "STALE", "source_cluster_id": cluster_id,
+              "revision_in_progress": False, "confidence": 0.8}],
+            # GET_CLUSTER_FOR_SYNTHESIS
+            [{"state": "STALE", "current_belief_id": belief_id, "synthesis_retry_count": 0}],
+            # GET_FACTS_IN_CLUSTER
+            [{"id": fid, "content": f"Fact {i}", "confidence": 0.8}
+             for i, fid in enumerate(fact_ids)],
+        ])
+
+        result, events = await tx5_revise_belief(
+            store=mock_store,
+            belief_id=belief_id,
+            silo_id="test-silo",
+            llm=mock_llm,
+            embedder=mock_embedder,
+        )
+
+        assert result.new_belief_id is None
+        assert result.content_changed is False
+
+    @pytest.mark.asyncio
+    async def test_invalidates_unsupported_belief(
+        self, mock_store: AsyncMock, mock_llm: AsyncMock, mock_embedder: AsyncMock
+    ) -> None:
+        """Test that TX5 invalidates belief when facts drop below threshold."""
+        belief_id = make_uuid()
+        cluster_id = make_uuid()
+
+        mock_store.execute_query = AsyncMock(side_effect=[
+            # GET_BELIEF_FOR_REVISION
+            [{"id": belief_id, "content": "Old belief", "state": "ACTIVE",
+              "synthesis_state": "STALE", "source_cluster_id": cluster_id,
+              "revision_in_progress": False, "confidence": 0.8}],
+            # GET_CLUSTER_FOR_SYNTHESIS
+            [{"state": "STALE", "current_belief_id": belief_id, "synthesis_retry_count": 0}],
+            # GET_FACTS_IN_CLUSTER - only 1 fact now
+            [{"id": make_uuid(), "content": "Lonely fact", "confidence": 0.8}],
+        ])
+
+        result, events = await tx5_revise_belief(
+            store=mock_store,
+            belief_id=belief_id,
+            silo_id="test-silo",
+            llm=mock_llm,
+            embedder=mock_embedder,
+        )
+
+        assert result.new_belief_id is None
+        assert result.invalidated is True
+        mock_llm.complete.assert_not_called()
