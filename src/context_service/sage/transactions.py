@@ -430,7 +430,7 @@ async def tx2_store_claim(
     corroboration_count, promoted = await _check_corroboration(store, str(node_id), silo_id)
 
     # FLAG_CONTRADICTION: detect and flag structural conflicts
-    conflict_events = await _flag_contradiction(
+    conflict_events = await detect_spo_conflict(
         store, str(node_id), subject, predicate, object_value, silo_id
     )
 
@@ -947,7 +947,7 @@ async def _validate_link(
     return {"error": None}
 
 
-async def _flag_contradiction(
+async def detect_spo_conflict(
     store: HyperGraphStore,
     new_node_id: str,
     subject: str | None,
@@ -959,6 +959,10 @@ async def _flag_contradiction(
 
     Creates bidirectional CONTRADICTS edges and emits ConflictDetected events.
     Only runs when all three SPO components are provided.
+
+    This is the public API for conflict detection - call after storing a claim
+    to check for contradicting claims with the same subject+predicate but
+    different object value.
     """
     if not all([subject, predicate, object_value]):
         return []
