@@ -33,6 +33,11 @@ from context_service.sage.transactions import (
     check_corroboration,
     detect_spo_conflict,
     tx0_store_memory,
+    tx2_store_claim,
+    tx3_supersede,
+    tx4_synthesize,
+    tx5_revise_belief,
+    tx8_commit,
     tx10_hard_delete,
     tx14_crystallize,
     tx15_forget,
@@ -40,11 +45,6 @@ from context_service.sage.transactions import (
     tx17_link,
     tx18_promote,
     tx19_demote,
-    tx2_store_claim,
-    tx3_supersede,
-    tx4_synthesize,
-    tx5_revise_belief,
-    tx8_commit,
 )
 
 __all__ = [
