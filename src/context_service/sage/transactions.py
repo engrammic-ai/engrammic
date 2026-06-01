@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -375,35 +375,53 @@ async def tx4_synthesize(
     effective_timeout = 2.0 if mode == "sync" else timeout_seconds
 
     # Acquire lock on cluster
-    lock_result = await store.execute_query(q.GET_CLUSTER_FOR_SYNTHESIS, {
-        "cluster_id": cluster_id,
-        "silo_id": silo_id,
-    })
+    lock_result = await store.execute_query(
+        q.GET_CLUSTER_FOR_SYNTHESIS,
+        {
+            "cluster_id": cluster_id,
+            "silo_id": silo_id,
+        },
+    )
 
     if not lock_result:
         return SynthesizeResult(
-            belief_id=None, cluster_id=cluster_id, cluster_state=ClusterState.SPARSE,
-            fact_count=0, confidence=None,
+            belief_id=None,
+            cluster_id=cluster_id,
+            cluster_state=ClusterState.SPARSE,
+            fact_count=0,
+            confidence=None,
         ), []
 
     cluster_state = lock_result[0].get("state", "SPARSE")
 
     try:
         # Fetch facts in cluster
-        facts_result = await store.execute_query(q.GET_FACTS_IN_CLUSTER, {
-            "cluster_id": cluster_id, "silo_id": silo_id,
-        })
+        facts_result = await store.execute_query(
+            q.GET_FACTS_IN_CLUSTER,
+            {
+                "cluster_id": cluster_id,
+                "silo_id": silo_id,
+            },
+        )
         facts = list(facts_result) if facts_result else []
         fact_count = len(facts)
 
         # Check threshold
         if fact_count < SYNTHESIS_THRESHOLD:
-            await store.execute_write(q.RELEASE_CLUSTER_LOCK, {
-                "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.SPARSE.value,
-            })
+            await store.execute_write(
+                q.RELEASE_CLUSTER_LOCK,
+                {
+                    "cluster_id": cluster_id,
+                    "silo_id": silo_id,
+                    "state": ClusterState.SPARSE.value,
+                },
+            )
             return SynthesizeResult(
-                belief_id=None, cluster_id=cluster_id, cluster_state=ClusterState.SPARSE,
-                fact_count=fact_count, confidence=None,
+                belief_id=None,
+                cluster_id=cluster_id,
+                cluster_state=ClusterState.SPARSE,
+                fact_count=fact_count,
+                confidence=None,
             ), []
 
         # Compute aggregate confidence
@@ -411,24 +429,40 @@ async def tx4_synthesize(
         aggregate_confidence = noisy_or_aggregate(confidences)
 
         if aggregate_confidence < SYNTHESIS_CONFIDENCE_THRESHOLD:
-            await store.execute_write(q.RELEASE_CLUSTER_LOCK, {
-                "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.READY.value,
-            })
+            await store.execute_write(
+                q.RELEASE_CLUSTER_LOCK,
+                {
+                    "cluster_id": cluster_id,
+                    "silo_id": silo_id,
+                    "state": ClusterState.READY.value,
+                },
+            )
             return SynthesizeResult(
-                belief_id=None, cluster_id=cluster_id, cluster_state=ClusterState.READY,
-                fact_count=fact_count, confidence=aggregate_confidence,
+                belief_id=None,
+                cluster_id=cluster_id,
+                cluster_state=ClusterState.READY,
+                fact_count=fact_count,
+                confidence=aggregate_confidence,
             ), []
 
         # Call LLM
         synthesis_result = await llm_synthesize(llm, facts, effective_timeout)
 
         if synthesis_result.timed_out or not synthesis_result.success:
-            await store.execute_write(q.RELEASE_CLUSTER_LOCK, {
-                "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.READY.value,
-            })
+            await store.execute_write(
+                q.RELEASE_CLUSTER_LOCK,
+                {
+                    "cluster_id": cluster_id,
+                    "silo_id": silo_id,
+                    "state": ClusterState.READY.value,
+                },
+            )
             return SynthesizeResult(
-                belief_id=None, cluster_id=cluster_id, cluster_state=ClusterState.READY,
-                fact_count=fact_count, confidence=aggregate_confidence,
+                belief_id=None,
+                cluster_id=cluster_id,
+                cluster_state=ClusterState.READY,
+                fact_count=fact_count,
+                confidence=aggregate_confidence,
                 timed_out=synthesis_result.timed_out,
             ), []
 
@@ -436,39 +470,73 @@ async def tx4_synthesize(
         belief_id = uuid.uuid4()
         created_at = datetime.now(UTC)
         props: dict[str, Any] = {
-            "layer": "wisdom", "type": "belief", "state": NodeState.ACTIVE.value,
-            "synthesis_state": SynthesisState.FRESH.value, "confidence": aggregate_confidence,
+            "layer": "wisdom",
+            "type": "belief",
+            "state": NodeState.ACTIVE.value,
+            "synthesis_state": SynthesisState.FRESH.value,
+            "confidence": aggregate_confidence,
             "source_cluster_id": cluster_id,
         }
         fact_ids = [f["id"] for f in facts]
 
-        await store.execute_write(q.CREATE_BELIEF_WITH_SYNTHESIZED_FROM, {
-            "id": str(belief_id), "silo_id": silo_id, "content": synthesis_result.content,
-            "created_at": created_at.isoformat(), "props": props, "fact_ids": fact_ids,
-        })
+        await store.execute_write(
+            q.CREATE_BELIEF_WITH_SYNTHESIZED_FROM,
+            {
+                "id": str(belief_id),
+                "silo_id": silo_id,
+                "content": synthesis_result.content,
+                "created_at": created_at.isoformat(),
+                "props": props,
+                "fact_ids": fact_ids,
+            },
+        )
 
         # Update cluster
-        await store.execute_write(q.UPDATE_CLUSTER_AFTER_SYNTHESIS, {
-            "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.SYNTHESIZED.value,
-            "belief_id": str(belief_id), "synthesized_at": created_at.isoformat(),
-        })
+        await store.execute_write(
+            q.UPDATE_CLUSTER_AFTER_SYNTHESIS,
+            {
+                "cluster_id": cluster_id,
+                "silo_id": silo_id,
+                "state": ClusterState.SYNTHESIZED.value,
+                "belief_id": str(belief_id),
+                "synthesized_at": created_at.isoformat(),
+            },
+        )
 
         events: list[ReactionEvent] = [
             ReactionEvent(event_type="compute_embedding", node_id=str(belief_id), silo_id=silo_id),
-            ReactionEvent(event_type="update_heat", node_id=str(belief_id), silo_id=silo_id, payload={"access_type": "SYNTHESIS"}),
+            ReactionEvent(
+                event_type="update_heat",
+                node_id=str(belief_id),
+                silo_id=silo_id,
+                payload={"access_type": "SYNTHESIS"},
+            ),
         ]
 
-        logger.debug("tx4_synthesize_complete", belief_id=str(belief_id), cluster_id=cluster_id, fact_count=fact_count)
+        logger.debug(
+            "tx4_synthesize_complete",
+            belief_id=str(belief_id),
+            cluster_id=cluster_id,
+            fact_count=fact_count,
+        )
 
         return SynthesizeResult(
-            belief_id=belief_id, cluster_id=cluster_id, cluster_state=ClusterState.SYNTHESIZED,
-            fact_count=fact_count, confidence=aggregate_confidence,
+            belief_id=belief_id,
+            cluster_id=cluster_id,
+            cluster_state=ClusterState.SYNTHESIZED,
+            fact_count=fact_count,
+            confidence=aggregate_confidence,
         ), events
 
     except Exception:
-        await store.execute_write(q.RELEASE_CLUSTER_LOCK, {
-            "cluster_id": cluster_id, "silo_id": silo_id, "state": cluster_state,
-        })
+        await store.execute_write(
+            q.RELEASE_CLUSTER_LOCK,
+            {
+                "cluster_id": cluster_id,
+                "silo_id": silo_id,
+                "state": cluster_state,
+            },
+        )
         raise
 
 
@@ -1249,9 +1317,13 @@ async def tx5_revise_belief(
     from context_service.db import queries as q
 
     # Get belief and validate
-    belief_result = await store.execute_query(q.GET_BELIEF_FOR_REVISION, {
-        "belief_id": belief_id, "silo_id": silo_id,
-    })
+    belief_result = await store.execute_query(
+        q.GET_BELIEF_FOR_REVISION,
+        {
+            "belief_id": belief_id,
+            "silo_id": silo_id,
+        },
+    )
 
     if not belief_result:
         raise InvariantViolation("BELIEF_NOT_FOUND", "Belief not found")
@@ -1273,36 +1345,59 @@ async def tx5_revise_belief(
     old_content = belief.get("content", "")
 
     # Mark revision in progress
-    await store.execute_write(q.MARK_BELIEF_REVISION_IN_PROGRESS, {
-        "belief_id": belief_id, "silo_id": silo_id,
-    })
+    await store.execute_write(
+        q.MARK_BELIEF_REVISION_IN_PROGRESS,
+        {
+            "belief_id": belief_id,
+            "silo_id": silo_id,
+        },
+    )
 
     try:
         # Acquire cluster lock
-        await store.execute_query(q.GET_CLUSTER_FOR_SYNTHESIS, {
-            "cluster_id": cluster_id, "silo_id": silo_id,
-        })
+        await store.execute_query(
+            q.GET_CLUSTER_FOR_SYNTHESIS,
+            {
+                "cluster_id": cluster_id,
+                "silo_id": silo_id,
+            },
+        )
 
         try:
             # Fetch current facts
-            facts_result = await store.execute_query(q.GET_FACTS_IN_CLUSTER, {
-                "cluster_id": cluster_id, "silo_id": silo_id,
-            })
+            facts_result = await store.execute_query(
+                q.GET_FACTS_IN_CLUSTER,
+                {
+                    "cluster_id": cluster_id,
+                    "silo_id": silo_id,
+                },
+            )
             facts = list(facts_result) if facts_result else []
             fact_count = len(facts)
 
             # Check threshold - invalidate if below
             if fact_count < SYNTHESIS_THRESHOLD:
-                await store.execute_write(q.UPDATE_BELIEF_AFTER_REVISION, {
-                    "belief_id": belief_id, "silo_id": silo_id,
-                    "synthesis_state": SynthesisState.INVALIDATED.value,
-                })
-                await store.execute_write(q.RELEASE_CLUSTER_LOCK, {
-                    "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.SPARSE.value,
-                })
+                await store.execute_write(
+                    q.UPDATE_BELIEF_AFTER_REVISION,
+                    {
+                        "belief_id": belief_id,
+                        "silo_id": silo_id,
+                        "synthesis_state": SynthesisState.INVALIDATED.value,
+                    },
+                )
+                await store.execute_write(
+                    q.RELEASE_CLUSTER_LOCK,
+                    {
+                        "cluster_id": cluster_id,
+                        "silo_id": silo_id,
+                        "state": ClusterState.SPARSE.value,
+                    },
+                )
                 return ReviseBeliefResult(
-                    new_belief_id=None, old_belief_id=uuid.UUID(belief_id),
-                    content_changed=False, invalidated=True,
+                    new_belief_id=None,
+                    old_belief_id=uuid.UUID(belief_id),
+                    content_changed=False,
+                    invalidated=True,
                 ), []
 
             # Compute aggregate confidence
@@ -1310,61 +1405,104 @@ async def tx5_revise_belief(
             aggregate_confidence = noisy_or_aggregate(confidences)
 
             if aggregate_confidence < SYNTHESIS_CONFIDENCE_THRESHOLD:
-                await store.execute_write(q.UPDATE_BELIEF_AFTER_REVISION, {
-                    "belief_id": belief_id, "silo_id": silo_id,
-                    "synthesis_state": SynthesisState.INVALIDATED.value,
-                })
-                await store.execute_write(q.RELEASE_CLUSTER_LOCK, {
-                    "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.SPARSE.value,
-                })
+                await store.execute_write(
+                    q.UPDATE_BELIEF_AFTER_REVISION,
+                    {
+                        "belief_id": belief_id,
+                        "silo_id": silo_id,
+                        "synthesis_state": SynthesisState.INVALIDATED.value,
+                    },
+                )
+                await store.execute_write(
+                    q.RELEASE_CLUSTER_LOCK,
+                    {
+                        "cluster_id": cluster_id,
+                        "silo_id": silo_id,
+                        "state": ClusterState.SPARSE.value,
+                    },
+                )
                 return ReviseBeliefResult(
-                    new_belief_id=None, old_belief_id=uuid.UUID(belief_id),
-                    content_changed=False, invalidated=True,
+                    new_belief_id=None,
+                    old_belief_id=uuid.UUID(belief_id),
+                    content_changed=False,
+                    invalidated=True,
                 ), []
 
             # Call LLM with previous belief context
             synthesis_result = await llm_synthesize(llm, facts, 30.0, previous_belief=old_content)
 
             if not synthesis_result.success:
-                await store.execute_write(q.UPDATE_BELIEF_AFTER_REVISION, {
-                    "belief_id": belief_id, "silo_id": silo_id,
-                    "synthesis_state": SynthesisState.STALE.value,
-                })
-                await store.execute_write(q.RELEASE_CLUSTER_LOCK, {
-                    "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.STALE.value,
-                })
+                await store.execute_write(
+                    q.UPDATE_BELIEF_AFTER_REVISION,
+                    {
+                        "belief_id": belief_id,
+                        "silo_id": silo_id,
+                        "synthesis_state": SynthesisState.STALE.value,
+                    },
+                )
+                await store.execute_write(
+                    q.RELEASE_CLUSTER_LOCK,
+                    {
+                        "cluster_id": cluster_id,
+                        "silo_id": silo_id,
+                        "state": ClusterState.STALE.value,
+                    },
+                )
                 return ReviseBeliefResult(
-                    new_belief_id=None, old_belief_id=uuid.UUID(belief_id), content_changed=False,
+                    new_belief_id=None,
+                    old_belief_id=uuid.UUID(belief_id),
+                    content_changed=False,
                 ), []
 
             # Check if content changed
             new_content = synthesis_result.content or ""
             if new_content.strip() == old_content.strip():
-                await store.execute_write(q.UPDATE_BELIEF_AFTER_REVISION, {
-                    "belief_id": belief_id, "silo_id": silo_id,
-                    "synthesis_state": SynthesisState.FRESH.value,
-                })
-                await store.execute_write(q.RELEASE_CLUSTER_LOCK, {
-                    "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.SYNTHESIZED.value,
-                })
+                await store.execute_write(
+                    q.UPDATE_BELIEF_AFTER_REVISION,
+                    {
+                        "belief_id": belief_id,
+                        "silo_id": silo_id,
+                        "synthesis_state": SynthesisState.FRESH.value,
+                    },
+                )
+                await store.execute_write(
+                    q.RELEASE_CLUSTER_LOCK,
+                    {
+                        "cluster_id": cluster_id,
+                        "silo_id": silo_id,
+                        "state": ClusterState.SYNTHESIZED.value,
+                    },
+                )
                 return ReviseBeliefResult(
-                    new_belief_id=None, old_belief_id=uuid.UUID(belief_id), content_changed=False,
+                    new_belief_id=None,
+                    old_belief_id=uuid.UUID(belief_id),
+                    content_changed=False,
                 ), []
 
             # Create new belief
             new_belief_id = uuid.uuid4()
             created_at = datetime.now(UTC)
             props: dict[str, Any] = {
-                "layer": "wisdom", "type": "belief", "state": NodeState.ACTIVE.value,
-                "synthesis_state": SynthesisState.FRESH.value, "confidence": aggregate_confidence,
+                "layer": "wisdom",
+                "type": "belief",
+                "state": NodeState.ACTIVE.value,
+                "synthesis_state": SynthesisState.FRESH.value,
+                "confidence": aggregate_confidence,
                 "source_cluster_id": cluster_id,
             }
             fact_ids = [f["id"] for f in facts]
 
-            await store.execute_write(q.CREATE_BELIEF_WITH_SYNTHESIZED_FROM, {
-                "id": str(new_belief_id), "silo_id": silo_id, "content": new_content,
-                "created_at": created_at.isoformat(), "props": props, "fact_ids": fact_ids,
-            })
+            await store.execute_write(
+                q.CREATE_BELIEF_WITH_SYNTHESIZED_FROM,
+                {
+                    "id": str(new_belief_id),
+                    "silo_id": silo_id,
+                    "content": new_content,
+                    "created_at": created_at.isoformat(),
+                    "props": props,
+                    "fact_ids": fact_ids,
+                },
+            )
 
             # Supersede old belief via SUPERSEDES edge
             await _create_supersedes_edge(
@@ -1372,32 +1510,61 @@ async def tx5_revise_belief(
             )
 
             # Update cluster
-            await store.execute_write(q.UPDATE_CLUSTER_AFTER_SYNTHESIS, {
-                "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.SYNTHESIZED.value,
-                "belief_id": str(new_belief_id), "synthesized_at": created_at.isoformat(),
-            })
+            await store.execute_write(
+                q.UPDATE_CLUSTER_AFTER_SYNTHESIS,
+                {
+                    "cluster_id": cluster_id,
+                    "silo_id": silo_id,
+                    "state": ClusterState.SYNTHESIZED.value,
+                    "belief_id": str(new_belief_id),
+                    "synthesized_at": created_at.isoformat(),
+                },
+            )
 
             events: list[ReactionEvent] = [
-                ReactionEvent(event_type="compute_embedding", node_id=str(new_belief_id), silo_id=silo_id),
-                ReactionEvent(event_type="update_heat", node_id=str(new_belief_id), silo_id=silo_id, payload={"access_type": "SYNTHESIS"}),
+                ReactionEvent(
+                    event_type="compute_embedding", node_id=str(new_belief_id), silo_id=silo_id
+                ),
+                ReactionEvent(
+                    event_type="update_heat",
+                    node_id=str(new_belief_id),
+                    silo_id=silo_id,
+                    payload={"access_type": "SYNTHESIS"},
+                ),
             ]
 
-            logger.debug("tx5_revise_belief_complete", new_belief_id=str(new_belief_id), old_belief_id=belief_id)
+            logger.debug(
+                "tx5_revise_belief_complete",
+                new_belief_id=str(new_belief_id),
+                old_belief_id=belief_id,
+            )
 
             return ReviseBeliefResult(
-                new_belief_id=new_belief_id, old_belief_id=uuid.UUID(belief_id), content_changed=True,
+                new_belief_id=new_belief_id,
+                old_belief_id=uuid.UUID(belief_id),
+                content_changed=True,
             ), events
 
         except Exception:
-            await store.execute_write(q.RELEASE_CLUSTER_LOCK, {
-                "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.STALE.value,
-            })
+            await store.execute_write(
+                q.RELEASE_CLUSTER_LOCK,
+                {
+                    "cluster_id": cluster_id,
+                    "silo_id": silo_id,
+                    "state": ClusterState.STALE.value,
+                },
+            )
             raise
 
     except Exception:
-        await store.execute_write(q.UPDATE_BELIEF_AFTER_REVISION, {
-            "belief_id": belief_id, "silo_id": silo_id, "synthesis_state": SynthesisState.STALE.value,
-        })
+        await store.execute_write(
+            q.UPDATE_BELIEF_AFTER_REVISION,
+            {
+                "belief_id": belief_id,
+                "silo_id": silo_id,
+                "synthesis_state": SynthesisState.STALE.value,
+            },
+        )
         raise
 
 
@@ -1776,4 +1943,243 @@ async def _set_conflict_status(
     await store.execute_write(
         cypher,
         {"node_ids": [node_a, node_b], "silo_id": silo_id, "status": status.value},
+    )
+
+
+async def cascade_staleness(
+    store: HyperGraphStore,
+    node_id: str,
+    silo_id: str,
+    depth: int = 1,
+    visited: set[str] | None = None,
+) -> int:
+    """CASCADE_STALENESS: Propagate staleness to dependent nodes.
+
+    Depth-limited (MAX_CASCADE_DEPTH). Sync for depth 1, async events for deeper.
+    Returns count of nodes marked stale.
+    """
+    from context_service.db import queries as q
+
+    if depth > MAX_CASCADE_DEPTH:
+        logger.warning("cascade_depth_limit_reached", node_id=node_id, depth=depth)
+        return 0
+
+    if visited is None:
+        visited = set()
+
+    if node_id in visited:
+        return 0
+
+    visited.add(node_id)
+
+    # Find dependents
+    dependents = await store.execute_query(q.GET_DEPENDENTS_FOR_CASCADE, {
+        "node_id": node_id,
+        "silo_id": silo_id,
+    })
+
+    cascade_count = 0
+
+    for dep in dependents:
+        dep_id = dep["id"]
+        layer = dep.get("layer")
+
+        if layer == "wisdom":
+            # Mark belief stale
+            await store.execute_write(q.MARK_BELIEF_STALE_FOR_CASCADE, {
+                "node_id": dep_id,
+                "silo_id": silo_id,
+            })
+            cascade_count += 1
+        else:
+            # Recurse into non-wisdom dependents (sync for depth 1, would be async for deeper in production)
+            if depth == 1:
+                cascade_count += await cascade_staleness(store, dep_id, silo_id, depth + 1, visited)
+
+    logger.debug("cascade_staleness_complete", node_id=node_id, cascade_count=cascade_count, depth=depth)
+
+    return cascade_count
+
+
+async def tx15_forget(
+    store: HyperGraphStore,
+    node_id: str,
+    silo_id: str,
+    agent_id: str,
+    *,
+    reason: str | None = None,
+    cascade: bool = False,
+) -> tuple[ForgetResult, list[ReactionEvent]]:
+    """TX15 FORGET: Soft-delete a node with cancel window.
+
+    Per brain-transactions-pseudocode.md:
+    - Preconditions: node exists, state is ACTIVE or SUPERSEDED
+    - Sets state to TOMBSTONED, records cancel_window_expires
+    - Optional cascade triggers CASCADE_STALENESS on dependents
+    """
+    from context_service.db import queries as q
+
+    # Validate node exists and is not already tombstoned
+    node_result = await store.execute_query(q.GET_NODE_FOR_FORGET, {
+        "node_id": node_id,
+        "silo_id": silo_id,
+    })
+
+    if not node_result:
+        raise InvariantViolation("NODE_NOT_FOUND", "Node not found")
+
+    node = node_result[0]
+    state = node.get("state")
+
+    if state == NodeState.TOMBSTONED.value:
+        raise InvariantViolation("ALREADY_TOMBSTONED", "Node is already tombstoned")
+
+    if state == NodeState.DELETED.value:
+        raise InvariantViolation("ALREADY_DELETED", "Node is already deleted")
+
+    if state not in (NodeState.ACTIVE.value, NodeState.SUPERSEDED.value):
+        raise InvariantViolation("INVALID_STATE", f"Cannot forget node in state {state}")
+
+    now = datetime.now(UTC)
+    cancel_window_expires = now + timedelta(seconds=CANCEL_WINDOW_DURATION_SECONDS)
+
+    # Tombstone the node
+    await store.execute_write(q.TOMBSTONE_NODE, {
+        "node_id": node_id,
+        "silo_id": silo_id,
+        "tombstoned_at": now.isoformat(),
+        "forget_requested_at": now.isoformat(),
+        "agent_id": agent_id,
+        "reason": reason,
+        "cancel_window_expires": cancel_window_expires.isoformat(),
+    })
+
+    cascade_count = 0
+    events: list[ReactionEvent] = []
+
+    if cascade:
+        # Trigger staleness cascade
+        cascade_count = await cascade_staleness(store, node_id, silo_id, depth=1)
+        events.append(ReactionEvent(
+            event_type="cascade_staleness_complete",
+            node_id=node_id,
+            silo_id=silo_id,
+            payload={"cascade_count": cascade_count},
+        ))
+
+    result = ForgetResult(
+        node_id=uuid.UUID(node_id),
+        state=NodeState.TOMBSTONED,
+        tombstoned_at=now,
+        cancel_window_expires=cancel_window_expires,
+        cascade_count=cascade_count,
+    )
+
+    logger.debug("tx15_forget_complete", node_id=node_id, silo_id=silo_id, cascade_count=cascade_count)
+
+    return result, events
+
+
+async def tx16_cancel_forget(
+    store: HyperGraphStore,
+    node_id: str,
+    silo_id: str,
+    agent_id: str,
+) -> CancelForgetResult:
+    """TX16 CANCEL_FORGET: Restore a tombstoned node within cancel window."""
+    from context_service.db import queries as q
+
+    node_result = await store.execute_query(q.GET_NODE_FOR_FORGET, {
+        "node_id": node_id,
+        "silo_id": silo_id,
+    })
+
+    if not node_result:
+        raise InvariantViolation("NODE_NOT_FOUND", "Node not found")
+
+    node = node_result[0]
+    state = node.get("state")
+
+    if state != NodeState.TOMBSTONED.value:
+        raise InvariantViolation("NOT_TOMBSTONED", f"Node is not tombstoned (state: {state})")
+
+    cancel_expires = node.get("cancel_window_expires")
+    if cancel_expires:
+        expires_dt = datetime.fromisoformat(cancel_expires.replace("Z", "+00:00"))
+        if datetime.now(UTC) > expires_dt:
+            raise InvariantViolation("CANCEL_WINDOW_EXPIRED", "Cancel window has expired")
+
+    now = datetime.now(UTC)
+
+    restore_result = await store.execute_write(q.RESTORE_TOMBSTONED_NODE, {
+        "node_id": node_id,
+        "silo_id": silo_id,
+        "now": now.isoformat(),
+        "restored_at": now.isoformat(),
+        "agent_id": agent_id,
+    })
+
+    previous_state_str = restore_result[0].get("previous_state", "ACTIVE") if restore_result else "ACTIVE"
+    previous_state = NodeState(previous_state_str)
+
+    logger.debug("tx16_cancel_forget_complete", node_id=node_id, silo_id=silo_id)
+
+    return CancelForgetResult(
+        node_id=uuid.UUID(node_id),
+        restored_at=now,
+        previous_state=previous_state,
+    )
+
+
+async def tx10_hard_delete(
+    store: HyperGraphStore,
+    silo_id: str,
+    batch_size: int = 100,
+) -> HardDeleteResult:
+    """TX10 HARD_DELETE: Permanently remove tombstoned nodes past cancel window.
+
+    Called by scheduled GC job, not by agents directly.
+    """
+    from context_service.db import queries as q
+
+    now = datetime.now(UTC)
+
+    # Find tombstoned nodes past cancel window
+    candidates = await store.execute_query(q.GET_TOMBSTONED_FOR_GC, {
+        "silo_id": silo_id,
+        "now": now.isoformat(),
+        "batch_size": batch_size,
+    })
+
+    deleted_ids: list[str] = []
+    skipped_count = 0
+
+    for candidate in candidates:
+        node_id = candidate["id"]
+
+        try:
+            # Delete edges first
+            await store.execute_write(q.DELETE_EDGES_FOR_NODE, {
+                "node_id": node_id,
+                "silo_id": silo_id,
+            })
+
+            # Delete node
+            await store.execute_write(q.HARD_DELETE_NODE, {
+                "node_id": node_id,
+                "silo_id": silo_id,
+            })
+
+            deleted_ids.append(node_id)
+
+        except Exception as e:
+            logger.warning("hard_delete_failed", node_id=node_id, error=str(e))
+            skipped_count += 1
+
+    logger.info("tx10_hard_delete_complete", silo_id=silo_id, deleted_count=len(deleted_ids), skipped_count=skipped_count)
+
+    return HardDeleteResult(
+        deleted_count=len(deleted_ids),
+        skipped_count=skipped_count,
+        deleted_ids=deleted_ids,
     )
