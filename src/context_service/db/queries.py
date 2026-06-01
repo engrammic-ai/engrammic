@@ -1941,3 +1941,56 @@ WHERE n.properties.state = 'TOMBSTONED'
 DELETE n
 RETURN count(n) AS deleted_count
 """
+
+# TX18 PROMOTE and TX19 DEMOTE (layer movement)
+
+GET_CLAIM_FOR_PROMOTE = """
+MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
+RETURN c.id AS id,
+       c.properties.state AS state,
+       c.properties.claim_status AS claim_status,
+       c.properties.corroboration_count AS corroboration_count,
+       c.properties.confidence AS confidence
+"""
+
+UPDATE_CLAIM_TO_PROMOTED = """
+MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
+WHERE c.properties.state = 'ACTIVE'
+  AND c.properties.claim_status = 'UNPROMOTED'
+SET c.properties.claim_status = 'PROMOTED',
+    c.properties.promoted_at = $promoted_at,
+    c.properties.confidence = $new_confidence
+SET c:Fact
+RETURN c.id AS id, c.properties.claim_status AS claim_status
+"""
+
+GET_FACT_FOR_DEMOTE = """
+MATCH (f:Fact {id: $fact_id, silo_id: $silo_id})
+RETURN f.id AS id,
+       f.properties.state AS state,
+       f.properties.claim_status AS claim_status,
+       f.properties.corroboration_count AS corroboration_count,
+       f.properties.confidence AS confidence
+"""
+
+UPDATE_FACT_TO_DEMOTED = """
+MATCH (f:Fact {id: $fact_id, silo_id: $silo_id})
+WHERE f.properties.state = 'ACTIVE'
+  AND f.properties.claim_status = 'PROMOTED'
+SET f.properties.claim_status = 'UNPROMOTED',
+    f.properties.demoted_at = $demoted_at,
+    f.properties.confidence = $new_confidence
+REMOVE f:Fact
+RETURN f.id AS id, f.properties.claim_status AS claim_status
+"""
+
+RECOUNT_CORROBORATION = """
+MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
+MATCH (corroborating:Claim {silo_id: $silo_id})
+WHERE corroborating.properties.subject = c.properties.subject
+  AND corroborating.properties.predicate = c.properties.predicate
+  AND corroborating.properties.object = c.properties.object
+  AND corroborating.properties.state = 'ACTIVE'
+OPTIONAL MATCH (corroborating)-[:DERIVED_FROM]->(evidence)
+RETURN count(DISTINCT evidence.id) AS corroboration_count
+"""
