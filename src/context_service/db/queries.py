@@ -1751,3 +1751,53 @@ RETURN id, marker_type, status, detected_at, about_ids,
        node_a_id, node_b_id, commitment_id
 ORDER BY detected_at DESC
 """
+
+# TX8 COMMIT and TX14 CRYSTALLIZE queries
+
+VALIDATE_ABOUT_REFS = """
+UNWIND $node_ids AS nid
+MATCH (n {id: nid, silo_id: $silo_id})
+RETURN n.id AS id, n.properties.state AS state
+"""
+
+CREATE_COMMITMENT_WITH_ABOUT = """
+CREATE (c:Node:Commitment {
+    id: $id,
+    silo_id: $silo_id,
+    content: $content,
+    created_at: $created_at,
+    properties: $props
+})
+WITH c
+UNWIND $about_ids AS aid
+MATCH (a {id: aid, silo_id: $silo_id})
+CREATE (c)-[:ABOUT]->(a)
+WITH c
+MERGE (agent:Agent {id: $agent_id})
+CREATE (c)-[:DECLARED_BY {created_at: $created_at}]->(agent)
+RETURN c.id AS id
+"""
+
+GET_HYPOTHESIS_FOR_CRYSTALLIZE = """
+MATCH (h:WorkingHypothesis {id: $hypothesis_id, silo_id: $silo_id})
+WHERE h.properties.session_id = $session_id
+RETURN h.id AS id,
+       h.content AS content,
+       h.properties.confidence AS confidence,
+       h.properties.crystallized AS crystallized,
+       h.properties.state AS state
+"""
+
+GET_HYPOTHESIS_ABOUT_REFS = """
+MATCH (h:WorkingHypothesis {id: $hypothesis_id, silo_id: $silo_id})-[:ABOUT]->(a)
+RETURN a.id AS id, a.properties.state AS state
+"""
+
+CREATE_CRYSTALLIZED_FROM_EDGE = """
+MATCH (commitment {id: $commitment_id, silo_id: $silo_id})
+MATCH (hypothesis {id: $hypothesis_id, silo_id: $silo_id})
+SET hypothesis.properties.crystallized = true,
+    hypothesis.properties.crystallized_into = $commitment_id
+CREATE (commitment)-[:CRYSTALLIZED_FROM {created_at: $created_at}]->(hypothesis)
+RETURN commitment.id AS id
+"""
