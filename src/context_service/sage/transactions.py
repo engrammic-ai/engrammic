@@ -42,6 +42,16 @@ class SupersedeReason(StrEnum):
     EVIDENCE_ERASED = "evidence_erased"
 
 
+class ConflictStatus(StrEnum):
+    """Conflict status for nodes."""
+
+    NONE = "none"
+    UNRESOLVED = "unresolved"
+    RESOLVED_SUPERSEDE = "resolved_supersede"
+    RESOLVED_MERGE = "resolved_merge"
+    RESOLVED_COEXIST = "resolved_coexist"
+
+
 class LinkType(StrEnum):
     """Allowed edge types for TX17 LINK."""
 
@@ -287,6 +297,9 @@ async def tx2_store_claim(
     silo_id: str,
     agent_id: str,
     *,
+    subject: str | None = None,
+    predicate: str | None = None,
+    object_value: str | None = None,
     source_tier: str | None = None,
     confidence: float = 0.8,
     supersedes: str | None = None,
@@ -308,6 +321,9 @@ async def tx2_store_claim(
         evidence_refs: References to evidence (node:<uuid> or URIs).
         silo_id: Tenant isolation ID.
         agent_id: Agent performing the write.
+        subject: Subject of the claim (SPO triple).
+        predicate: Predicate of the claim (SPO triple).
+        object_value: Object of the claim (SPO triple). Named to avoid shadowing builtin.
         source_tier: Quality tier (authoritative, validated, community, unknown).
         confidence: Confidence score 0.0-1.0.
         supersedes: Node ID this claim replaces.
@@ -360,6 +376,10 @@ async def tx2_store_claim(
     }
     if tags:
         props["tags"] = tags
+    if subject and predicate and object_value:
+        props["subject"] = subject
+        props["predicate"] = predicate
+        props["object"] = object_value
 
     cypher = """
     CREATE (n:Node:Claim {
@@ -399,6 +419,11 @@ async def tx2_store_claim(
 
     corroboration_count, promoted = await _check_corroboration(store, str(node_id), silo_id)
 
+    # FLAG_CONTRADICTION: detect and flag structural conflicts
+    conflict_events = await _flag_contradiction(
+        store, str(node_id), subject, predicate, object_value, silo_id
+    )
+
     result = StoreClaimResult(
         node_id=node_id,
         created_at=created_at,
@@ -435,6 +460,8 @@ async def tx2_store_claim(
                 payload={"depth": 1},
             )
         )
+
+    events.extend(conflict_events)
 
     logger.debug(
         "tx2_store_claim_complete",
@@ -908,3 +935,116 @@ async def _validate_link(
         return {"error": "WOULD_CREATE_CYCLE"}
 
     return {"error": None}
+
+
+async def _flag_contradiction(
+    store: HyperGraphStore,
+    new_node_id: str,
+    subject: str | None,
+    predicate: str | None,
+    object_value: str | None,
+    silo_id: str,
+) -> list[ReactionEvent]:
+    """Detect and flag structural conflicts with existing claims.
+
+    Creates bidirectional CONTRADICTS edges and emits ConflictDetected events.
+    Only runs when all three SPO components are provided.
+    """
+    if not all([subject, predicate, object_value]):
+        return []
+
+    # Find conflicting claims (same subject+predicate, different object)
+    cypher = """
+    MATCH (c:Claim {silo_id: $silo_id})
+    WHERE c.properties.subject = $subject
+      AND c.properties.predicate = $predicate
+      AND c.properties.object <> $object
+      AND c.properties.state = 'ACTIVE'
+      AND c.id <> $new_node_id
+    RETURN c.id AS id
+    """
+
+    conflicts = await store.execute_query(
+        cypher,
+        {
+            "silo_id": silo_id,
+            "subject": subject,
+            "predicate": predicate,
+            "object": object_value,
+            "new_node_id": new_node_id,
+        },
+    )
+
+    if not conflicts:
+        return []
+
+    events: list[ReactionEvent] = []
+    detected_at = datetime.now(UTC).isoformat()
+
+    for conflict in conflicts:
+        existing_id = conflict["id"]
+
+        # Create bidirectional CONTRADICTS edges (INV8)
+        await _create_bidirectional_contradicts(
+            store, new_node_id, existing_id, silo_id, detected_at
+        )
+
+        # Update conflict_status on both nodes
+        await _set_conflict_status(
+            store, new_node_id, existing_id, silo_id, ConflictStatus.UNRESOLVED
+        )
+
+        events.append(
+            ReactionEvent(
+                event_type="conflict_detected",
+                node_id=new_node_id,
+                silo_id=silo_id,
+                payload={
+                    "node_a": new_node_id,
+                    "node_b": existing_id,
+                    "conflict_type": "structural",
+                    "detected_at": detected_at,
+                },
+            )
+        )
+
+    return events
+
+
+async def _create_bidirectional_contradicts(
+    store: HyperGraphStore,
+    node_a: str,
+    node_b: str,
+    silo_id: str,
+    detected_at: str,
+) -> None:
+    """Create bidirectional CONTRADICTS edges (A->B and B->A)."""
+    cypher = """
+    MATCH (a {id: $node_a, silo_id: $silo_id})
+    MATCH (b {id: $node_b, silo_id: $silo_id})
+    MERGE (a)-[:CONTRADICTS {weight: 1.0, detected_at: $detected_at, conflict_type: 'structural'}]->(b)
+    MERGE (b)-[:CONTRADICTS {weight: 1.0, detected_at: $detected_at, conflict_type: 'structural'}]->(a)
+    """
+    await store.execute_write(
+        cypher,
+        {"node_a": node_a, "node_b": node_b, "silo_id": silo_id, "detected_at": detected_at},
+    )
+
+
+async def _set_conflict_status(
+    store: HyperGraphStore,
+    node_a: str,
+    node_b: str,
+    silo_id: str,
+    status: ConflictStatus,
+) -> None:
+    """Set conflict_status on both nodes."""
+    cypher = """
+    MATCH (n {silo_id: $silo_id})
+    WHERE n.id IN $node_ids
+    SET n.properties.conflict_status = $status
+    """
+    await store.execute_write(
+        cypher,
+        {"node_ids": [node_a, node_b], "silo_id": silo_id, "status": status.value},
+    )

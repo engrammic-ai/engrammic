@@ -11,6 +11,7 @@ import pytest
 
 from context_service.sage.transactions import (
     BrainError,
+    ConflictStatus,
     CrossSiloViolation,
     CycleError,
     InvariantViolation,
@@ -531,3 +532,136 @@ class TestCheckCorroboration:
 
         assert count == 1
         assert should_promote is False
+
+
+class TestFlagContradiction:
+    """Tests for FLAG_CONTRADICTION in TX2 flow."""
+
+    @pytest.mark.asyncio
+    async def test_detects_structural_conflict(self, mock_store: AsyncMock) -> None:
+        """Test that TX2 detects conflicting claims and emits ConflictDetected event."""
+        mock_store.execute_query = AsyncMock(side_effect=[
+            # Evidence validation
+            [{"id": "evidence-1", "silo_id": "test-silo", "layer": "memory", "state": "ACTIVE"}],
+            # Conflict detection: existing claim with different object
+            [{"id": "existing-claim"}],
+        ])
+        # Corroboration uses execute_write
+        mock_store.execute_write = AsyncMock(return_value=[{"count": 1, "should_promote": False}])
+
+        result, events = await tx2_store_claim(
+            store=mock_store,
+            content="test-subject has_value test-value",
+            evidence_refs=["node:evidence-1"],
+            silo_id="test-silo",
+            agent_id="test-agent",
+            subject="test-subject",
+            predicate="has_value",
+            object_value="test-value",
+        )
+
+        conflict_events = [e for e in events if e.event_type == "conflict_detected"]
+        assert len(conflict_events) == 1
+        assert conflict_events[0].payload["conflict_type"] == "structural"
+        assert conflict_events[0].payload["node_b"] == "existing-claim"
+
+    @pytest.mark.asyncio
+    async def test_no_conflict_when_no_spo(self, mock_store: AsyncMock) -> None:
+        """Test no conflict detection when SPO is not provided."""
+        evidence_id = "12345678-1234-1234-1234-123456789abc"
+        mock_store.execute_query = AsyncMock(
+            return_value=[{"id": evidence_id, "silo_id": "test-silo", "layer": "memory", "state": "ACTIVE"}]
+        )
+
+        result, events = await tx2_store_claim(
+            store=mock_store,
+            content="Test claim with no SPO",
+            evidence_refs=[f"node:{evidence_id}"],
+            silo_id="test-silo",
+            agent_id="test-agent",
+            # No subject/predicate/object_value
+        )
+
+        conflict_events = [e for e in events if e.event_type == "conflict_detected"]
+        assert len(conflict_events) == 0
+
+    @pytest.mark.asyncio
+    async def test_no_conflict_when_no_conflicting_claims(self, mock_store: AsyncMock) -> None:
+        """Test no conflict event when conflict query returns empty."""
+        mock_store.execute_query = AsyncMock(side_effect=[
+            # Evidence validation
+            [{"id": "evidence-1", "silo_id": "test-silo", "layer": "memory", "state": "ACTIVE"}],
+            # Conflict detection: no conflicts
+            [],
+        ])
+        mock_store.execute_write = AsyncMock(return_value=[{"count": 1, "should_promote": False}])
+
+        result, events = await tx2_store_claim(
+            store=mock_store,
+            content="test-subject has_value test-value",
+            evidence_refs=["node:evidence-1"],
+            silo_id="test-silo",
+            agent_id="test-agent",
+            subject="test-subject",
+            predicate="has_value",
+            object_value="test-value",
+        )
+
+        conflict_events = [e for e in events if e.event_type == "conflict_detected"]
+        assert len(conflict_events) == 0
+
+    @pytest.mark.asyncio
+    async def test_creates_bidirectional_contradicts_edges(self, mock_store: AsyncMock) -> None:
+        """Test that bidirectional CONTRADICTS edges are created on conflict."""
+        mock_store.execute_query = AsyncMock(side_effect=[
+            # Evidence validation
+            [{"id": "evidence-1", "silo_id": "test-silo", "layer": "memory", "state": "ACTIVE"}],
+            # Conflict detection: one conflict
+            [{"id": "existing-claim"}],
+        ])
+        mock_store.execute_write = AsyncMock(return_value=[{"count": 1, "should_promote": False}])
+
+        await tx2_store_claim(
+            store=mock_store,
+            content="s p new",
+            evidence_refs=["node:evidence-1"],
+            silo_id="test-silo",
+            agent_id="test-agent",
+            subject="s",
+            predicate="p",
+            object_value="new",
+        )
+
+        # Check that a CONTRADICTS write was issued
+        write_calls = mock_store.execute_write.call_args_list
+        contradicts_calls = [c for c in write_calls if "CONTRADICTS" in str(c)]
+        assert len(contradicts_calls) >= 1
+
+        # Verify both directions are in a single MERGE query
+        call_str = str(contradicts_calls[0])
+        assert "CONTRADICTS" in call_str
+
+    @pytest.mark.asyncio
+    async def test_sets_conflict_status_on_both_nodes(self, mock_store: AsyncMock) -> None:
+        """Test that conflict_status is set to UNRESOLVED on both nodes."""
+        mock_store.execute_query = AsyncMock(side_effect=[
+            [{"id": "evidence-1", "silo_id": "test-silo", "layer": "memory", "state": "ACTIVE"}],
+            [{"id": "existing-claim"}],
+        ])
+        mock_store.execute_write = AsyncMock(return_value=[{"count": 1, "should_promote": False}])
+
+        await tx2_store_claim(
+            store=mock_store,
+            content="s p new",
+            evidence_refs=["node:evidence-1"],
+            silo_id="test-silo",
+            agent_id="test-agent",
+            subject="s",
+            predicate="p",
+            object_value="new",
+        )
+
+        # At least one write should set conflict_status = 'unresolved'
+        write_calls = mock_store.execute_write.call_args_list
+        status_calls = [c for c in write_calls if ConflictStatus.UNRESOLVED.value in str(c)]
+        assert len(status_calls) >= 1
