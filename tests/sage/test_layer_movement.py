@@ -3,18 +3,17 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
 
 from context_service.sage.transactions import (
+    PROMOTION_THRESHOLD,
     DemoteResult,
     InvariantViolation,
-    PROMOTION_THRESHOLD,
     PromoteResult,
-    tx18_promote,
-    tx19_demote,
+    demote,
+    promote,
 )
 
 
@@ -36,23 +35,33 @@ class TestTx18Promote:
     """Tests for TX18 PROMOTE."""
 
     @pytest.mark.asyncio
-    async def test_promotes_claim_with_sufficient_corroboration(self, mock_store: AsyncMock) -> None:
+    async def test_promotes_claim_with_sufficient_corroboration(
+        self, mock_store: AsyncMock
+    ) -> None:
         """Test that TX18 promotes a claim meeting corroboration threshold."""
         claim_id = make_uuid()
 
-        mock_store.execute_query = AsyncMock(return_value=[{
-            "id": claim_id,
-            "state": "ACTIVE",
-            "claim_status": "UNPROMOTED",
-            "corroboration_count": PROMOTION_THRESHOLD,
-            "confidence": 0.8,
-        }])
-        mock_store.execute_write = AsyncMock(return_value=[{
-            "id": claim_id,
-            "claim_status": "PROMOTED",
-        }])
+        mock_store.execute_query = AsyncMock(
+            return_value=[
+                {
+                    "id": claim_id,
+                    "state": "ACTIVE",
+                    "claim_status": "UNPROMOTED",
+                    "corroboration_count": PROMOTION_THRESHOLD,
+                    "confidence": 0.8,
+                }
+            ]
+        )
+        mock_store.execute_write = AsyncMock(
+            return_value=[
+                {
+                    "id": claim_id,
+                    "claim_status": "PROMOTED",
+                }
+            ]
+        )
 
-        result, events = await tx18_promote(
+        result, events = await promote(
             store=mock_store,
             claim_id=claim_id,
             silo_id="test-silo",
@@ -66,16 +75,20 @@ class TestTx18Promote:
         """Test that TX18 rejects claims below corroboration threshold."""
         claim_id = make_uuid()
 
-        mock_store.execute_query = AsyncMock(return_value=[{
-            "id": claim_id,
-            "state": "ACTIVE",
-            "claim_status": "UNPROMOTED",
-            "corroboration_count": PROMOTION_THRESHOLD - 1,
-            "confidence": 0.8,
-        }])
+        mock_store.execute_query = AsyncMock(
+            return_value=[
+                {
+                    "id": claim_id,
+                    "state": "ACTIVE",
+                    "claim_status": "UNPROMOTED",
+                    "corroboration_count": PROMOTION_THRESHOLD - 1,
+                    "confidence": 0.8,
+                }
+            ]
+        )
 
         with pytest.raises(InvariantViolation) as exc_info:
-            await tx18_promote(
+            await promote(
                 store=mock_store,
                 claim_id=claim_id,
                 silo_id="test-silo",
@@ -88,15 +101,19 @@ class TestTx18Promote:
         """Test that TX18 is idempotent for already promoted claims."""
         claim_id = make_uuid()
 
-        mock_store.execute_query = AsyncMock(return_value=[{
-            "id": claim_id,
-            "state": "ACTIVE",
-            "claim_status": "PROMOTED",
-            "corroboration_count": PROMOTION_THRESHOLD,
-            "confidence": 0.9,
-        }])
+        mock_store.execute_query = AsyncMock(
+            return_value=[
+                {
+                    "id": claim_id,
+                    "state": "ACTIVE",
+                    "claim_status": "PROMOTED",
+                    "corroboration_count": PROMOTION_THRESHOLD,
+                    "confidence": 0.9,
+                }
+            ]
+        )
 
-        result, events = await tx18_promote(
+        result, events = await promote(
             store=mock_store,
             claim_id=claim_id,
             silo_id="test-silo",
@@ -111,7 +128,7 @@ class TestTx18Promote:
         mock_store.execute_query = AsyncMock(return_value=[])
 
         with pytest.raises(InvariantViolation) as exc_info:
-            await tx18_promote(
+            await promote(
                 store=mock_store,
                 claim_id=make_uuid(),
                 silo_id="test-silo",
@@ -124,26 +141,36 @@ class TestTx19Demote:
     """Tests for TX19 DEMOTE."""
 
     @pytest.mark.asyncio
-    async def test_demotes_fact_with_insufficient_corroboration(self, mock_store: AsyncMock) -> None:
+    async def test_demotes_fact_with_insufficient_corroboration(
+        self, mock_store: AsyncMock
+    ) -> None:
         """Test that TX19 demotes a fact below corroboration threshold."""
         fact_id = make_uuid()
 
-        mock_store.execute_query = AsyncMock(side_effect=[
-            [{
-                "id": fact_id,
-                "state": "ACTIVE",
-                "claim_status": "PROMOTED",
-                "corroboration_count": PROMOTION_THRESHOLD - 1,
-                "confidence": 0.9,
-            }],
-            [{"corroboration_count": PROMOTION_THRESHOLD - 1}],
-        ])
-        mock_store.execute_write = AsyncMock(return_value=[{
-            "id": fact_id,
-            "claim_status": "UNPROMOTED",
-        }])
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                [
+                    {
+                        "id": fact_id,
+                        "state": "ACTIVE",
+                        "claim_status": "PROMOTED",
+                        "corroboration_count": PROMOTION_THRESHOLD - 1,
+                        "confidence": 0.9,
+                    }
+                ],
+                [{"corroboration_count": PROMOTION_THRESHOLD - 1}],
+            ]
+        )
+        mock_store.execute_write = AsyncMock(
+            return_value=[
+                {
+                    "id": fact_id,
+                    "claim_status": "UNPROMOTED",
+                }
+            ]
+        )
 
-        result, events = await tx19_demote(
+        result, events = await demote(
             store=mock_store,
             fact_id=fact_id,
             silo_id="test-silo",
@@ -157,18 +184,22 @@ class TestTx19Demote:
         """Test that TX19 skips demotion if corroboration is still sufficient."""
         fact_id = make_uuid()
 
-        mock_store.execute_query = AsyncMock(side_effect=[
-            [{
-                "id": fact_id,
-                "state": "ACTIVE",
-                "claim_status": "PROMOTED",
-                "corroboration_count": PROMOTION_THRESHOLD,
-                "confidence": 0.9,
-            }],
-            [{"corroboration_count": PROMOTION_THRESHOLD}],
-        ])
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                [
+                    {
+                        "id": fact_id,
+                        "state": "ACTIVE",
+                        "claim_status": "PROMOTED",
+                        "corroboration_count": PROMOTION_THRESHOLD,
+                        "confidence": 0.9,
+                    }
+                ],
+                [{"corroboration_count": PROMOTION_THRESHOLD}],
+            ]
+        )
 
-        result, events = await tx19_demote(
+        result, events = await demote(
             store=mock_store,
             fact_id=fact_id,
             silo_id="test-silo",
@@ -182,15 +213,19 @@ class TestTx19Demote:
         """Test that TX19 is idempotent for already demoted facts."""
         fact_id = make_uuid()
 
-        mock_store.execute_query = AsyncMock(return_value=[{
-            "id": fact_id,
-            "state": "ACTIVE",
-            "claim_status": "UNPROMOTED",
-            "corroboration_count": 1,
-            "confidence": 0.7,
-        }])
+        mock_store.execute_query = AsyncMock(
+            return_value=[
+                {
+                    "id": fact_id,
+                    "state": "ACTIVE",
+                    "claim_status": "UNPROMOTED",
+                    "corroboration_count": 1,
+                    "confidence": 0.7,
+                }
+            ]
+        )
 
-        result, events = await tx19_demote(
+        result, events = await demote(
             store=mock_store,
             fact_id=fact_id,
             silo_id="test-silo",
@@ -205,7 +240,7 @@ class TestTx19Demote:
         mock_store.execute_query = AsyncMock(return_value=[])
 
         with pytest.raises(InvariantViolation) as exc_info:
-            await tx19_demote(
+            await demote(
                 store=mock_store,
                 fact_id=make_uuid(),
                 silo_id="test-silo",
@@ -218,22 +253,30 @@ class TestTx19Demote:
         """Test that TX19 emits cascade_staleness event."""
         fact_id = make_uuid()
 
-        mock_store.execute_query = AsyncMock(side_effect=[
-            [{
-                "id": fact_id,
-                "state": "ACTIVE",
-                "claim_status": "PROMOTED",
-                "corroboration_count": 1,
-                "confidence": 0.9,
-            }],
-            [{"corroboration_count": 1}],
-        ])
-        mock_store.execute_write = AsyncMock(return_value=[{
-            "id": fact_id,
-            "claim_status": "UNPROMOTED",
-        }])
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                [
+                    {
+                        "id": fact_id,
+                        "state": "ACTIVE",
+                        "claim_status": "PROMOTED",
+                        "corroboration_count": 1,
+                        "confidence": 0.9,
+                    }
+                ],
+                [{"corroboration_count": 1}],
+            ]
+        )
+        mock_store.execute_write = AsyncMock(
+            return_value=[
+                {
+                    "id": fact_id,
+                    "claim_status": "UNPROMOTED",
+                }
+            ]
+        )
 
-        result, events = await tx19_demote(
+        result, events = await demote(
             store=mock_store,
             fact_id=fact_id,
             silo_id="test-silo",

@@ -1993,10 +1993,13 @@ async def cascade_staleness(
     visited.add(node_id)
 
     # Find dependents
-    dependents = await store.execute_query(q.GET_DEPENDENTS_FOR_CASCADE, {
-        "node_id": node_id,
-        "silo_id": silo_id,
-    })
+    dependents = await store.execute_query(
+        q.GET_DEPENDENTS_FOR_CASCADE,
+        {
+            "node_id": node_id,
+            "silo_id": silo_id,
+        },
+    )
 
     cascade_count = 0
 
@@ -2006,17 +2009,22 @@ async def cascade_staleness(
 
         if layer == "wisdom":
             # Mark belief stale
-            await store.execute_write(q.MARK_BELIEF_STALE_FOR_CASCADE, {
-                "node_id": dep_id,
-                "silo_id": silo_id,
-            })
+            await store.execute_write(
+                q.MARK_BELIEF_STALE_FOR_CASCADE,
+                {
+                    "node_id": dep_id,
+                    "silo_id": silo_id,
+                },
+            )
             cascade_count += 1
         else:
             # Recurse into non-wisdom dependents (sync for depth 1, would be async for deeper in production)
             if depth == 1:
                 cascade_count += await cascade_staleness(store, dep_id, silo_id, depth + 1, visited)
 
-    logger.debug("cascade_staleness_complete", node_id=node_id, cascade_count=cascade_count, depth=depth)
+    logger.debug(
+        "cascade_staleness_complete", node_id=node_id, cascade_count=cascade_count, depth=depth
+    )
 
     return cascade_count
 
@@ -2040,10 +2048,13 @@ async def tx15_forget(
     from context_service.db import queries as q
 
     # Validate node exists and is not already tombstoned
-    node_result = await store.execute_query(q.GET_NODE_FOR_FORGET, {
-        "node_id": node_id,
-        "silo_id": silo_id,
-    })
+    node_result = await store.execute_query(
+        q.GET_NODE_FOR_FORGET,
+        {
+            "node_id": node_id,
+            "silo_id": silo_id,
+        },
+    )
 
     if not node_result:
         raise InvariantViolation("NODE_NOT_FOUND", "Node not found")
@@ -2064,15 +2075,18 @@ async def tx15_forget(
     cancel_window_expires = now + timedelta(seconds=CANCEL_WINDOW_DURATION_SECONDS)
 
     # Tombstone the node
-    await store.execute_write(q.TOMBSTONE_NODE, {
-        "node_id": node_id,
-        "silo_id": silo_id,
-        "tombstoned_at": now.isoformat(),
-        "forget_requested_at": now.isoformat(),
-        "agent_id": agent_id,
-        "reason": reason,
-        "cancel_window_expires": cancel_window_expires.isoformat(),
-    })
+    await store.execute_write(
+        q.TOMBSTONE_NODE,
+        {
+            "node_id": node_id,
+            "silo_id": silo_id,
+            "tombstoned_at": now.isoformat(),
+            "forget_requested_at": now.isoformat(),
+            "agent_id": agent_id,
+            "reason": reason,
+            "cancel_window_expires": cancel_window_expires.isoformat(),
+        },
+    )
 
     cascade_count = 0
     events: list[ReactionEvent] = []
@@ -2080,12 +2094,14 @@ async def tx15_forget(
     if cascade:
         # Trigger staleness cascade
         cascade_count = await cascade_staleness(store, node_id, silo_id, depth=1)
-        events.append(ReactionEvent(
-            event_type="cascade_staleness_complete",
-            node_id=node_id,
-            silo_id=silo_id,
-            payload={"cascade_count": cascade_count},
-        ))
+        events.append(
+            ReactionEvent(
+                event_type="cascade_staleness_complete",
+                node_id=node_id,
+                silo_id=silo_id,
+                payload={"cascade_count": cascade_count},
+            )
+        )
 
     result = ForgetResult(
         node_id=uuid.UUID(node_id),
@@ -2095,7 +2111,9 @@ async def tx15_forget(
         cascade_count=cascade_count,
     )
 
-    logger.debug("tx15_forget_complete", node_id=node_id, silo_id=silo_id, cascade_count=cascade_count)
+    logger.debug(
+        "tx15_forget_complete", node_id=node_id, silo_id=silo_id, cascade_count=cascade_count
+    )
 
     return result, events
 
@@ -2109,10 +2127,13 @@ async def tx16_cancel_forget(
     """TX16 CANCEL_FORGET: Restore a tombstoned node within cancel window."""
     from context_service.db import queries as q
 
-    node_result = await store.execute_query(q.GET_NODE_FOR_FORGET, {
-        "node_id": node_id,
-        "silo_id": silo_id,
-    })
+    node_result = await store.execute_query(
+        q.GET_NODE_FOR_FORGET,
+        {
+            "node_id": node_id,
+            "silo_id": silo_id,
+        },
+    )
 
     if not node_result:
         raise InvariantViolation("NODE_NOT_FOUND", "Node not found")
@@ -2131,15 +2152,20 @@ async def tx16_cancel_forget(
 
     now = datetime.now(UTC)
 
-    restore_result = await store.execute_write(q.RESTORE_TOMBSTONED_NODE, {
-        "node_id": node_id,
-        "silo_id": silo_id,
-        "now": now.isoformat(),
-        "restored_at": now.isoformat(),
-        "agent_id": agent_id,
-    })
+    restore_result = await store.execute_write(
+        q.RESTORE_TOMBSTONED_NODE,
+        {
+            "node_id": node_id,
+            "silo_id": silo_id,
+            "now": now.isoformat(),
+            "restored_at": now.isoformat(),
+            "agent_id": agent_id,
+        },
+    )
 
-    previous_state_str = restore_result[0].get("previous_state", "ACTIVE") if restore_result else "ACTIVE"
+    previous_state_str = (
+        restore_result[0].get("previous_state", "ACTIVE") if restore_result else "ACTIVE"
+    )
     previous_state = NodeState(previous_state_str)
 
     logger.debug("tx16_cancel_forget_complete", node_id=node_id, silo_id=silo_id)
@@ -2165,11 +2191,14 @@ async def tx10_hard_delete(
     now = datetime.now(UTC)
 
     # Find tombstoned nodes past cancel window
-    candidates = await store.execute_query(q.GET_TOMBSTONED_FOR_GC, {
-        "silo_id": silo_id,
-        "now": now.isoformat(),
-        "batch_size": batch_size,
-    })
+    candidates = await store.execute_query(
+        q.GET_TOMBSTONED_FOR_GC,
+        {
+            "silo_id": silo_id,
+            "now": now.isoformat(),
+            "batch_size": batch_size,
+        },
+    )
 
     deleted_ids: list[str] = []
     skipped_count = 0
@@ -2179,16 +2208,22 @@ async def tx10_hard_delete(
 
         try:
             # Delete edges first
-            await store.execute_write(q.DELETE_EDGES_FOR_NODE, {
-                "node_id": node_id,
-                "silo_id": silo_id,
-            })
+            await store.execute_write(
+                q.DELETE_EDGES_FOR_NODE,
+                {
+                    "node_id": node_id,
+                    "silo_id": silo_id,
+                },
+            )
 
             # Delete node
-            await store.execute_write(q.HARD_DELETE_NODE, {
-                "node_id": node_id,
-                "silo_id": silo_id,
-            })
+            await store.execute_write(
+                q.HARD_DELETE_NODE,
+                {
+                    "node_id": node_id,
+                    "silo_id": silo_id,
+                },
+            )
 
             deleted_ids.append(node_id)
 
@@ -2196,7 +2231,12 @@ async def tx10_hard_delete(
             logger.warning("hard_delete_failed", node_id=node_id, error=str(e))
             skipped_count += 1
 
-    logger.info("tx10_hard_delete_complete", silo_id=silo_id, deleted_count=len(deleted_ids), skipped_count=skipped_count)
+    logger.info(
+        "tx10_hard_delete_complete",
+        silo_id=silo_id,
+        deleted_count=len(deleted_ids),
+        skipped_count=skipped_count,
+    )
 
     return HardDeleteResult(
         deleted_count=len(deleted_ids),
@@ -2205,12 +2245,12 @@ async def tx10_hard_delete(
     )
 
 
-async def tx18_promote(
+async def promote(
     store: HyperGraphStore,
     claim_id: str,
     silo_id: str,
 ) -> tuple[PromoteResult, list[ReactionEvent]]:
-    """TX18 PROMOTE: Promote Claim to Fact when corroboration threshold met.
+    """Promote Claim to Fact when corroboration threshold met (TX18).
 
     Per brain-transactions-pseudocode.md:
     - Preconditions: claim exists, state ACTIVE, claim_status UNPROMOTED
@@ -2220,10 +2260,13 @@ async def tx18_promote(
     from context_service.db import queries as q
 
     # Fetch claim
-    claim_result = await store.execute_query(q.GET_CLAIM_FOR_PROMOTE, {
-        "claim_id": claim_id,
-        "silo_id": silo_id,
-    })
+    claim_result = await store.execute_query(
+        q.GET_CLAIM_FOR_PROMOTE,
+        {
+            "claim_id": claim_id,
+            "silo_id": silo_id,
+        },
+    )
 
     if not claim_result:
         raise InvariantViolation("CLAIM_NOT_FOUND", "Claim not found")
@@ -2256,14 +2299,19 @@ async def tx18_promote(
 
     now = datetime.now(UTC)
     # Boost confidence based on corroboration
-    new_confidence = min(1.0, current_confidence + 0.1 * (corroboration_count - PROMOTION_THRESHOLD + 1))
+    new_confidence = min(
+        1.0, current_confidence + 0.1 * (corroboration_count - PROMOTION_THRESHOLD + 1)
+    )
 
-    await store.execute_write(q.UPDATE_CLAIM_TO_PROMOTED, {
-        "claim_id": claim_id,
-        "silo_id": silo_id,
-        "promoted_at": now.isoformat(),
-        "new_confidence": new_confidence,
-    })
+    await store.execute_write(
+        q.UPDATE_CLAIM_TO_PROMOTED,
+        {
+            "claim_id": claim_id,
+            "silo_id": silo_id,
+            "promoted_at": now.isoformat(),
+            "new_confidence": new_confidence,
+        },
+    )
 
     result = PromoteResult(
         claim_id=uuid.UUID(claim_id),
@@ -2280,17 +2328,22 @@ async def tx18_promote(
         ),
     ]
 
-    logger.debug("tx18_promote_complete", claim_id=claim_id, silo_id=silo_id, corroboration_count=corroboration_count)
+    logger.debug(
+        "promote_complete",
+        claim_id=claim_id,
+        silo_id=silo_id,
+        corroboration_count=corroboration_count,
+    )
 
     return result, events
 
 
-async def tx19_demote(
+async def demote(
     store: HyperGraphStore,
     fact_id: str,
     silo_id: str,
 ) -> tuple[DemoteResult, list[ReactionEvent]]:
-    """TX19 DEMOTE: Demote Fact back to Claim when evidence withdrawn.
+    """Demote Fact back to Claim when evidence withdrawn (TX19).
 
     Per brain-transactions-pseudocode.md:
     - Preconditions: fact exists, state ACTIVE, claim_status PROMOTED
@@ -2300,10 +2353,13 @@ async def tx19_demote(
     from context_service.db import queries as q
 
     # Fetch fact
-    fact_result = await store.execute_query(q.GET_FACT_FOR_DEMOTE, {
-        "fact_id": fact_id,
-        "silo_id": silo_id,
-    })
+    fact_result = await store.execute_query(
+        q.GET_FACT_FOR_DEMOTE,
+        {
+            "fact_id": fact_id,
+            "silo_id": silo_id,
+        },
+    )
 
     if not fact_result:
         raise InvariantViolation("FACT_NOT_FOUND", "Fact not found")
@@ -2327,10 +2383,13 @@ async def tx19_demote(
         ), []
 
     # Recount corroboration
-    recount_result = await store.execute_query(q.RECOUNT_CORROBORATION, {
-        "claim_id": fact_id,
-        "silo_id": silo_id,
-    })
+    recount_result = await store.execute_query(
+        q.RECOUNT_CORROBORATION,
+        {
+            "claim_id": fact_id,
+            "silo_id": silo_id,
+        },
+    )
     corroboration_count = recount_result[0].get("corroboration_count", 0) if recount_result else 0
 
     # Still corroborated - no demotion needed
@@ -2346,12 +2405,15 @@ async def tx19_demote(
     # Reduce confidence without corroboration boost
     new_confidence = max(0.1, current_confidence - 0.1)
 
-    await store.execute_write(q.UPDATE_FACT_TO_DEMOTED, {
-        "fact_id": fact_id,
-        "silo_id": silo_id,
-        "demoted_at": now.isoformat(),
-        "new_confidence": new_confidence,
-    })
+    await store.execute_write(
+        q.UPDATE_FACT_TO_DEMOTED,
+        {
+            "fact_id": fact_id,
+            "silo_id": silo_id,
+            "demoted_at": now.isoformat(),
+            "new_confidence": new_confidence,
+        },
+    )
 
     result = DemoteResult(
         fact_id=uuid.UUID(fact_id),
@@ -2374,6 +2436,11 @@ async def tx19_demote(
         ),
     ]
 
-    logger.debug("tx19_demote_complete", fact_id=fact_id, silo_id=silo_id, corroboration_count=corroboration_count)
+    logger.debug(
+        "demote_complete",
+        fact_id=fact_id,
+        silo_id=silo_id,
+        corroboration_count=corroboration_count,
+    )
 
     return result, events

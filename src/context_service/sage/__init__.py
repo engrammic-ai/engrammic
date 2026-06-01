@@ -31,7 +31,9 @@ from context_service.sage.transactions import (
     SynthesizeResult,
     cascade_staleness,
     check_corroboration,
+    demote,
     detect_spo_conflict,
+    promote,
     tx0_store_memory,
     tx2_store_claim,
     tx3_supersede,
@@ -43,8 +45,6 @@ from context_service.sage.transactions import (
     tx15_forget,
     tx16_cancel_forget,
     tx17_link,
-    tx18_promote,
-    tx19_demote,
 )
 
 __all__ = [
@@ -82,8 +82,9 @@ __all__ = [
     "tx15_forget",
     "tx16_cancel_forget",
     "tx17_link",
-    "tx18_promote",
-    "tx19_demote",
+    # Layer movement (TX18, TX19)
+    "promote",
+    "demote",
     # Helpers (public API for ContextService integration)
     "compute_credibility",
     "check_corroboration",
