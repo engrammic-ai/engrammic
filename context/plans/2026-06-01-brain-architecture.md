@@ -1,6 +1,6 @@
 # Brain Architecture Implementation Plan
 
-**Status:** Phase 5 complete, Phase 6 next  
+**Status:** Phase 6 complete, Phase 7 next  
 **Date:** 2026-06-01  
 **Branch:** `feat/brain-architecture`
 
@@ -63,11 +63,11 @@ Core insight: value is in **retrieval with epistemic awareness**, not **autonomo
 16. [x] TX18 PROMOTE - fact to belief promotion
 17. [x] TX19 DEMOTE - belief to fact demotion
 
-### Phase 6: Query
+### Phase 6: Query (COMPLETE)
 
-18. [ ] RECALL query - with lazy synthesis trigger, engagement surfacing
-19. [ ] COMPUTE_RECALL_SCORE helper - epistemic-aware ranking
-20. [ ] Fix WOULD_CREATE_CYCLE query syntax bug
+18. [x] RECALL query - with lazy synthesis trigger, engagement surfacing
+19. [x] COMPUTE_RECALL_SCORE helper - epistemic-aware ranking
+20. [x] Fix WOULD_CREATE_CYCLE query syntax bug
 
 ### Phase 7: CITE v2 Epistemology
 
