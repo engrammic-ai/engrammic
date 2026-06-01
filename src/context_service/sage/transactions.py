@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from context_service.sage.confidence import compute_credibility
+
 if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
 
@@ -364,11 +366,19 @@ async def tx2_store_claim(
     node_id = uuid.uuid4()
     created_at = datetime.now(UTC)
 
+    credibility_breakdown = compute_credibility(
+        source_tier=source_tier,
+        method=None,  # Default to direct for MCP calls
+        raw_confidence=confidence,
+    )
+
     props: dict[str, Any] = {
         "layer": "knowledge",
         "state": NodeState.ACTIVE.value,
         "claim_status": "UNPROMOTED",
         "confidence": confidence,
+        "credibility": credibility_breakdown.credibility,
+        "credibility_factors": credibility_breakdown.to_dict(),
         "source_tier": source_tier or "unknown",
         "created_by": agent_id,
         "evidence": evidence_refs,

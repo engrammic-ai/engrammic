@@ -665,3 +665,79 @@ class TestFlagContradiction:
         write_calls = mock_store.execute_write.call_args_list
         status_calls = [c for c in write_calls if ConflictStatus.UNRESOLVED.value in str(c)]
         assert len(status_calls) >= 1
+
+
+class TestTx2Credibility:
+    """Tests for credibility computation in TX2 STORE_CLAIM."""
+
+    def _make_evidence_mock(self, evidence_id: str, silo_id: str = "test-silo") -> AsyncMock:
+        """Create a mock store that returns valid evidence."""
+        store = AsyncMock()
+        store.execute_query = AsyncMock(
+            return_value=[
+                {
+                    "id": evidence_id,
+                    "silo_id": silo_id,
+                    "layer": "memory",
+                    "state": "ACTIVE",
+                }
+            ]
+        )
+        store.execute_write = AsyncMock(return_value=[{"count": 1, "should_promote": False}])
+        return store
+
+    @pytest.mark.asyncio
+    async def test_computes_credibility_at_write(self) -> None:
+        """Test that credibility is computed and stored in props at write time."""
+        evidence_id = "12345678-1234-1234-1234-123456789abc"
+        mock_store = self._make_evidence_mock(evidence_id)
+
+        await tx2_store_claim(
+            store=mock_store,
+            content="Test claim",
+            evidence_refs=[f"node:{evidence_id}"],
+            silo_id="test-silo",
+            agent_id="test-agent",
+            source_tier="authoritative",
+            confidence=0.9,
+        )
+
+        # Find the CREATE call (first execute_write with CREATE cypher)
+        create_call = mock_store.execute_write.call_args_list[0]
+        params = create_call[0][1]  # positional args: (cypher, params)
+        props = params["props"]
+
+        # credibility = source_tier_weight * method_weight * raw_confidence
+        # authoritative (1.0) * direct (1.0) * 0.9 = 0.9
+        assert "credibility" in props
+        assert abs(props["credibility"] - 0.9) < 1e-9
+
+    @pytest.mark.asyncio
+    async def test_stores_credibility_breakdown(self) -> None:
+        """Test that credibility_factors breakdown dict is stored in props."""
+        evidence_id = "12345678-1234-1234-1234-123456789abc"
+        mock_store = self._make_evidence_mock(evidence_id)
+
+        await tx2_store_claim(
+            store=mock_store,
+            content="Test claim",
+            evidence_refs=[f"node:{evidence_id}"],
+            silo_id="test-silo",
+            agent_id="test-agent",
+            source_tier="validated",
+            confidence=0.8,
+        )
+
+        create_call = mock_store.execute_write.call_args_list[0]
+        params = create_call[0][1]
+        props = params["props"]
+
+        assert "credibility_factors" in props
+        factors = props["credibility_factors"]
+        assert factors["source_tier"] == "validated"
+        assert factors["source_tier_weight"] == 0.85
+        assert factors["method"] == "direct"
+        assert factors["method_weight"] == 1.0
+        assert factors["raw_confidence"] == 0.8
+        # credibility = 0.85 * 1.0 * 0.8 = 0.68
+        assert abs(factors["credibility"] - 0.68) < 1e-9
