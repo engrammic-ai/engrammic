@@ -10,6 +10,16 @@ from context_service.sage.confidence import (
     CredibilityBreakdown,
     compute_credibility,
 )
+from context_service.sage.recall import (
+    Layer,
+    RecallOptions,
+    RecallResult,
+    RecallResultItem,
+    RelatedNode,
+    compute_recall_score,
+    recall,
+    traverse_graph,
+)
 from context_service.sage.transactions import (
     CANCEL_WINDOW_DURATION_SECONDS,
     MAX_CASCADE_DEPTH,
@@ -45,10 +55,14 @@ from context_service.sage.transactions import (
     store_memory,
     supersede,
     synthesize,
+    would_create_cycle,
 )
 
 __all__ = [
     # Results
+    "RecallResult",
+    "RecallResultItem",
+    "RelatedNode",
     "StoreMemoryResult",
     "StoreClaimResult",
     "SupersedeResult",
@@ -66,7 +80,10 @@ __all__ = [
     # Enums
     "ClusterState",
     "ConflictStatus",
+    "Layer",
     "SynthesisState",
+    # Options
+    "RecallOptions",
     # Constants
     "CANCEL_WINDOW_DURATION_SECONDS",
     "MAX_CASCADE_DEPTH",
@@ -90,4 +107,9 @@ __all__ = [
     "check_corroboration",
     "detect_spo_conflict",
     "cascade_staleness",
+    "would_create_cycle",
+    # Recall (Phase 6)
+    "recall",
+    "compute_recall_score",
+    "traverse_graph",
 ]
