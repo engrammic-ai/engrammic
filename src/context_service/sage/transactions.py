@@ -186,6 +186,27 @@ class LinkResult:
 
 
 @dataclass
+class CommitResult:
+    """Result of TX8 COMMIT."""
+
+    commitment_id: uuid.UUID
+    silo_id: str
+    created_at: datetime
+    confidence: float
+
+
+@dataclass
+class CrystallizeResult:
+    """Result of TX14 CRYSTALLIZE."""
+
+    commitment_id: uuid.UUID
+    hypothesis_id: uuid.UUID
+    silo_id: str
+    created_at: datetime
+    confidence: float
+
+
+@dataclass
 class ReactionEvent:
     """Event emitted for async reaction processing."""
 
