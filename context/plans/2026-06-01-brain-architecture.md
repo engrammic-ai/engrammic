@@ -42,6 +42,7 @@ Core insight: value is in **retrieval with epistemic awareness**, not **autonomo
 7. [x] Conflict status on nodes - unresolved/resolved/merged states surfaced in recall
 8. [x] CHECK_CORROBORATION helper - atomic N-of-M check (fix atomicity issue from review)
 9. [x] Define confidence formulas (missing from pseudocode)
+10. [x] Wire into production path - integrate into ContextService.assert_claim (MCP learn path)
 
 ### Phase 3: Belief Flow
 
