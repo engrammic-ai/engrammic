@@ -845,6 +845,125 @@ async def tx8_commit(
     return result, events
 
 
+async def _validate_hypothesis(
+    store: HyperGraphStore,
+    hypothesis_id: str,
+    silo_id: str,
+    session_id: str,
+) -> dict[str, Any]:
+    """Validate hypothesis exists, belongs to session, not crystallized, not tombstoned."""
+    from context_service.db import queries as q
+
+    results = await store.execute_query(q.GET_HYPOTHESIS_FOR_CRYSTALLIZE, {
+        "hypothesis_id": hypothesis_id,
+        "silo_id": silo_id,
+        "session_id": session_id,
+    })
+
+    if not results:
+        return {"error": "HYPOTHESIS_NOT_FOUND", "message": "Hypothesis not found or wrong session"}
+
+    row = results[0]
+    if row.get("state") == NodeState.TOMBSTONED.value:
+        return {"error": "HYPOTHESIS_TOMBSTONED", "message": "Hypothesis is tombstoned"}
+
+    if row.get("crystallized"):
+        return {
+            "error": "ALREADY_CRYSTALLIZED",
+            "message": "Hypothesis already crystallized",
+        }
+
+    return {
+        "error": None,
+        "content": row.get("content"),
+        "confidence": row.get("confidence", 0.8),
+    }
+
+
+async def tx14_crystallize(
+    store: HyperGraphStore,
+    hypothesis_id: str,
+    silo_id: str,
+    agent_id: str,
+    session_id: str,
+) -> tuple[CrystallizeResult, list[ReactionEvent]]:
+    """TX14 CRYSTALLIZE: Convert WorkingHypothesis to Commitment."""
+    from context_service.db import queries as q
+
+    validation = await _validate_hypothesis(store, hypothesis_id, silo_id, session_id)
+    if validation["error"]:
+        raise InvariantViolation(validation["error"], validation["message"])
+
+    content = validation["content"]
+    confidence = float(validation["confidence"])
+
+    # Get about_refs from hypothesis
+    about_results = await store.execute_query(q.GET_HYPOTHESIS_ABOUT_REFS, {
+        "hypothesis_id": hypothesis_id,
+        "silo_id": silo_id,
+    })
+
+    about_refs = [r["id"] for r in about_results]
+    tombstoned = [r for r in about_results if r.get("state") == NodeState.TOMBSTONED.value]
+    if tombstoned:
+        raise InvariantViolation(
+            "ABOUT_REF_TOMBSTONED",
+            f"About refs are tombstoned: {[r['id'] for r in tombstoned]}",
+        )
+
+    commitment_id = uuid.uuid4()
+    created_at = datetime.now(UTC)
+
+    props: dict[str, Any] = {
+        "layer": "wisdom",
+        "type": "commitment",
+        "state": NodeState.ACTIVE.value,
+        "confidence": confidence,
+        "created_by": agent_id,
+        "source_hypothesis_id": hypothesis_id,
+    }
+
+    await store.execute_write(
+        q.CREATE_COMMITMENT_WITH_ABOUT,
+        {
+            "id": str(commitment_id),
+            "silo_id": silo_id,
+            "content": content,
+            "created_at": created_at.isoformat(),
+            "props": props,
+            "about_ids": about_refs,
+            "agent_id": agent_id,
+        },
+    )
+
+    await store.execute_write(
+        q.CREATE_CRYSTALLIZED_FROM_EDGE,
+        {
+            "commitment_id": str(commitment_id),
+            "hypothesis_id": hypothesis_id,
+            "silo_id": silo_id,
+            "created_at": created_at.isoformat(),
+        },
+    )
+
+    result = CrystallizeResult(
+        commitment_id=commitment_id,
+        hypothesis_id=uuid.UUID(hypothesis_id),
+        silo_id=silo_id,
+        created_at=created_at,
+        confidence=confidence,
+    )
+
+    events: list[ReactionEvent] = [
+        ReactionEvent(event_type="compute_embedding", node_id=str(commitment_id), silo_id=silo_id),
+        ReactionEvent(event_type="update_heat", node_id=str(commitment_id), silo_id=silo_id, payload={"access_type": "WRITE"}),
+    ]
+
+    logger.debug("tx14_crystallize_complete", commitment_id=str(commitment_id), hypothesis_id=hypothesis_id, silo_id=silo_id)
+
+    return result, events
+
+
 async def _validate_evidence_nodes(
     store: HyperGraphStore,
     node_ids: list[str],
