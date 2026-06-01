@@ -130,6 +130,14 @@ def _build_broker(silo_id: str) -> ListQueueBroker:
     # middleware pushes. Both hooks are called in registration order.
     broker.add_middlewares(retry_middleware, dlq_middleware)
 
+    # Register all reaction task handlers onto the broker so find_task resolves
+    # correctly at emit time. Imported here to avoid a circular import (tasks
+    # imports broker constants; broker imports tasks only after the broker is
+    # built).
+    from context_service.reactions.tasks import register_tasks
+
+    register_tasks(broker)
+
     return broker
 
 
