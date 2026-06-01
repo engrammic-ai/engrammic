@@ -1,4 +1,4 @@
-"""Brain transactions: Core write path with invariant enforcement.
+"""Sage transactions: Core write path with invariant enforcement.
 
 Implements TX0, TX2, TX3, TX17 per brain-transactions-pseudocode.md.
 
@@ -723,9 +723,7 @@ async def _validate_supersession(
     RETURN w.silo_id AS winner_silo, l.silo_id AS loser_silo,
            w.properties.state AS winner_state, l.properties.state AS loser_state
     """
-    results = await store.execute_query(
-        cypher, {"winner_id": winner_id, "loser_id": loser_id}
-    )
+    results = await store.execute_query(cypher, {"winner_id": winner_id, "loser_id": loser_id})
 
     if not results:
         return {"error": "NODE_NOT_FOUND", "message": "Winner or loser node not found"}
@@ -761,9 +759,7 @@ async def _would_create_cycle(
     MATCH path = (target {{id: $target_id}})-[:{edge_type}*]->(source {{id: $source_id}})
     RETURN count(path) > 0 AS would_cycle
     """
-    results = await store.execute_query(
-        cypher, {"source_id": source_id, "target_id": target_id}
-    )
+    results = await store.execute_query(cypher, {"source_id": source_id, "target_id": target_id})
     return results[0]["would_cycle"] if results else False
 
 
@@ -823,9 +819,7 @@ async def _validate_link(
     RETURN s.silo_id AS source_silo, t.silo_id AS target_silo,
            s.properties.state AS source_state, t.properties.state AS target_state
     """
-    results = await store.execute_query(
-        cypher, {"source_id": source_id, "target_id": target_id}
-    )
+    results = await store.execute_query(cypher, {"source_id": source_id, "target_id": target_id})
 
     if not results:
         return {"error": "NODE_NOT_FOUND", "message": "Source or target node not found"}
@@ -838,7 +832,10 @@ async def _validate_link(
             "target_silo": row["target_silo"],
         }
 
-    if row["source_state"] == NodeState.DELETED.value or row["target_state"] == NodeState.DELETED.value:
+    if (
+        row["source_state"] == NodeState.DELETED.value
+        or row["target_state"] == NodeState.DELETED.value
+    ):
         return {"error": "NODE_DELETED", "message": "Cannot link to deleted nodes"}
 
     dup_check = f"""

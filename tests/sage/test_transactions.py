@@ -1,4 +1,4 @@
-"""Tests for brain transactions (TX0, TX2, TX3, TX17)."""
+"""Tests for sage transactions (TX0, TX2, TX3, TX17)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from context_service.brain.transactions import (
+from context_service.sage.transactions import (
     BrainError,
     CrossSiloViolation,
     CycleError,

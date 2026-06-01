@@ -1,12 +1,12 @@
-"""Brain: Reactive transaction layer for CITE v2.
+"""Sage: Reactive transaction layer for CITE v2.
 
-This module implements the brain architecture that replaces SAGE's
-cadence-based Dagster jobs with write-time invariants and event-driven reactions.
+This module implements the sage architecture replacing cadence-based Dagster jobs
+with write-time invariants and event-driven reactions.
 
 See context/specs/brain-transactions-overview.md for the full specification.
 """
 
-from context_service.brain.transactions import (
+from context_service.sage.transactions import (
     LinkResult,
     StoreClaimResult,
     StoreMemoryResult,
