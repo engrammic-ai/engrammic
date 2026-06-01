@@ -5,7 +5,7 @@
 # Configuration
 # =============================================================================
 
-dc := "docker compose -f docker-compose.dev.yml"
+dc := "docker compose -f docker/docker-compose.dev.yml"
 project := "engrammic"
 region := "europe-north1"
 zone := "europe-north1-a"
@@ -165,16 +165,16 @@ dev-box action="ssh":
 
 # Build all images (tags :latest + :SHORT_SHA)
 build sha="latest":
-    gcloud builds submit --config=cloudbuild.api.yaml \
+    gcloud builds submit --config=deploy/cloudbuild/api.yaml \
         --substitutions=SHORT_SHA={{sha}} --region={{region}} .
-    gcloud builds submit --config=cloudbuild.beacon.yaml \
+    gcloud builds submit --config=deploy/cloudbuild/beacon.yaml \
         --substitutions=SHORT_SHA={{sha}} --region={{region}} .
-    gcloud builds submit --config=cloudbuild.dagster.yaml \
+    gcloud builds submit --config=deploy/cloudbuild/dagster.yaml \
         --substitutions=SHORT_SHA={{sha}} --region={{region}} .
 
 # Build partners image (bytecode-only distribution)
 build-partners sha="latest":
-    gcloud builds submit --config=cloudbuild.partners.yaml \
+    gcloud builds submit --config=deploy/cloudbuild/partners.yaml \
         --substitutions=SHORT_SHA={{sha}} --project={{project}} .
 
 # Deploy specific SHA to beta
@@ -210,7 +210,7 @@ dist version="0.1.0":
     set -euo pipefail
     SHORT_SHA=$(git rev-parse --short HEAD)
     echo "Building self-hosted images v{{version}} (${SHORT_SHA}) via Cloud Build..."
-    gcloud builds submit --config=cloudbuild.releases.yaml \
+    gcloud builds submit --config=deploy/cloudbuild/releases.yaml \
         --substitutions=SHORT_SHA=${SHORT_SHA},_VERSION={{version}} \
         --region={{region}} .
     echo "Done. Test with:"
