@@ -1,9 +1,48 @@
 # Phase 8: Reactions Infrastructure
 
+**Status:** COMPLETE (2026-06-02)
+
 **Goal:** Replace cadence-based Dagster jobs with event-driven Taskiq workers while keeping Dagster for orchestration visibility.
 
 **Date:** 2026-06-02  
 **Branch:** `feat/brain-architecture`
+
+---
+
+## Completion Summary
+
+**Commits:** 10 (a6c4311..41b2c5d)  
+**Tests:** 51 passing  
+**Files added:** 2,892 lines across reactions/, sensors/, tests/
+
+### What shipped:
+- `reactions/broker.py` - Silo-partitioned Taskiq broker with SmartRetryMiddleware + DeadLetterMiddleware
+- `reactions/events.py` - ReactionEventType enum (11 types), ReactionEvent dataclass, emit_reaction() fire-and-forget helper
+- `reactions/tasks.py` - 8 task handlers (5 fully implemented, 3 stubs for Phase 9)
+- `reactions/worker.py` - LoggingMiddleware, TracingMiddleware, Sentry integration, health check task
+- `reactions/worker_entrypoint.py` - CLI entrypoint for `taskiq worker`
+- `pipelines/sensors/reaction_health.py` - Queue depth + DLQ monitoring sensors
+- `sage/transactions.py` - All 11 transaction functions now emit reactions directly (emit=True flag)
+- Docker deployment: reaction-worker service in dev and prod compose files
+
+### Handler status:
+| Handler | Status |
+|---------|--------|
+| compute_embedding | Implemented (Qdrant upsert pending vector store wiring) |
+| update_heat | Fully implemented |
+| cascade_staleness | Fully implemented |
+| flag_contradiction | Implemented (emits consolidate) |
+| consolidate | Fully implemented |
+| update_cluster_membership | Stub (Phase 9) |
+| check_synthesis | Stub (Phase 9) |
+| propagate_confidence | Stub (Phase 9) |
+
+### Open items for Phase 9:
+1. Complete stub handlers (cluster membership, synthesis, confidence propagation)
+2. Wire Qdrant vector store into compute_embedding handler
+3. Disable Dagster job scheduling (workers take over)
+4. Remove legacy Dagster jobs
+5. Task queue abstraction (Phase 8b sub-plan)
 
 ---
 
@@ -61,10 +100,10 @@ taskiq-redis = "^1.0"
 
 **Files:** `reactions/broker.py`
 
-- [ ] Configure Taskiq Redis broker with silo-partitioned queue names
-- [ ] Add connection pooling (reuse existing Redis from config)
-- [ ] Add retry policy (exponential backoff, max 3 retries)
-- [ ] Add dead letter queue for failed tasks
+- [x] Configure Taskiq Redis broker with silo-partitioned queue names
+- [x] Add connection pooling (reuse existing Redis from config)
+- [x] Add retry policy (exponential backoff, max 3 retries)
+- [x] Add dead letter queue for failed tasks
 
 ```python
 from taskiq_redis import ListQueueBroker
@@ -92,10 +131,10 @@ class ReactionEvent:
     payload: dict[str, Any] = field(default_factory=dict)
 ```
 
-- [ ] Move to `reactions/events.py`
-- [ ] Add `emit_reaction()` helper that enqueues to Taskiq
-- [ ] Add event type enum for type safety
-- [ ] Wire into transaction return paths (replace list accumulation with direct emit)
+- [x] Move to `reactions/events.py`
+- [x] Add `emit_reaction()` helper that enqueues to Taskiq
+- [x] Add event type enum for type safety
+- [x] Wire into transaction return paths (replace list accumulation with direct emit)
 
 ---
 
@@ -116,9 +155,9 @@ Migrate reaction handlers from current inline/Dagster code:
 | `check_synthesis` | Trigger lazy synthesis if ready | Dagster synthesizer |
 | `propagate_confidence` | Run incremental propagation | New in Phase 7 |
 
-- [ ] Define Taskiq tasks for each event type
-- [ ] Add timeout and retry config per task type
-- [ ] Add structured logging with trace IDs
+- [x] Define Taskiq tasks for each event type
+- [x] Add timeout and retry config per task type
+- [x] Add structured logging with trace IDs
 
 ---
 
@@ -126,13 +165,13 @@ Migrate reaction handlers from current inline/Dagster code:
 
 **Files:** `reactions/worker.py`
 
-- [ ] Configure worker pool size (default: 4 workers)
-- [ ] Add graceful shutdown handling
-- [ ] Add middleware for:
+- [x] Configure worker pool size (default: 4 workers)
+- [x] Add graceful shutdown handling
+- [x] Add middleware for:
   - Structured logging (structlog integration)
   - OpenTelemetry tracing
   - Error capture (Sentry if configured)
-- [ ] Add health check endpoint
+- [x] Add health check endpoint
 
 ---
 
@@ -142,10 +181,10 @@ Migrate reaction handlers from current inline/Dagster code:
 
 Currently transactions return `list[ReactionEvent]`. Change to emit directly:
 
-- [ ] Replace event accumulation with `await emit_reaction(event)`
-- [ ] Make emission async but non-blocking (fire-and-forget with timeout)
-- [ ] Add fallback to sync processing if Redis unavailable
-- [ ] Keep event list return for testing (mock emit)
+- [x] Replace event accumulation with `await emit_reaction(event)`
+- [x] Make emission async but non-blocking (fire-and-forget with timeout)
+- [x] Add fallback to sync processing if Redis unavailable
+- [x] Keep event list return for testing (mock emit)
 
 ---
 
@@ -153,10 +192,10 @@ Currently transactions return `list[ReactionEvent]`. Change to emit directly:
 
 **Files:** `pipelines/sensors/reaction_health.py`
 
-- [ ] Sensor to check queue depths per silo
-- [ ] Alert on queue backlog > threshold (configurable)
-- [ ] Sensor to check dead letter queue
-- [ ] Dashboard asset for reaction metrics
+- [x] Sensor to check queue depths per silo
+- [x] Alert on queue backlog > threshold (configurable)
+- [x] Sensor to check dead letter queue
+- [ ] Dashboard asset for reaction metrics (deferred)
 
 Keep existing Dagster jobs running in parallel during migration.
 
@@ -166,20 +205,20 @@ Keep existing Dagster jobs running in parallel during migration.
 
 **Files:** `Dockerfile`, `docker-compose.yml`, deployment configs
 
-- [ ] Add `taskiq worker` command to Dockerfile
-- [ ] Add worker service to docker-compose
-- [ ] Configure worker count per environment (dev: 1, beta: 2, prod: 4)
-- [ ] Add worker to Pulumi/deployment
+- [x] Add `taskiq worker` command to Dockerfile
+- [x] Add worker service to docker-compose
+- [x] Configure worker count per environment (dev: 1, beta: 2, prod: 4)
+- [ ] Add worker to Pulumi/deployment (deferred - manual deploy first)
 
 ---
 
 ## Task 8: Tests
 
-- [ ] Unit tests for task handlers (mock store/services)
-- [ ] Integration test for emit -> process flow
-- [ ] Test retry behavior
-- [ ] Test dead letter handling
-- [ ] Test silo isolation (events don't cross silos)
+- [x] Unit tests for task handlers (mock store/services)
+- [x] Integration test for emit -> process flow
+- [x] Test retry behavior
+- [x] Test dead letter handling
+- [x] Test silo isolation (events don't cross silos)
 
 ---
 
