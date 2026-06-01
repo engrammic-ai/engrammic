@@ -2203,3 +2203,177 @@ async def tx10_hard_delete(
         skipped_count=skipped_count,
         deleted_ids=deleted_ids,
     )
+
+
+async def tx18_promote(
+    store: HyperGraphStore,
+    claim_id: str,
+    silo_id: str,
+) -> tuple[PromoteResult, list[ReactionEvent]]:
+    """TX18 PROMOTE: Promote Claim to Fact when corroboration threshold met.
+
+    Per brain-transactions-pseudocode.md:
+    - Preconditions: claim exists, state ACTIVE, claim_status UNPROMOTED
+    - Preconditions: corroboration_count >= PROMOTION_THRESHOLD
+    - Idempotent: already promoted returns success without modification
+    """
+    from context_service.db import queries as q
+
+    # Fetch claim
+    claim_result = await store.execute_query(q.GET_CLAIM_FOR_PROMOTE, {
+        "claim_id": claim_id,
+        "silo_id": silo_id,
+    })
+
+    if not claim_result:
+        raise InvariantViolation("CLAIM_NOT_FOUND", "Claim not found")
+
+    claim = claim_result[0]
+    state = claim.get("state")
+    claim_status = claim.get("claim_status")
+    corroboration_count = claim.get("corroboration_count", 0)
+    current_confidence = claim.get("confidence", 0.8)
+
+    if state != NodeState.ACTIVE.value:
+        raise InvariantViolation("CLAIM_NOT_ACTIVE", f"Claim is not active (state: {state})")
+
+    # Idempotent: already promoted
+    if claim_status == "PROMOTED":
+        return PromoteResult(
+            claim_id=uuid.UUID(claim_id),
+            promoted_at=datetime.now(UTC),
+            new_confidence=current_confidence,
+            corroboration_count=corroboration_count,
+        ), []
+
+    if corroboration_count < PROMOTION_THRESHOLD:
+        raise InvariantViolation(
+            "INSUFFICIENT_CORROBORATION",
+            f"Corroboration count {corroboration_count} below threshold {PROMOTION_THRESHOLD}",
+            count=corroboration_count,
+            threshold=PROMOTION_THRESHOLD,
+        )
+
+    now = datetime.now(UTC)
+    # Boost confidence based on corroboration
+    new_confidence = min(1.0, current_confidence + 0.1 * (corroboration_count - PROMOTION_THRESHOLD + 1))
+
+    await store.execute_write(q.UPDATE_CLAIM_TO_PROMOTED, {
+        "claim_id": claim_id,
+        "silo_id": silo_id,
+        "promoted_at": now.isoformat(),
+        "new_confidence": new_confidence,
+    })
+
+    result = PromoteResult(
+        claim_id=uuid.UUID(claim_id),
+        promoted_at=now,
+        new_confidence=new_confidence,
+        corroboration_count=corroboration_count,
+    )
+
+    events: list[ReactionEvent] = [
+        ReactionEvent(
+            event_type="update_cluster_membership",
+            node_id=claim_id,
+            silo_id=silo_id,
+        ),
+    ]
+
+    logger.debug("tx18_promote_complete", claim_id=claim_id, silo_id=silo_id, corroboration_count=corroboration_count)
+
+    return result, events
+
+
+async def tx19_demote(
+    store: HyperGraphStore,
+    fact_id: str,
+    silo_id: str,
+) -> tuple[DemoteResult, list[ReactionEvent]]:
+    """TX19 DEMOTE: Demote Fact back to Claim when evidence withdrawn.
+
+    Per brain-transactions-pseudocode.md:
+    - Preconditions: fact exists, state ACTIVE, claim_status PROMOTED
+    - Recounts corroboration; skips if still >= threshold
+    - Idempotent: already demoted returns success without modification
+    """
+    from context_service.db import queries as q
+
+    # Fetch fact
+    fact_result = await store.execute_query(q.GET_FACT_FOR_DEMOTE, {
+        "fact_id": fact_id,
+        "silo_id": silo_id,
+    })
+
+    if not fact_result:
+        raise InvariantViolation("FACT_NOT_FOUND", "Fact not found")
+
+    fact = fact_result[0]
+    state = fact.get("state")
+    claim_status = fact.get("claim_status")
+    current_confidence = fact.get("confidence", 0.8)
+
+    if state != NodeState.ACTIVE.value:
+        raise InvariantViolation("FACT_NOT_ACTIVE", f"Fact is not active (state: {state})")
+
+    # Idempotent: already demoted
+    if claim_status != "PROMOTED":
+        corroboration_count = fact.get("corroboration_count", 0)
+        return DemoteResult(
+            fact_id=uuid.UUID(fact_id),
+            demoted_at=datetime.now(UTC),
+            new_confidence=current_confidence,
+            corroboration_count=corroboration_count,
+        ), []
+
+    # Recount corroboration
+    recount_result = await store.execute_query(q.RECOUNT_CORROBORATION, {
+        "claim_id": fact_id,
+        "silo_id": silo_id,
+    })
+    corroboration_count = recount_result[0].get("corroboration_count", 0) if recount_result else 0
+
+    # Still corroborated - no demotion needed
+    if corroboration_count >= PROMOTION_THRESHOLD:
+        return DemoteResult(
+            fact_id=uuid.UUID(fact_id),
+            demoted_at=datetime.now(UTC),
+            new_confidence=current_confidence,
+            corroboration_count=corroboration_count,
+        ), []
+
+    now = datetime.now(UTC)
+    # Reduce confidence without corroboration boost
+    new_confidence = max(0.1, current_confidence - 0.1)
+
+    await store.execute_write(q.UPDATE_FACT_TO_DEMOTED, {
+        "fact_id": fact_id,
+        "silo_id": silo_id,
+        "demoted_at": now.isoformat(),
+        "new_confidence": new_confidence,
+    })
+
+    result = DemoteResult(
+        fact_id=uuid.UUID(fact_id),
+        demoted_at=now,
+        new_confidence=new_confidence,
+        corroboration_count=corroboration_count,
+    )
+
+    events: list[ReactionEvent] = [
+        ReactionEvent(
+            event_type="cascade_staleness",
+            node_id=fact_id,
+            silo_id=silo_id,
+            payload={"depth": 1},
+        ),
+        ReactionEvent(
+            event_type="update_cluster_membership",
+            node_id=fact_id,
+            silo_id=silo_id,
+        ),
+    ]
+
+    logger.debug("tx19_demote_complete", fact_id=fact_id, silo_id=silo_id, corroboration_count=corroboration_count)
+
+    return result, events
