@@ -1207,6 +1207,169 @@ async def tx14_crystallize(
     return result, events
 
 
+async def tx5_revise_belief(
+    store: HyperGraphStore,
+    belief_id: str,
+    silo_id: str,
+    llm: LLMProvider,
+    embedder: EmbeddingService,
+) -> tuple[ReviseBeliefResult, list[ReactionEvent]]:
+    """TX5 REVISE_BELIEF: Re-synthesize a stale belief."""
+    from context_service.db import queries as q
+
+    # Get belief and validate
+    belief_result = await store.execute_query(q.GET_BELIEF_FOR_REVISION, {
+        "belief_id": belief_id, "silo_id": silo_id,
+    })
+
+    if not belief_result:
+        raise InvariantViolation("BELIEF_NOT_FOUND", "Belief not found")
+
+    belief = belief_result[0]
+    if belief.get("state") != NodeState.ACTIVE.value:
+        raise InvariantViolation("BELIEF_NOT_ACTIVE", "Belief is not active")
+
+    if belief.get("synthesis_state") != SynthesisState.STALE.value:
+        raise InvariantViolation(
+            "BELIEF_NOT_STALE",
+            f"Belief synthesis_state is {belief.get('synthesis_state')}, not STALE",
+        )
+
+    if belief.get("revision_in_progress"):
+        raise InvariantViolation("REVISION_IN_PROGRESS", "Revision already in progress")
+
+    cluster_id = belief.get("source_cluster_id")
+    old_content = belief.get("content", "")
+
+    # Mark revision in progress
+    await store.execute_write(q.MARK_BELIEF_REVISION_IN_PROGRESS, {
+        "belief_id": belief_id, "silo_id": silo_id,
+    })
+
+    try:
+        # Acquire cluster lock
+        await store.execute_query(q.GET_CLUSTER_FOR_SYNTHESIS, {
+            "cluster_id": cluster_id, "silo_id": silo_id,
+        })
+
+        try:
+            # Fetch current facts
+            facts_result = await store.execute_query(q.GET_FACTS_IN_CLUSTER, {
+                "cluster_id": cluster_id, "silo_id": silo_id,
+            })
+            facts = list(facts_result) if facts_result else []
+            fact_count = len(facts)
+
+            # Check threshold - invalidate if below
+            if fact_count < SYNTHESIS_THRESHOLD:
+                await store.execute_write(q.UPDATE_BELIEF_AFTER_REVISION, {
+                    "belief_id": belief_id, "silo_id": silo_id,
+                    "synthesis_state": SynthesisState.INVALIDATED.value,
+                })
+                await store.execute_write(q.RELEASE_CLUSTER_LOCK, {
+                    "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.SPARSE.value,
+                })
+                return ReviseBeliefResult(
+                    new_belief_id=None, old_belief_id=uuid.UUID(belief_id),
+                    content_changed=False, invalidated=True,
+                ), []
+
+            # Compute aggregate confidence
+            confidences = [float(f.get("confidence", 0.8)) for f in facts]
+            aggregate_confidence = noisy_or_aggregate(confidences)
+
+            if aggregate_confidence < SYNTHESIS_CONFIDENCE_THRESHOLD:
+                await store.execute_write(q.UPDATE_BELIEF_AFTER_REVISION, {
+                    "belief_id": belief_id, "silo_id": silo_id,
+                    "synthesis_state": SynthesisState.INVALIDATED.value,
+                })
+                await store.execute_write(q.RELEASE_CLUSTER_LOCK, {
+                    "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.SPARSE.value,
+                })
+                return ReviseBeliefResult(
+                    new_belief_id=None, old_belief_id=uuid.UUID(belief_id),
+                    content_changed=False, invalidated=True,
+                ), []
+
+            # Call LLM with previous belief context
+            synthesis_result = await llm_synthesize(llm, facts, 30.0, previous_belief=old_content)
+
+            if not synthesis_result.success:
+                await store.execute_write(q.UPDATE_BELIEF_AFTER_REVISION, {
+                    "belief_id": belief_id, "silo_id": silo_id,
+                    "synthesis_state": SynthesisState.STALE.value,
+                })
+                await store.execute_write(q.RELEASE_CLUSTER_LOCK, {
+                    "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.STALE.value,
+                })
+                return ReviseBeliefResult(
+                    new_belief_id=None, old_belief_id=uuid.UUID(belief_id), content_changed=False,
+                ), []
+
+            # Check if content changed
+            new_content = synthesis_result.content or ""
+            if new_content.strip() == old_content.strip():
+                await store.execute_write(q.UPDATE_BELIEF_AFTER_REVISION, {
+                    "belief_id": belief_id, "silo_id": silo_id,
+                    "synthesis_state": SynthesisState.FRESH.value,
+                })
+                await store.execute_write(q.RELEASE_CLUSTER_LOCK, {
+                    "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.SYNTHESIZED.value,
+                })
+                return ReviseBeliefResult(
+                    new_belief_id=None, old_belief_id=uuid.UUID(belief_id), content_changed=False,
+                ), []
+
+            # Create new belief
+            new_belief_id = uuid.uuid4()
+            created_at = datetime.now(UTC)
+            props: dict[str, Any] = {
+                "layer": "wisdom", "type": "belief", "state": NodeState.ACTIVE.value,
+                "synthesis_state": SynthesisState.FRESH.value, "confidence": aggregate_confidence,
+                "source_cluster_id": cluster_id,
+            }
+            fact_ids = [f["id"] for f in facts]
+
+            await store.execute_write(q.CREATE_BELIEF_WITH_SYNTHESIZED_FROM, {
+                "id": str(new_belief_id), "silo_id": silo_id, "content": new_content,
+                "created_at": created_at.isoformat(), "props": props, "fact_ids": fact_ids,
+            })
+
+            # Supersede old belief via SUPERSEDES edge
+            await _create_supersedes_edge(
+                store, str(new_belief_id), belief_id, silo_id, SupersedeReason.EVIDENCE_SHIFT
+            )
+
+            # Update cluster
+            await store.execute_write(q.UPDATE_CLUSTER_AFTER_SYNTHESIS, {
+                "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.SYNTHESIZED.value,
+                "belief_id": str(new_belief_id), "synthesized_at": created_at.isoformat(),
+            })
+
+            events: list[ReactionEvent] = [
+                ReactionEvent(event_type="compute_embedding", node_id=str(new_belief_id), silo_id=silo_id),
+                ReactionEvent(event_type="update_heat", node_id=str(new_belief_id), silo_id=silo_id, payload={"access_type": "SYNTHESIS"}),
+            ]
+
+            logger.debug("tx5_revise_belief_complete", new_belief_id=str(new_belief_id), old_belief_id=belief_id)
+
+            return ReviseBeliefResult(
+                new_belief_id=new_belief_id, old_belief_id=uuid.UUID(belief_id), content_changed=True,
+            ), events
+
+        except Exception:
+            await store.execute_write(q.RELEASE_CLUSTER_LOCK, {
+                "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.STALE.value,
+            })
+            raise
+
+    except Exception:
+        await store.execute_write(q.UPDATE_BELIEF_AFTER_REVISION, {
+            "belief_id": belief_id, "silo_id": silo_id, "synthesis_state": SynthesisState.STALE.value,
+        })
+        raise
+
+
 async def _validate_evidence_nodes(
     store: HyperGraphStore,
     node_ids: list[str],
