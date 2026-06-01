@@ -1,6 +1,6 @@
 # Brain Architecture Implementation Plan
 
-**Status:** Phase 3 complete, Phase 4 next  
+**Status:** Phase 4 complete, Phase 5 next  
 **Date:** 2026-06-01  
 **Branch:** `feat/brain-architecture`
 
@@ -51,12 +51,12 @@ Core insight: value is in **retrieval with epistemic awareness**, not **autonomo
 10. [x] TX14 CRYSTALLIZE - WorkingHypothesis to Commitment
 11. [x] TX8 COMMIT - session hypothesis promotion
 
-### Phase 4: Lifecycle
+### Phase 4: Lifecycle (COMPLETE)
 
-12. [ ] TX15 FORGET - request deletion with INV8 enforcement
-13. [ ] TX16 CANCEL_FORGET - restore from pending deletion
-14. [ ] TX10 HARD_DELETE - actual deletion (admin/GDPR)
-15. [ ] CASCADE_STALENESS helper - depth-limited staleness propagation
+12. [x] TX15 FORGET - request deletion with INV8 enforcement
+13. [x] TX16 CANCEL_FORGET - restore from pending deletion
+14. [x] TX10 HARD_DELETE - actual deletion (admin/GDPR)
+15. [x] CASCADE_STALENESS helper - depth-limited staleness propagation
 
 ### Phase 5: Layer Movement
 
