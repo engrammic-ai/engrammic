@@ -17,6 +17,16 @@ Implement Phase 3 of the brain architecture: Belief Flow transactions (TX4, TX5,
 | TX8 | COMMIT | Direct stance declaration | No |
 | TX14 | CRYSTALLIZE | WorkingHypothesis to Commitment | No |
 
+## Invariants Referenced
+
+| INV | Rule | Enforced by |
+|-----|------|-------------|
+| INV3 | Every Belief has >= N SYNTHESIZED_FROM to ACTIVE Facts | TX4 |
+| INV5 | No cross-silo edges | TX4, TX8, TX14 |
+| INV7 | Every Commitment has DECLARED_BY edge to agent | TX8, TX14 |
+
+Full invariants defined in `context/specs/brain-transactions-overview.md`.
+
 ## Architecture Decision
 
 **Option A selected:** Extend `sage/transactions.py` with all 4 transactions.
@@ -120,7 +130,7 @@ async def tx14_crystallize(
 **Preconditions:**
 - Hypothesis exists, not tombstoned, belongs to agent's session
 - Hypothesis not already crystallized
-- All ABOUT refs still valid (not tombstoned)
+- All ABOUT refs exist in same silo (INV5), not tombstoned
 
 **Creates:**
 - Commitment node copying content/confidence from hypothesis
@@ -201,17 +211,17 @@ async def tx5_revise_belief(
 **Flow:**
 1. Get `cluster_id` from `belief.source_cluster_id`
 2. Mark `belief.revision_in_progress = true` (prevents duplicate SUPERSEDES chains)
-3. Acquire lock on cluster_id
-3. Fetch current ACTIVE facts in cluster
-4. If `fact_count < threshold`: mark belief INVALIDATED, return
-5. Recompute aggregate confidence
-6. If `confidence < threshold`: mark belief INVALIDATED, return
-7. Call LLM with facts + `previous_belief` context
-8. If content unchanged: mark belief FRESH, return existing belief_id
-9. Create new Belief node
-10. Create SUPERSEDES edge (`reason=EVIDENCE_SHIFT`) from new to old
-11. Mark old belief SUPERSEDED
-12. Update `cluster.current_belief_id`
+3. Acquire lock on cluster_id (try/finally to release on any exit)
+4. Fetch current ACTIVE facts in cluster
+5. If `fact_count < SYNTHESIS_THRESHOLD` (3): mark belief INVALIDATED, return
+6. Recompute aggregate confidence
+7. If `confidence < 0.6`: mark belief INVALIDATED, return
+8. Call LLM with facts + `previous_belief` context
+9. If content unchanged: mark belief FRESH, return existing belief_id
+10. Create new Belief node
+11. Create SUPERSEDES edge (`reason=EVIDENCE_SHIFT`) from new to old
+12. Mark old belief SUPERSEDED
+13. Update `cluster.current_belief_id`
 
 **Key differences from TX4:**
 - LLM gets `previous_belief` content for continuity
@@ -230,12 +240,21 @@ async def tx5_revise_belief(
 def noisy_or_aggregate(confidences: list[float]) -> float:
     """Noisy-or: 1 - product(1 - c_i). Higher when multiple sources agree."""
 
+@dataclass
+class LLMSynthesisResult:
+    """Result from LLM synthesis call."""
+    success: bool
+    content: str | None
+    caveats: list[str]
+    timed_out: bool
+    error: str | None = None
+
 async def llm_synthesize(
     llm: LLMProvider,
     facts: list[dict[str, Any]],
     timeout: float,
     previous_belief: str | None = None,
-) -> SynthesisResult:
+) -> LLMSynthesisResult:
     """Call LLM to synthesize belief from facts."""
 
 async def check_synthesis_trigger(store, cluster_id, silo_id) -> None:
@@ -281,7 +300,8 @@ UNWIND $about_ids AS aid
 MATCH (a {id: aid, silo_id: $silo_id})
 CREATE (c)-[:ABOUT]->(a)
 WITH c
-CREATE (c)-[:DECLARED_BY {created_at: $created_at}]->(:Agent {id: $agent_id})
+MERGE (agent:Agent {id: $agent_id})
+CREATE (c)-[:DECLARED_BY {created_at: $created_at}]->(agent)
 RETURN c.id
 
 -- CREATE_CRYSTALLIZED_FROM_EDGE (for TX14 provenance)
