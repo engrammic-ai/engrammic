@@ -143,6 +143,72 @@ class TestTx4Synthesize:
         assert result.confidence < 0.6
         mock_llm.complete.assert_not_called()
 
+    @pytest.mark.asyncio
+    async def test_handles_llm_failure(
+        self, mock_store: AsyncMock, mock_llm: AsyncMock, mock_embedder: AsyncMock
+    ) -> None:
+        """Test that TX4 handles LLM synthesis failure gracefully."""
+        cluster_id = make_uuid()
+        fact_ids = [make_uuid() for _ in range(3)]
+
+        mock_llm.complete = AsyncMock(side_effect=Exception("LLM unavailable"))
+
+        mock_store.execute_query = AsyncMock(side_effect=[
+            # GET_CLUSTER_FOR_SYNTHESIS
+            [{"state": "READY", "current_belief_id": None, "synthesis_retry_count": 0}],
+            # GET_FACTS_IN_CLUSTER
+            [{"id": fid, "content": f"Fact {i}", "confidence": 0.8}
+             for i, fid in enumerate(fact_ids)],
+        ])
+
+        result, events = await tx4_synthesize(
+            store=mock_store,
+            cluster_id=cluster_id,
+            silo_id="test-silo",
+            llm=mock_llm,
+            _embedder=mock_embedder,
+        )
+
+        assert result.belief_id is None
+        assert result.cluster_state == ClusterState.READY
+        assert not result.timed_out
+
+    @pytest.mark.asyncio
+    async def test_handles_llm_timeout(
+        self, mock_store: AsyncMock, mock_llm: AsyncMock, mock_embedder: AsyncMock
+    ) -> None:
+        """Test that TX4 handles LLM timeout gracefully."""
+        import asyncio
+        cluster_id = make_uuid()
+        fact_ids = [make_uuid() for _ in range(3)]
+
+        async def slow_complete(*args, **kwargs):
+            await asyncio.sleep(10)
+            return "Never returned"
+
+        mock_llm.complete = slow_complete
+
+        mock_store.execute_query = AsyncMock(side_effect=[
+            # GET_CLUSTER_FOR_SYNTHESIS
+            [{"state": "READY", "current_belief_id": None, "synthesis_retry_count": 0}],
+            # GET_FACTS_IN_CLUSTER
+            [{"id": fid, "content": f"Fact {i}", "confidence": 0.8}
+             for i, fid in enumerate(fact_ids)],
+        ])
+
+        result, events = await tx4_synthesize(
+            store=mock_store,
+            cluster_id=cluster_id,
+            silo_id="test-silo",
+            llm=mock_llm,
+            _embedder=mock_embedder,
+            timeout_seconds=0.1,  # Very short timeout
+        )
+
+        assert result.belief_id is None
+        assert result.timed_out is True
+        assert result.cluster_state == ClusterState.READY
+
 
 class TestTx8Commit:
     """Tests for TX8 COMMIT."""
@@ -328,6 +394,31 @@ class TestTx14Crystallize:
             )
 
         assert exc_info.value.code == "HYPOTHESIS_TOMBSTONED"
+
+    @pytest.mark.asyncio
+    async def test_rejects_tombstoned_about_refs(self, mock_store: AsyncMock) -> None:
+        """Test that TX14 rejects hypotheses with tombstoned about_refs."""
+        hypothesis_id = make_uuid()
+        tombstoned_ref = make_uuid()
+
+        mock_store.execute_query = AsyncMock(side_effect=[
+            # GET_HYPOTHESIS_FOR_CRYSTALLIZE
+            [{"id": hypothesis_id, "content": "My hypothesis", "confidence": 0.9,
+              "crystallized": False, "state": "ACTIVE"}],
+            # GET_HYPOTHESIS_ABOUT_REFS - returns tombstoned ref
+            [{"id": tombstoned_ref, "state": "TOMBSTONED"}],
+        ])
+
+        with pytest.raises(InvariantViolation) as exc_info:
+            await tx14_crystallize(
+                store=mock_store,
+                hypothesis_id=hypothesis_id,
+                silo_id="test-silo",
+                agent_id="test-agent",
+                session_id="test-session",
+            )
+
+        assert exc_info.value.code == "ABOUT_REF_TOMBSTONED"
 
 
 class TestTx5ReviseBelief:
