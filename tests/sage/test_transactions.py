@@ -19,6 +19,7 @@ from context_service.sage.transactions import (
     StoreClaimResult,
     StoreMemoryResult,
     SupersedeReason,
+    check_corroboration,
     tx0_store_memory,
     tx2_store_claim,
     tx3_supersede,
@@ -461,3 +462,72 @@ class TestTx17Link:
                 silo_id="test-silo",
                 agent_id="test-agent",
             )
+
+
+class TestCheckCorroboration:
+    """Tests for atomic CHECK_CORROBORATION helper."""
+
+    @pytest.mark.asyncio
+    async def test_returns_count_and_should_promote(self, mock_store: AsyncMock) -> None:
+        """Test that corroboration check returns count and promotion flag."""
+        mock_store.execute_write = AsyncMock(return_value=[{
+            "count": 2,
+            "should_promote": False,
+        }])
+
+        count, should_promote = await check_corroboration(
+            store=mock_store,
+            node_id="test-node-id",
+            silo_id="test-silo",
+        )
+
+        assert count == 2
+        assert should_promote is False
+
+    @pytest.mark.asyncio
+    async def test_returns_true_when_threshold_met(self, mock_store: AsyncMock) -> None:
+        """Test that should_promote is True when count meets threshold."""
+        mock_store.execute_write = AsyncMock(return_value=[{
+            "count": 3,
+            "should_promote": True,
+        }])
+
+        count, should_promote = await check_corroboration(
+            store=mock_store,
+            node_id="test-node-id",
+            silo_id="test-silo",
+        )
+
+        assert count == 3
+        assert should_promote is True
+
+    @pytest.mark.asyncio
+    async def test_uses_single_atomic_query(self, mock_store: AsyncMock) -> None:
+        """Test that exactly one write query is issued (atomic operation)."""
+        mock_store.execute_write = AsyncMock(return_value=[{
+            "count": 1,
+            "should_promote": False,
+        }])
+
+        await check_corroboration(
+            store=mock_store,
+            node_id="test-node-id",
+            silo_id="test-silo",
+        )
+
+        # Should be exactly one write call (atomic, contains SET mutation)
+        assert mock_store.execute_write.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_returns_defaults_when_no_results(self, mock_store: AsyncMock) -> None:
+        """Test that (1, False) is returned when query returns no rows."""
+        mock_store.execute_query = AsyncMock(return_value=[])
+
+        count, should_promote = await check_corroboration(
+            store=mock_store,
+            node_id="test-node-id",
+            silo_id="test-silo",
+        )
+
+        assert count == 1
+        assert should_promote is False

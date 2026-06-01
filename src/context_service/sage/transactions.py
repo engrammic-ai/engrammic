@@ -57,6 +57,8 @@ class LinkType(StrEnum):
 
 HIERARCHICAL_EDGE_TYPES = frozenset({LinkType.REFINES, LinkType.GENERALIZES, LinkType.CAUSED_BY})
 
+PROMOTION_THRESHOLD = 3
+
 
 class BrainError(Exception):
     """Base error for brain transaction failures."""
@@ -792,17 +794,69 @@ async def _create_supersedes_edge(
     )
 
 
+async def check_corroboration(
+    store: HyperGraphStore,
+    node_id: str,
+    silo_id: str,
+    threshold: int = PROMOTION_THRESHOLD,
+) -> tuple[int, bool]:
+    """Atomic corroboration check using single query.
+
+    Finds all claims with same (subject, predicate, object), counts distinct
+    evidence sources, updates corroboration_count on all, returns result.
+
+    Args:
+        store: Graph store instance.
+        node_id: The claim node to check.
+        silo_id: Tenant isolation ID.
+        threshold: Promotion threshold (default: 3).
+
+    Returns:
+        Tuple of (distinct_source_count, should_promote).
+    """
+    cypher = """
+    MATCH (new:Claim {id: $node_id, silo_id: $silo_id})
+    MATCH (c:Claim {silo_id: $silo_id})
+    WHERE c.properties.subject = new.properties.subject
+      AND c.properties.predicate = new.properties.predicate
+      AND c.properties.object = new.properties.object
+      AND c.properties.state = 'ACTIVE'
+    WITH collect(c) AS claims
+    UNWIND claims AS claim
+    OPTIONAL MATCH (claim)-[:DERIVED_FROM]->(evidence)
+    WITH claims, collect(DISTINCT evidence.id) AS distinct_sources
+    UNWIND claims AS claim
+    SET claim.properties.corroboration_count = size(distinct_sources)
+    RETURN size(distinct_sources) AS count, size(distinct_sources) >= $threshold AS should_promote
+    """
+
+    results = await store.execute_write(
+        cypher,
+        {"node_id": node_id, "silo_id": silo_id, "threshold": threshold},
+    )
+
+    if not results:
+        return 1, False
+
+    row = results[0]
+    return row.get("count", 1), row.get("should_promote", False)
+
+
 async def _check_corroboration(
-    _store: HyperGraphStore,
-    _node_id: str,
-    _silo_id: str,
+    store: HyperGraphStore,
+    node_id: str,
+    silo_id: str,
 ) -> tuple[int, bool]:
     """Check corroboration and potentially promote to Fact (TX18).
 
     Returns (corroboration_count, promoted).
+
+    TODO: TX18 promotion (converting a corroborated Claim to a Fact node) is
+    deferred to Phase 2. Currently only updates corroboration_count and returns
+    whether the threshold is met; the caller receives `promoted=False` until
+    TX18 is implemented.
     """
-    # TODO: Implement full CHECK_CORROBORATION per spec (Phase 2)
-    return 1, False
+    return await check_corroboration(store, node_id, silo_id)
 
 
 async def _validate_link(
