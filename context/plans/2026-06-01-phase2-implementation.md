@@ -49,19 +49,19 @@ Task 4 -> Task 5 (consolidation) -> Task 6 (credibility integration) -> Task 7 (
 - Rename: `tests/brain/` -> `tests/sage/`
 - Modify: All files importing from `context_service.brain`
 
-- [ ] **Step 1: Rename source directory**
+- [x] **Step 1: Rename source directory**
 
 ```bash
 git mv src/context_service/brain src/context_service/sage
 ```
 
-- [ ] **Step 2: Rename test directory**
+- [x] **Step 2: Rename test directory**
 
 ```bash
 git mv tests/brain tests/sage
 ```
 
-- [ ] **Step 3: Update imports in sage/transactions.py**
+- [x] **Step 3: Update imports in sage/transactions.py**
 
 Change the module docstring and any internal references:
 
@@ -72,7 +72,7 @@ Implements TX0, TX2, TX3, TX17 per brain-transactions-pseudocode.md.
 """
 ```
 
-- [ ] **Step 4: Find and update all imports across codebase**
+- [x] **Step 4: Find and update all imports across codebase**
 
 ```bash
 grep -r "context_service.brain" --include="*.py" src/ tests/
@@ -80,7 +80,7 @@ grep -r "context_service.brain" --include="*.py" src/ tests/
 
 Update each occurrence from `context_service.brain` to `context_service.sage`.
 
-- [ ] **Step 5: Run tests to verify rename works**
+- [x] **Step 5: Run tests to verify rename works**
 
 ```bash
 uv run pytest tests/sage/ -v
@@ -88,7 +88,7 @@ uv run pytest tests/sage/ -v
 
 Expected: All existing tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add -A
@@ -103,7 +103,7 @@ git commit -m "refactor: rename brain/ to sage/"
 - Create: `src/context_service/sage/confidence.py`
 - Create: `tests/sage/test_confidence.py`
 
-- [ ] **Step 1: Write failing test for source tier weights**
+- [x] **Step 1: Write failing test for source tier weights**
 
 ```python
 # tests/sage/test_confidence.py
@@ -135,7 +135,7 @@ class TestSourceTierWeights:
         assert SOURCE_TIER_WEIGHTS["unknown"] == 0.4
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 uv run pytest tests/sage/test_confidence.py -v
@@ -143,7 +143,7 @@ uv run pytest tests/sage/test_confidence.py -v
 
 Expected: FAIL with "ModuleNotFoundError: No module named 'context_service.sage.confidence'"
 
-- [ ] **Step 3: Write minimal implementation for tier weights**
+- [x] **Step 3: Write minimal implementation for tier weights**
 
 ```python
 # src/context_service/sage/confidence.py
@@ -173,7 +173,7 @@ METHOD_WEIGHTS: dict[str, float] = {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 ```bash
 uv run pytest tests/sage/test_confidence.py::TestSourceTierWeights -v
@@ -181,7 +181,7 @@ uv run pytest tests/sage/test_confidence.py::TestSourceTierWeights -v
 
 Expected: PASS
 
-- [ ] **Step 5: Write failing test for method weights**
+- [x] **Step 5: Write failing test for method weights**
 
 ```python
 # Add to tests/sage/test_confidence.py
@@ -202,7 +202,7 @@ class TestMethodWeights:
         assert METHOD_WEIGHTS["experimental"] == 0.6
 ```
 
-- [ ] **Step 6: Run test to verify it passes**
+- [x] **Step 6: Run test to verify it passes**
 
 ```bash
 uv run pytest tests/sage/test_confidence.py::TestMethodWeights -v
@@ -210,7 +210,7 @@ uv run pytest tests/sage/test_confidence.py::TestMethodWeights -v
 
 Expected: PASS (constants already defined)
 
-- [ ] **Step 7: Write failing test for compute_credibility**
+- [x] **Step 7: Write failing test for compute_credibility**
 
 ```python
 # Add to tests/sage/test_confidence.py
@@ -279,7 +279,7 @@ class TestComputeCredibility:
         assert d["credibility"] == pytest.approx(0.765)
 ```
 
-- [ ] **Step 8: Run test to verify it fails**
+- [x] **Step 8: Run test to verify it fails**
 
 ```bash
 uv run pytest tests/sage/test_confidence.py::TestComputeCredibility -v
@@ -287,7 +287,7 @@ uv run pytest tests/sage/test_confidence.py::TestComputeCredibility -v
 
 Expected: FAIL with "cannot import name 'compute_credibility'"
 
-- [ ] **Step 9: Implement CredibilityBreakdown and compute_credibility**
+- [x] **Step 9: Implement CredibilityBreakdown and compute_credibility**
 
 ```python
 # Add to src/context_service/sage/confidence.py
@@ -352,7 +352,7 @@ def compute_credibility(
     )
 ```
 
-- [ ] **Step 10: Run tests to verify they pass**
+- [x] **Step 10: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/sage/test_confidence.py -v
@@ -360,7 +360,7 @@ uv run pytest tests/sage/test_confidence.py -v
 
 Expected: All PASS
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add src/context_service/sage/confidence.py tests/sage/test_confidence.py
@@ -375,7 +375,7 @@ git commit -m "feat(sage): add credibility formula with transparency breakdown"
 - Modify: `src/context_service/sage/transactions.py`
 - Modify: `tests/sage/test_transactions.py`
 
-- [ ] **Step 1: Write failing test for atomic corroboration check**
+- [x] **Step 1: Write failing test for atomic corroboration check**
 
 ```python
 # Add to tests/sage/test_transactions.py
@@ -461,7 +461,7 @@ class TestCheckCorroboration:
         assert should_promote is False
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 uv run pytest tests/sage/test_transactions.py::TestCheckCorroboration -v
@@ -469,7 +469,7 @@ uv run pytest tests/sage/test_transactions.py::TestCheckCorroboration -v
 
 Expected: FAIL with "cannot import name 'check_corroboration'"
 
-- [ ] **Step 3: Implement atomic check_corroboration**
+- [x] **Step 3: Implement atomic check_corroboration**
 
 Replace the placeholder `_check_corroboration` in `src/context_service/sage/transactions.py`:
 
@@ -525,7 +525,7 @@ async def check_corroboration(
     return row.get("count", 1), row.get("should_promote", False)
 ```
 
-- [ ] **Step 4: Update _check_corroboration to call the new function and emit events**
+- [x] **Step 4: Update _check_corroboration to call the new function and emit events**
 
 ```python
 async def _check_corroboration(
@@ -554,11 +554,11 @@ async def _check_corroboration(
     return await check_corroboration(store, node_id, silo_id)
 ```
 
-- [ ] **Step 5: Export check_corroboration in module**
+- [x] **Step 5: Export check_corroboration in module**
 
 Add to imports/exports at top of transactions.py and update `__all__` if present.
 
-- [ ] **Step 6: Run tests to verify they pass**
+- [x] **Step 6: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/sage/test_transactions.py::TestCheckCorroboration -v
@@ -566,7 +566,7 @@ uv run pytest tests/sage/test_transactions.py::TestCheckCorroboration -v
 
 Expected: All PASS
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/context_service/sage/transactions.py tests/sage/test_transactions.py
@@ -581,7 +581,7 @@ git commit -m "feat(sage): implement atomic CHECK_CORROBORATION"
 - Modify: `src/context_service/sage/transactions.py`
 - Modify: `tests/sage/test_transactions.py`
 
-- [ ] **Step 1: Add ConflictStatus enum**
+- [x] **Step 1: Add ConflictStatus enum**
 
 ```python
 # Add to src/context_service/sage/transactions.py
@@ -596,7 +596,7 @@ class ConflictStatus(StrEnum):
     RESOLVED_COEXIST = "resolved_coexist"
 ```
 
-- [ ] **Step 2: Write failing test for conflict detection**
+- [x] **Step 2: Write failing test for conflict detection**
 
 ```python
 # Add to tests/sage/test_transactions.py
@@ -698,7 +698,7 @@ class TestFlagContradiction:
         assert "(b)-[:CONTRADICTS" in call_str or call_str.count("MERGE") >= 2
 ```
 
-- [ ] **Step 3: Run test to verify it fails**
+- [x] **Step 3: Run test to verify it fails**
 
 ```bash
 uv run pytest tests/sage/test_transactions.py::TestFlagContradiction -v
@@ -706,7 +706,7 @@ uv run pytest tests/sage/test_transactions.py::TestFlagContradiction -v
 
 Expected: FAIL (tx2_store_claim doesn't accept subject/predicate/object params yet)
 
-- [ ] **Step 4: Update tx2_store_claim signature to accept SPO**
+- [x] **Step 4: Update tx2_store_claim signature to accept SPO**
 
 ```python
 async def tx2_store_claim(
@@ -727,7 +727,7 @@ async def tx2_store_claim(
 ) -> tuple[StoreClaimResult, list[ReactionEvent]]:
 ```
 
-- [ ] **Step 5: Implement flag_contradiction helper**
+- [x] **Step 5: Implement flag_contradiction helper**
 
 ```python
 async def _flag_contradiction(
@@ -843,7 +843,7 @@ async def _set_conflict_status(
     )
 ```
 
-- [ ] **Step 6: Integrate flag_contradiction into tx2_store_claim**
+- [x] **Step 6: Integrate flag_contradiction into tx2_store_claim**
 
 Add after corroboration check, before return:
 
@@ -870,7 +870,7 @@ Add after corroboration check, before return:
     # ... rest of function ...
 ```
 
-- [ ] **Step 7: Run tests to verify they pass**
+- [x] **Step 7: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/sage/test_transactions.py::TestFlagContradiction -v
@@ -878,7 +878,7 @@ uv run pytest tests/sage/test_transactions.py::TestFlagContradiction -v
 
 Expected: All PASS
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/context_service/sage/transactions.py tests/sage/test_transactions.py
@@ -893,7 +893,7 @@ git commit -m "feat(sage): add FLAG_CONTRADICTION to TX2 with bidirectional edge
 - Create: `src/context_service/sage/consolidation.py`
 - Create: `tests/sage/test_consolidation.py`
 
-- [ ] **Step 1: Write failing test for DeterministicResolver**
+- [x] **Step 1: Write failing test for DeterministicResolver**
 
 ```python
 # tests/sage/test_consolidation.py
@@ -1018,7 +1018,7 @@ class TestDeterministicResolver:
         assert result.winner_id == "node-a"  # Older wins for stability
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 uv run pytest tests/sage/test_consolidation.py::TestDeterministicResolver -v
@@ -1026,7 +1026,7 @@ uv run pytest tests/sage/test_consolidation.py::TestDeterministicResolver -v
 
 Expected: FAIL with "ModuleNotFoundError"
 
-- [ ] **Step 3: Implement consolidation types and resolver**
+- [x] **Step 3: Implement consolidation types and resolver**
 
 ```python
 # src/context_service/sage/consolidation.py
@@ -1179,7 +1179,7 @@ class LLMResolverStub:
         )
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/sage/test_consolidation.py::TestDeterministicResolver -v
@@ -1187,7 +1187,7 @@ uv run pytest tests/sage/test_consolidation.py::TestDeterministicResolver -v
 
 Expected: All PASS
 
-- [ ] **Step 5: Write failing test for ConsolidationWorker**
+- [x] **Step 5: Write failing test for ConsolidationWorker**
 
 ```python
 # Add to tests/sage/test_consolidation.py
@@ -1281,7 +1281,7 @@ class TestConsolidationWorker:
         assert not mock_store.execute_write.called
 ```
 
-- [ ] **Step 6: Run test to verify it fails**
+- [x] **Step 6: Run test to verify it fails**
 
 ```bash
 uv run pytest tests/sage/test_consolidation.py::TestConsolidationWorker -v
@@ -1289,7 +1289,7 @@ uv run pytest tests/sage/test_consolidation.py::TestConsolidationWorker -v
 
 Expected: FAIL with "cannot import name 'ConsolidationWorker'"
 
-- [ ] **Step 7: Implement ConsolidationWorker**
+- [x] **Step 7: Implement ConsolidationWorker**
 
 ```python
 # Add to src/context_service/sage/consolidation.py
@@ -1406,7 +1406,7 @@ class ConsolidationWorker:
         )
 ```
 
-- [ ] **Step 8: Run tests to verify they pass**
+- [x] **Step 8: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/sage/test_consolidation.py -v
@@ -1414,7 +1414,7 @@ uv run pytest tests/sage/test_consolidation.py -v
 
 Expected: All PASS
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add src/context_service/sage/consolidation.py tests/sage/test_consolidation.py
@@ -1429,7 +1429,7 @@ git commit -m "feat(sage): add consolidation infrastructure with deterministic r
 - Modify: `src/context_service/sage/transactions.py`
 - Modify: `tests/sage/test_transactions.py`
 
-- [ ] **Step 1: Write failing test for credibility in TX2**
+- [x] **Step 1: Write failing test for credibility in TX2**
 
 ```python
 # Add to tests/sage/test_transactions.py
@@ -1490,7 +1490,7 @@ class TestTx2Credibility:
         assert props["credibility_factors"]["source_tier_weight"] == 1.0
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 ```bash
 uv run pytest tests/sage/test_transactions.py::TestTx2Credibility -v
@@ -1498,7 +1498,7 @@ uv run pytest tests/sage/test_transactions.py::TestTx2Credibility -v
 
 Expected: FAIL (credibility not computed yet)
 
-- [ ] **Step 3: Integrate credibility computation into TX2**
+- [x] **Step 3: Integrate credibility computation into TX2**
 
 ```python
 # Add import at top of src/context_service/sage/transactions.py
@@ -1532,7 +1532,7 @@ async def tx2_store_claim(
     # ... rest of function ...
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 ```bash
 uv run pytest tests/sage/test_transactions.py::TestTx2Credibility -v
@@ -1540,7 +1540,7 @@ uv run pytest tests/sage/test_transactions.py::TestTx2Credibility -v
 
 Expected: All PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/context_service/sage/transactions.py tests/sage/test_transactions.py
@@ -1555,13 +1555,13 @@ git commit -m "feat(sage): integrate credibility computation into TX2"
 - Modify: `src/context_service/mcp/tools/recall.py` (or wherever recall is implemented)
 - Create: `tests/sage/test_recall_conflict.py`
 
-- [ ] **Step 1: Find the recall implementation**
+- [x] **Step 1: Find the recall implementation**
 
 ```bash
 grep -r "def recall" --include="*.py" src/context_service/
 ```
 
-- [ ] **Step 2: Write failing test for conflict status in recall**
+- [x] **Step 2: Write failing test for conflict status in recall**
 
 ```python
 # tests/sage/test_recall_conflict.py
@@ -1609,7 +1609,7 @@ class TestRecallConflictStatus:
         pass  # TODO: Implement based on actual recall structure
 ```
 
-- [ ] **Step 3: Update RecallItem to include conflict fields**
+- [x] **Step 3: Update RecallItem to include conflict fields**
 
 Add to the RecallItem dataclass/model:
 
@@ -1628,7 +1628,7 @@ class RecallItem:
     credibility_factors: dict | None = None
 ```
 
-- [ ] **Step 4: Update RecallResult to include has_unresolved_conflicts**
+- [x] **Step 4: Update RecallResult to include has_unresolved_conflicts**
 
 ```python
 @dataclass
@@ -1638,7 +1638,7 @@ class RecallResult:
     # ... existing fields ...
 ```
 
-- [ ] **Step 5: Update recall query to fetch conflict fields**
+- [x] **Step 5: Update recall query to fetch conflict fields**
 
 Add to the Cypher query in recall:
 
@@ -1651,7 +1651,7 @@ RETURN n.id AS id,
        -- ... other fields ...
 ```
 
-- [ ] **Step 6: Update recall result building to set has_unresolved_conflicts**
+- [x] **Step 6: Update recall result building to set has_unresolved_conflicts**
 
 ```python
 def build_recall_result(items: list[RecallItem]) -> RecallResult:
@@ -1662,13 +1662,13 @@ def build_recall_result(items: list[RecallItem]) -> RecallResult:
     )
 ```
 
-- [ ] **Step 7: Run tests**
+- [x] **Step 7: Run tests**
 
 ```bash
 uv run pytest tests/sage/test_recall_conflict.py -v
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/context_service/mcp/tools/recall.py tests/sage/test_recall_conflict.py
@@ -1682,7 +1682,7 @@ git commit -m "feat(sage): surface conflict status and credibility in recall"
 **Files:**
 - Create: `tests/sage/test_conflict_flow.py`
 
-- [ ] **Step 1: Write integration test**
+- [x] **Step 1: Write integration test**
 
 ```python
 # tests/sage/test_conflict_flow.py
@@ -1788,7 +1788,7 @@ class TestConflictFlow:
         assert resolution.winner_id == str(result2.node_id)
 ```
 
-- [ ] **Step 2: Run test**
+- [x] **Step 2: Run test**
 
 ```bash
 uv run pytest tests/sage/test_conflict_flow.py -v
@@ -1796,7 +1796,7 @@ uv run pytest tests/sage/test_conflict_flow.py -v
 
 Expected: PASS
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/sage/test_conflict_flow.py

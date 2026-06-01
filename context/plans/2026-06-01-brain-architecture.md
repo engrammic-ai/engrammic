@@ -1,6 +1,6 @@
 # Brain Architecture Implementation Plan
 
-**Status:** Ready to execute  
+**Status:** Phase 2 complete, Phase 3 next  
 **Date:** 2026-06-01  
 **Branch:** `feat/brain-architecture`
 
@@ -35,13 +35,13 @@ Core insight: value is in **retrieval with epistemic awareness**, not **autonomo
 3. [x] TX3 SUPERSEDE - version chain management, INV4 predecessor validation
 4. [x] TX17 LINK - typed relationship creation with INV7 validation
 
-### Phase 2: Conflict Detection + Consolidation
+### Phase 2: Conflict Detection + Consolidation (COMPLETE)
 
-5. [ ] FLAG_CONTRADICTION at write time - detect conflict, mark both nodes, emit consolidation event
-6. [ ] CONSOLIDATE reaction - weigh evidence quality/recency/authority, merge or pick winner
-7. [ ] Conflict status on nodes - unresolved/resolved/merged states surfaced in recall
-8. [ ] CHECK_CORROBORATION helper - atomic N-of-M check (fix atomicity issue from review)
-9. [ ] Define confidence formulas (missing from pseudocode)
+5. [x] FLAG_CONTRADICTION at write time - detect conflict, mark both nodes, emit consolidation event
+6. [x] CONSOLIDATE reaction - weigh evidence quality/recency/authority, merge or pick winner
+7. [x] Conflict status on nodes - unresolved/resolved/merged states surfaced in recall
+8. [x] CHECK_CORROBORATION helper - atomic N-of-M check (fix atomicity issue from review)
+9. [x] Define confidence formulas (missing from pseudocode)
 
 ### Phase 3: Belief Flow
 
