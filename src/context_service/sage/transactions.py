@@ -728,6 +728,123 @@ async def tx17_link(
     return result, events
 
 
+async def _validate_about_refs(
+    store: HyperGraphStore,
+    about_refs: list[str],
+    silo_id: str,
+) -> dict[str, Any]:
+    """Validate about_refs exist, are in same silo, and not tombstoned."""
+    from context_service.db import queries as q
+
+    if not about_refs:
+        return {"error": "EMPTY_ABOUT_REFS", "message": "about_refs must be non-empty"}
+
+    results = await store.execute_query(q.VALIDATE_ABOUT_REFS, {
+        "node_ids": about_refs,
+        "silo_id": silo_id,
+    })
+
+    found_ids = {r["id"] for r in results}
+    missing = set(about_refs) - found_ids
+    if missing:
+        return {
+            "error": "ABOUT_REF_NOT_FOUND",
+            "message": f"About refs not found: {missing}",
+            "missing_ids": list(missing),
+        }
+
+    tombstoned = [r for r in results if r.get("state") == NodeState.TOMBSTONED.value]
+    if tombstoned:
+        return {
+            "error": "ABOUT_REF_TOMBSTONED",
+            "message": f"About refs are tombstoned: {[r['id'] for r in tombstoned]}",
+        }
+
+    return {"error": None}
+
+
+async def tx8_commit(
+    store: HyperGraphStore,
+    content: str,
+    about_refs: list[str],
+    silo_id: str,
+    agent_id: str,
+    *,
+    confidence: float = 0.8,
+    metadata: dict[str, Any] | None = None,
+) -> tuple[CommitResult, list[ReactionEvent]]:
+    """TX8 COMMIT: Agent declares a stance directly.
+
+    Per brain-transactions-pseudocode.md:
+    - Enforces: about_refs non-empty, all exist in same silo (INV5), not tombstoned
+    - Creates: Commitment node, ABOUT edges, DECLARED_BY edge (INV7)
+    """
+    from context_service.db import queries as q
+
+    validation = await _validate_about_refs(store, about_refs, silo_id)
+    if validation["error"]:
+        raise InvariantViolation(
+            validation["error"],
+            validation["message"],
+            **{k: v for k, v in validation.items() if k not in ("error", "message")},
+        )
+
+    commitment_id = uuid.uuid4()
+    created_at = datetime.now(UTC)
+
+    props: dict[str, Any] = {
+        "layer": "wisdom",
+        "type": "commitment",
+        "state": NodeState.ACTIVE.value,
+        "confidence": confidence,
+        "created_by": agent_id,
+        **(metadata or {}),
+    }
+
+    await store.execute_write(
+        q.CREATE_COMMITMENT_WITH_ABOUT,
+        {
+            "id": str(commitment_id),
+            "silo_id": silo_id,
+            "content": content,
+            "created_at": created_at.isoformat(),
+            "props": props,
+            "about_ids": about_refs,
+            "agent_id": agent_id,
+        },
+    )
+
+    result = CommitResult(
+        commitment_id=commitment_id,
+        silo_id=silo_id,
+        created_at=created_at,
+        confidence=confidence,
+    )
+
+    events: list[ReactionEvent] = [
+        ReactionEvent(
+            event_type="compute_embedding",
+            node_id=str(commitment_id),
+            silo_id=silo_id,
+        ),
+        ReactionEvent(
+            event_type="update_heat",
+            node_id=str(commitment_id),
+            silo_id=silo_id,
+            payload={"access_type": "WRITE"},
+        ),
+    ]
+
+    logger.debug(
+        "tx8_commit_complete",
+        commitment_id=str(commitment_id),
+        silo_id=silo_id,
+        about_count=len(about_refs),
+    )
+
+    return result, events
+
+
 async def _validate_evidence_nodes(
     store: HyperGraphStore,
     node_ids: list[str],
