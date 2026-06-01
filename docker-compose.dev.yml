@@ -48,6 +48,37 @@ services:
       - "metadata.google.internal:169.254.169.254"
     restart: unless-stopped
 
+  reaction-worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: engrammic-reaction-worker
+    command: ["taskiq", "worker", "context_service.reactions.worker_entrypoint:broker", "--workers", "1"]
+    env_file:
+      - .env
+    environment:
+      - HOME=/home/engrammic
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - MEMGRAPH_HOST=memgraph
+      - QDRANT_HOST=qdrant
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=postgres
+      - OTEL_ENABLED=${OTEL_ENABLED:-true}
+      - OTEL_SERVICE_NAME=engrammic-worker
+      - VERTEX_PROJECT=${VERTEX_PROJECT:-}
+      - VERTEX_LOCATION=${VERTEX_LOCATION:-europe-north1}
+    volumes:
+      - ~/.config/gcloud:/mnt/gcloud:ro
+      - ./src:/app/src
+      - ./pyproject.toml:/app/pyproject.toml:ro
+      - ./config:/app/config:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+
   memgraph:
     image: memgraph/memgraph-mage:latest
     container_name: engrammic-memgraph

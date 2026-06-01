@@ -45,4 +45,7 @@ USER engrammic
 
 EXPOSE 8000
 
+# Default command runs the FastAPI/MCP server.
+# Override CMD to run the Taskiq reaction worker instead:
+#   CMD ["taskiq", "worker", "context_service.reactions.worker_entrypoint:broker", "--workers", "4"]
 CMD ["python", "-m", "context_service.entrypoint"]

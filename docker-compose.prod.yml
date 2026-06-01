@@ -34,6 +34,29 @@ services:
           memory: 2G
     restart: unless-stopped
 
+  reaction-worker:
+    image: europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-api:latest
+    container_name: engrammic-reaction-worker
+    command: ["taskiq", "worker", "context_service.reactions.worker_entrypoint:broker", "--workers", "2"]
+    environment:
+      - ENVIRONMENT=production
+      - MEMGRAPH_HOST=memgraph
+      - QDRANT_HOST=qdrant
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=postgres
+    volumes:
+      - ~/.config/gcloud:/mnt/gcloud:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    restart: unless-stopped
+
   memgraph:
     image: memgraph/memgraph-mage:3.10.1
     container_name: engrammic-memgraph
