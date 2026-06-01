@@ -1,6 +1,6 @@
 # Brain Architecture Implementation Plan
 
-**Status:** Phase 6 complete, Phase 7 next  
+**Status:** Phase 7 complete, Phase 8 next  
 **Date:** 2026-06-01  
 **Branch:** `feat/brain-architecture`
 
@@ -69,14 +69,14 @@ Core insight: value is in **retrieval with epistemic awareness**, not **autonomo
 19. [x] COMPUTE_RECALL_SCORE helper - epistemic-aware ranking
 20. [x] Fix WOULD_CREATE_CYCLE query syntax bug
 
-### Phase 7: CITE v2 Epistemology
+### Phase 7: CITE v2 Epistemology (COMPLETE)
 
-21. [ ] Add `confidence` (propagated) and `credibility` (static) fields to nodes
-22. [ ] Add weighted `SUPPORTS` and `CONTRADICTS` edges
-23. [ ] Implement damped confidence propagation algorithm
-24. [ ] Implement independence-weighted corroboration
-25. [ ] Add PPR-based transitive scoring to recall
-26. [ ] Consolidation subagent interface and prompt
+21. [x] Add `confidence` (propagated) and `credibility` (static) fields to nodes
+22. [x] Add weighted `SUPPORTS` and `CONTRADICTS` edges
+23. [x] Implement damped confidence propagation algorithm
+24. [x] Implement independence-weighted corroboration
+25. [x] Add PPR-based transitive scoring to recall
+26. [x] Consolidation subagent interface and prompt
 
 ### Phase 8: Reactions
 
