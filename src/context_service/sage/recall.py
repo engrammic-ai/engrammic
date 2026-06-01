@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
@@ -85,3 +85,52 @@ class RecallResult:
     total_candidates: int
     synthesis_pending: bool
     query_time_ms: float
+
+
+def gaussian_decay(age_days: float, sigma: float = MEMORY_DECAY_SIGMA) -> float:
+    """Apply Gaussian decay based on age. Returns value in [0, 1]."""
+    return math.exp(-(age_days**2) / (2 * sigma**2))
+
+
+def days_since(dt: datetime) -> float:
+    """Calculate days since a datetime."""
+    now = datetime.now(UTC)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    delta = now - dt
+    return delta.total_seconds() / 86400
+
+
+def compute_recall_score(node: dict[str, Any], similarity: float, heat: float = 0.0) -> float:
+    """Compute epistemic recall score for a node.
+
+    Applies layer-specific scoring rules, heat boost, and clamps to [0, 1].
+    """
+    layer = node.get("layer", "")
+    confidence = float(node.get("confidence", 1.0))
+    created_at = node.get("created_at")
+
+    age_days: float = 0.0
+    if isinstance(created_at, datetime):
+        age_days = days_since(created_at)
+    elif isinstance(created_at, str):
+        try:
+            age_days = days_since(datetime.fromisoformat(created_at))
+        except ValueError:
+            age_days = 0.0
+
+    if layer == Layer.MEMORY:
+        layer_score = similarity * gaussian_decay(age_days)
+    elif layer == Layer.KNOWLEDGE:
+        corroboration_boost = float(node.get("corroboration_count", 0))
+        layer_score = similarity * confidence * (1 + corroboration_boost * 0.2)
+    elif layer == Layer.WISDOM:
+        synthesis_state = node.get("synthesis_state", "")
+        staleness_penalty = 0.5 if synthesis_state == SynthesisState.STALE else 1.0
+        layer_score = similarity * confidence * staleness_penalty
+    else:
+        # INTELLIGENCE and unknown layers: no decay
+        layer_score = similarity
+
+    final_score = layer_score * (1 + heat * 0.1)
+    return max(0.0, min(1.0, final_score))
