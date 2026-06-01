@@ -1867,3 +1867,77 @@ SET b.properties.synthesis_state = $synthesis_state,
     b.properties.revision_in_progress = false
 RETURN b.id AS id
 """
+
+# TX15 FORGET (soft-delete with cancel window) and TX16 CANCEL_FORGET (restore)
+
+TOMBSTONE_NODE = """
+MATCH (n {id: $node_id, silo_id: $silo_id})
+WHERE n.properties.state IN ['ACTIVE', 'SUPERSEDED']
+SET n.properties.state = 'TOMBSTONED',
+    n.properties.tombstoned_at = $tombstoned_at,
+    n.properties.forget_requested_at = $forget_requested_at,
+    n.properties.forget_requested_by = $agent_id,
+    n.properties.forget_reason = $reason,
+    n.properties.cancel_window_expires = $cancel_window_expires,
+    n.properties.previous_state = n.properties.state
+RETURN n.id AS id, n.properties.state AS state
+"""
+
+RESTORE_TOMBSTONED_NODE = """
+MATCH (n {id: $node_id, silo_id: $silo_id})
+WHERE n.properties.state = 'TOMBSTONED'
+  AND n.properties.cancel_window_expires > $now
+SET n.properties.state = n.properties.previous_state,
+    n.properties.tombstoned_at = null,
+    n.properties.forget_requested_at = null,
+    n.properties.forget_requested_by = null,
+    n.properties.forget_reason = null,
+    n.properties.cancel_window_expires = null,
+    n.properties.restored_at = $restored_at,
+    n.properties.restored_by = $agent_id
+RETURN n.id AS id, n.properties.state AS state, n.properties.previous_state AS previous_state
+"""
+
+GET_NODE_FOR_FORGET = """
+MATCH (n {id: $node_id, silo_id: $silo_id})
+RETURN n.id AS id,
+       n.properties.state AS state,
+       n.properties.layer AS layer,
+       n.properties.cancel_window_expires AS cancel_window_expires
+"""
+
+# CASCADE_STALENESS and TX10 HARD_DELETE
+
+GET_DEPENDENTS_FOR_CASCADE = """
+MATCH (d)-[e:SYNTHESIZED_FROM|DERIVED_FROM]->(changed {id: $node_id, silo_id: $silo_id})
+WHERE d.properties.state = 'ACTIVE'
+RETURN d.id AS id, d.properties.layer AS layer, type(e) AS edge_type
+"""
+
+MARK_BELIEF_STALE_FOR_CASCADE = """
+MATCH (b {id: $node_id, silo_id: $silo_id})
+WHERE b.properties.layer = 'wisdom'
+SET b.properties.synthesis_state = 'STALE'
+RETURN b.id AS id
+"""
+
+GET_TOMBSTONED_FOR_GC = """
+MATCH (n {silo_id: $silo_id})
+WHERE n.properties.state = 'TOMBSTONED'
+  AND n.properties.cancel_window_expires < $now
+RETURN n.id AS id
+LIMIT $batch_size
+"""
+
+DELETE_EDGES_FOR_NODE = """
+MATCH (n {id: $node_id, silo_id: $silo_id})-[e]-()
+DELETE e
+RETURN count(e) AS deleted_count
+"""
+
+HARD_DELETE_NODE = """
+MATCH (n {id: $node_id, silo_id: $silo_id})
+WHERE n.properties.state = 'TOMBSTONED'
+DELETE n
+RETURN count(n) AS deleted_count
+"""
