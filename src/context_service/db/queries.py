@@ -1801,3 +1801,69 @@ SET hypothesis.properties.crystallized = true,
 CREATE (commitment)-[:CRYSTALLIZED_FROM {created_at: $created_at}]->(hypothesis)
 RETURN commitment.id AS id
 """
+
+# TX4 SYNTHESIZE and TX5 REVISE_BELIEF queries
+
+GET_CLUSTER_FOR_SYNTHESIS = """
+MATCH (c:Cluster {id: $cluster_id, silo_id: $silo_id})
+SET c.synthesis_in_progress = true
+RETURN c.state AS state,
+       c.current_belief_id AS current_belief_id,
+       c.synthesis_retry_count AS synthesis_retry_count
+"""
+
+RELEASE_CLUSTER_LOCK = """
+MATCH (c:Cluster {id: $cluster_id, silo_id: $silo_id})
+SET c.synthesis_in_progress = false,
+    c.state = $state
+RETURN c.id AS id
+"""
+
+UPDATE_CLUSTER_AFTER_SYNTHESIS = """
+MATCH (c:Cluster {id: $cluster_id, silo_id: $silo_id})
+SET c.synthesis_in_progress = false,
+    c.state = $state,
+    c.current_belief_id = $belief_id,
+    c.synthesized_at = $synthesized_at,
+    c.synthesis_retry_count = 0
+RETURN c.id AS id
+"""
+
+CREATE_BELIEF_WITH_SYNTHESIZED_FROM = """
+CREATE (b:Node:Belief {
+    id: $id,
+    silo_id: $silo_id,
+    content: $content,
+    created_at: $created_at,
+    properties: $props
+})
+WITH b
+UNWIND $fact_ids AS fid
+MATCH (f {id: fid, silo_id: $silo_id})
+CREATE (b)-[:SYNTHESIZED_FROM]->(f)
+RETURN b.id AS id
+"""
+
+GET_BELIEF_FOR_REVISION = """
+MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
+RETURN b.id AS id,
+       b.content AS content,
+       b.properties.state AS state,
+       b.properties.synthesis_state AS synthesis_state,
+       b.properties.source_cluster_id AS source_cluster_id,
+       b.properties.revision_in_progress AS revision_in_progress,
+       b.properties.confidence AS confidence
+"""
+
+MARK_BELIEF_REVISION_IN_PROGRESS = """
+MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
+SET b.properties.revision_in_progress = true
+RETURN b.id AS id
+"""
+
+UPDATE_BELIEF_AFTER_REVISION = """
+MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
+SET b.properties.synthesis_state = $synthesis_state,
+    b.properties.revision_in_progress = false
+RETURN b.id AS id
+"""
