@@ -7,7 +7,6 @@ Provides dataclasses, options, and scoring constants for retrieval.
 from __future__ import annotations
 
 import math
-import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
@@ -244,11 +243,15 @@ async def recall(
     # 4. Build results with optional graph traversal
     results: list[RecallResultItem] = []
     for node, score in top_results:
+        node_id = node.get("id")
+        if node_id is None:
+            continue
+
         related: list[RelatedNode] = []
         if options.depth > 0:
             related = await traverse_graph(
                 store=store,
-                node_id=node.get("id"),
+                node_id=node_id,
                 silo_id=silo_id,
                 max_depth=options.depth,
             )
@@ -259,11 +262,17 @@ async def recall(
         elif node_created_at is None:
             node_created_at = datetime.now(UTC)
 
+        layer_str = node.get("layer", Layer.MEMORY.value)
+        try:
+            layer = Layer(layer_str)
+        except ValueError:
+            layer = Layer.MEMORY
+
         results.append(
             RecallResultItem(
-                node_id=node.get("id", str(uuid.uuid4())),
+                node_id=node_id,
                 content=node.get("content", ""),
-                layer=node.get("layer", Layer.MEMORY.value),
+                layer=layer,
                 score=score,
                 confidence=float(node.get("confidence", 0.0)),
                 created_at=node_created_at,
@@ -285,40 +294,41 @@ async def recall(
 
         for cluster in cluster_results:
             cluster_id = cluster.get("cluster_id")
+            if cluster_id is None:
+                continue
             cluster_state = cluster.get("state")
             current_belief_id = cluster.get("current_belief_id")
 
-            if cluster_state in (ClusterState.READY.value, ClusterState.STALE.value):
-                if current_belief_id is None:
-                    try:
-                        belief_result, _ = await tx4_synthesize(
-                            store=store,
-                            cluster_id=cluster_id,
-                            silo_id=silo_id,
-                            llm=None,  # type: ignore[arg-type]
-                            _embedder=embedding_service,
-                            mode="sync",
-                        )
-                        if belief_result and belief_result.belief_id:
-                            results.append(
-                                RecallResultItem(
-                                    node_id=str(belief_result.belief_id),
-                                    content="",
-                                    layer=Layer.WISDOM.value,
-                                    score=1.0,
-                                    confidence=belief_result.confidence or 0.0,
-                                    created_at=datetime.now(UTC),
-                                    properties={},
-                                    related=[],
-                                    synthesized=True,
-                                )
+            if cluster_state in (ClusterState.READY.value, ClusterState.STALE.value) and current_belief_id is None:
+                try:
+                    belief_result, _ = await tx4_synthesize(
+                        store=store,
+                        cluster_id=cluster_id,
+                        silo_id=silo_id,
+                        llm=None,  # type: ignore[arg-type]
+                        _embedder=embedding_service,
+                        mode="sync",
+                    )
+                    if belief_result and belief_result.belief_id:
+                        results.append(
+                            RecallResultItem(
+                                node_id=str(belief_result.belief_id),
+                                content="",
+                                layer=Layer.WISDOM,
+                                score=1.0,
+                                confidence=belief_result.confidence or 0.0,
+                                created_at=datetime.now(UTC),
+                                properties={},
+                                related=[],
+                                synthesized=True,
                             )
-                    except Exception:
-                        logger.warning(
-                            "lazy_synthesis_failed",
-                            cluster_id=cluster_id,
                         )
-                        synthesis_pending = True
+                except Exception:
+                    logger.warning(
+                        "lazy_synthesis_failed",
+                        cluster_id=cluster_id,
+                    )
+                    synthesis_pending = True
 
     elapsed_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
 
