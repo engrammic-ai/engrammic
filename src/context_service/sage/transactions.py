@@ -272,6 +272,26 @@ class HardDeleteResult:
     deleted_ids: list[str]
 
 
+@dataclass
+class PromoteResult:
+    """Result of TX18 PROMOTE."""
+
+    claim_id: uuid.UUID
+    promoted_at: datetime
+    new_confidence: float
+    corroboration_count: int
+
+
+@dataclass
+class DemoteResult:
+    """Result of TX19 DEMOTE."""
+
+    fact_id: uuid.UUID
+    demoted_at: datetime
+    new_confidence: float
+    corroboration_count: int
+
+
 def noisy_or_aggregate(confidences: list[float]) -> float:
     """Compute noisy-or aggregation of confidence values.
 
