@@ -18,7 +18,7 @@ import structlog
 from context_service.sage.transactions import ClusterState, NodeState, SynthesisState
 
 if TYPE_CHECKING:
-    pass
+    from context_service.engine.protocols import HyperGraphStore
 
 logger = structlog.get_logger(__name__)
 
@@ -134,3 +134,64 @@ def compute_recall_score(node: dict[str, Any], similarity: float, heat: float = 
 
     final_score = layer_score * (1 + heat * 0.1)
     return max(0.0, min(1.0, final_score))
+
+
+async def traverse_graph(
+    store: HyperGraphStore,
+    node_id: str,
+    silo_id: str,
+    max_depth: int,
+    current_depth: int = 1,
+    visited: set[str] | None = None,
+) -> list[RelatedNode]:
+    """Traverse graph to find related nodes up to max_depth."""
+    from context_service.db import queries as q
+
+    if visited is None:
+        visited = set()
+
+    if current_depth > max_depth:
+        return []
+
+    visited.add(node_id)
+
+    # Get immediate neighbors using TRAVERSE_NEIGHBORS query
+    neighbors = await store.execute_query(
+        q.TRAVERSE_NEIGHBORS,
+        {
+            "node_id": node_id,
+            "silo_id": silo_id,
+            "visited": list(visited),
+            "limit": MAX_NEIGHBORS_PER_NODE,
+        },
+    )
+
+    results: list[RelatedNode] = []
+    for neighbor in neighbors:
+        neighbor_id = neighbor.get("id")
+        if neighbor_id is None:
+            continue
+
+        results.append(
+            RelatedNode(
+                node_id=neighbor_id,
+                edge_type=neighbor.get("edge_type", "RELATED_TO"),
+                direction=neighbor.get("direction", "outgoing"),
+                depth=current_depth,
+                properties=neighbor.get("properties", {}),
+            )
+        )
+
+        # Recurse if depth allows
+        if current_depth < max_depth:
+            child_results = await traverse_graph(
+                store=store,
+                node_id=neighbor_id,
+                silo_id=silo_id,
+                max_depth=max_depth,
+                current_depth=current_depth + 1,
+                visited=visited,
+            )
+            results.extend(child_results)
+
+    return results
