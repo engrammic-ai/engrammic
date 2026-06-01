@@ -30,10 +30,10 @@ Core insight: value is in **retrieval with epistemic awareness**, not **autonomo
 
 ### Phase 1: Core Write Path
 
-1. [ ] TX0 STORE_MEMORY - basic observation storage with INV3 enforcement
-2. [ ] TX2 STORE_CLAIM - claim with evidence, INV1/INV2 enforcement, optimistic locking
-3. [ ] TX3 SUPERSEDE - version chain management, INV4 predecessor validation
-4. [ ] TX17 LINK - typed relationship creation with INV7 validation
+1. [x] TX0 STORE_MEMORY - basic observation storage with INV3 enforcement
+2. [x] TX2 STORE_CLAIM - claim with evidence, INV1/INV2 enforcement, optimistic locking
+3. [x] TX3 SUPERSEDE - version chain management, INV4 predecessor validation
+4. [x] TX17 LINK - typed relationship creation with INV7 validation
 
 ### Phase 2: Conflict Detection + Consolidation
 
@@ -100,6 +100,23 @@ Core insight: value is in **retrieval with epistemic awareness**, not **autonomo
 | Semantic conflict detection | INV1 covers structural only; semantic is research problem |
 | Heat propagation formula params | PPR details defer to impl |
 
+## Phase 2 Deferred Items
+
+Items explicitly deferred during Phase 2 design, with target phases:
+
+| Item | Target Phase | Rationale |
+|------|--------------|-----------|
+| LLM subagent consolidation | Phase 7 | Infrastructure first, stub returns 'defer', plug in LLM later |
+| Damped confidence propagation | Phase 7 | Credibility is foundation, propagation layers on top |
+| Configurable tier weights per silo | Phase 7+ | Start with semantic anchors, tune later |
+| Calibration based on observed accuracy | Phase 7+ | Need usage data first |
+| `merge` and `coexist` consolidation actions | Phase 7 | Deterministic supersede/defer for now |
+| Primitives package update | After Phase 2 validation | Stabilize types before publishing to ../primitives |
+
+## Directory Change
+
+Rename `brain/` to `sage/` in Phase 2. Keep SAGE name, reactive implementation. Old Dagster jobs (`pipelines/jobs/`) removed in Phase 9.
+
 ## Pseudocode Review Issues to Fix
 
 1. **CHECK_CORROBORATION atomicity** - current pseudocode does two queries; need single atomic check
@@ -126,3 +143,4 @@ Core insight: value is in **retrieval with epistemic awareness**, not **autonomo
 - Architecture draft: `context/specs/brain-architecture-draft.md`
 - Reviews: `context/specs/brain-tables-review-v2.md`, `context/specs/brain-pseudocode-review.md`
 - **CITE v2 Epistemology: `context/specs/cite-v2-epistemology.md`** - damped confidence propagation, weighted edges, subagent consolidation
+- **Phase 2 Spec: `context/specs/2026-06-01-phase2-conflict-consolidation.md`** - conflict detection, consolidation, credibility formula
