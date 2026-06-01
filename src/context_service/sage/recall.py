@@ -136,6 +136,200 @@ def compute_recall_score(node: dict[str, Any], similarity: float, heat: float = 
     return max(0.0, min(1.0, final_score))
 
 
+async def recall(
+    store: HyperGraphStore,
+    vector_store: Any,
+    embedding_service: Any,
+    query: str,
+    silo_id: str,
+    options: RecallOptions | None = None,
+) -> RecallResult:
+    """RECALL: Query transaction with epistemic-aware retrieval.
+
+    Per brain-transactions-pseudocode.md RECALL:
+    1. Vector search with over-fetch
+    2. Apply filters (state, temporal, layer, confidence)
+    3. Score by layer semantics
+    4. Graph traversal (if depth > 0)
+    5. Lazy synthesis (if enabled)
+    """
+    from context_service.db import queries as q
+    from context_service.sage.transactions import synthesize as tx4_synthesize
+
+    start_time = datetime.now(UTC)
+
+    if options is None:
+        options = RecallOptions()
+
+    # Validation
+    if not silo_id:
+        raise ValueError("silo_id is required")
+    if not query or not query.strip():
+        raise ValueError("query is required")
+
+    # 1. Vector search with over-fetch
+    query_embedding = await embedding_service.embed_query(query)
+    over_fetch_k = options.top_k * 3
+    candidates = await vector_store.search(
+        collection=silo_id,
+        vector=query_embedding,
+        top_k=over_fetch_k,
+    )
+
+    # 2. Apply filters
+    filtered: list[tuple[dict[str, Any], float]] = []
+
+    for candidate in candidates:
+        node_id = candidate.get("id")
+        similarity = candidate.get("score", 0.0)
+
+        # Fetch full node
+        node_results = await store.execute_query(
+            q.GET_NODE_FOR_RECALL,
+            {"node_id": node_id, "silo_id": silo_id},
+        )
+        if not node_results:
+            continue
+
+        node = node_results[0]
+
+        # State filter
+        state = node.get("state")
+        if state in (NodeState.TOMBSTONED.value, NodeState.DELETED.value):
+            continue
+        if state == NodeState.SUPERSEDED.value and not options.include_superseded:
+            continue
+
+        # Temporal filter (as_of)
+        if options.as_of is not None:
+            created_at = node.get("created_at")
+            if created_at:
+                if isinstance(created_at, str):
+                    created_at = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                if created_at > options.as_of:
+                    continue
+
+            valid_to = node.get("valid_to")
+            if valid_to:
+                if isinstance(valid_to, str):
+                    valid_to = datetime.fromisoformat(valid_to.replace("Z", "+00:00"))
+                if valid_to < options.as_of:
+                    continue
+
+        # Layer filter
+        if options.layers is not None:
+            node_layer = node.get("layer")
+            if node_layer not in [layer.value for layer in options.layers]:
+                continue
+
+        # Confidence filter
+        confidence = float(node.get("confidence", 0.0))
+        if confidence < options.min_confidence:
+            continue
+
+        filtered.append((node, float(similarity)))
+
+    # 3. Score by layer semantics
+    scored: list[tuple[dict[str, Any], float]] = []
+    for node, similarity in filtered:
+        # Heat from reactions (reserved for future implementation)
+        heat = 0.0
+        score = compute_recall_score(node, similarity, heat)
+        scored.append((node, score))
+
+    # Sort by score descending, take top_k
+    scored.sort(key=lambda x: x[1], reverse=True)
+    top_results = scored[: options.top_k]
+
+    # 4. Build results with optional graph traversal
+    results: list[RecallResultItem] = []
+    for node, score in top_results:
+        related: list[RelatedNode] = []
+        if options.depth > 0:
+            related = await traverse_graph(
+                store=store,
+                node_id=node.get("id"),
+                silo_id=silo_id,
+                max_depth=options.depth,
+            )
+
+        node_created_at = node.get("created_at")
+        if isinstance(node_created_at, str):
+            node_created_at = datetime.fromisoformat(node_created_at.replace("Z", "+00:00"))
+        elif node_created_at is None:
+            node_created_at = datetime.now(UTC)
+
+        results.append(
+            RecallResultItem(
+                node_id=node.get("id", str(uuid.uuid4())),
+                content=node.get("content", ""),
+                layer=node.get("layer", Layer.MEMORY.value),
+                score=score,
+                confidence=float(node.get("confidence", 0.0)),
+                created_at=node_created_at,
+                properties=node.get("properties", {}),
+                related=related,
+                synthesized=False,
+            )
+        )
+
+    # 5. Lazy synthesis (if enabled)
+    synthesis_pending = False
+    if options.include_synthesis and results:
+        node_ids = [r.node_id for r in results]
+
+        cluster_results = await store.execute_query(
+            q.GET_CLUSTERS_FOR_NODES,
+            {"silo_id": silo_id, "node_ids": node_ids},
+        )
+
+        for cluster in cluster_results:
+            cluster_id = cluster.get("cluster_id")
+            cluster_state = cluster.get("state")
+            current_belief_id = cluster.get("current_belief_id")
+
+            if cluster_state in (ClusterState.READY.value, ClusterState.STALE.value):
+                if current_belief_id is None:
+                    try:
+                        belief_result, _ = await tx4_synthesize(
+                            store=store,
+                            cluster_id=cluster_id,
+                            silo_id=silo_id,
+                            llm=None,  # type: ignore[arg-type]
+                            _embedder=embedding_service,
+                            mode="sync",
+                        )
+                        if belief_result and belief_result.belief_id:
+                            results.append(
+                                RecallResultItem(
+                                    node_id=str(belief_result.belief_id),
+                                    content="",
+                                    layer=Layer.WISDOM.value,
+                                    score=1.0,
+                                    confidence=belief_result.confidence or 0.0,
+                                    created_at=datetime.now(UTC),
+                                    properties={},
+                                    related=[],
+                                    synthesized=True,
+                                )
+                            )
+                    except Exception:
+                        logger.warning(
+                            "lazy_synthesis_failed",
+                            cluster_id=cluster_id,
+                        )
+                        synthesis_pending = True
+
+    elapsed_ms = (datetime.now(UTC) - start_time).total_seconds() * 1000
+
+    return RecallResult(
+        results=results,
+        total_candidates=len(candidates),
+        synthesis_pending=synthesis_pending,
+        query_time_ms=elapsed_ms,
+    )
+
+
 async def traverse_graph(
     store: HyperGraphStore,
     node_id: str,
