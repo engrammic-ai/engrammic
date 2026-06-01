@@ -14,14 +14,16 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 
 from context_service.sage.confidence import compute_credibility
 
 if TYPE_CHECKING:
+    from context_service.embeddings.base import EmbeddingService
     from context_service.engine.protocols import HyperGraphStore
+    from context_service.llm.base import LLMProvider
 
 logger = structlog.get_logger(__name__)
 
@@ -319,6 +321,124 @@ class ReactionEvent:
     silo_id: str
     payload: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+async def tx4_synthesize(
+    store: HyperGraphStore,
+    cluster_id: str,
+    silo_id: str,
+    llm: LLMProvider,
+    embedder: EmbeddingService,
+    *,
+    mode: Literal["async", "sync"] = "async",
+    timeout_seconds: float = 30.0,
+) -> tuple[SynthesizeResult, list[ReactionEvent]]:
+    """TX4 SYNTHESIZE: Create Belief from fact cluster.
+
+    Per brain-transactions-pseudocode.md:
+    - Modes: ASYNC (30s timeout), SYNC (2s timeout for query-time)
+    - Enforces INV3: Every Belief has >= N SYNTHESIZED_FROM to ACTIVE Facts
+    """
+    from context_service.db import queries as q
+
+    effective_timeout = 2.0 if mode == "sync" else timeout_seconds
+
+    # Acquire lock on cluster
+    lock_result = await store.execute_query(q.GET_CLUSTER_FOR_SYNTHESIS, {
+        "cluster_id": cluster_id,
+        "silo_id": silo_id,
+    })
+
+    if not lock_result:
+        return SynthesizeResult(
+            belief_id=None, cluster_id=cluster_id, cluster_state=ClusterState.SPARSE,
+            fact_count=0, confidence=None,
+        ), []
+
+    cluster_state = lock_result[0].get("state", "SPARSE")
+
+    try:
+        # Fetch facts in cluster
+        facts_result = await store.execute_query(q.GET_FACTS_IN_CLUSTER, {
+            "cluster_id": cluster_id, "silo_id": silo_id,
+        })
+        facts = list(facts_result) if facts_result else []
+        fact_count = len(facts)
+
+        # Check threshold
+        if fact_count < SYNTHESIS_THRESHOLD:
+            await store.execute_write(q.RELEASE_CLUSTER_LOCK, {
+                "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.SPARSE.value,
+            })
+            return SynthesizeResult(
+                belief_id=None, cluster_id=cluster_id, cluster_state=ClusterState.SPARSE,
+                fact_count=fact_count, confidence=None,
+            ), []
+
+        # Compute aggregate confidence
+        confidences = [float(f.get("confidence", 0.8)) for f in facts]
+        aggregate_confidence = noisy_or_aggregate(confidences)
+
+        if aggregate_confidence < SYNTHESIS_CONFIDENCE_THRESHOLD:
+            await store.execute_write(q.RELEASE_CLUSTER_LOCK, {
+                "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.READY.value,
+            })
+            return SynthesizeResult(
+                belief_id=None, cluster_id=cluster_id, cluster_state=ClusterState.READY,
+                fact_count=fact_count, confidence=aggregate_confidence,
+            ), []
+
+        # Call LLM
+        synthesis_result = await llm_synthesize(llm, facts, effective_timeout)
+
+        if synthesis_result.timed_out or not synthesis_result.success:
+            await store.execute_write(q.RELEASE_CLUSTER_LOCK, {
+                "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.READY.value,
+            })
+            return SynthesizeResult(
+                belief_id=None, cluster_id=cluster_id, cluster_state=ClusterState.READY,
+                fact_count=fact_count, confidence=aggregate_confidence,
+                timed_out=synthesis_result.timed_out,
+            ), []
+
+        # Create belief
+        belief_id = uuid.uuid4()
+        created_at = datetime.now(UTC)
+        props: dict[str, Any] = {
+            "layer": "wisdom", "type": "belief", "state": NodeState.ACTIVE.value,
+            "synthesis_state": SynthesisState.FRESH.value, "confidence": aggregate_confidence,
+            "source_cluster_id": cluster_id,
+        }
+        fact_ids = [f["id"] for f in facts]
+
+        await store.execute_write(q.CREATE_BELIEF_WITH_SYNTHESIZED_FROM, {
+            "id": str(belief_id), "silo_id": silo_id, "content": synthesis_result.content,
+            "created_at": created_at.isoformat(), "props": props, "fact_ids": fact_ids,
+        })
+
+        # Update cluster
+        await store.execute_write(q.UPDATE_CLUSTER_AFTER_SYNTHESIS, {
+            "cluster_id": cluster_id, "silo_id": silo_id, "state": ClusterState.SYNTHESIZED.value,
+            "belief_id": str(belief_id), "synthesized_at": created_at.isoformat(),
+        })
+
+        events: list[ReactionEvent] = [
+            ReactionEvent(event_type="compute_embedding", node_id=str(belief_id), silo_id=silo_id),
+            ReactionEvent(event_type="update_heat", node_id=str(belief_id), silo_id=silo_id, payload={"access_type": "SYNTHESIS"}),
+        ]
+
+        logger.debug("tx4_synthesize_complete", belief_id=str(belief_id), cluster_id=cluster_id, fact_count=fact_count)
+
+        return SynthesizeResult(
+            belief_id=belief_id, cluster_id=cluster_id, cluster_state=ClusterState.SYNTHESIZED,
+            fact_count=fact_count, confidence=aggregate_confidence,
+        ), events
+
+    except Exception:
+        await store.execute_write(q.RELEASE_CLUSTER_LOCK, {
+            "cluster_id": cluster_id, "silo_id": silo_id, "state": cluster_state,
+        })
+        raise
 
 
 async def tx0_store_memory(
