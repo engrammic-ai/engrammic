@@ -207,6 +207,39 @@ class CrystallizeResult:
 
 
 @dataclass
+class SynthesizeResult:
+    """Result of TX4 SYNTHESIZE."""
+
+    belief_id: uuid.UUID | None
+    cluster_id: str
+    cluster_state: ClusterState
+    fact_count: int
+    confidence: float | None
+    timed_out: bool = False
+
+
+@dataclass
+class ReviseBeliefResult:
+    """Result of TX5 REVISE_BELIEF."""
+
+    new_belief_id: uuid.UUID | None
+    old_belief_id: uuid.UUID
+    content_changed: bool
+    invalidated: bool = False
+
+
+@dataclass
+class LLMSynthesisResult:
+    """Result from LLM synthesis call."""
+
+    success: bool
+    content: str | None
+    caveats: list[str]
+    timed_out: bool
+    error: str | None = None
+
+
+@dataclass
 class ReactionEvent:
     """Event emitted for async reaction processing."""
 
