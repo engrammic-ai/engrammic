@@ -12,9 +12,11 @@ import pytest
 from context_service.sage.transactions import (
     BrainError,
     CommitResult,
+    CrystallizeResult,
     InvariantViolation,
     NodeState,
     tx8_commit,
+    tx14_crystallize,
 )
 
 
@@ -106,3 +108,92 @@ class TestTx8Commit:
             )
 
         assert exc_info.value.code == "ABOUT_REF_NOT_FOUND"
+
+
+class TestTx14Crystallize:
+    """Tests for TX14 CRYSTALLIZE."""
+
+    @pytest.mark.asyncio
+    async def test_converts_hypothesis_to_commitment(self, mock_store: AsyncMock) -> None:
+        """Test that TX14 converts a WorkingHypothesis to a Commitment."""
+        hypothesis_id = make_uuid()
+        about_ref = make_uuid()
+
+        mock_store.execute_query = AsyncMock(side_effect=[
+            # GET_HYPOTHESIS_FOR_CRYSTALLIZE
+            [{"id": hypothesis_id, "content": "My hypothesis", "confidence": 0.9,
+              "crystallized": False, "state": "ACTIVE"}],
+            # GET_HYPOTHESIS_ABOUT_REFS
+            [{"id": about_ref, "state": "ACTIVE"}],
+        ])
+
+        result, events = await tx14_crystallize(
+            store=mock_store,
+            hypothesis_id=hypothesis_id,
+            silo_id="test-silo",
+            agent_id="test-agent",
+            session_id="test-session",
+        )
+
+        assert isinstance(result, CrystallizeResult)
+        assert result.hypothesis_id == uuid.UUID(hypothesis_id)
+        assert result.silo_id == "test-silo"
+        assert result.confidence == 0.9
+
+    @pytest.mark.asyncio
+    async def test_rejects_already_crystallized(self, mock_store: AsyncMock) -> None:
+        """Test that TX14 rejects already crystallized hypotheses."""
+        hypothesis_id = make_uuid()
+
+        mock_store.execute_query = AsyncMock(return_value=[
+            {"id": hypothesis_id, "content": "Already done", "confidence": 0.9,
+             "crystallized": True, "state": "ACTIVE"}
+        ])
+
+        with pytest.raises(InvariantViolation) as exc_info:
+            await tx14_crystallize(
+                store=mock_store,
+                hypothesis_id=hypothesis_id,
+                silo_id="test-silo",
+                agent_id="test-agent",
+                session_id="test-session",
+            )
+
+        assert exc_info.value.code == "ALREADY_CRYSTALLIZED"
+
+    @pytest.mark.asyncio
+    async def test_rejects_missing_hypothesis(self, mock_store: AsyncMock) -> None:
+        """Test that TX14 rejects non-existent hypotheses."""
+        mock_store.execute_query = AsyncMock(return_value=[])
+
+        with pytest.raises(InvariantViolation) as exc_info:
+            await tx14_crystallize(
+                store=mock_store,
+                hypothesis_id=make_uuid(),
+                silo_id="test-silo",
+                agent_id="test-agent",
+                session_id="test-session",
+            )
+
+        assert exc_info.value.code == "HYPOTHESIS_NOT_FOUND"
+
+    @pytest.mark.asyncio
+    async def test_rejects_tombstoned_hypothesis(self, mock_store: AsyncMock) -> None:
+        """Test that TX14 rejects tombstoned hypotheses."""
+        hypothesis_id = make_uuid()
+
+        mock_store.execute_query = AsyncMock(return_value=[
+            {"id": hypothesis_id, "content": "Deleted", "confidence": 0.9,
+             "crystallized": False, "state": "TOMBSTONED"}
+        ])
+
+        with pytest.raises(InvariantViolation) as exc_info:
+            await tx14_crystallize(
+                store=mock_store,
+                hypothesis_id=hypothesis_id,
+                silo_id="test-silo",
+                agent_id="test-agent",
+                session_id="test-session",
+            )
+
+        assert exc_info.value.code == "HYPOTHESIS_TOMBSTONED"
