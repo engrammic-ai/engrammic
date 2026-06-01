@@ -328,7 +328,7 @@ async def tx4_synthesize(
     cluster_id: str,
     silo_id: str,
     llm: LLMProvider,
-    embedder: EmbeddingService,
+    _embedder: EmbeddingService,
     *,
     mode: Literal["async", "sync"] = "async",
     timeout_seconds: float = 30.0,
@@ -1212,7 +1212,7 @@ async def tx5_revise_belief(
     belief_id: str,
     silo_id: str,
     llm: LLMProvider,
-    embedder: EmbeddingService,
+    _embedder: EmbeddingService,
 ) -> tuple[ReviseBeliefResult, list[ReactionEvent]]:
     """TX5 REVISE_BELIEF: Re-synthesize a stale belief."""
     from context_service.db import queries as q

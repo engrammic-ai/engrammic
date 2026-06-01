@@ -78,7 +78,7 @@ class TestTx4Synthesize:
             cluster_id=cluster_id,
             silo_id="test-silo",
             llm=mock_llm,
-            embedder=mock_embedder,
+            _embedder=mock_embedder,
         )
 
         assert isinstance(result, SynthesizeResult)
@@ -107,7 +107,7 @@ class TestTx4Synthesize:
             cluster_id=cluster_id,
             silo_id="test-silo",
             llm=mock_llm,
-            embedder=mock_embedder,
+            _embedder=mock_embedder,
         )
 
         assert result.belief_id is None
@@ -135,7 +135,7 @@ class TestTx4Synthesize:
             cluster_id=cluster_id,
             silo_id="test-silo",
             llm=mock_llm,
-            embedder=mock_embedder,
+            _embedder=mock_embedder,
         )
 
         assert result.belief_id is None
@@ -361,7 +361,7 @@ class TestTx5ReviseBelief:
             belief_id=belief_id,
             silo_id="test-silo",
             llm=mock_llm,
-            embedder=mock_embedder,
+            _embedder=mock_embedder,
         )
 
         assert isinstance(result, ReviseBeliefResult)
@@ -398,7 +398,7 @@ class TestTx5ReviseBelief:
             belief_id=belief_id,
             silo_id="test-silo",
             llm=mock_llm,
-            embedder=mock_embedder,
+            _embedder=mock_embedder,
         )
 
         assert result.new_belief_id is None
@@ -428,7 +428,7 @@ class TestTx5ReviseBelief:
             belief_id=belief_id,
             silo_id="test-silo",
             llm=mock_llm,
-            embedder=mock_embedder,
+            _embedder=mock_embedder,
         )
 
         assert result.new_belief_id is None
