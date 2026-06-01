@@ -9,17 +9,17 @@ from dataclasses import dataclass
 from typing import Any
 
 SOURCE_TIER_WEIGHTS: dict[str, float] = {
-    "authoritative": 1.0,   # Primary source: official docs, verified API response
-    "validated": 0.85,      # Cross-checked against independent source
-    "community": 0.6,       # Unverified but from known-good agent/source
-    "unknown": 0.4,         # No provenance info
+    "authoritative": 1.0,  # Primary source: official docs, verified API response
+    "validated": 0.85,  # Cross-checked against independent source
+    "community": 0.6,  # Unverified but from known-good agent/source
+    "unknown": 0.4,  # No provenance info
 }
 
 METHOD_WEIGHTS: dict[str, float] = {
-    "direct": 1.0,               # Agent directly observed/verified
+    "direct": 1.0,  # Agent directly observed/verified
     "validated_extractor": 0.85,  # Extraction pipeline with validation
-    "standard_extractor": 0.75,   # Standard extraction, no validation
-    "experimental": 0.6,          # New/untested extraction method
+    "standard_extractor": 0.75,  # Standard extraction, no validation
+    "experimental": 0.6,  # New/untested extraction method
 }
 
 
