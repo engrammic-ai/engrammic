@@ -232,10 +232,9 @@ class TestRecall:
                 {"id": wisdom_id, "score": 0.7},
             ]
         )
-        # side_effect: first call returns memory node, second returns wisdom node,
-        # third call is GET_CLUSTERS_FOR_NODES
+        # First call is batch query returning all nodes, second is GET_CLUSTERS_FOR_NODES
         mock_store.execute_query = AsyncMock(
-            side_effect=[[memory_node], [wisdom_node], []]
+            side_effect=[[memory_node, wisdom_node], []]
         )
 
         options = RecallOptions(layers=[Layer.WISDOM])
@@ -269,8 +268,9 @@ class TestRecall:
                 {"id": high_id, "score": 0.75},
             ]
         )
+        # First call is batch query returning all nodes, second is GET_CLUSTERS_FOR_NODES
         mock_store.execute_query = AsyncMock(
-            side_effect=[[low_conf], [high_conf], []]
+            side_effect=[[low_conf, high_conf], []]
         )
 
         options = RecallOptions(min_confidence=0.5)

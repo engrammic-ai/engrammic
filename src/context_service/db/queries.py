@@ -92,6 +92,23 @@ RETURN n.id AS id,
        n.properties AS properties
 """
 
+# Batched version of GET_NODE_FOR_RECALL for performance.
+# Fetches multiple nodes in a single query.
+GET_NODES_FOR_RECALL_BATCH = """
+MATCH (n {silo_id: $silo_id})
+WHERE n.id IN $node_ids
+RETURN n.id AS id,
+       n.properties.content AS content,
+       n.properties.layer AS layer,
+       n.properties.state AS state,
+       n.properties.confidence AS confidence,
+       n.properties.corroboration_count AS corroboration_count,
+       n.properties.synthesis_state AS synthesis_state,
+       n.properties.created_at AS created_at,
+       n.properties.valid_to AS valid_to,
+       n.properties AS properties
+"""
+
 # Get clusters containing a set of result nodes (RECALL transaction).
 # Used to surface cluster-level context alongside individual results.
 GET_CLUSTERS_FOR_NODES = """

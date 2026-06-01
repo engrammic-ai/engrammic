@@ -121,7 +121,8 @@ def compute_recall_score(node: dict[str, Any], similarity: float, heat: float = 
     if layer == Layer.MEMORY:
         layer_score = similarity * gaussian_decay(age_days)
     elif layer == Layer.KNOWLEDGE:
-        corroboration_boost = float(node.get("corroboration_count", 0))
+        corroboration_count = int(node.get("corroboration_count", 0))
+        corroboration_boost = math.log10(1 + corroboration_count) if corroboration_count > 0 else 0.0
         layer_score = similarity * confidence * (1 + corroboration_boost * 0.2)
     elif layer == Layer.WISDOM:
         synthesis_state = node.get("synthesis_state", "")
@@ -142,6 +143,7 @@ async def recall(
     query: str,
     silo_id: str,
     options: RecallOptions | None = None,
+    llm: Any | None = None,
 ) -> RecallResult:
     """RECALL: Query transaction with epistemic-aware retrieval.
 
@@ -175,22 +177,25 @@ async def recall(
         top_k=over_fetch_k,
     )
 
-    # 2. Apply filters
+    # 2. Batch-fetch full nodes (single query instead of N)
+    candidate_ids = [c.get("id") for c in candidates if c.get("id")]
+    similarity_by_id = {c.get("id"): float(c.get("score", 0.0)) for c in candidates}
+
+    nodes_batch = await store.execute_query(
+        q.GET_NODES_FOR_RECALL_BATCH,
+        {"silo_id": silo_id, "node_ids": candidate_ids},
+    )
+    nodes_by_id = {n.get("id"): n for n in nodes_batch}
+
+    # 3. Apply filters
     filtered: list[tuple[dict[str, Any], float]] = []
 
-    for candidate in candidates:
-        node_id = candidate.get("id")
-        similarity = candidate.get("score", 0.0)
-
-        # Fetch full node
-        node_results = await store.execute_query(
-            q.GET_NODE_FOR_RECALL,
-            {"node_id": node_id, "silo_id": silo_id},
-        )
-        if not node_results:
+    for node_id in candidate_ids:
+        node = nodes_by_id.get(node_id)
+        if node is None:
             continue
 
-        node = node_results[0]
+        similarity = similarity_by_id.get(node_id, 0.0)
 
         # State filter
         state = node.get("state")
@@ -226,9 +231,9 @@ async def recall(
         if confidence < options.min_confidence:
             continue
 
-        filtered.append((node, float(similarity)))
+        filtered.append((node, similarity))
 
-    # 3. Score by layer semantics
+    # 4. Score by layer semantics
     scored: list[tuple[dict[str, Any], float]] = []
     for node, similarity in filtered:
         # Heat from reactions (reserved for future implementation)
@@ -282,15 +287,19 @@ async def recall(
             )
         )
 
-    # 5. Lazy synthesis (if enabled)
+    # 5. Lazy synthesis (if enabled and LLM available)
     synthesis_pending = False
-    if options.include_synthesis and results:
+    if options.include_synthesis and results and llm is not None:
+        import asyncio
+
         node_ids = [r.node_id for r in results]
 
         cluster_results = await store.execute_query(
             q.GET_CLUSTERS_FOR_NODES,
             {"silo_id": silo_id, "node_ids": node_ids},
         )
+
+        synthesis_timeout_s = LAZY_SYNTHESIS_TIMEOUT_MS / 1000.0
 
         for cluster in cluster_results:
             cluster_id = cluster.get("cluster_id")
@@ -301,13 +310,16 @@ async def recall(
 
             if cluster_state in (ClusterState.READY.value, ClusterState.STALE.value) and current_belief_id is None:
                 try:
-                    belief_result, _ = await tx4_synthesize(
-                        store=store,
-                        cluster_id=cluster_id,
-                        silo_id=silo_id,
-                        llm=None,  # type: ignore[arg-type]
-                        _embedder=embedding_service,
-                        mode="sync",
+                    belief_result, _ = await asyncio.wait_for(
+                        tx4_synthesize(
+                            store=store,
+                            cluster_id=cluster_id,
+                            silo_id=silo_id,
+                            llm=llm,
+                            _embedder=embedding_service,
+                            mode="sync",
+                        ),
+                        timeout=synthesis_timeout_s,
                     )
                     if belief_result and belief_result.belief_id:
                         results.append(
@@ -323,6 +335,13 @@ async def recall(
                                 synthesized=True,
                             )
                         )
+                except TimeoutError:
+                    logger.warning(
+                        "lazy_synthesis_timeout",
+                        cluster_id=cluster_id,
+                        timeout_ms=LAZY_SYNTHESIS_TIMEOUT_MS,
+                    )
+                    synthesis_pending = True
                 except Exception:
                     logger.warning(
                         "lazy_synthesis_failed",
