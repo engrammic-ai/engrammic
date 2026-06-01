@@ -95,6 +95,26 @@ async def _recall_impl(
 
     result_list = result.get("results") or result.get("nodes") or []
 
+    # Surface conflict status and credibility on each result item.
+    # Query-path items carry these as top-level fields (set by context_query.py).
+    # Get-path items carry them inside `properties`; promote to top-level for
+    # consistency so callers always see conflict_status / credibility / credibility_factors.
+    has_unresolved_conflicts = False
+    for item in result_list:
+        if "error" in item:
+            continue
+        props = item.get("properties") or {}
+        if "conflict_status" not in item:
+            item["conflict_status"] = str(props.get("conflict_status") or "none")
+        if "credibility" not in item:
+            item["credibility"] = float(props.get("credibility") or 0.0)
+        if "credibility_factors" not in item:
+            raw_cf = props.get("credibility_factors")
+            item["credibility_factors"] = raw_cf if isinstance(raw_cf, dict) else None
+        if item.get("conflict_status") == "unresolved":
+            has_unresolved_conflicts = True
+    result["has_unresolved_conflicts"] = has_unresolved_conflicts
+
     # Track node access for evidence accessibility (Layer 3 chain reuse)
     # Fire-and-forget to avoid blocking recall hot path
     session_id = auth.session_id

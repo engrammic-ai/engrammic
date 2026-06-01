@@ -366,6 +366,9 @@ async def _context_query(
             "relevance_score": r.relevance_score,
             "tags": r.tags or [],
             "created_at": r.created_at.isoformat() if r.created_at else None,
+            "conflict_status": r.conflict_status,
+            "credibility": r.credibility,
+            "credibility_factors": r.credibility_factors,
         }
         for r in results
     ]

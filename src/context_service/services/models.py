@@ -78,6 +78,9 @@ class QueryResult:
     summary: str | None = None
     tags: list[str] | None = None
     created_at: datetime | None = None
+    conflict_status: str = "none"
+    credibility: float = 0.0
+    credibility_factors: dict[str, Any] | None = None
 
 
 @dataclass

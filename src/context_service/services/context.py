@@ -1479,6 +1479,11 @@ class ContextService:
                 heat = float(raw_heat) if raw_heat is not None else 0.5
                 relevance = relevance * ((1.0 - settings.heat_weight) + settings.heat_weight * heat)
 
+            raw_credibility_factors = props.get("credibility_factors")
+            credibility_factors: dict[str, Any] | None = None
+            if isinstance(raw_credibility_factors, dict):
+                credibility_factors = raw_credibility_factors
+
             results.append(
                 QueryResult(
                     node_id=node.id,
@@ -1489,6 +1494,9 @@ class ContextService:
                     summary=props.get("summary"),
                     tags=node_tags or None,
                     created_at=node.created_at,
+                    conflict_status=str(props.get("conflict_status") or "none"),
+                    credibility=float(props.get("credibility") or 0.0),
+                    credibility_factors=credibility_factors,
                 )
             )
 
