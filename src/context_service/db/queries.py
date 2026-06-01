@@ -51,6 +51,57 @@ RETURN r
 """
 
 
+# ---------------------------------------------------------------------------
+# Phase 6 recall and cycle detection queries
+# ---------------------------------------------------------------------------
+
+# Get neighbors of a node for graph traversal (RECALL transaction).
+# Returns neighbor id, edge type, direction, and properties.
+# Excludes already-visited nodes and inactive neighbors.
+TRAVERSE_NEIGHBORS = """
+MATCH (n {id: $node_id, silo_id: $silo_id})-[e]-(neighbor)
+WHERE neighbor.properties.state = 'ACTIVE'
+  AND NOT neighbor.id IN $visited
+RETURN neighbor.id AS id,
+       type(e) AS edge_type,
+       CASE WHEN startNode(e) = n THEN 'outgoing' ELSE 'incoming' END AS direction,
+       neighbor.properties AS properties
+LIMIT $limit
+"""
+
+# Check if adding a SUPERSEDES edge from source to target would create a cycle.
+# A cycle exists when target can already reach source via SUPERSEDES.
+CHECK_CYCLE_PATH = """
+MATCH path = (source {id: $source_id, silo_id: $silo_id})-[:SUPERSEDES*1..10]->(target {id: $target_id, silo_id: $silo_id})
+RETURN count(path) > 0 AS would_cycle
+"""
+
+# Get full node details for recall filtering (RECALL transaction).
+# Returns all fields needed for result ranking and filtering.
+GET_NODE_FOR_RECALL = """
+MATCH (n {id: $node_id, silo_id: $silo_id})
+RETURN n.id AS id,
+       n.properties.content AS content,
+       n.properties.layer AS layer,
+       n.properties.state AS state,
+       n.properties.confidence AS confidence,
+       n.properties.corroboration_count AS corroboration_count,
+       n.properties.synthesis_state AS synthesis_state,
+       n.properties.created_at AS created_at,
+       n.properties.valid_to AS valid_to,
+       n.properties AS properties
+"""
+
+# Get clusters containing a set of result nodes (RECALL transaction).
+# Used to surface cluster-level context alongside individual results.
+GET_CLUSTERS_FOR_NODES = """
+MATCH (n {silo_id: $silo_id})-[:MEMBER_OF]->(cluster:Cluster)
+WHERE n.id IN $node_ids
+RETURN cluster.id AS cluster_id,
+       cluster.properties.state AS state,
+       cluster.properties.current_belief_id AS current_belief_id
+"""
+
 # Cluster CRUD queries
 CREATE_CLUSTER = """
 CREATE (c:Cluster {
