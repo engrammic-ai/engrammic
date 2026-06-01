@@ -1,8 +1,7 @@
-"""Tests for silo-partitioned broker factory and dead letter middleware."""
+"""Tests for broker factory and dead letter middleware."""
 
 from __future__ import annotations
 
-import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -21,20 +20,16 @@ from context_service.reactions.events import ReactionEventType
 
 
 class TestGetBroker:
-    def test_returns_broker_for_silo(self) -> None:
-        silo_id = "silo-" + uuid.uuid4().hex[:8]
+    def test_returns_broker(self) -> None:
         with patch("context_service.reactions.broker.ListQueueBroker") as mock_cls:
             mock_instance = MagicMock()
             mock_instance.add_middlewares = MagicMock()
             mock_cls.return_value = mock_instance
-            # register_tasks is a local import inside _build_broker; patch at the
-            # tasks module level, not as a broker module attribute.
             with patch("context_service.reactions.tasks.register_tasks"):
-                broker = get_broker(silo_id)
+                broker = get_broker()
         assert broker is not None
 
-    def test_same_silo_returns_cached_instance(self) -> None:
-        silo_id = "cached-silo-" + uuid.uuid4().hex[:8]
+    def test_returns_cached_singleton(self) -> None:
         with (
             patch("context_service.reactions.broker.ListQueueBroker") as mock_cls,
             patch("context_service.reactions.tasks.register_tasks"),
@@ -43,38 +38,13 @@ class TestGetBroker:
             instance.add_middlewares = MagicMock()
             mock_cls.return_value = instance
 
-            first = get_broker(silo_id)
-            second = get_broker(silo_id)
+            first = get_broker()
+            second = get_broker()
 
         assert first is second
 
-    def test_different_silos_get_different_brokers(self) -> None:
-        silo_a = "silo-a-" + uuid.uuid4().hex[:8]
-        silo_b = "silo-b-" + uuid.uuid4().hex[:8]
-
-        instances: list[MagicMock] = []
-
-        def make_instance(*args: object, **kwargs: object) -> MagicMock:
-            m = MagicMock()
-            m.add_middlewares = MagicMock()
-            instances.append(m)
-            return m
-
-        with (
-            patch(
-                "context_service.reactions.broker.ListQueueBroker",
-                side_effect=make_instance,
-            ),
-            patch("context_service.reactions.tasks.register_tasks"),
-        ):
-            broker_a = get_broker(silo_a)
-            broker_b = get_broker(silo_b)
-
-        assert broker_a is not broker_b
-
-    def test_queue_names_are_silo_partitioned(self) -> None:
-        silo_id = "partition-silo-" + uuid.uuid4().hex[:8]
-        expected_queue = f"reactions:{silo_id}:default"
+    def test_uses_shared_queue_name(self) -> None:
+        """All silos share a single queue; silo isolation is at task level."""
         captured_kwargs: list[dict] = []
 
         def capture(*args: object, **kwargs: object) -> MagicMock:
@@ -90,16 +60,13 @@ class TestGetBroker:
             ),
             patch("context_service.reactions.tasks.register_tasks"),
         ):
-            get_broker(silo_id)
+            get_broker.cache_clear()
+            get_broker()
 
-        # First call is the main queue; second (if any) is DLQ inside middleware
         main_queue_call = captured_kwargs[0]
-        assert main_queue_call.get("queue_name") == expected_queue
+        assert main_queue_call.get("queue_name") == "reactions:default"
 
-    def test_dlq_name_is_silo_partitioned(self) -> None:
-        silo_id = "dlq-silo-" + uuid.uuid4().hex[:8]
-        expected_dlq = f"reactions:{silo_id}:dlq"
-
+    def test_uses_shared_dlq_name(self) -> None:
         middlewares_added: list = []
 
         def capture_broker(*args: object, **kwargs: object) -> MagicMock:
@@ -114,14 +81,15 @@ class TestGetBroker:
             ),
             patch("context_service.reactions.tasks.register_tasks"),
         ):
-            get_broker(silo_id)
+            get_broker.cache_clear()
+            get_broker()
 
         dlq_mw = next(
             (mw for mw in middlewares_added if isinstance(mw, DeadLetterMiddleware)),
             None,
         )
         assert dlq_mw is not None
-        assert dlq_mw._dlq_name == expected_dlq
+        assert dlq_mw._dlq_name == "reactions:dlq"
 
 
 # ---------------------------------------------------------------------------

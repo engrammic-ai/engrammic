@@ -153,19 +153,19 @@ class TestEmitReaction:
         kiq.assert_awaited_once_with(node_id=node_id, silo_id=silo_id, delta=2.5)
 
     @pytest.mark.asyncio
-    async def test_emit_uses_silo_broker(self) -> None:
+    async def test_emit_uses_shared_broker(self) -> None:
+        """All events use the same shared broker regardless of silo_id."""
         broker = _make_broker_with_kicker()
-        silo_id = "specific-silo-" + uuid.uuid4().hex[:6]
         event = ReactionEvent(
             event_type=ReactionEventType.UPDATE_HEAT,
             node_id=str(uuid.uuid4()),
-            silo_id=silo_id,
+            silo_id="any-silo",
         )
 
         with patch("context_service.reactions.broker.get_broker", return_value=broker) as mock_get_broker:
             await emit_reaction(event)
 
-        mock_get_broker.assert_called_once_with(silo_id)
+        mock_get_broker.assert_called_once_with()
 
     @pytest.mark.asyncio
     async def test_emit_task_not_registered_logs_warning_and_returns(self) -> None:
@@ -234,17 +234,18 @@ class TestEmitReaction:
         assert 0 < _EMIT_TIMEOUT_SECONDS <= 5.0
 
     @pytest.mark.asyncio
-    async def test_silo_isolation_different_silos_use_different_brokers(self) -> None:
-        """emit_reaction uses get_broker(silo_id), so different silos are isolated."""
-        brokers_called: list[str] = []
+    async def test_silo_isolation_silo_id_passed_to_task(self) -> None:
+        """emit_reaction passes silo_id to task kwargs for task-level isolation."""
+        kiq_calls: list[dict] = []
 
-        def mock_get_broker(silo_id: str) -> MagicMock:
-            brokers_called.append(silo_id)
-            b = MagicMock()
-            kicker = MagicMock()
-            kicker.kiq = AsyncMock(return_value=None)
-            b.find_task = MagicMock(return_value=kicker)
-            return b
+        kicker = MagicMock()
+
+        async def capture_kiq(**kwargs: object) -> None:
+            kiq_calls.append(dict(kwargs))
+
+        kicker.kiq = capture_kiq
+        broker = MagicMock()
+        broker.find_task = MagicMock(return_value=kicker)
 
         event_a = ReactionEvent(
             event_type=ReactionEventType.UPDATE_HEAT,
@@ -257,10 +258,10 @@ class TestEmitReaction:
             silo_id="silo-beta",
         )
 
-        with patch("context_service.reactions.broker.get_broker", side_effect=mock_get_broker):
+        with patch("context_service.reactions.broker.get_broker", return_value=broker):
             await emit_reaction(event_a)
             await emit_reaction(event_b)
 
-        assert "silo-alpha" in brokers_called
-        assert "silo-beta" in brokers_called
-        assert brokers_called[0] != brokers_called[1]
+        assert len(kiq_calls) == 2
+        assert kiq_calls[0]["silo_id"] == "silo-alpha"
+        assert kiq_calls[1]["silo_id"] == "silo-beta"

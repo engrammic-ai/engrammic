@@ -1,9 +1,8 @@
 """Worker entrypoint for the Taskiq reaction worker process.
 
-Exposes a default broker instance that the ``taskiq worker`` CLI can reference
-as a module-level object. Silo-specific routing is handled at task dispatch time
-via the ``silo_id`` kwarg passed to each task; the worker itself does not need
-to be silo-aware at startup.
+Exposes the broker instance that the ``taskiq worker`` CLI references as a
+module-level object. All silos share the same queue; silo isolation is enforced
+at the task level via the ``silo_id`` kwarg passed to each handler.
 
 Usage::
 
@@ -19,7 +18,5 @@ from __future__ import annotations
 from context_service.reactions.broker import get_broker
 from context_service.reactions.worker import configure_worker
 
-# Default broker for the worker process.  Actual silo routing happens via
-# task kwargs at dispatch time, not at the broker level.
-broker = get_broker("default")
+broker = get_broker()
 configure_worker(broker)

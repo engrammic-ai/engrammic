@@ -16,14 +16,20 @@
 **Files added:** 2,892 lines across reactions/, sensors/, tests/
 
 ### What shipped:
-- `reactions/broker.py` - Silo-partitioned Taskiq broker with SmartRetryMiddleware + DeadLetterMiddleware
+- `reactions/broker.py` - Single shared Taskiq broker with SmartRetryMiddleware + DeadLetterMiddleware
 - `reactions/events.py` - ReactionEventType enum (11 types), ReactionEvent dataclass, emit_reaction() fire-and-forget helper
 - `reactions/tasks.py` - 8 task handlers (5 fully implemented, 3 stubs for Phase 9)
-- `reactions/worker.py` - LoggingMiddleware, TracingMiddleware, Sentry integration, health check task
+- `reactions/worker.py` - LoggingMiddleware, TracingMiddleware (with stale span cleanup), Sentry integration, health check task
 - `reactions/worker_entrypoint.py` - CLI entrypoint for `taskiq worker`
 - `pipelines/sensors/reaction_health.py` - Queue depth + DLQ monitoring sensors
 - `sage/transactions.py` - All 11 transaction functions now emit reactions directly (emit=True flag)
 - Docker deployment: reaction-worker service in dev and prod compose files
+
+### Post-review fixes (Opus review 2026-06-02):
+1. **Silo routing:** Changed from per-silo queues to single shared queue. Silo isolation enforced at task level via silo_id kwarg, not queue level. Simplifies worker deployment.
+2. **DLQ startup race:** Added asyncio.Lock to prevent concurrent startup() calls.
+3. **Span cleanup:** Added _purge_stale_spans() to clean up _active_spans dict when it exceeds 1000 entries, preventing memory leaks from crashed tasks.
+4. **Event type docs:** Added docstring explaining notification-only event types (CASCADE_STALENESS_COMPLETE, CONFLICT_DETECTED, CHECK_EXTRACTION_TRIGGER).
 
 ### Handler status:
 | Handler | Status |
@@ -52,17 +58,19 @@
 Transaction (write) 
     |
     v
-ReactionEvent emitted --> Redis Stream (silo-partitioned)
+ReactionEvent emitted --> Redis List (shared queue: reactions:default)
                               |
                               v
                          Taskiq Worker Pool
                               |
                               v
-                         Process reaction (consolidate, cascade, cluster, etc.)
+                         Process reaction (silo isolation via silo_id kwarg)
                               |
                               v
                          Dagster sensors monitor queue health
 ```
+
+**Note:** All silos share a single queue. Silo isolation is enforced at the task handler level via the `silo_id` kwarg, not at the queue level. This simplifies worker deployment (one worker pool serves all tenants).
 
 **Key decisions:**
 1. **Taskiq** for async workers - native asyncio, FastAPI integration, actively maintained

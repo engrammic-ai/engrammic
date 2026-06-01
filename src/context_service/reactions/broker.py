@@ -1,7 +1,14 @@
-"""Taskiq broker setup for silo-partitioned reaction queues."""
+"""Taskiq broker setup for reaction queues.
+
+Uses a single shared queue for all silos. Silo isolation is enforced at the
+task level via the ``silo_id`` kwarg, not at the queue level. This simplifies
+worker deployment (one worker pool serves all tenants) while maintaining
+logical isolation in task handlers.
+"""
 
 from __future__ import annotations
 
+import asyncio
 from functools import lru_cache
 from typing import Any
 
@@ -20,7 +27,7 @@ _MAX_DELAY_SECONDS: float = 60.0
 
 
 class DeadLetterMiddleware(TaskiqMiddleware):
-    """Push exhausted tasks to the silo dead letter queue.
+    """Push exhausted tasks to the dead letter queue.
 
     The SmartRetryMiddleware increments ``_retries`` and re-kicks the task
     when ``retries < max_retries``. When retries are exhausted it logs a
@@ -37,6 +44,8 @@ class DeadLetterMiddleware(TaskiqMiddleware):
         super().__init__()
         self._dlq_name = dlq_name
         self._dlq_broker: ListQueueBroker | None = None
+        self._startup_lock = asyncio.Lock()
+        self._started = False
 
     def set_broker(self, broker: ListQueueBroker) -> None:  # type: ignore[override]
         super().set_broker(broker)
@@ -74,8 +83,10 @@ class DeadLetterMiddleware(TaskiqMiddleware):
             return
 
         try:
-            if not self._dlq_broker.is_worker_process:
-                await self._dlq_broker.startup()
+            async with self._startup_lock:
+                if not self._started and not self._dlq_broker.is_worker_process:
+                    await self._dlq_broker.startup()
+                    self._started = True
 
             dlq_message = message.model_copy(
                 update={
@@ -103,11 +114,15 @@ class DeadLetterMiddleware(TaskiqMiddleware):
             )
 
 
-def _build_broker(silo_id: str) -> ListQueueBroker:
-    """Construct a configured broker for the given silo."""
+def _build_broker() -> ListQueueBroker:
+    """Construct a configured broker for reaction events.
+
+    Uses a single shared queue for all silos. Silo isolation is enforced
+    at the task level via the ``silo_id`` kwarg passed to each handler.
+    """
     settings = get_settings()
-    queue_name = f"reactions:{silo_id}:default"
-    dlq_name = f"reactions:{silo_id}:dlq"
+    queue_name = "reactions:default"
+    dlq_name = "reactions:dlq"
 
     broker = ListQueueBroker(
         url=settings.redis_url,
@@ -141,17 +156,14 @@ def _build_broker(silo_id: str) -> ListQueueBroker:
     return broker
 
 
-@lru_cache(maxsize=256)
-def get_broker(silo_id: str) -> ListQueueBroker:
-    """Return a cached silo-partitioned Taskiq broker.
+@lru_cache(maxsize=1)
+def get_broker() -> ListQueueBroker:
+    """Return the cached Taskiq broker for reaction events.
 
-    Caches per ``silo_id`` so repeated calls within a process reuse one
-    connection pool rather than creating a new one on each call.
-
-    Args:
-        silo_id: Tenant identifier used to partition queues.
+    Returns a singleton broker instance. All silos share the same queue;
+    silo isolation is enforced at the task level via the ``silo_id`` kwarg.
 
     Returns:
         A configured ``ListQueueBroker`` backed by Redis.
     """
-    return _build_broker(silo_id)
+    return _build_broker()

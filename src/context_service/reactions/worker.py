@@ -90,6 +90,11 @@ class TracingMiddleware(TaskiqMiddleware):
 
     async def pre_execute(self, message: TaskiqMessage) -> TaskiqMessage:
         """Start a span and store its token in the message labels."""
+        # Purge stale entries if dict is getting large (prevents memory leak
+        # from tasks that crash without calling post_execute).
+        if len(_active_spans) > _MAX_ACTIVE_SPANS:
+            _purge_stale_spans()
+
         span = tracer.start_span(
             name=f"taskiq.{message.task_name}",
             attributes={
@@ -138,7 +143,33 @@ class TracingMiddleware(TaskiqMiddleware):
 
 # Module-level storage for in-flight spans so we can close them in
 # post_execute without needing to mutate TaskiqMessage.
+# Entries are cleaned up in post_execute; stale entries (from crashed tasks)
+# are purged when the dict exceeds _MAX_ACTIVE_SPANS.
 _active_spans: dict[str, tuple[trace.Span, float]] = {}
+_MAX_ACTIVE_SPANS = 1000
+_STALE_SPAN_SECONDS = 3600.0  # 1 hour
+
+
+def _purge_stale_spans() -> None:
+    """Remove spans older than _STALE_SPAN_SECONDS from _active_spans.
+
+    Called when _active_spans exceeds _MAX_ACTIVE_SPANS to prevent unbounded
+    memory growth from tasks that crash without calling post_execute.
+    """
+    now = time.monotonic()
+    stale_ids = [
+        task_id
+        for task_id, (_, started_at) in _active_spans.items()
+        if now - started_at > _STALE_SPAN_SECONDS
+    ]
+    for task_id in stale_ids:
+        entry = _active_spans.pop(task_id, None)
+        if entry:
+            span, _ = entry
+            span.set_status(trace.StatusCode.ERROR, description="span_purged_as_stale")
+            span.end()
+    if stale_ids:
+        logger.warning("purged_stale_spans", count=len(stale_ids))
 
 
 # ---------------------------------------------------------------------------
