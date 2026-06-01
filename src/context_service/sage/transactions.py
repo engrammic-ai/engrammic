@@ -11,13 +11,14 @@ Design:
 from __future__ import annotations
 
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 
+from context_service.reactions.events import ReactionEvent
 from context_service.sage.confidence import compute_credibility
 from context_service.sage.epistemology import propagate_incremental
 
@@ -362,17 +363,6 @@ async def llm_synthesize(
             timed_out=False,
             error=str(e),
         )
-
-
-@dataclass
-class ReactionEvent:
-    """Event emitted for async reaction processing."""
-
-    event_type: str
-    node_id: str
-    silo_id: str
-    payload: dict[str, Any] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 async def synthesize(
