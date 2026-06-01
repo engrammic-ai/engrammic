@@ -76,6 +76,8 @@ SYNTHESIS_THRESHOLD = 3
 SYNTHESIS_CONFIDENCE_THRESHOLD = 0.6
 MAX_CLUSTER_SIZE = 1000
 MAX_SYNTHESIS_RETRIES = 3
+CANCEL_WINDOW_DURATION_SECONDS = 3600  # 60 minutes
+MAX_CASCADE_DEPTH = 10
 
 
 class SynthesisState(StrEnum):
@@ -239,6 +241,35 @@ class LLMSynthesisResult:
     caveats: list[str]
     timed_out: bool
     error: str | None = None
+
+
+@dataclass
+class ForgetResult:
+    """Result of TX15 FORGET."""
+
+    node_id: uuid.UUID
+    state: NodeState
+    tombstoned_at: datetime
+    cancel_window_expires: datetime
+    cascade_count: int = 0
+
+
+@dataclass
+class CancelForgetResult:
+    """Result of TX16 CANCEL_FORGET."""
+
+    node_id: uuid.UUID
+    restored_at: datetime
+    previous_state: NodeState
+
+
+@dataclass
+class HardDeleteResult:
+    """Result of TX10 HARD_DELETE."""
+
+    deleted_count: int
+    skipped_count: int
+    deleted_ids: list[str]
 
 
 def noisy_or_aggregate(confidences: list[float]) -> float:
