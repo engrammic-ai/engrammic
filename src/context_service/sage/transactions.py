@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 
-from context_service.reactions.events import ReactionEvent
+from context_service.reactions.events import ReactionEvent, ReactionEventType, emit_reaction
 from context_service.sage.confidence import compute_credibility
 from context_service.sage.epistemology import propagate_incremental
 
@@ -374,6 +374,7 @@ async def synthesize(
     *,
     mode: Literal["async", "sync"] = "async",
     timeout_seconds: float = 30.0,
+    emit: bool = True,
 ) -> tuple[SynthesizeResult, list[ReactionEvent]]:
     """Create Belief from fact cluster (TX4).
 
@@ -515,14 +516,22 @@ async def synthesize(
         )
 
         events: list[ReactionEvent] = [
-            ReactionEvent(event_type="compute_embedding", node_id=str(belief_id), silo_id=silo_id),
             ReactionEvent(
-                event_type="update_heat",
+                event_type=ReactionEventType.COMPUTE_EMBEDDING,
+                node_id=str(belief_id),
+                silo_id=silo_id,
+            ),
+            ReactionEvent(
+                event_type=ReactionEventType.UPDATE_HEAT,
                 node_id=str(belief_id),
                 silo_id=silo_id,
                 payload={"access_type": "SYNTHESIS"},
             ),
         ]
+
+        if emit:
+            for event in events:
+                await emit_reaction(event)
 
         logger.debug(
             "synthesize_complete",
@@ -561,6 +570,7 @@ async def store_memory(
     content_type: str = "text",
     decay_class: str = "standard",
     metadata: dict[str, Any] | None = None,
+    emit: bool = True,
 ) -> tuple[StoreMemoryResult, list[ReactionEvent]]:
     """Store an observation to Memory layer (TX0).
 
@@ -627,12 +637,12 @@ async def store_memory(
 
     events: list[ReactionEvent] = [
         ReactionEvent(
-            event_type="compute_embedding",
+            event_type=ReactionEventType.COMPUTE_EMBEDDING,
             node_id=str(node_id),
             silo_id=silo_id,
         ),
         ReactionEvent(
-            event_type="update_heat",
+            event_type=ReactionEventType.UPDATE_HEAT,
             node_id=str(node_id),
             silo_id=silo_id,
             payload={"access_type": "WRITE"},
@@ -642,11 +652,15 @@ async def store_memory(
     if len(content) > _EXTRACTION_THRESHOLD:
         events.append(
             ReactionEvent(
-                event_type="check_extraction_trigger",
+                event_type=ReactionEventType.CHECK_EXTRACTION_TRIGGER,
                 node_id=str(node_id),
                 silo_id=silo_id,
             )
         )
+
+    if emit:
+        for event in events:
+            await emit_reaction(event)
 
     logger.debug(
         "store_memory_complete",
@@ -683,6 +697,7 @@ async def store_claim(
     supersedes: str | None = None,
     metadata: dict[str, Any] | None = None,
     tags: list[str] | None = None,
+    emit: bool = True,
 ) -> tuple[StoreClaimResult, list[ReactionEvent]]:
     """Store a claim to Knowledge layer with evidence (TX2).
 
@@ -820,18 +835,18 @@ async def store_claim(
 
     events: list[ReactionEvent] = [
         ReactionEvent(
-            event_type="compute_embedding",
+            event_type=ReactionEventType.COMPUTE_EMBEDDING,
             node_id=str(node_id),
             silo_id=silo_id,
         ),
         ReactionEvent(
-            event_type="update_heat",
+            event_type=ReactionEventType.UPDATE_HEAT,
             node_id=str(node_id),
             silo_id=silo_id,
             payload={"access_type": "WRITE"},
         ),
         ReactionEvent(
-            event_type="update_cluster_membership",
+            event_type=ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP,
             node_id=str(node_id),
             silo_id=silo_id,
         ),
@@ -840,7 +855,7 @@ async def store_claim(
     if supersedes:
         events.append(
             ReactionEvent(
-                event_type="cascade_staleness",
+                event_type=ReactionEventType.CASCADE_STALENESS,
                 node_id=supersedes,
                 silo_id=silo_id,
                 payload={"depth": 1},
@@ -848,6 +863,10 @@ async def store_claim(
         )
 
     events.extend(conflict_events)
+
+    if emit:
+        for event in events:
+            await emit_reaction(event)
 
     logger.debug(
         "store_claim_complete",
@@ -867,6 +886,8 @@ async def supersede(
     loser_id: str,
     silo_id: str,
     reason: SupersedeReason,
+    *,
+    emit: bool = True,
 ) -> tuple[SupersedeResult, list[ReactionEvent]]:
     """Mark a node as superseded by another (TX3).
 
@@ -916,12 +937,16 @@ async def supersede(
 
     events: list[ReactionEvent] = [
         ReactionEvent(
-            event_type="cascade_staleness",
+            event_type=ReactionEventType.CASCADE_STALENESS,
             node_id=loser_id,
             silo_id=silo_id,
             payload={"depth": 1},
         ),
     ]
+
+    if emit:
+        for event in events:
+            await emit_reaction(event)
 
     logger.debug(
         "supersede_complete",
@@ -943,6 +968,7 @@ async def link(
     *,
     metadata: dict[str, Any] | None = None,
     weight: float = 1.0,
+    emit: bool = True,
 ) -> tuple[LinkResult, list[ReactionEvent]]:
     """Create a typed relationship between nodes (TX17).
 
@@ -1028,13 +1054,13 @@ async def link(
 
     events: list[ReactionEvent] = [
         ReactionEvent(
-            event_type="update_heat",
+            event_type=ReactionEventType.UPDATE_HEAT,
             node_id=source_id,
             silo_id=silo_id,
             payload={"access_type": "LINK"},
         ),
         ReactionEvent(
-            event_type="update_heat",
+            event_type=ReactionEventType.UPDATE_HEAT,
             node_id=target_id,
             silo_id=silo_id,
             payload={"access_type": "LINK"},
@@ -1044,7 +1070,7 @@ async def link(
     if edge_type == LinkType.CONTRADICTS:
         events.append(
             ReactionEvent(
-                event_type="flag_contradiction",
+                event_type=ReactionEventType.FLAG_CONTRADICTION,
                 node_id=source_id,
                 silo_id=silo_id,
                 payload={"contradicting_node_id": target_id},
@@ -1053,6 +1079,10 @@ async def link(
 
     if edge_type in (LinkType.SUPPORTS, LinkType.CONTRADICTS):
         await _run_incremental_propagation(store, target_id, silo_id)
+
+    if emit:
+        for event in events:
+            await emit_reaction(event)
 
     logger.debug(
         "link_complete",
@@ -1112,6 +1142,7 @@ async def commit(
     *,
     confidence: float = 0.8,
     metadata: dict[str, Any] | None = None,
+    emit: bool = True,
 ) -> tuple[CommitResult, list[ReactionEvent]]:
     """Agent declares a stance directly (TX8).
 
@@ -1163,17 +1194,21 @@ async def commit(
 
     events: list[ReactionEvent] = [
         ReactionEvent(
-            event_type="compute_embedding",
+            event_type=ReactionEventType.COMPUTE_EMBEDDING,
             node_id=str(commitment_id),
             silo_id=silo_id,
         ),
         ReactionEvent(
-            event_type="update_heat",
+            event_type=ReactionEventType.UPDATE_HEAT,
             node_id=str(commitment_id),
             silo_id=silo_id,
             payload={"access_type": "WRITE"},
         ),
     ]
+
+    if emit:
+        for event in events:
+            await emit_reaction(event)
 
     logger.debug(
         "commit_complete",
@@ -1229,6 +1264,8 @@ async def crystallize(
     silo_id: str,
     agent_id: str,
     session_id: str,
+    *,
+    emit: bool = True,
 ) -> tuple[CrystallizeResult, list[ReactionEvent]]:
     """Convert WorkingHypothesis to Commitment (TX14)."""
     from context_service.db import queries as q
@@ -1301,14 +1338,22 @@ async def crystallize(
     )
 
     events: list[ReactionEvent] = [
-        ReactionEvent(event_type="compute_embedding", node_id=str(commitment_id), silo_id=silo_id),
         ReactionEvent(
-            event_type="update_heat",
+            event_type=ReactionEventType.COMPUTE_EMBEDDING,
+            node_id=str(commitment_id),
+            silo_id=silo_id,
+        ),
+        ReactionEvent(
+            event_type=ReactionEventType.UPDATE_HEAT,
             node_id=str(commitment_id),
             silo_id=silo_id,
             payload={"access_type": "WRITE"},
         ),
     ]
+
+    if emit:
+        for event in events:
+            await emit_reaction(event)
 
     logger.debug(
         "crystallize_complete",
@@ -1326,6 +1371,8 @@ async def revise_belief(
     silo_id: str,
     llm: LLMProvider,
     _embedder: EmbeddingService,
+    *,
+    emit: bool = True,
 ) -> tuple[ReviseBeliefResult, list[ReactionEvent]]:
     """Re-synthesize a stale belief (TX5)."""
     from context_service.db import queries as q
@@ -1537,15 +1584,21 @@ async def revise_belief(
 
             events: list[ReactionEvent] = [
                 ReactionEvent(
-                    event_type="compute_embedding", node_id=str(new_belief_id), silo_id=silo_id
+                    event_type=ReactionEventType.COMPUTE_EMBEDDING,
+                    node_id=str(new_belief_id),
+                    silo_id=silo_id,
                 ),
                 ReactionEvent(
-                    event_type="update_heat",
+                    event_type=ReactionEventType.UPDATE_HEAT,
                     node_id=str(new_belief_id),
                     silo_id=silo_id,
                     payload={"access_type": "SYNTHESIS"},
                 ),
             ]
+
+            if emit:
+                for event in events:
+                    await emit_reaction(event)
 
             logger.debug(
                 "revise_belief_complete",
@@ -1936,7 +1989,7 @@ async def detect_spo_conflict(
 
         events.append(
             ReactionEvent(
-                event_type="conflict_detected",
+                event_type=ReactionEventType.CONFLICT_DETECTED,
                 node_id=new_node_id,
                 silo_id=silo_id,
                 payload={
@@ -2139,6 +2192,7 @@ async def forget(
     *,
     reason: str | None = None,
     cascade: bool = False,
+    emit: bool = True,
 ) -> tuple[ForgetResult, list[ReactionEvent]]:
     """Soft-delete a node with cancel window (TX15).
 
@@ -2198,12 +2252,16 @@ async def forget(
         cascade_count = await cascade_staleness(store, node_id, silo_id, depth=1)
         events.append(
             ReactionEvent(
-                event_type="cascade_staleness_complete",
+                event_type=ReactionEventType.CASCADE_STALENESS_COMPLETE,
                 node_id=node_id,
                 silo_id=silo_id,
                 payload={"cascade_count": cascade_count},
             )
         )
+
+    if emit:
+        for event in events:
+            await emit_reaction(event)
 
     result = ForgetResult(
         node_id=uuid.UUID(node_id),
@@ -2349,6 +2407,8 @@ async def promote(
     store: HyperGraphStore,
     claim_id: str,
     silo_id: str,
+    *,
+    emit: bool = True,
 ) -> tuple[PromoteResult, list[ReactionEvent]]:
     """Promote Claim to Fact when corroboration threshold met (TX18).
 
@@ -2422,11 +2482,15 @@ async def promote(
 
     events: list[ReactionEvent] = [
         ReactionEvent(
-            event_type="update_cluster_membership",
+            event_type=ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP,
             node_id=claim_id,
             silo_id=silo_id,
         ),
     ]
+
+    if emit:
+        for event in events:
+            await emit_reaction(event)
 
     logger.debug(
         "promote_complete",
@@ -2442,6 +2506,8 @@ async def demote(
     store: HyperGraphStore,
     fact_id: str,
     silo_id: str,
+    *,
+    emit: bool = True,
 ) -> tuple[DemoteResult, list[ReactionEvent]]:
     """Demote Fact back to Claim when evidence withdrawn (TX19).
 
@@ -2524,17 +2590,21 @@ async def demote(
 
     events: list[ReactionEvent] = [
         ReactionEvent(
-            event_type="cascade_staleness",
+            event_type=ReactionEventType.CASCADE_STALENESS,
             node_id=fact_id,
             silo_id=silo_id,
             payload={"depth": 1},
         ),
         ReactionEvent(
-            event_type="update_cluster_membership",
+            event_type=ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP,
             node_id=fact_id,
             silo_id=silo_id,
         ),
     ]
+
+    if emit:
+        for event in events:
+            await emit_reaction(event)
 
     logger.debug(
         "demote_complete",
