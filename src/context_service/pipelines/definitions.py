@@ -22,6 +22,10 @@ from context_service.pipelines.jobs.telemetry_prune import telemetry_prune_job
 from context_service.pipelines.resources import build_default_resources
 from context_service.pipelines.schedules import all_schedules
 from context_service.pipelines.sensors import all_sensors
+from context_service.telemetry.metrics import setup_metrics
+
+# Initialize metrics buffer at module load so LLM token tracking works in Dagster ops
+setup_metrics()
 
 causal_tombstone_job = dg.define_asset_job(
     name="causal_tombstone_job",

@@ -51,6 +51,75 @@ RETURN r
 """
 
 
+# ---------------------------------------------------------------------------
+# Phase 6 recall and cycle detection queries
+# ---------------------------------------------------------------------------
+
+# Get neighbors of a node for graph traversal (RECALL transaction).
+# Returns neighbor id, edge type, direction, and properties.
+# Excludes already-visited nodes and inactive neighbors.
+TRAVERSE_NEIGHBORS = """
+MATCH (n {id: $node_id, silo_id: $silo_id})-[e]-(neighbor)
+WHERE neighbor.properties.state = 'ACTIVE'
+  AND NOT neighbor.id IN $visited
+RETURN neighbor.id AS id,
+       type(e) AS edge_type,
+       CASE WHEN startNode(e) = n THEN 'outgoing' ELSE 'incoming' END AS direction,
+       neighbor.properties AS properties
+LIMIT $limit
+"""
+
+# Check if adding a SUPERSEDES edge from source to target would create a cycle.
+# A cycle exists when target can already reach source via SUPERSEDES.
+CHECK_CYCLE_PATH = """
+MATCH path = (source {id: $source_id, silo_id: $silo_id})-[:SUPERSEDES*1..10]->(target {id: $target_id, silo_id: $silo_id})
+RETURN count(path) > 0 AS would_cycle
+"""
+
+# Get full node details for recall filtering (RECALL transaction).
+# Returns all fields needed for result ranking and filtering.
+GET_NODE_FOR_RECALL = """
+MATCH (n {id: $node_id, silo_id: $silo_id})
+RETURN n.id AS id,
+       n.properties.content AS content,
+       n.properties.layer AS layer,
+       n.properties.state AS state,
+       n.properties.confidence AS confidence,
+       n.properties.corroboration_count AS corroboration_count,
+       n.properties.synthesis_state AS synthesis_state,
+       n.properties.created_at AS created_at,
+       n.properties.valid_to AS valid_to,
+       n.properties AS properties
+"""
+
+# Batched version of GET_NODE_FOR_RECALL for performance.
+# Fetches multiple nodes in a single query.
+GET_NODES_FOR_RECALL_BATCH = """
+MATCH (n {silo_id: $silo_id})
+WHERE n.id IN $node_ids
+RETURN n.id AS id,
+       n.properties.content AS content,
+       n.properties.layer AS layer,
+       n.properties.state AS state,
+       n.properties.confidence AS confidence,
+       n.properties.corroboration_count AS corroboration_count,
+       n.properties.synthesis_state AS synthesis_state,
+       n.properties.created_at AS created_at,
+       n.properties.valid_to AS valid_to,
+       coalesce(n.heat_score, 0.0) AS heat_score,
+       n.properties AS properties
+"""
+
+# Get clusters containing a set of result nodes (RECALL transaction).
+# Used to surface cluster-level context alongside individual results.
+GET_CLUSTERS_FOR_NODES = """
+MATCH (n {silo_id: $silo_id})-[:MEMBER_OF]->(cluster:Cluster)
+WHERE n.id IN $node_ids
+RETURN cluster.id AS cluster_id,
+       cluster.properties.state AS state,
+       cluster.properties.current_belief_id AS current_belief_id
+"""
+
 # Cluster CRUD queries
 CREATE_CLUSTER = """
 CREATE (c:Cluster {
@@ -1750,4 +1819,326 @@ CALL {
 RETURN id, marker_type, status, detected_at, about_ids,
        node_a_id, node_b_id, commitment_id
 ORDER BY detected_at DESC
+"""
+
+# TX8 COMMIT and TX14 CRYSTALLIZE queries
+
+VALIDATE_ABOUT_REFS = """
+UNWIND $node_ids AS nid
+MATCH (n {id: nid, silo_id: $silo_id})
+RETURN n.id AS id, n.properties.state AS state
+"""
+
+CREATE_COMMITMENT_WITH_ABOUT = """
+CREATE (c:Node:Commitment {
+    id: $id,
+    silo_id: $silo_id,
+    content: $content,
+    created_at: $created_at,
+    properties: $props
+})
+WITH c
+UNWIND $about_ids AS aid
+MATCH (a {id: aid, silo_id: $silo_id})
+CREATE (c)-[:ABOUT]->(a)
+WITH c
+MERGE (agent:Agent {id: $agent_id})
+CREATE (c)-[:DECLARED_BY {created_at: $created_at}]->(agent)
+RETURN c.id AS id
+"""
+
+GET_HYPOTHESIS_FOR_CRYSTALLIZE = """
+MATCH (h:WorkingHypothesis {id: $hypothesis_id, silo_id: $silo_id})
+WHERE h.properties.session_id = $session_id
+RETURN h.id AS id,
+       h.content AS content,
+       h.properties.confidence AS confidence,
+       h.properties.crystallized AS crystallized,
+       h.properties.state AS state
+"""
+
+GET_HYPOTHESIS_ABOUT_REFS = """
+MATCH (h:WorkingHypothesis {id: $hypothesis_id, silo_id: $silo_id})-[:ABOUT]->(a)
+RETURN a.id AS id, a.properties.state AS state
+"""
+
+CREATE_CRYSTALLIZED_FROM_EDGE = """
+MATCH (commitment {id: $commitment_id, silo_id: $silo_id})
+MATCH (hypothesis {id: $hypothesis_id, silo_id: $silo_id})
+SET hypothesis.properties.crystallized = true,
+    hypothesis.properties.crystallized_into = $commitment_id
+CREATE (commitment)-[:CRYSTALLIZED_FROM {created_at: $created_at}]->(hypothesis)
+RETURN commitment.id AS id
+"""
+
+# TX4 SYNTHESIZE and TX5 REVISE_BELIEF queries
+
+GET_CLUSTER_FOR_SYNTHESIS = """
+MATCH (c:Cluster {id: $cluster_id, silo_id: $silo_id})
+SET c.synthesis_in_progress = true
+RETURN c.state AS state,
+       c.current_belief_id AS current_belief_id,
+       c.synthesis_retry_count AS synthesis_retry_count
+"""
+
+RELEASE_CLUSTER_LOCK = """
+MATCH (c:Cluster {id: $cluster_id, silo_id: $silo_id})
+SET c.synthesis_in_progress = false,
+    c.state = $state
+RETURN c.id AS id
+"""
+
+UPDATE_CLUSTER_AFTER_SYNTHESIS = """
+MATCH (c:Cluster {id: $cluster_id, silo_id: $silo_id})
+SET c.synthesis_in_progress = false,
+    c.state = $state,
+    c.current_belief_id = $belief_id,
+    c.synthesized_at = $synthesized_at,
+    c.synthesis_retry_count = 0
+RETURN c.id AS id
+"""
+
+CREATE_BELIEF_WITH_SYNTHESIZED_FROM = """
+CREATE (b:Node:Belief {
+    id: $id,
+    silo_id: $silo_id,
+    content: $content,
+    created_at: $created_at,
+    properties: $props
+})
+WITH b
+UNWIND $fact_ids AS fid
+MATCH (f {id: fid, silo_id: $silo_id})
+CREATE (b)-[:SYNTHESIZED_FROM]->(f)
+RETURN b.id AS id
+"""
+
+GET_BELIEF_FOR_REVISION = """
+MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
+RETURN b.id AS id,
+       b.content AS content,
+       b.properties.state AS state,
+       b.properties.synthesis_state AS synthesis_state,
+       b.properties.source_cluster_id AS source_cluster_id,
+       b.properties.revision_in_progress AS revision_in_progress,
+       b.properties.confidence AS confidence
+"""
+
+MARK_BELIEF_REVISION_IN_PROGRESS = """
+MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
+SET b.properties.revision_in_progress = true
+RETURN b.id AS id
+"""
+
+UPDATE_BELIEF_AFTER_REVISION = """
+MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
+SET b.properties.synthesis_state = $synthesis_state,
+    b.properties.revision_in_progress = false
+RETURN b.id AS id
+"""
+
+# TX15 FORGET (soft-delete with cancel window) and TX16 CANCEL_FORGET (restore)
+
+TOMBSTONE_NODE = """
+MATCH (n {id: $node_id, silo_id: $silo_id})
+WHERE n.properties.state IN ['ACTIVE', 'SUPERSEDED']
+SET n.properties.state = 'TOMBSTONED',
+    n.properties.tombstoned_at = $tombstoned_at,
+    n.properties.forget_requested_at = $forget_requested_at,
+    n.properties.forget_requested_by = $agent_id,
+    n.properties.forget_reason = $reason,
+    n.properties.cancel_window_expires = $cancel_window_expires,
+    n.properties.previous_state = n.properties.state
+RETURN n.id AS id, n.properties.state AS state
+"""
+
+RESTORE_TOMBSTONED_NODE = """
+MATCH (n {id: $node_id, silo_id: $silo_id})
+WHERE n.properties.state = 'TOMBSTONED'
+  AND n.properties.cancel_window_expires > $now
+SET n.properties.state = n.properties.previous_state,
+    n.properties.tombstoned_at = null,
+    n.properties.forget_requested_at = null,
+    n.properties.forget_requested_by = null,
+    n.properties.forget_reason = null,
+    n.properties.cancel_window_expires = null,
+    n.properties.restored_at = $restored_at,
+    n.properties.restored_by = $agent_id
+RETURN n.id AS id, n.properties.state AS state, n.properties.previous_state AS previous_state
+"""
+
+GET_NODE_FOR_FORGET = """
+MATCH (n {id: $node_id, silo_id: $silo_id})
+RETURN n.id AS id,
+       n.properties.state AS state,
+       n.properties.layer AS layer,
+       n.properties.cancel_window_expires AS cancel_window_expires
+"""
+
+# CASCADE_STALENESS and TX10 HARD_DELETE
+
+GET_DEPENDENTS_FOR_CASCADE = """
+MATCH (d)-[e:SYNTHESIZED_FROM|DERIVED_FROM]->(changed {id: $node_id, silo_id: $silo_id})
+WHERE d.properties.state = 'ACTIVE'
+RETURN d.id AS id, d.properties.layer AS layer, type(e) AS edge_type
+"""
+
+MARK_BELIEF_STALE_FOR_CASCADE = """
+MATCH (b {id: $node_id, silo_id: $silo_id})
+WHERE b.properties.layer = 'wisdom'
+SET b.properties.synthesis_state = 'STALE'
+RETURN b.id AS id
+"""
+
+GET_TOMBSTONED_FOR_GC = """
+MATCH (n {silo_id: $silo_id})
+WHERE n.properties.state = 'TOMBSTONED'
+  AND n.properties.cancel_window_expires < $now
+RETURN n.id AS id
+LIMIT $batch_size
+"""
+
+DELETE_EDGES_FOR_NODE = """
+MATCH (n {id: $node_id, silo_id: $silo_id})-[e]-()
+DELETE e
+RETURN count(e) AS deleted_count
+"""
+
+HARD_DELETE_NODE = """
+MATCH (n {id: $node_id, silo_id: $silo_id})
+WHERE n.properties.state = 'TOMBSTONED'
+DELETE n
+RETURN count(n) AS deleted_count
+"""
+
+# TX18 PROMOTE and TX19 DEMOTE (layer movement)
+
+GET_CLAIM_FOR_PROMOTE = """
+MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
+RETURN c.id AS id,
+       c.properties.state AS state,
+       c.properties.claim_status AS claim_status,
+       c.properties.corroboration_count AS corroboration_count,
+       c.properties.confidence AS confidence
+"""
+
+UPDATE_CLAIM_TO_PROMOTED = """
+MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
+WHERE c.properties.state = 'ACTIVE'
+  AND c.properties.claim_status = 'UNPROMOTED'
+SET c.properties.claim_status = 'PROMOTED',
+    c.properties.promoted_at = $promoted_at,
+    c.properties.confidence = $new_confidence
+SET c:Fact
+RETURN c.id AS id, c.properties.claim_status AS claim_status
+"""
+
+GET_FACT_FOR_DEMOTE = """
+MATCH (f:Fact {id: $fact_id, silo_id: $silo_id})
+RETURN f.id AS id,
+       f.properties.state AS state,
+       f.properties.claim_status AS claim_status,
+       f.properties.corroboration_count AS corroboration_count,
+       f.properties.confidence AS confidence
+"""
+
+UPDATE_FACT_TO_DEMOTED = """
+MATCH (f:Fact {id: $fact_id, silo_id: $silo_id})
+WHERE f.properties.state = 'ACTIVE'
+  AND f.properties.claim_status = 'PROMOTED'
+SET f.properties.claim_status = 'UNPROMOTED',
+    f.properties.demoted_at = $demoted_at,
+    f.properties.confidence = $new_confidence
+REMOVE f:Fact
+RETURN f.id AS id, f.properties.claim_status AS claim_status
+"""
+
+RECOUNT_CORROBORATION = """
+MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
+MATCH (corroborating:Claim {silo_id: $silo_id})
+WHERE corroborating.properties.subject = c.properties.subject
+  AND corroborating.properties.predicate = c.properties.predicate
+  AND corroborating.properties.object = c.properties.object
+  AND corroborating.properties.state = 'ACTIVE'
+OPTIONAL MATCH (corroborating)-[:DERIVED_FROM]->(evidence)
+RETURN count(DISTINCT evidence.id) AS corroboration_count
+"""
+
+# --- Epistemology: confidence propagation queries ---
+
+GET_SUPPORT_EDGES = """
+MATCH (source {silo_id: $silo_id})-[e:SUPPORTS]->(target {silo_id: $silo_id})
+WHERE source.properties.state = 'ACTIVE' AND target.properties.state = 'ACTIVE'
+RETURN source.id AS source_id,
+       target.id AS target_id,
+       coalesce(e.weight, 1.0) AS weight
+"""
+
+GET_CONTRADICTION_EDGES = """
+MATCH (source {silo_id: $silo_id})-[e:CONTRADICTS]->(target {silo_id: $silo_id})
+WHERE source.properties.state = 'ACTIVE' AND target.properties.state = 'ACTIVE'
+RETURN source.id AS source_id,
+       target.id AS target_id,
+       coalesce(e.weight, 1.0) AS weight
+"""
+
+GET_GRAPH_FOR_PROPAGATION = """
+MATCH (n {silo_id: $silo_id})
+WHERE n.properties.state = 'ACTIVE'
+  AND n.properties.layer IN ['knowledge', 'wisdom']
+WITH collect({
+    id: n.id,
+    credibility: coalesce(n.properties.credibility, n.properties.confidence, 0.5),
+    layer: n.properties.layer
+}) AS nodes
+OPTIONAL MATCH (s {silo_id: $silo_id})-[sup:SUPPORTS]->(t {silo_id: $silo_id})
+WHERE s.properties.state = 'ACTIVE' AND t.properties.state = 'ACTIVE'
+WITH nodes, collect({source: s.id, target: t.id, weight: coalesce(sup.weight, 1.0)}) AS supports
+OPTIONAL MATCH (s2 {silo_id: $silo_id})-[con:CONTRADICTS]->(t2 {silo_id: $silo_id})
+WHERE s2.properties.state = 'ACTIVE' AND t2.properties.state = 'ACTIVE'
+RETURN nodes,
+       supports,
+       collect({source: s2.id, target: t2.id, weight: coalesce(con.weight, 1.0)}) AS contradictions
+"""
+
+CREATE_WEIGHTED_SUPPORT_EDGE = """
+MATCH (source {id: $source_id, silo_id: $silo_id})
+MATCH (target {id: $target_id, silo_id: $silo_id})
+MERGE (source)-[e:SUPPORTS]->(target)
+ON CREATE SET e.weight = $weight, e.created_at = $created_at
+ON MATCH SET e.weight = $weight
+RETURN source.id AS source_id, target.id AS target_id, e.weight AS weight
+"""
+
+CREATE_WEIGHTED_CONTRADICTION_EDGE = """
+MATCH (source {id: $source_id, silo_id: $silo_id})
+MATCH (target {id: $target_id, silo_id: $silo_id})
+MERGE (source)-[e:CONTRADICTS]->(target)
+ON CREATE SET e.weight = $weight, e.created_at = $created_at
+ON MATCH SET e.weight = $weight
+RETURN source.id AS source_id, target.id AS target_id, e.weight AS weight
+"""
+
+UPDATE_PROPAGATED_CONFIDENCE = """
+UNWIND $updates AS u
+MATCH (n {id: u.node_id, silo_id: $silo_id})
+SET n.properties.confidence = u.confidence,
+    n.properties.confidence_updated_at = $updated_at
+RETURN count(*) AS updated_count
+"""
+
+GET_LOCAL_GRAPH_FOR_PROPAGATION = """
+MATCH path = (center {id: $node_id, silo_id: $silo_id})-[*..2]-(neighbor {silo_id: $silo_id})
+WHERE neighbor.properties.state = 'ACTIVE'
+WITH collect(DISTINCT center) + collect(DISTINCT neighbor) AS all_nodes
+UNWIND all_nodes AS n
+WITH collect(DISTINCT {id: n.id, credibility: coalesce(n.properties.credibility, n.properties.confidence, 0.5)}) AS nodes
+OPTIONAL MATCH (s {silo_id: $silo_id})-[sup:SUPPORTS]->(t {silo_id: $silo_id})
+WHERE s.id IN [node IN nodes | node.id] AND t.id IN [node IN nodes | node.id]
+WITH nodes, collect({source: s.id, target: t.id, weight: coalesce(sup.weight, 1.0)}) AS supports
+OPTIONAL MATCH (s2 {silo_id: $silo_id})-[con:CONTRADICTS]->(t2 {silo_id: $silo_id})
+WHERE s2.id IN [node IN nodes | node.id] AND t2.id IN [node IN nodes | node.id]
+RETURN nodes,
+       supports,
+       collect({source: s2.id, target: t2.id, weight: coalesce(con.weight, 1.0)}) AS contradictions
 """

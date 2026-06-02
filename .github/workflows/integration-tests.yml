@@ -11,7 +11,7 @@ on:
   #     - "src/context_service/services/**"
   #     - "src/context_service/stores/**"
   #     - "tests/integration/**"
-  #     - "docker-compose.yml"
+  #     - "docker/docker-compose.dev.yml"
   #     - "pyproject.toml"
   #     - "justfile"
 
@@ -37,11 +37,11 @@ jobs:
 
       - name: Start docker-compose stack
         run: |
-          docker compose up -d memgraph qdrant redis
+          docker compose -f docker/docker-compose.dev.yml up -d memgraph qdrant redis
           echo "Waiting for services to be ready..."
-          timeout 60 bash -c 'until docker compose exec -T memgraph echo ok 2>/dev/null; do sleep 2; done'
+          timeout 60 bash -c 'until docker compose -f docker/docker-compose.dev.yml exec -T memgraph echo ok 2>/dev/null; do sleep 2; done'
           timeout 60 bash -c 'until curl -sf http://localhost:6333/readyz > /dev/null 2>&1; do sleep 2; done'
-          timeout 30 bash -c 'until docker compose exec -T redis redis-cli ping 2>/dev/null | grep -q PONG; do sleep 2; done'
+          timeout 30 bash -c 'until docker compose -f docker/docker-compose.dev.yml exec -T redis redis-cli ping 2>/dev/null | grep -q PONG; do sleep 2; done'
 
       - name: Run integration tests
         run: just test-integration
@@ -57,4 +57,4 @@ jobs:
 
       - name: Stop docker-compose stack
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker/docker-compose.dev.yml down -v

@@ -55,7 +55,7 @@ Manifold: latent-native memory for world model agents (JEPA, VLAs). Same epistem
 
 ## Tagline
 
-"Memory is storage. Meaning is Engrammic."
+"Memory is guesswork, meaning is Engrammic."
 
 ## What NOT to lead with
 

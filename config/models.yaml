@@ -125,6 +125,34 @@ tiers:
       provider: vllm
       model: Qwen/Qwen3-7B  # HumanEval leader in 7B class
 
+  # Standalone lite - minimal footprint for laptops
+  # Requires: Ollama (phi4-mini), TEI (MiniLM), 8GB+ RAM
+  standalone_lite:
+    embeddings:
+      provider: tei
+      model: sentence-transformers/all-MiniLM-L6-v2
+      dimensions: 384
+    reasoning:
+      provider: ollama
+      model: phi4-mini
+    fast:
+      provider: ollama
+      model: phi4-mini
+
+  # Standalone standard - balanced offline deployment
+  # Requires: Ollama (deepseek-r1:7b), TEI (nomic-embed), 32GB+ RAM
+  standalone_standard:
+    embeddings:
+      provider: tei
+      model: nomic-ai/nomic-embed-text-v1.5
+      dimensions: 768
+    reasoning:
+      provider: ollama
+      model: deepseek-r1:7b
+    fast:
+      provider: ollama
+      model: deepseek-r1:7b
+
 # Task-to-tier mapping (which tier each task uses)
 # Override individual tasks without changing the whole tier
 task_mapping:

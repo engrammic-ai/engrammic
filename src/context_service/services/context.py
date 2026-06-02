@@ -135,6 +135,11 @@ class ContextService:
         """Expose the embedding service for callers that need it without accessing private state."""
         return self._embedding
 
+    @property
+    def vector_store(self) -> QdrantClient:
+        """Expose the Qdrant client for callers that need direct vector operations."""
+        return self._qdrant
+
     async def store(
         self,
         scope: ScopeContext,
@@ -1000,13 +1005,28 @@ class ContextService:
         The stored confidence is computed via ``partial_confidence`` which
         applies a 0.7 epistemic discount for uncorroborated single-source
         claims. Source tier maps to source_reliability weight.
+
+        After storage, runs conflict detection for SPO claims and updates
+        corroboration count for all claims.
         """
         from primitives.eag.epistemology import SourceTier, partial_confidence
 
         from context_service.models.mcp import SPOClaim
+        from context_service.sage import (
+            check_corroboration,
+            compute_credibility,
+            detect_spo_conflict,
+        )
 
         tier = SourceTier(source_tier) if source_tier else SourceTier.UNKNOWN
         discounted_confidence = partial_confidence(confidence, source_reliability=tier.weight)
+
+        # Compute credibility with full breakdown
+        credibility_breakdown = compute_credibility(
+            source_tier=source_tier,
+            method=metadata.get("extraction_method") if metadata else None,
+            raw_confidence=confidence,
+        )
 
         props = dict(metadata or {})
         props["layer"] = "knowledge"
@@ -1014,6 +1034,9 @@ class ContextService:
         props["confidence"] = discounted_confidence
         props["raw_confidence"] = confidence
         props["evidence"] = evidence
+        props["credibility"] = credibility_breakdown.credibility
+        props["credibility_factors"] = credibility_breakdown.to_dict()
+        props["conflict_status"] = "none"
         if source_tier is not None:
             props["source_tier"] = source_tier
         if tags:
@@ -1021,12 +1044,20 @@ class ContextService:
         if agent_id:
             props["agent_id"] = agent_id
 
+        # Track SPO for conflict detection
+        subject: str | None = None
+        predicate: str | None = None
+        object_value: str | None = None
+
         if isinstance(claim, SPOClaim):
             content = f"{claim.subject} {claim.predicate} {claim.object}"
             props["claim_structured"] = True
             props["subject"] = claim.subject
             props["predicate"] = claim.predicate
             props["object"] = claim.object
+            subject = claim.subject
+            predicate = claim.predicate
+            object_value = claim.object
             if claim.qualifiers:
                 props["qualifiers"] = claim.qualifiers
         else:
@@ -1102,6 +1133,36 @@ class ContextService:
                     "silo_id": str(scope.silo_id),
                     "ev_ids": ev_node_ids,
                 },
+            )
+
+        # Conflict detection for SPO claims
+        conflict_events = await detect_spo_conflict(
+            store=self._memgraph,
+            new_node_id=str(node.id),
+            subject=subject,
+            predicate=predicate,
+            object_value=object_value,
+            silo_id=str(scope.silo_id),
+        )
+        if conflict_events:
+            logger.info(
+                "claim_conflicts_detected",
+                node_id=str(node.id),
+                conflict_count=len(conflict_events),
+            )
+
+        # Check corroboration (updates corroboration_count on matching claims)
+        corroboration_count, should_promote = await check_corroboration(
+            store=self._memgraph,
+            node_id=str(node.id),
+            silo_id=str(scope.silo_id),
+        )
+        if corroboration_count > 1:
+            logger.debug(
+                "claim_corroboration_updated",
+                node_id=str(node.id),
+                corroboration_count=corroboration_count,
+                should_promote=should_promote,
             )
 
         return node
@@ -1479,6 +1540,11 @@ class ContextService:
                 heat = float(raw_heat) if raw_heat is not None else 0.5
                 relevance = relevance * ((1.0 - settings.heat_weight) + settings.heat_weight * heat)
 
+            raw_credibility_factors = props.get("credibility_factors")
+            credibility_factors: dict[str, Any] | None = None
+            if isinstance(raw_credibility_factors, dict):
+                credibility_factors = raw_credibility_factors
+
             results.append(
                 QueryResult(
                     node_id=node.id,
@@ -1489,6 +1555,9 @@ class ContextService:
                     summary=props.get("summary"),
                     tags=node_tags or None,
                     created_at=node.created_at,
+                    conflict_status=str(props.get("conflict_status") or "none"),
+                    credibility=float(props.get("credibility") or 0.0),
+                    credibility_factors=credibility_factors,
                 )
             )
 
