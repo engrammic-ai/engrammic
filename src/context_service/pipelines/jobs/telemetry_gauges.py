@@ -3,9 +3,20 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 from typing import Any
 
 import dagster as dg
+
+
+def _run_async(coro: Any) -> Any:
+    """Run a coroutine, handling cases where an event loop is already running."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result(timeout=300)
 
 _LIST_SILOS = "SELECT DISTINCT silo_id FROM silo_config"
 
@@ -101,10 +112,45 @@ def snapshot_storage_gauges(context) -> dict[str, Any]:
         finally:
             await pool.close()
 
-    return asyncio.run(_run())
+    return _run_async(_run())
+
+
+@dg.op(required_resource_keys={"postgres"})
+def flush_metrics_buffer(context) -> dict[str, Any]:
+    """Flush in-memory metrics buffer to service_metrics table."""
+    from context_service.pipelines.resources import PostgresResource
+    from context_service.telemetry.flush import flush_metrics_to_db
+    from context_service.telemetry.metrics import get_buffer
+
+    postgres: PostgresResource = context.resources.postgres
+    buffer = get_buffer()
+
+    if buffer is None:
+        context.log.info("flush_metrics: no buffer initialized")
+        return {"status": "no_buffer"}
+
+    rows = buffer.peek()
+    if not rows:
+        context.log.info("flush_metrics: buffer empty")
+        return {"status": "empty", "rows_flushed": 0}
+
+    async def _flush() -> int:
+        import asyncpg
+
+        pool = await asyncpg.create_pool(postgres.database_url)
+        try:
+            await flush_metrics_to_db(pool, buffer)
+            return len(rows)
+        finally:
+            await pool.close()
+
+    count = _run_async(_flush())
+    context.log.info(f"flush_metrics: flushed {count} rows")
+    return {"status": "flushed", "rows_flushed": count}
 
 
 @dg.job(name="telemetry_gauges", tags={"schedule_type": "maintenance"})
 def telemetry_gauges_job() -> None:
-    """Hourly storage gauge snapshots."""
+    """Hourly storage gauge snapshots + metrics flush."""
     snapshot_storage_gauges()
+    flush_metrics_buffer()
