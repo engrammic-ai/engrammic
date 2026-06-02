@@ -22,6 +22,7 @@ import pytest
 from taskiq import InMemoryBroker
 
 from context_service.reactions.events import ReactionEvent, ReactionEventType
+from context_service.sage.transactions import SYNTHESIS_THRESHOLD, ClusterState
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -133,6 +134,44 @@ class TestComputeEmbeddingTask:
 
         embedder.embed_single.assert_awaited_once_with("some content to embed")
 
+    @pytest.mark.asyncio
+    async def test_upserts_vector_to_qdrant(
+        self,
+        in_memory_broker: InMemoryBroker,
+        mock_context_service: MagicMock,
+        mock_graph_store: AsyncMock,
+    ) -> None:
+        """Verify compute_embedding calls vector_store.upsert with correct params."""
+        node_id = str(uuid.uuid4())
+        node = _make_node(node_id, content="content for qdrant")
+        mock_graph_store.get_node = AsyncMock(return_value=node)
+
+        mock_vector_store = AsyncMock()
+        mock_context_service.vector_store = mock_vector_store
+
+        vector = [0.1] * 768
+        embedder = MagicMock()
+        embedder.embed_single = AsyncMock(return_value=vector)
+
+        task = in_memory_broker.find_task(ReactionEventType.COMPUTE_EMBEDDING)
+        assert task is not None
+
+        with (
+            _patch_ctx_svc(mock_context_service),
+            patch(
+                "context_service.embeddings.build_embedding_service",
+                return_value=embedder,
+            ),
+        ):
+            await task.kiq(node_id=node_id, silo_id="s1")
+
+        mock_vector_store.upsert.assert_awaited_once_with(
+            node_id=node_id,
+            vector=vector,
+            payload={"type": "Memory"},
+            silo_id="s1",
+        )
+
 
 # ---------------------------------------------------------------------------
 # update_heat
@@ -211,17 +250,136 @@ class TestUpdateHeatTask:
 
 
 # ---------------------------------------------------------------------------
-# update_cluster_membership (stub)
+# update_cluster_membership
 # ---------------------------------------------------------------------------
 
 
 class TestUpdateClusterMembershipTask:
     @pytest.mark.asyncio
-    async def test_stub_completes_without_error(self, in_memory_broker: InMemoryBroker) -> None:
+    async def test_no_op_when_services_not_configured(
+        self, in_memory_broker: InMemoryBroker
+    ) -> None:
         task = in_memory_broker.find_task(ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP)
         assert task is not None
-        # Phase 8a stub: no external calls, just completes
-        await task.kiq(node_id=str(uuid.uuid4()), silo_id="s1")
+
+        with patch(
+            "context_service.mcp.server.get_context_service",
+            side_effect=RuntimeError("not configured"),
+        ):
+            await task.kiq(node_id=str(uuid.uuid4()), silo_id="s1")
+
+    @pytest.mark.asyncio
+    async def test_no_op_when_no_cluster_found(
+        self,
+        in_memory_broker: InMemoryBroker,
+        mock_context_service: MagicMock,
+        mock_graph_store: AsyncMock,
+    ) -> None:
+        """No cluster_id in payload and empty membership query -> silent no-op."""
+        mock_graph_store.execute_query = AsyncMock(return_value=[])
+        task = in_memory_broker.find_task(ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP)
+        assert task is not None
+
+        mock_emit = AsyncMock()
+        with (
+            _patch_ctx_svc(mock_context_service),
+            patch("context_service.reactions.events.emit_reaction", mock_emit),
+        ):
+            await task.kiq(node_id=str(uuid.uuid4()), silo_id="s1")
+
+        mock_emit.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_with_cluster_id_hint_emits_check_synthesis_when_threshold_met(
+        self,
+        in_memory_broker: InMemoryBroker,
+        mock_context_service: MagicMock,
+        mock_graph_store: AsyncMock,
+    ) -> None:
+        """cluster_id in payload skips membership query; emits CHECK_SYNTHESIS at threshold."""
+        node_id = str(uuid.uuid4())
+        cluster_id = str(uuid.uuid4())
+        # Only the count query is executed when cluster_id hint is provided
+        mock_graph_store.execute_query = AsyncMock(
+            return_value=[{"member_count": SYNTHESIS_THRESHOLD}]
+        )
+        task = in_memory_broker.find_task(ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP)
+        assert task is not None
+
+        mock_emit = AsyncMock()
+        with (
+            _patch_ctx_svc(mock_context_service),
+            patch("context_service.reactions.events.emit_reaction", mock_emit),
+        ):
+            await task.kiq(node_id=node_id, silo_id="s1", cluster_id=cluster_id)
+
+        mock_emit.assert_awaited_once()
+        emitted_event: ReactionEvent = mock_emit.call_args[0][0]
+        assert emitted_event.event_type == ReactionEventType.CHECK_SYNTHESIS
+        assert emitted_event.node_id == node_id
+        assert emitted_event.payload["cluster_id"] == cluster_id
+
+    @pytest.mark.asyncio
+    async def test_with_cluster_id_hint_no_emit_below_threshold(
+        self,
+        in_memory_broker: InMemoryBroker,
+        mock_context_service: MagicMock,
+        mock_graph_store: AsyncMock,
+    ) -> None:
+        """cluster_id provided but member count below threshold -> no synthesis event."""
+        mock_graph_store.execute_query = AsyncMock(
+            return_value=[{"member_count": SYNTHESIS_THRESHOLD - 1}]
+        )
+        task = in_memory_broker.find_task(ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP)
+        assert task is not None
+
+        mock_emit = AsyncMock()
+        with (
+            _patch_ctx_svc(mock_context_service),
+            patch("context_service.reactions.events.emit_reaction", mock_emit),
+        ):
+            await task.kiq(
+                node_id=str(uuid.uuid4()),
+                silo_id="s1",
+                cluster_id=str(uuid.uuid4()),
+            )
+
+        mock_emit.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_without_cluster_id_hint_queries_membership_then_count(
+        self,
+        in_memory_broker: InMemoryBroker,
+        mock_context_service: MagicMock,
+        mock_graph_store: AsyncMock,
+    ) -> None:
+        """No cluster_id hint: first query resolves membership, second counts members."""
+        node_id = str(uuid.uuid4())
+        cluster_id = str(uuid.uuid4())
+        # First call = MEMBER_OF lookup, second = count query
+        mock_graph_store.execute_query = AsyncMock(
+            side_effect=[
+                [{"cluster_id": cluster_id}],
+                [{"member_count": SYNTHESIS_THRESHOLD}],
+            ]
+        )
+        task = in_memory_broker.find_task(ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP)
+        assert task is not None
+
+        mock_emit = AsyncMock()
+        with (
+            _patch_ctx_svc(mock_context_service),
+            patch("context_service.reactions.events.emit_reaction", mock_emit),
+        ):
+            await task.kiq(node_id=node_id, silo_id="s1")
+
+        assert mock_graph_store.execute_query.await_count == 2
+        first_query_cypher = mock_graph_store.execute_query.call_args_list[0][0][0]
+        assert "MEMBER_OF" in first_query_cypher
+
+        mock_emit.assert_awaited_once()
+        emitted_event: ReactionEvent = mock_emit.call_args[0][0]
+        assert emitted_event.event_type == ReactionEventType.CHECK_SYNTHESIS
 
 
 # ---------------------------------------------------------------------------
@@ -449,29 +607,313 @@ class TestConsolidateTask:
 
 
 # ---------------------------------------------------------------------------
-# check_synthesis (stub)
+# check_synthesis
 # ---------------------------------------------------------------------------
 
 
 class TestCheckSynthesisTask:
     @pytest.mark.asyncio
-    async def test_stub_completes_without_error(self, in_memory_broker: InMemoryBroker) -> None:
+    async def test_no_op_when_services_not_configured(
+        self, in_memory_broker: InMemoryBroker
+    ) -> None:
         task = in_memory_broker.find_task(ReactionEventType.CHECK_SYNTHESIS)
         assert task is not None
-        await task.kiq(node_id=str(uuid.uuid4()), silo_id="s1")
+
+        with patch(
+            "context_service.mcp.server.get_context_service",
+            side_effect=RuntimeError("not configured"),
+        ):
+            await task.kiq(node_id=str(uuid.uuid4()), silo_id="s1")
+
+    @pytest.mark.asyncio
+    async def test_no_op_when_no_clusters_for_node(
+        self,
+        in_memory_broker: InMemoryBroker,
+        mock_context_service: MagicMock,
+        mock_graph_store: AsyncMock,
+    ) -> None:
+        mock_graph_store.execute_query = AsyncMock(return_value=[])
+        task = in_memory_broker.find_task(ReactionEventType.CHECK_SYNTHESIS)
+        assert task is not None
+
+        mock_synthesize = AsyncMock()
+        with (
+            _patch_ctx_svc(mock_context_service),
+            patch("context_service.sage.transactions.synthesize", mock_synthesize),
+        ):
+            await task.kiq(node_id=str(uuid.uuid4()), silo_id="s1")
+
+        mock_synthesize.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_op_when_cluster_not_ready(
+        self,
+        in_memory_broker: InMemoryBroker,
+        mock_context_service: MagicMock,
+        mock_graph_store: AsyncMock,
+    ) -> None:
+        cluster_id = str(uuid.uuid4())
+        mock_graph_store.execute_query = AsyncMock(
+            return_value=[{"c": {"id": cluster_id, "state": ClusterState.SPARSE.value}}]
+        )
+        task = in_memory_broker.find_task(ReactionEventType.CHECK_SYNTHESIS)
+        assert task is not None
+
+        mock_synthesize = AsyncMock()
+        with (
+            _patch_ctx_svc(mock_context_service),
+            patch("context_service.sage.transactions.synthesize", mock_synthesize),
+        ):
+            await task.kiq(node_id=str(uuid.uuid4()), silo_id="s1")
+
+        mock_synthesize.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_op_when_fact_count_below_threshold(
+        self,
+        in_memory_broker: InMemoryBroker,
+        mock_context_service: MagicMock,
+        mock_graph_store: AsyncMock,
+    ) -> None:
+        cluster_id = str(uuid.uuid4())
+        # First query: GET_NODE_CLUSTERS (READY state); second: GET_FACTS_IN_CLUSTER (below threshold)
+        mock_graph_store.execute_query = AsyncMock(
+            side_effect=[
+                [{"c": {"id": cluster_id, "state": ClusterState.READY.value}}],
+                [{}] * (SYNTHESIS_THRESHOLD - 1),
+            ]
+        )
+        task = in_memory_broker.find_task(ReactionEventType.CHECK_SYNTHESIS)
+        assert task is not None
+
+        mock_synthesize = AsyncMock()
+        with (
+            _patch_ctx_svc(mock_context_service),
+            patch("context_service.sage.transactions.synthesize", mock_synthesize),
+        ):
+            await task.kiq(node_id=str(uuid.uuid4()), silo_id="s1")
+
+        mock_synthesize.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_calls_synthesize_when_cluster_ready_and_threshold_met(
+        self,
+        in_memory_broker: InMemoryBroker,
+        mock_context_service: MagicMock,
+        mock_graph_store: AsyncMock,
+    ) -> None:
+        """synthesize() is called when cluster is READY and has >= SYNTHESIS_THRESHOLD facts."""
+        node_id = str(uuid.uuid4())
+        cluster_id = str(uuid.uuid4())
+        # First query: GET_NODE_CLUSTERS; second: GET_FACTS_IN_CLUSTER
+        mock_graph_store.execute_query = AsyncMock(
+            side_effect=[
+                [{"c": {"id": cluster_id, "state": ClusterState.READY.value}}],
+                [{}] * SYNTHESIS_THRESHOLD,
+            ]
+        )
+        task = in_memory_broker.find_task(ReactionEventType.CHECK_SYNTHESIS)
+        assert task is not None
+
+        mock_result = MagicMock()
+        mock_result.belief_id = uuid.uuid4()
+        mock_result.cluster_state = ClusterState.SYNTHESIZED
+        mock_result.fact_count = SYNTHESIS_THRESHOLD
+        mock_synthesize = AsyncMock(return_value=(mock_result, []))
+
+        mock_llm = MagicMock()
+        mock_embedder = MagicMock()
+
+        with (
+            _patch_ctx_svc(mock_context_service),
+            patch("context_service.sage.transactions.synthesize", mock_synthesize),
+            patch(
+                "context_service.llm.build_llm_provider",
+                return_value=mock_llm,
+            ),
+            patch(
+                "context_service.embeddings.build_embedding_service",
+                return_value=mock_embedder,
+            ),
+            patch(
+                "context_service.config.config_loader.load_config",
+                return_value={"provider": "litellm", "model": "test-model"},
+            ),
+        ):
+            await task.kiq(node_id=node_id, silo_id="s1")
+
+        mock_synthesize.assert_awaited_once()
+        call_kwargs = mock_synthesize.call_args[1]
+        assert call_kwargs["cluster_id"] == cluster_id
+        assert call_kwargs["silo_id"] == "s1"
+        assert call_kwargs["mode"] == "async"
 
 
 # ---------------------------------------------------------------------------
-# propagate_confidence (stub)
+# propagate_confidence
 # ---------------------------------------------------------------------------
 
 
 class TestPropagateConfidenceTask:
     @pytest.mark.asyncio
-    async def test_stub_completes_without_error(self, in_memory_broker: InMemoryBroker) -> None:
+    async def test_no_op_when_services_not_configured(
+        self, in_memory_broker: InMemoryBroker
+    ) -> None:
         task = in_memory_broker.find_task(ReactionEventType.PROPAGATE_CONFIDENCE)
         assert task is not None
-        await task.kiq(node_id=str(uuid.uuid4()), silo_id="s1")
+
+        with patch(
+            "context_service.mcp.server.get_context_service",
+            side_effect=RuntimeError("not configured"),
+        ):
+            await task.kiq(node_id=str(uuid.uuid4()), silo_id="s1")
+
+    @pytest.mark.asyncio
+    async def test_no_op_when_no_neighborhood_found(
+        self,
+        in_memory_broker: InMemoryBroker,
+        mock_context_service: MagicMock,
+        mock_graph_store: AsyncMock,
+    ) -> None:
+        mock_graph_store.execute_query = AsyncMock(return_value=[])
+        task = in_memory_broker.find_task(ReactionEventType.PROPAGATE_CONFIDENCE)
+        assert task is not None
+
+        mock_propagate = MagicMock()
+        with (
+            _patch_ctx_svc(mock_context_service),
+            patch("context_service.sage.epistemology.propagate_incremental", mock_propagate),
+        ):
+            await task.kiq(node_id=str(uuid.uuid4()), silo_id="s1")
+
+        mock_propagate.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_writes_back_updated_confidence_values(
+        self,
+        in_memory_broker: InMemoryBroker,
+        mock_context_service: MagicMock,
+        mock_graph_store: AsyncMock,
+    ) -> None:
+        """propagate_incremental result is written back for nodes with delta > 0.1."""
+        node_id = str(uuid.uuid4())
+        # Neighborhood has the target node with credibility 0.5
+        mock_graph_store.execute_query = AsyncMock(
+            return_value=[
+                {
+                    "node_id": node_id,
+                    "credibility": 0.5,
+                    "support_edge": None,
+                    "contra_edge": None,
+                }
+            ]
+        )
+        task = in_memory_broker.find_task(ReactionEventType.PROPAGATE_CONFIDENCE)
+        assert task is not None
+
+        # Return a score that differs by > 0.1 to trigger the write-back
+        new_confidence = 0.9
+        mock_propagate = MagicMock(return_value={node_id: new_confidence})
+
+        with (
+            _patch_ctx_svc(mock_context_service),
+            patch(
+                "context_service.sage.epistemology.propagate_incremental", mock_propagate
+            ),
+        ):
+            await task.kiq(node_id=node_id, silo_id="s1")
+
+        mock_propagate.assert_called_once()
+        call_kwargs = mock_propagate.call_args[1]
+        assert call_kwargs["target_id"] == node_id
+        assert node_id in call_kwargs["credibility_scores"]
+
+        mock_graph_store.execute_write.assert_awaited_once()
+        write_args = mock_graph_store.execute_write.call_args[0]
+        write_params = write_args[1]
+        assert write_params["node_id"] == node_id
+        assert write_params["silo_id"] == "s1"
+        assert write_params["confidence"] == new_confidence
+
+    @pytest.mark.asyncio
+    async def test_skips_write_when_confidence_unchanged(
+        self,
+        in_memory_broker: InMemoryBroker,
+        mock_context_service: MagicMock,
+        mock_graph_store: AsyncMock,
+    ) -> None:
+        """Nodes whose confidence changed by <= 0.1 are not written back."""
+        node_id = str(uuid.uuid4())
+        initial_credibility = 0.5
+        mock_graph_store.execute_query = AsyncMock(
+            return_value=[
+                {
+                    "node_id": node_id,
+                    "credibility": initial_credibility,
+                    "support_edge": None,
+                    "contra_edge": None,
+                }
+            ]
+        )
+        task = in_memory_broker.find_task(ReactionEventType.PROPAGATE_CONFIDENCE)
+        assert task is not None
+
+        # Delta of 0.05 is below the 0.1 threshold
+        mock_propagate = MagicMock(return_value={node_id: initial_credibility + 0.05})
+
+        with (
+            _patch_ctx_svc(mock_context_service),
+            patch(
+                "context_service.sage.epistemology.propagate_incremental", mock_propagate
+            ),
+        ):
+            await task.kiq(node_id=node_id, silo_id="s1")
+
+        mock_graph_store.execute_write.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_builds_edge_inputs_from_neighborhood_rows(
+        self,
+        in_memory_broker: InMemoryBroker,
+        mock_context_service: MagicMock,
+        mock_graph_store: AsyncMock,
+    ) -> None:
+        """Support and contradiction edges are extracted from query rows correctly."""
+        node_id = str(uuid.uuid4())
+        neighbor_id = str(uuid.uuid4())
+        mock_graph_store.execute_query = AsyncMock(
+            return_value=[
+                {
+                    "node_id": node_id,
+                    "credibility": 0.7,
+                    "support_edge": [node_id, neighbor_id, 0.8],
+                    "contra_edge": None,
+                },
+                {
+                    "node_id": neighbor_id,
+                    "credibility": 0.6,
+                    "support_edge": None,
+                    "contra_edge": [neighbor_id, node_id, 0.5],
+                },
+            ]
+        )
+        task = in_memory_broker.find_task(ReactionEventType.PROPAGATE_CONFIDENCE)
+        assert task is not None
+
+        mock_propagate = MagicMock(return_value={})
+
+        with (
+            _patch_ctx_svc(mock_context_service),
+            patch(
+                "context_service.sage.epistemology.propagate_incremental", mock_propagate
+            ),
+        ):
+            await task.kiq(node_id=node_id, silo_id="s1")
+
+        mock_propagate.assert_called_once()
+        call_kwargs = mock_propagate.call_args[1]
+        assert (node_id, neighbor_id, 0.8) in call_kwargs["support_edges"]
+        assert (neighbor_id, node_id, 0.5) in call_kwargs["contradiction_edges"]
 
 
 # ---------------------------------------------------------------------------
@@ -551,7 +993,9 @@ class TestEmitToProcessIntegration:
         # imports it locally from there, so this is the correct patch target.
         with (
             patch("context_service.reactions.broker.get_broker", return_value=in_memory_broker),
-            patch("context_service.mcp.server.get_context_service", return_value=mock_context_service),
+            patch(
+                "context_service.mcp.server.get_context_service", return_value=mock_context_service
+            ),
         ):
             from context_service.reactions.events import emit_reaction
 
@@ -579,7 +1023,9 @@ class TestEmitToProcessIntegration:
                 consolidate_calls.append(ev)
 
         with (
-            patch("context_service.mcp.server.get_context_service", return_value=mock_context_service),
+            patch(
+                "context_service.mcp.server.get_context_service", return_value=mock_context_service
+            ),
             patch("context_service.reactions.events.emit_reaction", side_effect=capture_emit),
         ):
             task = in_memory_broker.find_task(ReactionEventType.FLAG_CONTRADICTION)

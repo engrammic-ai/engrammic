@@ -35,6 +35,9 @@ _TIMEOUT_LLM = 300
 _TIMEOUT_SIMPLE = 10
 _TIMEOUT_CASCADE = 60
 
+# Confidence propagation threshold - only write back if delta exceeds this
+_CONFIDENCE_DELTA_THRESHOLD = 0.1
+
 
 def register_tasks(broker: ListQueueBroker) -> None:
     """Register all reaction task handlers onto ``broker``.
@@ -60,7 +63,9 @@ def register_tasks(broker: ListQueueBroker) -> None:
             silo_id: Tenant isolation identifier.
             **payload: Additional event payload (unused by this handler).
         """
-        log = logger.bind(node_id=node_id, silo_id=silo_id, task=ReactionEventType.COMPUTE_EMBEDDING)
+        log = logger.bind(
+            node_id=node_id, silo_id=silo_id, task=ReactionEventType.COMPUTE_EMBEDDING
+        )
         log.info("compute_embedding_task_start")
 
         from context_service.embeddings import build_embedding_service
@@ -88,15 +93,14 @@ def register_tasks(broker: ListQueueBroker) -> None:
         embedder = build_embedding_service()
         vector = await embedder.embed_single(content)
 
-        # The EngineQdrantStore is not exposed through ContextService directly;
-        # upsert is deferred until worker.py wires up the qdrant handle in Task 4.
-        # For now, log what we would write and mark the work incomplete.
-        log.warning(
-            "compute_embedding_qdrant_upsert_deferred",
-            vector_length=len(vector),
-            node_type=node.type,
+        qdrant = ctx_svc.vector_store
+        await qdrant.upsert(
+            node_id=node_id,
+            vector=vector,
+            payload={"type": node.type},
+            silo_id=silo_id,
         )
-        log.info("compute_embedding_task_done", vector_length=len(vector))
+        log.info("compute_embedding_task_done", vector_length=len(vector), node_type=node.type)
 
     @broker.task(task_name=ReactionEventType.UPDATE_HEAT, timeout=_TIMEOUT_SIMPLE)
     async def update_heat_task(
@@ -113,7 +117,9 @@ def register_tasks(broker: ListQueueBroker) -> None:
             delta: How much to add to the current heat score (default 1.0).
             **payload: Additional event payload (unused by this handler).
         """
-        log = logger.bind(node_id=node_id, silo_id=silo_id, task=ReactionEventType.UPDATE_HEAT, delta=delta)
+        log = logger.bind(
+            node_id=node_id, silo_id=silo_id, task=ReactionEventType.UPDATE_HEAT, delta=delta
+        )
         log.info("update_heat_task_start")
 
         from context_service.mcp.server import get_context_service
@@ -139,25 +145,84 @@ def register_tasks(broker: ListQueueBroker) -> None:
 
     @broker.task(task_name=ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP, timeout=_TIMEOUT_SIMPLE)
     async def update_cluster_membership_task(
-        node_id: str, silo_id: str, **_payload: Any
+        node_id: str, silo_id: str, **payload: Any
     ) -> None:
-        """Assign or update a node's cluster membership.
+        """Confirm cluster membership for a node after Dagster clustering has run.
 
-        This handler is a stub for Phase 8a. Cluster assignment runs as a
-        full pass via ClusteringService (Dagster custodian job). The reactive
-        single-node path will be wired in Phase 9 when the Dagster job is
-        removed.
+        Full Leiden clustering is handled by the Dagster custodian job. This
+        reactive handler runs after that job and:
+
+        1. Resolves the cluster the node belongs to (via ``cluster_id`` payload
+           hint or by querying the MEMBER_OF edge).
+        2. Counts the cluster's current members.
+        3. Emits CHECK_SYNTHESIS if the member count meets SYNTHESIS_THRESHOLD.
+
+        No-ops silently if the node has no cluster membership.
 
         Args:
-            node_id: String UUID of the node to assign.
+            node_id: String UUID of the node to check.
             silo_id: Tenant isolation identifier.
-            **payload: Additional event payload (cluster_id, weight, etc.).
+            **payload: Optional ``cluster_id`` hint from the triggering event.
         """
         log = logger.bind(
             node_id=node_id, silo_id=silo_id, task=ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP
         )
         log.info("update_cluster_membership_task_start")
-        log.warning("update_cluster_membership_not_yet_implemented_deferred_to_phase9")
+
+        from context_service.mcp.server import get_context_service
+
+        try:
+            ctx_svc = get_context_service()
+        except RuntimeError:
+            log.error("update_cluster_membership_services_not_configured")
+            return
+
+        store = ctx_svc.graph_store
+
+        # Use cluster_id from payload if provided; otherwise query the graph.
+        cluster_id: str | None = payload.get("cluster_id")
+
+        if not cluster_id:
+            result = await store.execute_query(
+                "MATCH (n {id: $node_id, silo_id: $silo_id})-[:MEMBER_OF]->(c:Cluster) "
+                "RETURN c.id AS cluster_id LIMIT 1",
+                {"node_id": node_id, "silo_id": silo_id},
+            )
+            if result:
+                cluster_id = result[0].get("cluster_id")
+
+        if not cluster_id:
+            log.info("update_cluster_membership_no_cluster_found")
+            return
+
+        count_result = await store.execute_query(
+            "MATCH (n)-[:MEMBER_OF]->(c:Cluster {id: $cluster_id, silo_id: $silo_id}) "
+            "RETURN count(n) AS member_count",
+            {"cluster_id": cluster_id, "silo_id": silo_id},
+        )
+        member_count: int = count_result[0].get("member_count", 0) if count_result else 0
+
+        log.info(
+            "update_cluster_membership_counted",
+            cluster_id=cluster_id,
+            member_count=member_count,
+        )
+
+        from context_service.sage.transactions import SYNTHESIS_THRESHOLD
+
+        if member_count >= SYNTHESIS_THRESHOLD:
+            from context_service.reactions.events import ReactionEvent, emit_reaction
+
+            event = ReactionEvent(
+                event_type=ReactionEventType.CHECK_SYNTHESIS,
+                node_id=node_id,
+                silo_id=silo_id,
+                payload={"cluster_id": cluster_id},
+            )
+            await emit_reaction(event)
+            log.info("update_cluster_membership_synthesis_triggered", cluster_id=cluster_id)
+
+        log.info("update_cluster_membership_task_done", cluster_id=cluster_id)
 
     @broker.task(task_name=ReactionEventType.CASCADE_STALENESS, timeout=_TIMEOUT_CASCADE)
     async def cascade_staleness_task(
@@ -297,31 +362,129 @@ def register_tasks(broker: ListQueueBroker) -> None:
     async def check_synthesis_task(node_id: str, silo_id: str, **_payload: Any) -> None:
         """Trigger lazy synthesis if the node's cluster is ready.
 
-        This handler is a stub for Phase 8a. Synthesis is currently handled
-        by the Dagster synthesizer job. The reactive single-cluster path will
-        be wired in Phase 9 when the Dagster job is removed.
+        Looks up the clusters the node belongs to (or uses ``cluster_id`` from
+        the payload if supplied), and for each cluster in READY state with at
+        least SYNTHESIS_THRESHOLD active facts, calls
+        ``sage.transactions.synthesize`` in async mode.
 
         Args:
             node_id: Node that triggered the synthesis check.
             silo_id: Tenant isolation identifier.
-            **payload: Additional event payload (cluster_id, etc.).
+            **_payload: Optional ``cluster_id`` to target a specific cluster.
         """
-        log = logger.bind(
-            node_id=node_id, silo_id=silo_id, task=ReactionEventType.CHECK_SYNTHESIS
-        )
+        log = logger.bind(node_id=node_id, silo_id=silo_id, task=ReactionEventType.CHECK_SYNTHESIS)
         log.info("check_synthesis_task_start")
-        log.warning("check_synthesis_not_yet_implemented_deferred_to_phase9")
+
+        from context_service.db import queries as q
+        from context_service.embeddings import build_embedding_service
+        from context_service.llm import build_llm_provider
+        from context_service.mcp.server import get_context_service
+        from context_service.sage.transactions import (
+            SYNTHESIS_THRESHOLD,
+            ClusterState,
+            synthesize,
+        )
+
+        try:
+            ctx_svc = get_context_service()
+        except RuntimeError:
+            log.error("check_synthesis_services_not_configured")
+            return
+
+        store = ctx_svc.graph_store
+
+        # Resolve which cluster(s) to check.
+        cluster_id_hint: str | None = _payload.get("cluster_id")
+
+        cluster_rows = await store.execute_query(
+            q.GET_NODE_CLUSTERS,
+            {"node_id": node_id, "silo_id": silo_id},
+        )
+
+        if not cluster_rows:
+            log.debug("check_synthesis_no_clusters_for_node")
+            return
+
+        for row in cluster_rows:
+            cluster_node = row.get("c")
+            if not cluster_node:
+                continue
+
+            cluster_id: str = cluster_node.get("id", "")
+            if not cluster_id:
+                continue
+
+            # If the event carried a specific cluster_id, skip others.
+            if cluster_id_hint is not None and cluster_id != cluster_id_hint:
+                continue
+
+            cluster_state = cluster_node.get("state", ClusterState.SPARSE.value)
+            if cluster_state != ClusterState.READY.value:
+                log.debug(
+                    "check_synthesis_cluster_not_ready",
+                    cluster_id=cluster_id,
+                    state=cluster_state,
+                )
+                continue
+
+            # Count active facts before acquiring the synthesis lock.
+            facts_result = await store.execute_query(
+                q.GET_FACTS_IN_CLUSTER,
+                {"cluster_id": cluster_id, "silo_id": silo_id},
+            )
+            fact_count = len(facts_result) if facts_result else 0
+
+            if fact_count < SYNTHESIS_THRESHOLD:
+                log.debug(
+                    "check_synthesis_below_threshold",
+                    cluster_id=cluster_id,
+                    fact_count=fact_count,
+                    threshold=SYNTHESIS_THRESHOLD,
+                )
+                continue
+
+            log.info(
+                "check_synthesis_triggering",
+                cluster_id=cluster_id,
+                fact_count=fact_count,
+            )
+
+            try:
+                from context_service.config.config_loader import load_config
+
+                llm_config = load_config("llm")
+                llm = build_llm_provider(
+                    llm_config.get("provider", "litellm"),
+                    llm_config.get("model"),
+                )
+                embedder = build_embedding_service()
+
+                result, _events = await synthesize(
+                    store,
+                    cluster_id=cluster_id,
+                    silo_id=silo_id,
+                    llm=llm,
+                    _embedder=embedder,
+                    mode="async",
+                )
+                log.info(
+                    "check_synthesis_done",
+                    cluster_id=cluster_id,
+                    belief_id=str(result.belief_id) if result.belief_id else None,
+                    cluster_state=result.cluster_state,
+                    fact_count=result.fact_count,
+                )
+            except Exception:
+                log.exception("check_synthesis_synthesize_error", cluster_id=cluster_id)
 
     @broker.task(task_name=ReactionEventType.PROPAGATE_CONFIDENCE, timeout=_TIMEOUT_SIMPLE)
     async def propagate_confidence_task(node_id: str, silo_id: str, **_payload: Any) -> None:
         """Run incremental confidence propagation for a node.
 
-        ``propagate_incremental`` requires pre-fetched neighborhood data
-        (node_ids, credibility_scores, support_edges, contradiction_edges)
-        that is expensive to derive from ``node_id`` alone. This handler is a
-        stub for Phase 8a. The full implementation requires a graph read pass
-        to assemble these inputs before calling the sync propagation function,
-        which will be added in Phase 9.
+        Fetches the depth-2 neighbourhood from the graph store, assembles the
+        inputs required by ``propagate_incremental``, runs the computation, and
+        writes back updated confidence values for nodes whose score changed by
+        more than 0.1.
 
         Args:
             node_id: Node whose confidence neighbourhood to propagate.
@@ -332,4 +495,111 @@ def register_tasks(broker: ListQueueBroker) -> None:
             node_id=node_id, silo_id=silo_id, task=ReactionEventType.PROPAGATE_CONFIDENCE
         )
         log.info("propagate_confidence_task_start")
-        log.warning("propagate_confidence_not_yet_implemented_deferred_to_phase9")
+
+        from context_service.mcp.server import get_context_service
+        from context_service.sage.epistemology import propagate_incremental
+
+        try:
+            ctx_svc = get_context_service()
+        except RuntimeError:
+            log.error("propagate_confidence_services_not_configured")
+            return
+
+        store = ctx_svc.graph_store
+
+        # Fetch depth-2 neighbourhood including all relevant edges.
+        # Each row may contain one support_edge or one contra_edge (or neither).
+        neighborhood_query = """
+MATCH (target {id: $node_id, silo_id: $silo_id})
+CALL {
+    WITH target
+    MATCH path = (target)-[*1..2]-(neighbor)
+    WHERE neighbor.silo_id = $silo_id
+    RETURN DISTINCT neighbor
+}
+WITH target, collect(neighbor) + [target] AS nodes
+UNWIND nodes AS n
+OPTIONAL MATCH (n)-[support:SUPPORTS|SYNTHESIZED_FROM]->(other)
+WHERE other IN nodes
+OPTIONAL MATCH (n)-[contra:CONTRADICTS]->(other2)
+WHERE other2 IN nodes
+RETURN
+    n.id AS node_id,
+    n.credibility AS credibility,
+    CASE WHEN support IS NOT NULL
+        THEN [startNode(support).id, endNode(support).id, coalesce(support.weight, 1.0)]
+        ELSE null
+    END AS support_edge,
+    CASE WHEN contra IS NOT NULL
+        THEN [startNode(contra).id, endNode(contra).id, coalesce(contra.weight, 1.0)]
+        ELSE null
+    END AS contra_edge
+"""
+        rows = await store.execute_query(
+            neighborhood_query, {"node_id": node_id, "silo_id": silo_id}
+        )
+
+        if not rows:
+            log.warning("propagate_confidence_no_neighborhood_found")
+            return
+
+        # Build input structures from query results. Rows are deduplicated per
+        # node but may repeat due to multiple edges, so use dicts/sets.
+        node_credibility: dict[str, float] = {}
+        support_edges_set: set[tuple[str, str, float]] = set()
+        contradiction_edges_set: set[tuple[str, str, float]] = set()
+
+        for row in rows:
+            nid = row.get("node_id")
+            if nid and nid not in node_credibility:
+                raw_cred = row.get("credibility")
+                node_credibility[nid] = float(raw_cred) if raw_cred is not None else 0.5
+
+            support_edge = row.get("support_edge")
+            if support_edge:
+                support_edges_set.add((str(support_edge[0]), str(support_edge[1]), float(support_edge[2])))
+
+            contra_edge = row.get("contra_edge")
+            if contra_edge:
+                contradiction_edges_set.add((str(contra_edge[0]), str(contra_edge[1]), float(contra_edge[2])))
+
+        node_ids = list(node_credibility.keys())
+        support_edges_list = list(support_edges_set)
+        contradiction_edges_list = list(contradiction_edges_set)
+
+        log.debug(
+            "propagate_confidence_inputs",
+            neighborhood_size=len(node_ids),
+            support_edges=len(support_edges_list),
+            contradiction_edges=len(contradiction_edges_list),
+        )
+
+        updated_scores = propagate_incremental(
+            target_id=node_id,
+            node_ids=node_ids,
+            credibility_scores=node_credibility,
+            support_edges=support_edges_list,
+            contradiction_edges=contradiction_edges_list,
+        )
+
+        # Write back nodes whose confidence changed significantly.
+        update_query = (
+            "MATCH (n {id: $node_id, silo_id: $silo_id}) "
+            "SET n.confidence = $confidence "
+            "RETURN n.id AS id"
+        )
+        updated_count = 0
+        for affected_id, new_conf in updated_scores.items():
+            old_conf = node_credibility.get(affected_id, 0.5)
+            if abs(new_conf - old_conf) > _CONFIDENCE_DELTA_THRESHOLD:
+                await store.execute_write(
+                    update_query,
+                    {"node_id": affected_id, "silo_id": silo_id, "confidence": new_conf},
+                )
+                updated_count += 1
+
+        log.info(
+            "propagate_confidence_task_done",
+            affected_nodes=len(updated_scores),
+            updated_nodes=updated_count,
+        )

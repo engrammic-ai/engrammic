@@ -147,8 +147,7 @@ def reaction_dlq_sensor(
         for key, depth in sorted(non_empty.items(), key=lambda kv: -kv[1]):
             silo_id = _extract_silo_id(key, "dlq")
             context.log.error(
-                f"reaction_dlq_non_empty silo={silo_id} depth={depth} "
-                f"action=manual_triage_required"
+                f"reaction_dlq_non_empty silo={silo_id} depth={depth} action=manual_triage_required"
             )
         context.log.error(
             f"reaction_dlq_summary silos_with_dlq_items={len(non_empty)} "
@@ -158,8 +157,7 @@ def reaction_dlq_sensor(
         context.log.info(f"reaction_dlq_ok total_dlq_depth={total_dlq_depth}")
 
     return dg.SkipReason(
-        f"Checked {len(depths)} DLQs; total_depth={total_dlq_depth}; "
-        f"non_empty={len(non_empty)}"
+        f"Checked {len(depths)} DLQs; total_depth={total_dlq_depth}; non_empty={len(non_empty)}"
     )
 
 

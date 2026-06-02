@@ -121,7 +121,9 @@ class TestBrokerTaskRegistration:
             task = in_memory_broker.find_task(event_type)
             assert task is not None, f"Task not registered: {event_type}"
 
-    def test_notification_only_event_types_not_registered(self, in_memory_broker: InMemoryBroker) -> None:
+    def test_notification_only_event_types_not_registered(
+        self, in_memory_broker: InMemoryBroker
+    ) -> None:
         """Notification-only enum members have no registered handler in Phase 8a."""
         notification_only = set(ReactionEventType) - self._HANDLER_BACKED
         for event_type in notification_only:

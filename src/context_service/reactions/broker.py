@@ -96,9 +96,7 @@ class DeadLetterMiddleware(TaskiqMiddleware):
                     },
                 }
             )
-            await self._dlq_broker.kick(
-                self._dlq_broker.formatter.dumps(dlq_message)
-            )
+            await self._dlq_broker.kick(self._dlq_broker.formatter.dumps(dlq_message))
             logger.warning(
                 "task_sent_to_dlq",
                 task_name=message.task_name,

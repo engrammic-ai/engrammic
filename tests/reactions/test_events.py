@@ -162,7 +162,9 @@ class TestEmitReaction:
             silo_id="any-silo",
         )
 
-        with patch("context_service.reactions.broker.get_broker", return_value=broker) as mock_get_broker:
+        with patch(
+            "context_service.reactions.broker.get_broker", return_value=broker
+        ) as mock_get_broker:
             await emit_reaction(event)
 
         mock_get_broker.assert_called_once_with()

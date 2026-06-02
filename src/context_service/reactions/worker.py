@@ -74,9 +74,7 @@ class LoggingMiddleware(TaskiqMiddleware):
                 task_name=message.task_name,
                 task_id=message.task_id,
             )
-        structlog.contextvars.unbind_contextvars(
-            "task_name", "task_id", "silo_id"
-        )
+        structlog.contextvars.unbind_contextvars("task_name", "task_id", "silo_id")
 
 
 class TracingMiddleware(TaskiqMiddleware):
@@ -208,6 +206,64 @@ def _register_worker_hooks(broker: ListQueueBroker) -> None:
                 state.sentry_enabled = False
         else:
             state.sentry_enabled = False
+
+        # Initialise service layer so task handlers can call get_context_service().
+        try:
+            from context_service.embeddings import build_embedding_service
+            from context_service.engine.memgraph_store import MemgraphStore
+            from context_service.mcp.server import configure_services
+            from context_service.stores import (
+                MemgraphClient,
+                QdrantClient,
+                RedisClient,
+                create_memgraph_driver,
+                create_redis_pool,
+            )
+
+            memgraph_driver = await create_memgraph_driver(settings)
+            memgraph_client = MemgraphClient(memgraph_driver)
+            logger.info("worker_memgraph_connected")
+
+            redis_pool = await create_redis_pool(settings)
+            redis_client = RedisClient(redis_pool)
+            logger.info("worker_redis_connected")
+
+            qdrant_client = QdrantClient.from_settings(settings)
+            await qdrant_client.ensure_collection(hybrid=settings.hybrid_search_enabled)
+            logger.info("worker_qdrant_connected")
+
+            embedding_service = None
+            try:
+                from context_service.cache.embedding_cache import EmbeddingCache
+
+                embedding_cache = EmbeddingCache(redis_client)
+                embedding_service = build_embedding_service(embedding_cache)
+                logger.info("worker_embedding_service_configured")
+            except Exception as exc:
+                logger.warning(
+                    "worker_embedding_service_unconfigured",
+                    error_type=type(exc).__name__,
+                    error_message=str(exc),
+                    hint="create config/embeddings.yaml to enable semantic search",
+                )
+
+            memgraph_store = MemgraphStore(memgraph_client)
+            configure_services(
+                memgraph=memgraph_store,
+                qdrant=qdrant_client,
+                redis=redis_client,
+                embedding=embedding_service,
+            )
+
+            state.qdrant = qdrant_client
+            logger.info("worker_services_configured")
+        except Exception as exc:
+            logger.error(
+                "worker_service_init_failed",
+                error_type=type(exc).__name__,
+                error_message=str(exc),
+            )
+            # Worker continues in degraded mode; task handlers will log errors.
 
         state.started_at = time.monotonic()
         logger.info("worker_startup_complete")

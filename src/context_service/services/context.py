@@ -135,6 +135,11 @@ class ContextService:
         """Expose the embedding service for callers that need it without accessing private state."""
         return self._embedding
 
+    @property
+    def vector_store(self) -> QdrantClient:
+        """Expose the Qdrant client for callers that need direct vector operations."""
+        return self._qdrant
+
     async def store(
         self,
         scope: ScopeContext,
