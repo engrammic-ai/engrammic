@@ -1533,13 +1533,21 @@ ORDER BY fact_count DESC
 """
 
 GET_PENDING_PROPOSED_BELIEFS_FOR_CLAIMS = """
-MATCH (pb:ProposedBelief {silo_id: $silo_id, status: 'pending'})
-WHERE pb.expires_at IS NULL OR pb.expires_at > datetime()
-MATCH (pb)-[:SYNTHESIZED_FROM]->(f:Fact {silo_id: $silo_id})
-OPTIONAL MATCH (f)<-[:ABOUT]-(other)
-WHERE f.id IN $about_ids OR other.id IN $about_ids
+CALL {
+    MATCH (pb:ProposedBelief {silo_id: $silo_id, status: 'pending'})
+    WHERE pb.expires_at IS NULL OR pb.expires_at > datetime()
+    MATCH (pb)-[:SYNTHESIZED_FROM]->(f:Fact {silo_id: $silo_id})
+    WHERE f.id IN $about_ids
+    RETURN pb
+    UNION
+    MATCH (pb:ProposedBelief {silo_id: $silo_id, status: 'pending'})
+    WHERE pb.expires_at IS NULL OR pb.expires_at > datetime()
+    MATCH (pb)-[:SYNTHESIZED_FROM]->(f:Fact {silo_id: $silo_id})
+    MATCH (f)<-[:ABOUT]-(other)
+    WHERE other.id IN $about_ids
+    RETURN pb
+}
 WITH DISTINCT pb
-WHERE pb IS NOT NULL
 OPTIONAL MATCH (pb)-[:SYNTHESIZED_FROM]->(f2:Fact)
 RETURN pb.id AS id,
        pb.content AS content,

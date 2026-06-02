@@ -1249,7 +1249,7 @@ WITH interior
 MATCH (interior)-[:SUPERSEDES+]->(tail)
 WHERE {content_union_predicate("tail")}
   AND tail.silo_id = $silo_id
-  AND NOT EXISTS((tail)-[:SUPERSEDES]->())
+  AND NOT (tail)-[:SUPERSEDES]->()
 RETURN DISTINCT interior.id AS node_id
 LIMIT $batch_size
 """
