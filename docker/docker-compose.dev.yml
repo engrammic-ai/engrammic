@@ -1,13 +1,13 @@
 services:
   app:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile.api
     container_name: engrammic-app
     ports:
       - "8000:8000"
     env_file:
-      - .env
+      - ../.env
     environment:
       - HOME=/home/engrammic
       - ENVIRONMENT=${ENVIRONMENT:-development}
@@ -22,10 +22,10 @@ services:
       - VERTEX_LOCATION=${VERTEX_LOCATION:-europe-north1}
     volumes:
       - ~/.config/gcloud:/mnt/gcloud:ro
-      - ./src:/app/src
-      - ./pyproject.toml:/app/pyproject.toml:ro
-      - ./config:/app/config:ro
-      - ./skills:/app/skills:ro
+      - ../src:/app/src
+      - ../pyproject.toml:/app/pyproject.toml:ro
+      - ../config:/app/config:ro
+      - ../skills:/app/skills:ro
     depends_on:
       memgraph:
         condition: service_healthy
@@ -50,12 +50,12 @@ services:
 
   reaction-worker:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile.api
     container_name: engrammic-reaction-worker
     command: ["taskiq", "worker", "context_service.reactions.worker_entrypoint:broker", "--workers", "1"]
     env_file:
-      - .env
+      - ../.env
     environment:
       - HOME=/home/engrammic
       - ENVIRONMENT=${ENVIRONMENT:-development}
@@ -69,9 +69,9 @@ services:
       - VERTEX_LOCATION=${VERTEX_LOCATION:-europe-north1}
     volumes:
       - ~/.config/gcloud:/mnt/gcloud:ro
-      - ./src:/app/src
-      - ./pyproject.toml:/app/pyproject.toml:ro
-      - ./config:/app/config:ro
+      - ../src:/app/src
+      - ../pyproject.toml:/app/pyproject.toml:ro
+      - ../config:/app/config:ro
     depends_on:
       redis:
         condition: service_healthy
@@ -150,9 +150,9 @@ services:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+      - ./initdb:/docker-entrypoint-initdb.d:ro
     env_file:
-      - .env
+      - ../.env
     environment:
       - POSTGRES_DB=${POSTGRES_DATABASE}
     healthcheck:
@@ -176,7 +176,7 @@ services:
 
   dagster-code-server:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile.dagster
       args:
         UID: ${UID:-1000}
@@ -184,7 +184,7 @@ services:
     container_name: engrammic-dagster-code
     command: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-m", "context_service.pipelines.definitions"]
     env_file:
-      - .env
+      - ../.env
     environment:
       - DAGSTER_HOME=/app
       - MEMGRAPH_HOST=memgraph
@@ -194,9 +194,9 @@ services:
       - HOME=/home/dagster
       - DAGSTER_POSTGRES_DB=engrammic_dagster
     volumes:
-      - ./src:/app/src
-      - ./docker/dagster.dev.yaml:/app/dagster.yaml:ro
-      - ./config:/app/config:ro
+      - ../src:/app/src
+      - ./dagster.dev.yaml:/app/dagster.yaml:ro
+      - ../config:/app/config:ro
       - ~/.config/gcloud:/mnt/gcloud:ro
     depends_on:
       - postgres
@@ -213,7 +213,7 @@ services:
 
   dagster-webserver:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile.dagster
       args:
         UID: ${UID:-1000}
@@ -223,7 +223,7 @@ services:
     ports:
       - "3002:3000"
     env_file:
-      - .env
+      - ../.env
     environment:
       - DAGSTER_HOME=/app
       - MEMGRAPH_HOST=memgraph
@@ -233,10 +233,10 @@ services:
       - HOME=/home/dagster
       - DAGSTER_POSTGRES_DB=engrammic_dagster
     volumes:
-      - ./src:/app/src
-      - ./workspace.yaml:/app/workspace.yaml:ro
-      - ./docker/dagster.dev.yaml:/app/dagster.yaml:ro
-      - ./config:/app/config:ro
+      - ../src:/app/src
+      - ../workspace.yaml:/app/workspace.yaml:ro
+      - ./dagster.dev.yaml:/app/dagster.yaml:ro
+      - ../config:/app/config:ro
       - ~/.config/gcloud:/mnt/gcloud:ro
     depends_on:
       dagster-code-server:
@@ -249,7 +249,7 @@ services:
 
   dagster-daemon:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile.dagster
       args:
         UID: ${UID:-1000}
@@ -257,7 +257,7 @@ services:
     container_name: engrammic-dagster-daemon
     command: ["dagster-daemon", "run"]
     env_file:
-      - .env
+      - ../.env
     environment:
       - DAGSTER_HOME=/app
       - MEMGRAPH_HOST=memgraph
@@ -267,10 +267,10 @@ services:
       - HOME=/home/dagster
       - DAGSTER_POSTGRES_DB=engrammic_dagster
     volumes:
-      - ./src:/app/src
-      - ./workspace.yaml:/app/workspace.yaml:ro
-      - ./docker/dagster.dev.yaml:/app/dagster.yaml:ro
-      - ./config:/app/config:ro
+      - ../src:/app/src
+      - ../workspace.yaml:/app/workspace.yaml:ro
+      - ./dagster.dev.yaml:/app/dagster.yaml:ro
+      - ../config:/app/config:ro
       - ~/.config/gcloud:/mnt/gcloud:ro
     depends_on:
       postgres:
