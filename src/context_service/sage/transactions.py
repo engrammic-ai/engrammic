@@ -1730,7 +1730,7 @@ async def _validate_supersession(
     if row["loser_state"] != NodeState.ACTIVE.value:
         return {"error": "LOSER_NOT_ACTIVE", "message": "Loser must be ACTIVE"}
 
-    if await _would_create_cycle(store, winner_id, loser_id, "SUPERSEDES"):
+    if await _would_create_cycle(store, winner_id, loser_id, "SUPERSEDES", silo_id):
         return {"error": "WOULD_CREATE_CYCLE"}
 
     return {"error": None}
@@ -1741,13 +1741,16 @@ async def _would_create_cycle(
     source_id: str,
     target_id: str,
     edge_type: str,
+    silo_id: str,
 ) -> bool:
     """Check if adding edge would create a cycle (BFS from target to source)."""
     cypher = f"""
-    MATCH path = (target {{id: $target_id}})-[:{edge_type}*]->(source {{id: $source_id}})
+    MATCH path = (target {{id: $target_id, silo_id: $silo_id}})-[:{edge_type}*]->(source {{id: $source_id, silo_id: $silo_id}})
     RETURN count(path) > 0 AS would_cycle
     """
-    results = await store.execute_query(cypher, {"source_id": source_id, "target_id": target_id})
+    results = await store.execute_query(
+        cypher, {"source_id": source_id, "target_id": target_id, "silo_id": silo_id}
+    )
     return results[0]["would_cycle"] if results else False
 
 
@@ -1919,7 +1922,7 @@ async def _validate_link(
         return {"error": "DUPLICATE_EDGE", "existing_id": dup_results[0].get("existing_id")}
 
     if edge_type in HIERARCHICAL_EDGE_TYPES and await _would_create_cycle(
-        store, source_id, target_id, edge_type.value
+        store, source_id, target_id, edge_type.value, silo_id
     ):
         return {"error": "WOULD_CREATE_CYCLE"}
 

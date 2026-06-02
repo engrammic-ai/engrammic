@@ -256,6 +256,8 @@ def _register_worker_hooks(broker: ListQueueBroker) -> None:
             )
 
             state.qdrant = qdrant_client
+            state.memgraph_driver = memgraph_driver
+            state.redis_pool = redis_pool
             logger.info("worker_services_configured")
         except Exception as exc:
             logger.error(
@@ -272,6 +274,21 @@ def _register_worker_hooks(broker: ListQueueBroker) -> None:
     async def _on_worker_shutdown(state: TaskiqState) -> None:
         uptime_s = time.monotonic() - getattr(state, "started_at", time.monotonic())
         logger.info("worker_shutdown", uptime_seconds=round(uptime_s, 1))
+
+        # Close database connections
+        if hasattr(state, "memgraph_driver") and state.memgraph_driver is not None:
+            try:
+                await state.memgraph_driver.close()
+                logger.info("worker_memgraph_closed")
+            except Exception:
+                logger.warning("worker_memgraph_close_failed")
+
+        if hasattr(state, "redis_pool") and state.redis_pool is not None:
+            try:
+                await state.redis_pool.aclose()
+                logger.info("worker_redis_closed")
+            except Exception:
+                logger.warning("worker_redis_close_failed")
 
         if getattr(state, "sentry_enabled", False):
             try:
