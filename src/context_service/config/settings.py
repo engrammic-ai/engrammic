@@ -519,6 +519,17 @@ class FeaturesConfig(BaseModel):
     enable_test_endpoints: bool = False  # Admin endpoints for testing (disabled in prod)
 
 
+class ConsolidationConfig(BaseModel):
+    """Configuration for conflict consolidation resolution."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    use_llm_resolver: bool = Field(
+        default=False,
+        description="Use LLM resolver instead of deterministic scorer for conflict resolution",
+    )
+
+
 class TelemetryConfig(BaseModel):
     """Self-hosted telemetry configuration."""
 
@@ -904,6 +915,7 @@ class Settings(BaseSettings):
     custodian: CustodianSettings = Field(default_factory=CustodianSettings)
     retrieval_tuning: RetrievalTuning = Field(default_factory=RetrievalTuning)
     auto_reflect: AutoReflectConfig = Field(default_factory=AutoReflectConfig)
+    consolidation: ConsolidationConfig = Field(default_factory=ConsolidationConfig)
     causal: CausalConfig = Field(default_factory=CausalConfig)
     pattern: PatternConfig = Field(default_factory=PatternConfig)
     weak_links: WeakLinksSettings = Field(default_factory=WeakLinksSettings)

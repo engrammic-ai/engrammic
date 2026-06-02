@@ -818,7 +818,22 @@ async def store_claim(
         )
         superseded_id = uuid.UUID(supersedes)
 
-    corroboration_count, promoted = await _check_corroboration(store, str(node_id), silo_id)
+    corroboration_count, should_promote = await _check_corroboration(store, str(node_id), silo_id)
+
+    # TX18 PROMOTE: convert Claim to Fact when corroboration threshold met
+    promoted = False
+    promotion_events: list[ReactionEvent] = []
+    if should_promote:
+        try:
+            _, promotion_events = await promote(store, str(node_id), silo_id, emit=False)
+            promoted = True
+        except InvariantViolation as e:
+            logger.warning(
+                "promote_race_condition",
+                node_id=str(node_id),
+                silo_id=silo_id,
+                error=e.code,
+            )
 
     # FLAG_CONTRADICTION: detect and flag structural conflicts
     conflict_events = await detect_spo_conflict(
@@ -863,6 +878,7 @@ async def store_claim(
         )
 
     events.extend(conflict_events)
+    events.extend(promotion_events)
 
     if emit:
         for event in events:
@@ -1866,14 +1882,9 @@ async def _check_corroboration(
     node_id: str,
     silo_id: str,
 ) -> tuple[int, bool]:
-    """Check corroboration and potentially promote to Fact (TX18).
+    """Check corroboration count and whether promotion threshold is met (TX18).
 
-    Returns (corroboration_count, promoted).
-
-    TODO: TX18 promotion (converting a corroborated Claim to a Fact node) is
-    deferred to Phase 2. Currently only updates corroboration_count and returns
-    whether the threshold is met; the caller receives `promoted=False` until
-    TX18 is implemented.
+    Returns (corroboration_count, should_promote).
     """
     return await check_corroboration(store, node_id, silo_id)
 
