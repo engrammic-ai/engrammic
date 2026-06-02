@@ -24,6 +24,7 @@ from typing import Any
 import dagster as dg
 from dagster import ScheduleEvaluationContext
 
+from context_service.pipelines.jobs.beacon_sender import beacon_sender_job
 from context_service.pipelines.jobs.telemetry_gauges import telemetry_gauges_job
 from context_service.pipelines.jobs.telemetry_prune import telemetry_prune_job
 from context_service.pipelines.partitions import silo_partitions
@@ -429,6 +430,12 @@ telemetry_prune_schedule = dg.ScheduleDefinition(
     default_status=dg.DefaultScheduleStatus.RUNNING,
 )
 
+beacon_sender_schedule = dg.ScheduleDefinition(
+    job=beacon_sender_job,
+    cron_schedule="0 * * * *",  # hourly (matches beacon_interval_hours default)
+    default_status=dg.DefaultScheduleStatus.STOPPED,  # opt-in for self-hosted
+)
+
 all_schedules: list[Any] = [
     # SAGE pipelines (custodian and synthesizer disabled in Phase 9 - Taskiq handles them)
     sage_groundskeeper_schedule,
@@ -443,6 +450,7 @@ all_schedules: list[Any] = [
     # Telemetry
     telemetry_gauges_schedule,
     telemetry_prune_schedule,
+    beacon_sender_schedule,
 ]
 
 __all__ = [
@@ -457,4 +465,5 @@ __all__ = [
     "groundskeeper_gc_schedule",
     "telemetry_gauges_schedule",
     "telemetry_prune_schedule",
+    "beacon_sender_schedule",
 ]

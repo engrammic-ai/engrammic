@@ -530,6 +530,21 @@ class ConsolidationConfig(BaseModel):
     )
 
 
+def _generate_install_id() -> str:
+    """Generate a stable install ID based on machine identity."""
+    import hashlib
+    import platform
+    import uuid
+
+    try:
+        node = uuid.getnode()
+        hostname = platform.node()
+        raw = f"{node}:{hostname}"
+        return hashlib.sha256(raw.encode()).hexdigest()[:16]
+    except Exception:
+        return str(uuid.uuid4())[:16]
+
+
 class TelemetryConfig(BaseModel):
     """Self-hosted telemetry configuration."""
 
@@ -538,6 +553,10 @@ class TelemetryConfig(BaseModel):
     enabled: bool = Field(
         default=True,
         description="Tier 1: anonymous aggregate telemetry (default on)",
+    )
+    install_id: str = Field(
+        default_factory=_generate_install_id,
+        description="Unique identifier for this installation (auto-generated if not set)",
     )
     silos: list[str] = Field(
         default_factory=list,
