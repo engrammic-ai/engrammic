@@ -1,9 +1,10 @@
 # Phase 9: Complete Dagster Migration
 
-**Status:** PLANNED  
+**Status:** COMPLETE  
 **Depends on:** Phase 8 (Reactions Infrastructure) - COMPLETE  
 **Date:** 2026-06-02  
-**Branch:** `feat/brain-architecture`
+**Branch:** `feat/brain-architecture`  
+**Completed:** 2026-06-02
 
 ---
 
@@ -17,7 +18,7 @@ Complete the migration from Dagster-based batch processing to Taskiq event-drive
 
 Phase 8 shipped:
 - Taskiq broker with silo-partitioned queues
-- 8 reaction task handlers (5 implemented, 3 stubs)
+- 8 reaction task handlers (all now implemented)
 - Transaction integration (emit_reaction on all writes)
 - Worker deployment (docker-compose)
 - Queue health monitoring sensors
@@ -218,11 +219,11 @@ docker-compose -f docker-compose.prod.yml up -d reaction-worker
 
 ## Task 7: Tests
 
-- [ ] Integration tests for completed stub handlers
-- [ ] End-to-end test: write -> emit -> process -> verify state
-- [ ] Test worker startup/shutdown with vector store
-- [ ] Test cluster membership assignment
-- [ ] Test synthesis triggering
+- [x] Integration tests for completed stub handlers
+- [x] End-to-end test: write -> emit -> process -> verify state
+- [x] Test worker startup/shutdown with vector store
+- [x] Test cluster membership assignment
+- [x] Test synthesis triggering
 
 ---
 
