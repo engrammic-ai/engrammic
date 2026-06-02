@@ -16,6 +16,7 @@ Usage::
 
 from __future__ import annotations
 
+import contextlib
 import time
 from typing import Any
 
@@ -207,6 +208,12 @@ def _register_worker_hooks(broker: ListQueueBroker) -> None:
         else:
             state.sentry_enabled = False
 
+        # Initialize telemetry metrics buffer
+        from context_service.telemetry.metrics import setup_metrics
+
+        setup_metrics()
+        logger.info("worker_metrics_initialized")
+
         # Initialise service layer so task handlers can call get_context_service().
         try:
             from context_service.embeddings import build_embedding_service
@@ -267,6 +274,38 @@ def _register_worker_hooks(broker: ListQueueBroker) -> None:
             )
             # Worker continues in degraded mode; task handlers will log errors.
 
+        # Set up metrics flushing to postgres
+        try:
+            import asyncio
+
+            import asyncpg
+
+            from context_service.telemetry.flush import flush_metrics_to_db
+            from context_service.telemetry.metrics import get_buffer, set_db_pool
+
+            pg_pool = await asyncpg.create_pool(settings.postgres_dsn)
+            set_db_pool(pg_pool)
+            state.pg_pool = pg_pool
+
+            async def periodic_flush() -> None:
+                while True:
+                    await asyncio.sleep(60)
+                    buffer = get_buffer()
+                    if buffer is not None and pg_pool is not None:
+                        try:
+                            await flush_metrics_to_db(pg_pool, buffer)
+                        except Exception:
+                            logger.warning("worker_metrics_flush_failed")
+
+            state.metrics_flush_task = asyncio.create_task(periodic_flush())
+            logger.info("worker_metrics_flush_started")
+        except Exception as exc:
+            logger.warning(
+                "worker_metrics_flush_setup_failed",
+                error_type=type(exc).__name__,
+                error_message=str(exc),
+            )
+
         state.started_at = time.monotonic()
         logger.info("worker_startup_complete")
 
@@ -289,6 +328,25 @@ def _register_worker_hooks(broker: ListQueueBroker) -> None:
                 logger.info("worker_redis_closed")
             except Exception:
                 logger.warning("worker_redis_close_failed")
+
+        # Final metrics flush before shutdown
+        if hasattr(state, "metrics_flush_task"):
+            state.metrics_flush_task.cancel()
+            with contextlib.suppress(Exception):
+                await state.metrics_flush_task
+
+        if hasattr(state, "pg_pool") and state.pg_pool is not None:
+            try:
+                from context_service.telemetry.flush import flush_metrics_to_db
+                from context_service.telemetry.metrics import get_buffer
+
+                buffer = get_buffer()
+                if buffer is not None:
+                    await flush_metrics_to_db(state.pg_pool, buffer)
+                await state.pg_pool.close()
+                logger.info("worker_metrics_flushed_and_pg_closed")
+            except Exception:
+                logger.warning("worker_pg_close_failed")
 
         if getattr(state, "sentry_enabled", False):
             try:
