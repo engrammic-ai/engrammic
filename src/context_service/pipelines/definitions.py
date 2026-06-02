@@ -8,6 +8,11 @@ from __future__ import annotations
 
 import dagster as dg
 
+from context_service.telemetry.metrics import setup_metrics
+
+# Initialize metrics buffer at module load so LLM token tracking works in Dagster ops
+setup_metrics()
+
 from context_service.pipelines.assets import all_assets
 from context_service.pipelines.jobs import (
     groundskeeper_nightly,
