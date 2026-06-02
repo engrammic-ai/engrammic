@@ -25,11 +25,11 @@ status env="beta":
     gcloud compute ssh engrammic-{{env}}-stateful --zone={{zone}} --project={{project}} --tunnel-through-iap \
         --command="docker ps --format 'table {{{{.Names}}}}\t{{{{.Status}}}}'"
 
-# Tunnel services to localhost
+# Tunnel services to localhost (Memgraph, Qdrant, Redis, Dagster, Postgres)
 [group('ops')]
 tunnel env="beta":
     gcloud compute ssh engrammic-{{env}}-stateful --zone={{zone}} --project={{project}} --tunnel-through-iap \
-        -- -NL 7687:localhost:7687 -L 6333:localhost:6333 -L 6334:localhost:6334 -L 6379:localhost:6379 -L 3000:localhost:3000
+        -- -NL 7687:localhost:7687 -L 6333:localhost:6333 -L 6334:localhost:6334 -L 6379:localhost:6379 -L 3000:localhost:3000 -L 5432:10.162.0.3:5432
 
 # Start stateful instance
 [group('ops')]
