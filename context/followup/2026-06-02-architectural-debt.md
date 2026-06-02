@@ -83,6 +83,37 @@ else:
 
 ---
 
+---
+
+## 4. Dead Code: Legacy MCP Tool Files
+
+**Priority:** LOW  
+**Effort:** 15 min
+
+**Current state:**
+- `mcp/tools/context_get.py`, `context_history.py`, `context_query.py`, `context_graph.py`, `context_crystallize.py`, `coerce.py` exist
+- These are NOT registered in `registry.py` - only the 15 verb-based tools are live
+- Files are orphaned dead code from pre-verb-surface refactor
+
+**Fix:** Delete the orphaned files after confirming no imports.
+
+---
+
+## 5. ProposedBelief Cleanup Assets Still Active
+
+**Priority:** LOW  
+**Effort:** 30 min
+
+**Current state:**
+- TX11-13 (ProposedBelief write path) removed in Phase 7
+- But `proposal_detection` and `proposal_cleanup` Dagster assets still registered
+- `custodian/proposal_worker.py` still exists
+- Daily cleanup schedule still runs
+
+**Fix:** Remove orphaned assets and worker, or document why kept.
+
+---
+
 ## Summary
 
 | Item | Priority | Action |
@@ -90,3 +121,5 @@ else:
 | TX18 PROMOTE | HIGH | Fix before production |
 | LLMResolver | LOW | Accept + flag for beta |
 | Single queue | LOW | Defer + monitor for beta |
+| Dead MCP tools | LOW | Delete orphaned files |
+| ProposedBelief assets | LOW | Remove or document |
