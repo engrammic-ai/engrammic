@@ -76,6 +76,7 @@ def mock_context_service():
     svc.provenance = AsyncMock(return_value=MagicMock(chain=[], root_sources=[]))
     svc.graph_store = MagicMock()
     svc.graph_store.execute_query = AsyncMock(return_value=[])
+    svc.graph_store.execute_write = AsyncMock(return_value=None)
 
     with (
         patch("context_service.mcp.tools.context_store.get_context_service", return_value=svc),

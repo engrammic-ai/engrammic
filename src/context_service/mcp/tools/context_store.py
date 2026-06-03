@@ -30,6 +30,16 @@ from context_service.models.mcp import (
 )
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
+from context_service.reactions.events import emit_reaction
+from context_service.sage.transactions import (
+    commit as brain_commit,
+    crystallize,
+    forget as brain_forget,
+    link as brain_link,
+    revise_belief,
+    store_claim,
+    store_memory,
+)
 from context_service.services.source_tier_resolver import resolve_source_tier
 
 # Query to get embedding for contradiction check
@@ -262,33 +272,40 @@ async def _context_remember(
     ctx_svc = get_context_service()
     scope = ScopeContext(org_id=auth.org_id, silo_id=validated_silo_id)
     _start = time.perf_counter()
-    node = await ctx_svc.remember(
-        scope=scope,
+
+    result_tx, events = await store_memory(
+        store=ctx_svc.graph_store,
         content=content,
-        content_type=content_type,
-        metadata=metadata,
-        tags=tags,
-        decay_class=decay,
-        observed_from=observed_from,
+        silo_id=str(validated_silo_id),
         agent_id=auth.agent_id,
+        layer="memory",
+        tags=tags,
+        content_type=content_type,
+        decay_class=decay_class,
+        metadata=metadata,
     )
+
+    for event in events:
+        await emit_reaction(event)
+
     record_store_latency(time.perf_counter() - _start, silo_id=validated_silo_id, layer="memory")
+    node_id = result_tx.node_id
 
     if supersedes is not None:
         try:
-            await create_supersession(node.id, supersedes, str(validated_silo_id))
+            await create_supersession(node_id, supersedes, str(validated_silo_id))
         except SupersessionCycleError as e:
             return {
                 "error": "supersession_cycle",
                 "message": str(e),
-                "node_id": str(node.id),
+                "node_id": str(node_id),
                 "supersedes": supersedes,
                 "hint": "Content-hash dedup returned a node already in the chain. "
                 "Use a different claim text or omit supersedes.",
             }
 
     result: dict[str, Any] = {
-        "node_id": str(node.id),
+        "node_id": str(node_id),
         "layer": "memory",
         "decay_class": decay_class,
         "created_at": datetime.now(UTC).isoformat(),
