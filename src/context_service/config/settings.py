@@ -425,30 +425,16 @@ class AuthConfig(BaseModel):
     workos: WorkosConfig = Field(default_factory=WorkosConfig)
 
 
-def _load_oauth_redirect_hosts() -> list[str]:
-    """Load allowed OAuth redirect hosts from YAML config file."""
-    config_path = Path(__file__).parent / "oauth_redirect_hosts.yaml"
-    if config_path.exists():
-        with open(config_path) as f:
-            data = yaml.safe_load(f)
-            hosts: list[str] = data.get("hosts", [])
-            return hosts
-    return ["localhost", "127.0.0.1"]
-
-
 class OAuthConfig(BaseModel):
     """OAuth 2.0 configuration for MCP client authentication.
 
-    The allowed_redirect_hosts setting validates only the hostname portion of
-    redirect URIs, not the full URI. This is intentional for MCP clients which
-    use custom URL schemes (cursor://, claude://, etc.) with varying paths.
-    PKCE provides code injection protection regardless of exact redirect path.
+    Redirect URI validation follows RFC 8252 (OAuth for Native Apps):
+    - Loopback (127.0.0.1, localhost) with any port: allowed for CLI/desktop
+    - Custom URL schemes (cursor://, claude://, etc.): allowed for native apps
+    - HTTPS: allowed for web clients
+    - HTTP to non-loopback: rejected
 
-    Default allowlist is loaded from oauth_redirect_hosts.yaml in this directory.
-    To add new hosts, edit that file - no code changes needed.
-
-    To override at runtime, set OAUTH__ALLOWED_REDIRECT_HOSTS as a
-    JSON-encoded list: '["localhost", "127.0.0.1", "myapp.local"]'
+    PKCE (S256) is required for all clients, providing code injection protection.
     """
 
     model_config = ConfigDict(frozen=True, extra="ignore")
@@ -457,10 +443,6 @@ class OAuthConfig(BaseModel):
     access_token_ttl_seconds: int = 2592000  # 30 days - harness refresh is unreliable
     refresh_token_ttl_days: int = 90
     authorization_code_ttl_seconds: int = 600  # 10 minutes
-    allowed_redirect_hosts: list[str] = Field(
-        default_factory=_load_oauth_redirect_hosts,
-        description="Allowed hostnames for redirect_uri (not full URI validation)",
-    )
 
 
 class PromptsConfig(BaseModel):

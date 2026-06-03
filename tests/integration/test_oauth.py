@@ -231,11 +231,20 @@ class TestOAuthAuthorize:
         assert resp.status_code == 400
         assert "S256" in resp.json()["detail"]
 
-    async def test_disallowed_redirect_host_returns_400(self, client: AsyncClient) -> None:
-        params = self._params(redirect_uri="https://evil.example.com/callback")
+    async def test_http_non_loopback_redirect_returns_400(self, client: AsyncClient) -> None:
+        """RFC 8252: HTTP to non-loopback addresses is rejected (only loopback HTTP allowed)."""
+        params = self._params(redirect_uri="http://evil.example.com/callback")
         resp = await client.get("/oauth/authorize", params=params, follow_redirects=False)
         assert resp.status_code == 400
         assert "redirect_uri" in resp.json()["detail"]
+
+    async def test_dangerous_scheme_redirect_returns_400(self, client: AsyncClient) -> None:
+        """Dangerous schemes (javascript, file, etc.) are rejected."""
+        for scheme in ("javascript", "file", "data"):
+            params = self._params(redirect_uri=f"{scheme}://malicious")
+            resp = await client.get("/oauth/authorize", params=params, follow_redirects=False)
+            assert resp.status_code == 400, f"{scheme}:// should be rejected"
+            assert "scheme" in resp.json()["detail"]
 
     async def test_valid_authorize_redirects_to_workos(self, client: AsyncClient) -> None:
         """Happy path: valid params redirect to WorkOS authorization URL."""

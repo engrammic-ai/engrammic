@@ -221,9 +221,30 @@ async def authorize(
     if code_challenge_method != "S256":
         raise HTTPException(status_code=400, detail="Only S256 code_challenge_method is supported")
 
+    # RFC 8252 pattern validation (PKCE already required above)
+    # - Loopback (127.0.0.1, localhost, ::1) with any port: allowed for CLI/desktop
+    # - Custom schemes (non-http/https): allowed for native apps
+    # - HTTPS with valid host: allowed for web clients
+    # HTTP to non-loopback is rejected
     parsed = urlparse(redirect_uri)
-    if parsed.hostname not in settings.oauth.allowed_redirect_hosts:
-        raise HTTPException(status_code=400, detail="Invalid redirect_uri host")
+    hostname = parsed.hostname or ""
+    scheme = (parsed.scheme or "").lower()
+
+    is_loopback = hostname in ("127.0.0.1", "localhost", "::1")
+    is_custom_scheme = scheme not in ("http", "https", "")
+    is_https = scheme == "https" and hostname
+    is_http_loopback = scheme == "http" and is_loopback
+
+    # Reject dangerous pseudo-schemes that could enable XSS or local file access
+    dangerous_schemes = {"file", "javascript", "data", "vbscript", "about"}
+    if is_custom_scheme and scheme in dangerous_schemes:
+        raise HTTPException(status_code=400, detail="Invalid redirect_uri scheme")
+
+    if not (is_custom_scheme or is_https or is_http_loopback):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid redirect_uri: must be HTTPS, loopback HTTP, or custom scheme",
+        )
 
     workos_state = secrets.token_urlsafe(32)
 
