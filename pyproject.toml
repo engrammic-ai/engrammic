@@ -139,7 +139,7 @@ disallow_untyped_decorators = false
 asyncio_mode = "auto"
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "--import-mode=importlib"
+addopts = "--import-mode=importlib --cov=src --cov-report=term-missing --cov-report=html"
 markers = [
     "integration: tests that require live docker stack (Memgraph, Qdrant, Redis)",
 ]

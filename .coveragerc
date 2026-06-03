@@ -1,0 +1,17 @@
+[run]
+source = src
+omit =
+    src/context_service/__main__.py
+    src/context_service/entrypoint.py
+    */__pycache__/*
+    */tests/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    if TYPE_CHECKING:
+    raise NotImplementedError
+    @abstractmethod
+
+[html]
+directory = htmlcov
