@@ -64,8 +64,12 @@ tools:
     maps_to: wisdom
 
   recall:
-    description: "Retrieve knowledge. Search by query or fetch by node_id."
-    maps_to: recall
+    description: |
+      Search or fetch knowledge. Returns immediately. Use query for semantic
+      search, node_ids for direct fetch. Use query="*" to list all nodes
+      (bypasses relevance filtering). Optional min_threshold overrides the
+      default relevance cutoff (0.0-1.0, lower = more results).
+    maps_to: retrieve
 
   trace:
     description: "Trace the provenance of a belief back to its sources."

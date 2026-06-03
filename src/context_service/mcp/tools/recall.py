@@ -41,6 +41,7 @@ async def _recall_impl(
     include_hypotheses: bool = False,
     bypass_cache: bool = False,
     max_age_seconds: int | None = None,
+    min_threshold: float | None = None,
 ) -> dict[str, Any]:
     """Implementation for recall tool."""
     auth = await get_mcp_auth_context()
@@ -74,6 +75,7 @@ async def _recall_impl(
         top_k=effective_top_k,
         bypass_cache=bypass_cache,
         max_age_seconds=max_age_seconds,
+        min_threshold=min_threshold,
     )
     duration_ms = (time.perf_counter() - start) * 1000
 
@@ -247,6 +249,7 @@ def register(mcp: FastMCP) -> None:
         include_hypotheses: bool = False,
         bypass_cache: bool = False,
         max_age_seconds: int | None = None,
+        min_threshold: float | None = None,
     ) -> dict[str, Any]:
         """Retrieve knowledge.
 
@@ -262,6 +265,8 @@ def register(mcp: FastMCP) -> None:
             max_age_seconds: Maximum acceptable cache age in seconds. If the
                 cached result is older than this, a fresh search is performed.
                 Only applies to query + depth=0 mode.
+            min_threshold: Override relevance threshold (0.0-1.0). Lower values
+                return more results. When query="*", threshold is bypassed.
 
         Returns:
             {results|nodes, hypotheses?, ...}
@@ -278,6 +283,7 @@ def register(mcp: FastMCP) -> None:
                 include_hypotheses,
                 bypass_cache,
                 max_age_seconds,
+                min_threshold,
             )
         except Exception:
             success = False
