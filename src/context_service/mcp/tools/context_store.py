@@ -23,7 +23,6 @@ from context_service.mcp.server import (
 from context_service.models.mcp import (
     Crystallization,
     DecayClass,
-    ObservationType,
     ReasoningStep,
     SourceType,
     SPOClaim,
@@ -654,49 +653,28 @@ async def _context_reflect(
             return err
 
     expected_silo_id = derive_silo_id(auth.org_id)
-
-    try:
-        obs_type = ObservationType(observation_type)
-    except ValueError:
-        return {
-            "error": "invalid_observation_type",
-            "valid": [e.value for e in ObservationType],
-        }
-
     agent_id = auth.agent_id or auth.org_id
 
-    if agent_id is not None:
-        try:
-            await ctx_svc.graph_store.upsert_agent(
-                agent_id,
-                str(expected_silo_id),
-                role="reflector",
-            )
-        except Exception:
-            logger.warning(
-                "context_reflect_agent_upsert_failed",
-                exc_info=True,
-                agent_id=agent_id,
-            )
-
-    scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
     _start = time.perf_counter()
-    node = await ctx_svc.reflect(
-        scope=scope,
-        observation=observation,
-        observation_type=obs_type,
-        about=about,
-        confidence=confidence,
-        metadata=metadata,
+    result, events = await store_memory(
+        store=ctx_svc.graph_store,
+        content=observation,
+        silo_id=str(expected_silo_id),
         agent_id=agent_id,
+        layer="meta",
+        metadata=metadata,
     )
+
+    for event in events:
+        await emit_reaction(event)
+
     record_store_latency(time.perf_counter() - _start, silo_id=expected_silo_id, layer="meta")
 
     return {
-        "node_id": str(node.id),
+        "node_id": str(result.node_id),
         "observation_type": observation_type,
         "about_nodes": about,
-        "created_at": datetime.now(UTC).isoformat(),
+        "created_at": result.created_at.isoformat(),
     }
 
 
