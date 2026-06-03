@@ -42,11 +42,21 @@ mcp_instructions: |
 
 tools:
   remember:
-    description: "Store an observation. No evidence required. Consider recall first - if updating existing knowledge, pass supersedes:<node_id>."
+    description: |
+      Store an observation to memory. Returns immediately; node becomes
+      searchable within ~500ms (async embedding). For immediate recall,
+      use the returned node_id with recall(node_ids=[...]). No evidence
+      required. Consider recall first - if updating existing knowledge,
+      pass supersedes:<node_id>.
     maps_to: memory
 
   learn:
-    description: "Record a claim with evidence. Recall first to check for existing claims - pass supersedes:<node_id> to update. Optionally hint source_tier."
+    description: |
+      Record a claim with evidence. Returns immediately; node becomes
+      searchable within ~500ms (async embedding). For immediate recall,
+      use the returned node_id with recall(node_ids=[...]). Recall first
+      to check for existing claims - pass supersedes:<node_id> to update.
+      Optionally hint source_tier.
     maps_to: knowledge
 
   believe:
