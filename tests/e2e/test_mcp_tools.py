@@ -1,13 +1,14 @@
-"""E2E tests for the 4-tool MCP surface.
+"""E2E tests for MCP verb surface.
 
-All tests exercise the registered MCP tools via fastmcp Client, either against
-a real running server or the in-process FastMCPTransport with fake stores.
+All tests exercise the registered MCP tools via fastmcp Client.
 
 Tool surface:
-  context_store  -- unified write (memory/knowledge/wisdom/intelligence/meta)
-  context_recall -- unified read (get by id, semantic search, graph traversal)
-  context_link   -- create typed relationships between nodes
-  context_admin  -- silo_list, close_session, provenance, history
+  remember  -- store observation (memory layer)
+  learn     -- store claim with evidence (knowledge layer)
+  believe   -- store commitment (wisdom layer)
+  recall    -- retrieve nodes
+  link      -- create relationships
+  forget    -- request deletion
 """
 
 from __future__ import annotations
@@ -19,23 +20,36 @@ import pytest
 
 from tests.e2e.conftest import call_result
 
-pytestmark = pytest.mark.skip(reason="Uses internal tool names; pending verb promotion refactor")
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-async def store(client: Any, layer: str, content: str, **kwargs: Any) -> dict[str, Any]:
+async def remember(client: Any, content: str, **kwargs: Any) -> dict[str, Any]:
+    raw = await client.call_tool("remember", {"content": content, **kwargs})
+    return call_result(raw)
+
+
+async def learn(
+    client: Any, content: str, evidence: list[str], **kwargs: Any
+) -> dict[str, Any]:
     raw = await client.call_tool(
-        "context_store",
-        {"content": content, "layer": layer, **kwargs},
+        "learn", {"content": content, "evidence": evidence, **kwargs}
+    )
+    return call_result(raw)
+
+
+async def believe(
+    client: Any, content: str, about: list[str], **kwargs: Any
+) -> dict[str, Any]:
+    raw = await client.call_tool(
+        "believe", {"content": content, "about": about, **kwargs}
     )
     return call_result(raw)
 
 
 async def recall(client: Any, **kwargs: Any) -> dict[str, Any]:
-    raw = await client.call_tool("context_recall", kwargs)
+    raw = await client.call_tool("recall", kwargs)
     return call_result(raw)
 
 
@@ -43,8 +57,16 @@ async def link(
     client: Any, from_node: str, to_node: str, relationship: str, **kwargs: Any
 ) -> dict[str, Any]:
     raw = await client.call_tool(
-        "context_link",
+        "link",
         {"from_node": from_node, "to_node": to_node, "relationship": relationship, **kwargs},
+    )
+    return call_result(raw)
+
+
+async def store(client: Any, layer: str, content: str, **kwargs: Any) -> dict[str, Any]:
+    raw = await client.call_tool(
+        "context_store",
+        {"content": content, "layer": layer, **kwargs},
     )
     return call_result(raw)
 
