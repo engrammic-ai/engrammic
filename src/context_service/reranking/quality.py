@@ -49,6 +49,8 @@ def classify_quality(avg_score: float) -> RetrievalQuality:
 def apply_threshold_filter(
     results: list[dict[str, Any]],
     threshold_overrides: dict[str, float] | None = None,
+    min_threshold: float | None = None,
+    bypass: bool = False,
 ) -> tuple[list[dict[str, Any]], int]:
     """Filter result dicts by per-layer threshold.
 
@@ -59,6 +61,8 @@ def apply_threshold_filter(
     Returns:
         (kept_results, below_threshold_count)
     """
+    if bypass:
+        return results, 0
     kept: list[dict[str, Any]] = []
     below = 0
     for r in results:
@@ -69,6 +73,8 @@ def apply_threshold_filter(
             continue
         layer = r.get("layer", "memory")
         threshold = _threshold_for_layer(layer, threshold_overrides)
+        if min_threshold is not None:
+            threshold = min(threshold, min_threshold)
         if score >= threshold:
             kept.append(r)
         else:

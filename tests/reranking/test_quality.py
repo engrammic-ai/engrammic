@@ -95,6 +95,24 @@ class TestApplyThresholdFilter:
         assert kept == []
         assert below == 1
 
+    def test_min_threshold_override(self) -> None:
+        results = [
+            self._make_result("knowledge", 0.25),
+            self._make_result("wisdom", 0.25),
+        ]
+        kept, below = apply_threshold_filter(results, min_threshold=0.2)
+        assert len(kept) == 2
+        assert below == 0
+
+    def test_bypass_skips_all_filtering(self) -> None:
+        results = [
+            self._make_result("knowledge", 0.1),
+            self._make_result("wisdom", 0.05),
+        ]
+        kept, below = apply_threshold_filter(results, bypass=True)
+        assert len(kept) == 2
+        assert below == 0
+
 
 class TestComputeRetrievalQuality:
     def _result(self, score: float) -> dict:
