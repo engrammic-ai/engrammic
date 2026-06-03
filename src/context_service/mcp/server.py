@@ -304,20 +304,28 @@ async def get_mcp_auth_context() -> AuthContext:
                 db_user_id=oauth_context.db_user_id,
             )
 
-        # Fall back to WorkOS sealed session (existing path).
-        base = await resolve_mcp_auth_from_header(auth_header)
-        agent_id = headers.get("x-agent-id") or f"user:{base.user_id}"
-        # Derive a stable session identifier from the token so the same
-        # sealed session always maps to the same session_id.
-        session_id = headers.get("x-session-id") or hashlib.sha256(auth_header.encode()).hexdigest()
-        return AuthContext(
-            org_id=base.org_id,
-            user_id=base.user_id,
-            email=base.email,
-            is_dev=base.is_dev,
-            agent_id=agent_id,
-            session_id=session_id,
-            db_user_id=base.db_user_id,
+        settings = get_settings()
+
+        # Fall back to WorkOS sealed session only if auth is enabled.
+        # In dev mode, skip WorkOS and fall through to dev context below.
+        if settings.auth_enabled:
+            base = await resolve_mcp_auth_from_header(auth_header)
+            agent_id = headers.get("x-agent-id") or f"user:{base.user_id}"
+            session_id = headers.get("x-session-id") or hashlib.sha256(auth_header.encode()).hexdigest()
+            return AuthContext(
+                org_id=base.org_id,
+                user_id=base.user_id,
+                email=base.email,
+                is_dev=base.is_dev,
+                agent_id=agent_id,
+                session_id=session_id,
+                db_user_id=base.db_user_id,
+            )
+
+        # Auth disabled but token didn't validate - warn and fall through to dev context
+        logger.warning(
+            "auth.token_ignored_dev_mode",
+            hint="Token provided but auth disabled; using dev context",
         )
 
     settings = get_settings()
