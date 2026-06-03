@@ -121,6 +121,7 @@ async def _context_recall(
     include_proposals: bool = False,
     bypass_cache: bool = False,
     max_age_seconds: int | None = None,
+    min_threshold: float | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     if not query and not node_ids:
@@ -168,6 +169,7 @@ async def _context_recall(
         return response
 
     if query and depth == 0:
+        is_wildcard = query in ("*", "")
         response = await _context_query(
             silo_id=silo_id,
             query=query,
@@ -176,6 +178,8 @@ async def _context_recall(
             as_of=as_of,
             bypass_cache=bypass_cache,
             max_age_seconds=max_age_seconds,
+            min_threshold=min_threshold,
+            bypass_threshold=is_wildcard,
         )
         if not include_content:
             response = _strip_content(response)
