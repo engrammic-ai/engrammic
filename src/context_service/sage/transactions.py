@@ -566,6 +566,7 @@ async def store_memory(
     silo_id: str,
     agent_id: str,
     *,
+    layer: str = "memory",
     tags: list[str] | None = None,
     content_type: str = "text",
     decay_class: str = "standard",
@@ -597,7 +598,7 @@ async def store_memory(
     label = _CONTENT_TYPE_TO_LABEL.get(content_type, "Document")
 
     props: dict[str, Any] = {
-        "layer": "memory",
+        "layer": layer,
         "state": NodeState.ACTIVE.value,
         "content_type": content_type,
         "decay_class": decay_class,
