@@ -329,10 +329,6 @@ async def mcp_client(e2e_org_id: str) -> AsyncGenerator[Any, None]:
             new=AsyncMock(return_value=auth),
         ),
         patch(
-            "context_service.mcp.tools.context_admin.get_mcp_auth_context",
-            new=AsyncMock(return_value=auth),
-        ),
-        patch(
             "context_service.services.silo.validate_silo_ownership",
             new=AsyncMock(return_value=None),
         ),
@@ -372,10 +368,6 @@ async def mcp_client_alt(e2e_org_id: str) -> AsyncGenerator[Any, None]:
         ),
         patch(
             "context_service.mcp.tools.context_recall.get_mcp_auth_context",
-            new=AsyncMock(return_value=alt_auth),
-        ),
-        patch(
-            "context_service.mcp.tools.context_admin.get_mcp_auth_context",
             new=AsyncMock(return_value=alt_auth),
         ),
         patch(
