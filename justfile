@@ -58,7 +58,7 @@ clean:
 
 # Start local dev services (Memgraph, Qdrant, Redis)
 up:
-    {{dc}} up -d --build
+    {{dc}} up -d --build --remove-orphans
 
 # Stop local dev services
 down:

@@ -88,9 +88,6 @@ services:
     volumes:
       - memgraph-data:/var/lib/memgraph
       - memgraph-log:/var/log/memgraph
-    environment:
-      - MEMGRAPH_USER=${MEMGRAPH_USER:-}
-      - MEMGRAPH_PASSWORD=${MEMGRAPH_PASSWORD:-}
     command: ["--log-level=WARNING", "--storage-properties-on-edges=true"]
     healthcheck:
       test: ["CMD", "python3", "-c", "import socket; s=socket.socket(); s.connect(('localhost',7687)); s.close()"]
