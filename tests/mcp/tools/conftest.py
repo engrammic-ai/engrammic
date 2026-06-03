@@ -9,6 +9,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from context_service.sage.transactions import CommitResult
+
 
 @pytest.fixture
 def reset_preset_cache() -> Generator[None, None, None]:
@@ -79,6 +81,14 @@ def mock_context_service():
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
 
+    _commit_node_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+    _commit_result = CommitResult(
+        commitment_id=_commit_node_id,
+        silo_id="test-silo",
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        confidence=0.8,
+    )
+
     svc = MagicMock()
     svc.store = AsyncMock(
         return_value={"node_id": "test-node-id", "created_at": "2026-01-01T00:00:00Z"}
@@ -107,6 +117,10 @@ def mock_context_service():
         patch(
             "context_service.mcp.tools.context_store.store_memory",
             new=AsyncMock(return_value=(_memory_result, [])),
+        ),
+        patch(
+            "context_service.mcp.tools.context_store.brain_commit",
+            new=AsyncMock(return_value=(_commit_result, [])),
         ),
     ):
         yield svc

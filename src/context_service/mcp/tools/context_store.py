@@ -556,26 +556,26 @@ async def _context_commit(
 
     agent_id = auth.agent_id or auth.org_id
 
-    scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
     _start = time.perf_counter()
-    node = await ctx_svc.commit_belief(
-        scope=scope,
-        belief=belief,
-        about=about,
-        confidence=confidence,
-        reasoning=reasoning,
-        metadata=metadata,
-        tags=tags,
+    commit_result, events = await brain_commit(
+        store=ctx_svc.graph_store,
+        content=belief,
+        about_refs=about,
+        silo_id=str(expected_silo_id),
         agent_id=agent_id,
+        confidence=confidence,
+        metadata=metadata,
     )
+    for event in events:
+        await emit_reaction(event)
     record_store_latency(time.perf_counter() - _start, silo_id=expected_silo_id, layer="wisdom")
 
     result: dict[str, Any] = {
-        "node_id": str(node.id),
+        "node_id": str(commit_result.commitment_id),
         "layer": "wisdom",
         "declared_by": agent_id,
         "about_nodes": about,
-        "created_at": datetime.now(UTC).isoformat(),
+        "created_at": commit_result.created_at.isoformat(),
     }
 
     if chain_id is not None:
@@ -599,13 +599,13 @@ async def _context_commit(
 
     if supersedes is not None:
         try:
-            await create_supersession(node.id, supersedes, str(expected_silo_id))
+            await create_supersession(commit_result.commitment_id, supersedes, str(expected_silo_id))
             result["supersedes"] = supersedes
         except SupersessionCycleError as e:
             return {
                 "error": "supersession_cycle",
                 "message": str(e),
-                "node_id": str(node.id),
+                "node_id": str(commit_result.commitment_id),
                 "supersedes": supersedes,
                 "hint": "Content-hash dedup returned a node already in the chain. "
                 "Use a different claim text or omit supersedes.",
@@ -619,13 +619,13 @@ async def _context_commit(
         if settings.contradiction_flagging_enabled:
             emb_result = await ctx_svc.graph_store.execute_query(
                 _GET_NODE_EMBEDDING,
-                {"node_id": str(node.id), "silo_id": str(expected_silo_id)},
+                {"node_id": str(commit_result.commitment_id), "silo_id": str(expected_silo_id)},
             )
             if emb_result and emb_result[0].get("embedding"):
                 contradiction_candidates = await maybe_flag_contradiction(
                     store=ctx_svc.graph_store,
                     silo_id=str(expected_silo_id),
-                    node_id=str(node.id),
+                    node_id=str(commit_result.commitment_id),
                     embedding=emb_result[0]["embedding"],
                 )
                 if contradiction_candidates:
