@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Generator
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -60,10 +61,23 @@ def mock_mcp_context(mock_mcp_auth_context):
 @pytest.fixture
 def mock_context_service():
     """Mock context service with common methods."""
+    from context_service.sage.transactions import StoreClaimResult, StoreMemoryResult
     from context_service.services.source_tier_resolver import SourceTier
 
     node = MagicMock()
     node.id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+    _claim_node_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+    _claim_result = StoreClaimResult(
+        node_id=_claim_node_id,
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+
+    _memory_node_id = uuid.UUID("00000000-0000-0000-0000-000000000001")
+    _memory_result = StoreMemoryResult(
+        node_id=_memory_node_id,
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
 
     svc = MagicMock()
     svc.store = AsyncMock(
@@ -74,6 +88,7 @@ def mock_context_service():
     svc.commit = AsyncMock(return_value=node)
     svc.commit_belief = AsyncMock(return_value=node)
     svc.provenance = AsyncMock(return_value=MagicMock(chain=[], root_sources=[]))
+    svc.promote_claim_to_fact = AsyncMock(return_value=None)
     svc.graph_store = MagicMock()
     svc.graph_store.execute_query = AsyncMock(return_value=[])
     svc.graph_store.execute_write = AsyncMock(return_value=None)
@@ -84,6 +99,14 @@ def mock_context_service():
         patch(
             "context_service.mcp.tools.context_store.resolve_source_tier",
             new=AsyncMock(return_value=(SourceTier.VALIDATED, "mock")),
+        ),
+        patch(
+            "context_service.mcp.tools.context_store.store_claim",
+            new=AsyncMock(return_value=(_claim_result, [])),
+        ),
+        patch(
+            "context_service.mcp.tools.context_store.store_memory",
+            new=AsyncMock(return_value=(_memory_result, [])),
         ),
     ):
         yield svc

@@ -345,7 +345,7 @@ async def _context_assert(
             return err
 
     try:
-        src_type = SourceType(source_type)
+        SourceType(source_type)
     except ValueError:
         return {
             "error": "invalid_source_type",
@@ -389,7 +389,6 @@ async def _context_assert(
             if result.node_id:
                 evidence_nodes.append(result.node_id)
 
-    scope = ScopeContext(org_id=auth.org_id, silo_id=expected_silo_id)
     _start = time.perf_counter()
     # Use validated node IDs if available, else fall back to raw refs
     evidence_refs = [f"node:{nid}" for nid in evidence_nodes] if evidence_nodes else evidence_list
@@ -404,18 +403,36 @@ async def _context_assert(
         )
         resolved_tier = tier_enum.value
 
-    node = await ctx_svc.assert_claim(
-        scope=scope,
-        claim=parsed_claim,
-        evidence=evidence_refs,
-        source_type=src_type,
-        confidence=confidence,
-        metadata=metadata,
-        tags=tags,
+    spo_kwargs: dict[str, str] = {}
+    if isinstance(parsed_claim, SPOClaim):
+        claim_text = f"{parsed_claim.subject} {parsed_claim.predicate} {parsed_claim.object}"
+        spo_kwargs = {
+            "subject": parsed_claim.subject,
+            "predicate": parsed_claim.predicate,
+            "object_value": parsed_claim.object,
+        }
+    else:
+        claim_text = parsed_claim
+
+    result, events = await store_claim(
+        store=ctx_svc.graph_store,
+        content=claim_text,
+        evidence_refs=evidence_refs,
+        silo_id=str(expected_silo_id),
         agent_id=auth.agent_id,
         source_tier=resolved_tier,
+        confidence=confidence,
+        tags=tags,
+        metadata=metadata,
+        supersedes=supersedes,
+        **spo_kwargs,
     )
+
+    for event in events:
+        await emit_reaction(event)
+
     record_store_latency(time.perf_counter() - _start, silo_id=expected_silo_id, layer="knowledge")
+    node_id = result.node_id
 
     promoted = False
     promoted_error: str | None = None
@@ -423,7 +440,7 @@ async def _context_assert(
         try:
             promotion_result = await ctx_svc.promote_claim_to_fact(
                 silo_id=str(expected_silo_id),
-                claim_id=str(node.id),
+                claim_id=str(node_id),
                 evidence_count=len(evidence_list),
             )
             if promotion_result is not None:
@@ -433,21 +450,8 @@ async def _context_assert(
             logger.warning(
                 "claim_assert_promotion_failed",
                 exc_info=True,
-                claim_id=str(node.id),
+                claim_id=str(node_id),
             )
-
-    if supersedes is not None:
-        try:
-            await create_supersession(node.id, supersedes, str(expected_silo_id))
-        except SupersessionCycleError as e:
-            return {
-                "error": "supersession_cycle",
-                "message": str(e),
-                "node_id": str(node.id),
-                "supersedes": supersedes,
-                "hint": "Content-hash dedup returned a node already in the chain. "
-                "Use a different claim text or omit supersedes.",
-            }
 
     # Fetch embedding once for both contradiction and affinity checks
     settings = get_settings()
@@ -456,7 +460,7 @@ async def _context_assert(
         try:
             emb_result = await ctx_svc.graph_store.execute_query(
                 _GET_NODE_EMBEDDING,
-                {"node_id": str(node.id), "silo_id": str(expected_silo_id)},
+                {"node_id": str(node_id), "silo_id": str(expected_silo_id)},
             )
             if emb_result and emb_result[0].get("embedding"):
                 node_embedding = emb_result[0]["embedding"]
@@ -472,7 +476,7 @@ async def _context_assert(
             contradiction_candidates = await maybe_flag_contradiction(
                 store=ctx_svc.graph_store,
                 silo_id=str(expected_silo_id),
-                node_id=str(node.id),
+                node_id=str(node_id),
                 embedding=node_embedding,
             )
         except Exception as exc:
@@ -487,7 +491,7 @@ async def _context_assert(
             collection_name = f"ctx_{expected_silo_id}"
             affinity_edges = await compute_affinities(
                 qdrant=raw_client,
-                source_id=node.id,
+                source_id=node_id,
                 embedding=node_embedding,
                 silo_id=str(expected_silo_id),
                 collection_name=collection_name,
@@ -500,10 +504,10 @@ async def _context_assert(
                     silo_id=str(expected_silo_id),
                 )
         except Exception as exc:
-            logger.warning("affinity_computation_failed", error=str(exc), node_id=str(node.id))
+            logger.warning("affinity_computation_failed", error=str(exc), node_id=str(node_id))
 
     response: dict[str, Any] = {
-        "node_id": str(node.id),
+        "node_id": str(node_id),
         "layer": "knowledge",
         "claim_type": claim_type,
         "evidence_status": "verified" if evidence_mode == "sync" else "pending",
