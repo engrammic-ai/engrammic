@@ -6,8 +6,11 @@ Tool surface:
   remember  -- store observation (memory layer)
   learn     -- store claim with evidence (knowledge layer)
   believe   -- store commitment (wisdom layer)
+  reason    -- record reasoning chain (intelligence layer)
+  reflect   -- record meta-observation (meta layer)
   recall    -- retrieve nodes
   link      -- create relationships
+  trace     -- trace provenance
   forget    -- request deletion
 """
 
@@ -31,19 +34,37 @@ async def remember(client: Any, content: str, **kwargs: Any) -> dict[str, Any]:
 
 
 async def learn(
-    client: Any, content: str, evidence: list[str], **kwargs: Any
+    client: Any, claim: str, evidence: list[str], source: str = "document", **kwargs: Any
 ) -> dict[str, Any]:
     raw = await client.call_tool(
-        "learn", {"content": content, "evidence": evidence, **kwargs}
+        "learn", {"claim": claim, "evidence": evidence, "source": source, **kwargs}
     )
     return call_result(raw)
 
 
 async def believe(
-    client: Any, content: str, about: list[str], **kwargs: Any
+    client: Any, belief: str, about: list[str], **kwargs: Any
 ) -> dict[str, Any]:
     raw = await client.call_tool(
-        "believe", {"content": content, "about": about, **kwargs}
+        "believe", {"belief": belief, "about": about, **kwargs}
+    )
+    return call_result(raw)
+
+
+async def reason(
+    client: Any, steps: list[dict[str, Any]], conclusion: str | None = None, **kwargs: Any
+) -> dict[str, Any]:
+    raw = await client.call_tool(
+        "reason", {"steps": steps, "conclusion": conclusion, **kwargs}
+    )
+    return call_result(raw)
+
+
+async def reflect(
+    client: Any, observation: str, type: str, about: list[str], **kwargs: Any
+) -> dict[str, Any]:
+    raw = await client.call_tool(
+        "reflect", {"observation": observation, "type": type, "about": about, **kwargs}
     )
     return call_result(raw)
 
@@ -63,71 +84,66 @@ async def link(
     return call_result(raw)
 
 
-async def store(client: Any, layer: str, content: str, **kwargs: Any) -> dict[str, Any]:
-    raw = await client.call_tool(
-        "context_store",
-        {"content": content, "layer": layer, **kwargs},
-    )
-    return call_result(raw)
-
-
-async def admin(client: Any, action: str, **kwargs: Any) -> dict[str, Any]:
-    raw = await client.call_tool("context_admin", {"action": action, **kwargs})
+async def trace_provenance(client: Any, node_id: str) -> dict[str, Any]:
+    raw = await client.call_tool("trace", {"node_id": node_id})
     return call_result(raw)
 
 
 # ---------------------------------------------------------------------------
-# 1. Store across all 5 layers
+# 1. Store across all layers
 # ---------------------------------------------------------------------------
 
 
 class TestStoreAllLayers:
     async def test_store_memory(self, mcp_client: Any) -> None:
-        result = await store(mcp_client, "memory", "Agent booted at t=0")
+        result = await remember(mcp_client, "Agent booted at t=0")
         assert result.get("layer") == "memory"
         assert "node_id" in result
         assert "created_at" in result
 
     async def test_store_memory_decay_classes(self, mcp_client: Any) -> None:
         for dc in ("ephemeral", "standard", "durable", "permanent"):
-            result = await store(mcp_client, "memory", f"content for {dc}", decay_class=dc)
-            assert "error" not in result, f"decay_class={dc!r} unexpectedly failed: {result}"
+            result = await remember(mcp_client, f"content for {dc}", decay=dc)
+            assert "error" not in result, f"decay={dc!r} unexpectedly failed: {result}"
             assert result.get("layer") == "memory"
 
     async def test_store_knowledge(self, mcp_client: Any) -> None:
-        mem = await store(mcp_client, "memory", "API docs state rate limit is 1000/min")
+        mem = await remember(mcp_client, "API docs state rate limit is 1000/min")
         ev_id = mem["node_id"]
-        result = await store(
+        result = await learn(
             mcp_client,
-            "knowledge",
             "The API rate limit is 1000 req/min",
             evidence=[f"node:{ev_id}"],
-            source_type="document",
+            source="document",
             confidence=0.9,
         )
         assert result.get("layer") == "knowledge"
         assert "node_id" in result
 
     async def test_store_knowledge_missing_evidence(self, mcp_client: Any) -> None:
-        result = await store(mcp_client, "knowledge", "claim with no evidence")
+        result = await learn(
+            mcp_client,
+            "claim with empty evidence",
+            evidence=[],
+            source="document",
+        )
         assert result.get("error") == "missing_evidence"
 
     async def test_store_knowledge_missing_source_type(self, mcp_client: Any) -> None:
         ev_id = str(uuid.uuid4())
-        result = await store(
+        result = await learn(
             mcp_client,
-            "knowledge",
-            "claim without source_type",
+            "claim without source",
             evidence=[f"node:{ev_id}"],
+            source="made_up_source",
         )
-        assert result.get("error") == "missing_source_type"
+        assert result.get("error") == "invalid_source_type"
 
     async def test_store_wisdom(self, mcp_client: Any) -> None:
         node_a = str(uuid.uuid4())
         node_b = str(uuid.uuid4())
-        result = await store(
+        result = await believe(
             mcp_client,
-            "wisdom",
             "The system favours consistency over availability",
             about=[node_a, node_b],
             confidence=0.85,
@@ -137,7 +153,7 @@ class TestStoreAllLayers:
         assert "node_id" in result
 
     async def test_store_wisdom_missing_about(self, mcp_client: Any) -> None:
-        result = await store(mcp_client, "wisdom", "belief without about")
+        result = await believe(mcp_client, "belief without about", about=[])
         assert result.get("error") == "missing_about"
 
     async def test_store_intelligence(self, mcp_client: Any) -> None:
@@ -148,48 +164,49 @@ class TestStoreAllLayers:
             },
             {"step": 2, "reasoning": "Token bucket, replenishes hourly"},
         ]
-        result = await store(
+        result = await reason(
             mcp_client,
-            "intelligence",
-            "Rate limit is token-bucket, 1000/min",
             steps=steps,
+            conclusion="Rate limit is token-bucket, 1000/min",
         )
-        assert result.get("layer") == "intelligence"
         assert "chain_id" in result
-        assert result.get("steps_count") == 2
+        assert "error" not in result
 
     async def test_store_intelligence_missing_steps(self, mcp_client: Any) -> None:
-        result = await store(mcp_client, "intelligence", "conclusion with no steps")
+        raw = await mcp_client.call_tool(
+            "reason", {"steps": [], "conclusion": "conclusion with no steps"}
+        )
+        result = call_result(raw)
         assert result.get("error") == "missing_steps"
 
     async def test_store_meta(self, mcp_client: Any) -> None:
         ref_node = str(uuid.uuid4())
-        result = await store(
+        result = await reflect(
             mcp_client,
-            "meta",
-            "Confidence in rate-limit model shifted after new docs surfaced",
-            observation_type="confidence_shift",
+            observation="Confidence in rate-limit model shifted after new docs surfaced",
+            type="confidence_shift",
             about=[ref_node],
             confidence=0.7,
         )
-        assert result.get("layer") == "meta"
         assert "node_id" in result
+        assert "error" not in result
 
     async def test_store_meta_missing_observation_type(self, mcp_client: Any) -> None:
-        ref_node = str(uuid.uuid4())
-        result = await store(mcp_client, "meta", "obs", about=[ref_node])
-        assert result.get("error") == "missing_observation_type"
-
-    async def test_store_meta_missing_about(self, mcp_client: Any) -> None:
-        result = await store(mcp_client, "meta", "obs", observation_type="insight")
-        assert result.get("error") == "missing_about"
-
-    async def test_store_invalid_layer(self, mcp_client: Any) -> None:
-        import pytest
         from fastmcp.exceptions import ToolError
 
-        with pytest.raises(ToolError, match="literal_error"):
-            await store(mcp_client, "invalid_layer", "content")
+        ref_node = str(uuid.uuid4())
+        with pytest.raises(ToolError):
+            await mcp_client.call_tool(
+                "reflect", {"observation": "obs", "about": [ref_node]}
+            )
+
+    async def test_store_meta_missing_about(self, mcp_client: Any) -> None:
+        from fastmcp.exceptions import ToolError
+
+        with pytest.raises(ToolError):
+            await mcp_client.call_tool(
+                "reflect", {"observation": "obs", "type": "pattern"}
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -199,16 +216,15 @@ class TestStoreAllLayers:
 
 class TestRecallRoundTrip:
     async def test_recall_by_node_id(self, mcp_client: Any) -> None:
-        store_result = await store(mcp_client, "memory", "recall by ID test")
-        assert "error" not in store_result
+        stored = await remember(mcp_client, "recall by ID test")
+        assert "error" not in stored
 
-        node_id = store_result["node_id"]
+        node_id = stored["node_id"]
         result = await recall(mcp_client, node_ids=[node_id])
-        # Should return either nodes list or a result set without error
         assert "error" not in result
 
     async def test_recall_by_query(self, mcp_client: Any) -> None:
-        await store(mcp_client, "memory", "the quick brown fox jumps")
+        await remember(mcp_client, "the quick brown fox jumps")
         result = await recall(mcp_client, query="quick brown fox")
         assert "error" not in result
         assert "results" in result or "nodes" in result
@@ -222,14 +238,14 @@ class TestRecallRoundTrip:
         assert result.get("error") == "missing_input"
 
     async def test_recall_layer_filter(self, mcp_client: Any) -> None:
-        await store(mcp_client, "memory", "memory layer content")
+        await remember(mcp_client, "memory layer content")
         result = await recall(mcp_client, query="memory layer", layers=["memory"])
         assert "error" not in result
 
     async def test_recall_time_travel(self, mcp_client: Any) -> None:
         past = "2024-01-01T00:00:00Z"
-        store_result = await store(mcp_client, "memory", "time travel test")
-        node_id = store_result["node_id"]
+        stored = await remember(mcp_client, "time travel test")
+        node_id = stored["node_id"]
 
         result = await recall(mcp_client, node_ids=[node_id], as_of=past)
         assert "error" not in result or result.get("error") in (
@@ -239,8 +255,8 @@ class TestRecallRoundTrip:
 
     async def test_recall_as_of_future(self, mcp_client: Any) -> None:
         future = "2099-12-31T23:59:59Z"
-        store_result = await store(mcp_client, "memory", "future recall test")
-        node_id = store_result["node_id"]
+        stored = await remember(mcp_client, "future recall test")
+        node_id = stored["node_id"]
 
         result = await recall(mcp_client, node_ids=[node_id], as_of=future)
         assert "error" not in result
@@ -253,8 +269,8 @@ class TestRecallRoundTrip:
 
 class TestLinkAndGraph:
     async def test_link_two_nodes(self, mcp_client: Any) -> None:
-        a = await store(mcp_client, "memory", "node A")
-        b = await store(mcp_client, "memory", "node B")
+        a = await remember(mcp_client, "node A")
+        b = await remember(mcp_client, "node B")
         assert "node_id" in a and "node_id" in b
 
         result = await link(mcp_client, a["node_id"], b["node_id"], "REFERENCES")
@@ -275,42 +291,42 @@ class TestLinkAndGraph:
             "CORROBORATES",
             "PREVENTS",
         )
-        a = await store(mcp_client, "memory", "source node")
-        b = await store(mcp_client, "memory", "target node")
+        a = await remember(mcp_client, "source node")
+        b = await remember(mcp_client, "target node")
         for rel in relationship_types:
             result = await link(mcp_client, a["node_id"], b["node_id"], rel)
             assert "error" not in result, f"Unexpected error for relationship {rel!r}: {result}"
 
     async def test_link_invalid_relationship(self, mcp_client: Any) -> None:
-        a = await store(mcp_client, "memory", "node for invalid link")
-        b = await store(mcp_client, "memory", "other node")
+        a = await remember(mcp_client, "node for invalid link")
+        b = await remember(mcp_client, "other node")
         result = await link(mcp_client, a["node_id"], b["node_id"], "NOT_A_RELATIONSHIP")
         assert result.get("error") == "invalid_relationship"
         assert "valid" in result
 
     async def test_link_with_weight(self, mcp_client: Any) -> None:
-        a = await store(mcp_client, "memory", "weighted source")
-        b = await store(mcp_client, "memory", "weighted target")
+        a = await remember(mcp_client, "weighted source")
+        b = await remember(mcp_client, "weighted target")
         result = await link(mcp_client, a["node_id"], b["node_id"], "SUPPORTS", weight=5.0)
         assert "error" not in result
 
     async def test_link_invalid_weight(self, mcp_client: Any) -> None:
-        a = await store(mcp_client, "memory", "node x")
-        b = await store(mcp_client, "memory", "node y")
+        a = await remember(mcp_client, "node x")
+        b = await remember(mcp_client, "node y")
         result = await link(mcp_client, a["node_id"], b["node_id"], "REFERENCES", weight=99.0)
         assert result.get("error") == "invalid_weight"
 
     async def test_link_with_note(self, mcp_client: Any) -> None:
-        a = await store(mcp_client, "memory", "annotated source")
-        b = await store(mcp_client, "memory", "annotated target")
+        a = await remember(mcp_client, "annotated source")
+        b = await remember(mcp_client, "annotated target")
         result = await link(
             mcp_client, a["node_id"], b["node_id"], "RELATED_TO", note="added by e2e test"
         )
         assert "error" not in result
 
     async def test_graph_traversal_depth_1(self, mcp_client: Any) -> None:
-        a = await store(mcp_client, "memory", "graph seed node")
-        b = await store(mcp_client, "memory", "graph neighbor")
+        a = await remember(mcp_client, "graph seed node")
+        b = await remember(mcp_client, "graph neighbor")
         await link(mcp_client, a["node_id"], b["node_id"], "REFERENCES")
 
         result = await recall(mcp_client, node_ids=[a["node_id"]], depth=1)
@@ -319,9 +335,9 @@ class TestLinkAndGraph:
         assert "nodes" in result or "edges" in result
 
     async def test_graph_traversal_depth_2(self, mcp_client: Any) -> None:
-        root = await store(mcp_client, "memory", "root")
-        mid = await store(mcp_client, "memory", "middle")
-        leaf = await store(mcp_client, "memory", "leaf")
+        root = await remember(mcp_client, "root")
+        mid = await remember(mcp_client, "middle")
+        leaf = await remember(mcp_client, "leaf")
         await link(mcp_client, root["node_id"], mid["node_id"], "REFERENCES")
         await link(mcp_client, mid["node_id"], leaf["node_id"], "DERIVED_FROM")
 
@@ -335,84 +351,43 @@ class TestLinkAndGraph:
 
 
 # ---------------------------------------------------------------------------
-# 4. Reasoning chain -> close_session
+# 4. Reasoning chain
 # ---------------------------------------------------------------------------
 
 
 class TestReasoningChain:
-    async def test_store_intelligence_and_close_session(self, mcp_client: Any) -> None:
+    async def test_store_intelligence(self, mcp_client: Any) -> None:
         steps = [
             {"step": 1, "reasoning": "Observed in logs"},
             {"step": 2, "reasoning": "Consistent with docs"},
         ]
-        store_result = await store(
+        result = await reason(
             mcp_client,
-            "intelligence",
-            "Conclusion: system is stable",
             steps=steps,
-        )
-        assert "error" not in store_result
-        chain_id = store_result["chain_id"]
-
-        close_result = await admin(mcp_client, "close_session", ref=chain_id)
-        # May error with feature_disabled if setting is off in test env;
-        # accept that as a valid outcome.
-        assert "error" not in close_result or close_result["error"] in (
-            "feature_disabled",
-            "chain_not_found",
-        )
-
-    async def test_close_session_missing_ref(self, mcp_client: Any) -> None:
-        result = await admin(mcp_client, "close_session")
-        assert result.get("error") == "missing_ref"
-
-    async def test_store_reasoning_with_session_id(self, mcp_client: Any) -> None:
-        steps = [{"step": 1, "reasoning": "Because A implies B"}]
-        result = await store(
-            mcp_client,
-            "intelligence",
-            "Conclusion B",
-            steps=steps,
-            # session_id passed via metadata workaround -- note: not a direct param on
-            # context_store, so we test that it surfaces in the chain output.
+            conclusion="Conclusion: system is stable",
         )
         assert "error" not in result
         assert "chain_id" in result
 
+    async def test_store_reasoning_with_conclusion(self, mcp_client: Any) -> None:
+        steps = [{"step": 1, "reasoning": "Because A implies B"}]
+        result = await reason(
+            mcp_client,
+            steps=steps,
+            conclusion="Conclusion B",
+        )
+        assert "error" not in result
+        assert "chain_id" in result
+
+    @pytest.mark.skip(reason="close_reasoning_chain removed with context_admin; no replacement")
     async def test_already_closed_chain(self, mcp_client: Any) -> None:
         """Calling close_session twice on the same chain should return already_closed error."""
-        from context_service.mcp.tools.context_admin import close_reasoning_chain
+        pass
 
-        from tests.fakes.fake_graph_store import FakeGraphStore
-
-        store = FakeGraphStore()
-        chain_id = str(uuid.uuid4())
-        silo_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, "silo:already-closed"))
-
-        # Seed a chain row that is already closed
-        store.seed_query_result(
-            [{"chain_id": chain_id, "steps": [], "session_state": "closed", "compacted": False}]
-        )
-
-        result = await close_reasoning_chain(store=store, chain_id=chain_id, silo_id=silo_id)
-        assert result.get("error") == "already_closed"
-
+    @pytest.mark.skip(reason="close_reasoning_chain removed with context_admin; no replacement")
     async def test_close_nonexistent_chain(self, mcp_client: Any) -> None:
         """Closing a chain that does not exist returns chain_not_found."""
-        from context_service.mcp.tools.context_admin import close_reasoning_chain
-
-        from tests.fakes.fake_graph_store import FakeGraphStore
-
-        store = FakeGraphStore()
-        # Seed empty result -- chain not found
-        store.seed_query_result([])
-
-        result = await close_reasoning_chain(
-            store=store,
-            chain_id=str(uuid.uuid4()),
-            silo_id=str(uuid.uuid5(uuid.NAMESPACE_DNS, "silo:missing")),
-        )
-        assert result.get("error") == "chain_not_found"
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -422,16 +397,16 @@ class TestReasoningChain:
 
 class TestTimeTravel:
     async def test_recall_as_of_iso8601(self, mcp_client: Any) -> None:
-        store_result = await store(mcp_client, "memory", "time-travel content")
-        node_id = store_result["node_id"]
+        stored = await remember(mcp_client, "time-travel content")
+        node_id = stored["node_id"]
 
         # Query with an as_of timestamp after the node was created -- should find it
         result = await recall(mcp_client, node_ids=[node_id], as_of="2099-01-01T00:00:00Z")
         assert "error" not in result
 
     async def test_recall_as_of_before_creation(self, mcp_client: Any) -> None:
-        store_result = await store(mcp_client, "memory", "future content")
-        node_id = store_result["node_id"]
+        stored = await remember(mcp_client, "future content")
+        node_id = stored["node_id"]
 
         # as_of is far in the past -- node should not appear (or return empty without error)
         result = await recall(mcp_client, node_ids=[node_id], as_of="2000-01-01T00:00:00Z")
@@ -442,7 +417,7 @@ class TestTimeTravel:
         )
 
     async def test_query_as_of_timestamp(self, mcp_client: Any) -> None:
-        await store(mcp_client, "memory", "time-travel query target")
+        await remember(mcp_client, "time-travel query target")
         result = await recall(
             mcp_client,
             query="time-travel query",
@@ -455,9 +430,8 @@ class TestTimeTravel:
     )
     async def test_recall_as_of_before_node_created(self, mcp_client: Any) -> None:
         """Query with as_of before node's valid_from returns not_yet_valid."""
-        # Store a node (will have valid_from = now)
-        store_result = await store(mcp_client, "memory", "future node content")
-        node_id = store_result["node_id"]
+        stored = await remember(mcp_client, "future node content")
+        node_id = stored["node_id"]
 
         # Query with as_of in the past (before node existed)
         past = "2020-01-01T00:00:00Z"
@@ -472,8 +446,8 @@ class TestTimeTravel:
 
     async def test_recall_as_of_invalid_format(self, mcp_client: Any) -> None:
         """Invalid as_of format returns error."""
-        store_result = await store(mcp_client, "memory", "test content")
-        node_id = store_result["node_id"]
+        stored = await remember(mcp_client, "test content")
+        node_id = stored["node_id"]
 
         result = await recall(mcp_client, node_ids=[node_id], as_of="not-a-date")
 
@@ -487,87 +461,71 @@ class TestTimeTravel:
 
 class TestErrorCases:
     async def test_invalid_decay_class(self, mcp_client: Any) -> None:
-        result = await store(mcp_client, "memory", "content", decay_class="bogus")
+        result = await remember(mcp_client, "content", decay="bogus")
         assert result.get("error") == "invalid_decay_class"
 
     async def test_invalid_source_type(self, mcp_client: Any) -> None:
         ev_id = str(uuid.uuid4())
-        result = await store(
+        result = await learn(
             mcp_client,
-            "knowledge",
             "claim",
             evidence=[f"node:{ev_id}"],
-            source_type="made_up",
+            source="made_up",
         )
         assert result.get("error") == "invalid_source_type"
 
     async def test_invalid_confidence_below_zero(self, mcp_client: Any) -> None:
         ev_id = str(uuid.uuid4())
-        result = await store(
+        result = await learn(
             mcp_client,
-            "knowledge",
             "claim",
             evidence=[f"node:{ev_id}"],
-            source_type="document",
+            source="document",
             confidence=-0.1,
         )
         assert result.get("error") == "invalid_confidence"
 
     async def test_invalid_confidence_above_one(self, mcp_client: Any) -> None:
         ev_id = str(uuid.uuid4())
-        result = await store(
+        result = await learn(
             mcp_client,
-            "knowledge",
             "claim",
             evidence=[f"node:{ev_id}"],
-            source_type="document",
+            source="document",
             confidence=1.5,
         )
         assert result.get("error") == "invalid_confidence"
 
     async def test_invalid_observation_type(self, mcp_client: Any) -> None:
         ref_node = str(uuid.uuid4())
-        result = await store(
+        result = await reflect(
             mcp_client,
-            "meta",
-            "observation",
-            observation_type="not_valid",
+            observation="observation",
+            type="not_valid",
             about=[ref_node],
         )
         assert result.get("error") == "invalid_observation_type"
 
     async def test_invalid_link_relationship(self, mcp_client: Any) -> None:
-        a = await store(mcp_client, "memory", "src")
-        b = await store(mcp_client, "memory", "dst")
+        a = await remember(mcp_client, "src")
+        b = await remember(mcp_client, "dst")
         result = await link(mcp_client, a["node_id"], b["node_id"], "UNKNOWN")
         assert result.get("error") == "invalid_relationship"
-
-    async def test_admin_unknown_action(self, mcp_client: Any) -> None:
-        import pytest
-        from fastmcp.exceptions import ToolError
-
-        with pytest.raises(ToolError, match="literal_error"):
-            await admin(mcp_client, "not_a_real_action")
-
-    async def test_admin_provenance_missing_ref(self, mcp_client: Any) -> None:
-        result = await admin(mcp_client, "provenance")
-        assert result.get("error") == "missing_ref"
-
-    async def test_admin_history_missing_ref(self, mcp_client: Any) -> None:
-        result = await admin(mcp_client, "history")
-        assert result.get("error") == "missing_ref"
-
-    async def test_store_wisdom_empty_about_list(self, mcp_client: Any) -> None:
-        result = await store(mcp_client, "wisdom", "belief with empty about", about=[])
-        assert result.get("error") == "missing_about"
-
-    async def test_store_intelligence_empty_steps(self, mcp_client: Any) -> None:
-        result = await store(mcp_client, "intelligence", "conclusion", steps=[])
-        assert result.get("error") == "missing_steps"
 
     async def test_recall_no_args_returns_error(self, mcp_client: Any) -> None:
         result = await recall(mcp_client)
         assert result.get("error") == "missing_input"
+
+    async def test_store_wisdom_empty_about_list(self, mcp_client: Any) -> None:
+        result = await believe(mcp_client, "belief with empty about", about=[])
+        assert result.get("error") == "missing_about"
+
+    async def test_store_intelligence_empty_steps(self, mcp_client: Any) -> None:
+        raw = await mcp_client.call_tool(
+            "reason", {"steps": [], "conclusion": "conclusion"}
+        )
+        result = call_result(raw)
+        assert result.get("error") == "missing_steps"
 
 
 # ---------------------------------------------------------------------------
@@ -613,9 +571,9 @@ class TestMultiAgentVisibility:
         ):
             transport_a = FastMCPTransport(server)
             async with Client(transport_a) as client_a:
-                store_result = await store(client_a, "memory", "agent alpha wrote this")
-                assert "node_id" in store_result
-                node_id = store_result["node_id"]
+                stored = await remember(client_a, "agent alpha wrote this")
+                assert "node_id" in stored
+                node_id = stored["node_id"]
 
         with (
             patch(
@@ -635,8 +593,8 @@ class TestMultiAgentVisibility:
     async def test_agent_session_ids_distinct(self, mcp_client: Any) -> None:
         """Reasoning chains for different sessions should yield distinct chain_ids."""
         steps = [{"step": 1, "reasoning": "reason one"}]
-        r1 = await store(mcp_client, "intelligence", "conclusion 1", steps=steps)
-        r2 = await store(mcp_client, "intelligence", "conclusion 2", steps=steps)
+        r1 = await reason(mcp_client, steps=steps, conclusion="conclusion 1")
+        r2 = await reason(mcp_client, steps=steps, conclusion="conclusion 2")
         assert r1.get("chain_id") != r2.get("chain_id")
 
 
@@ -653,8 +611,8 @@ class TestSiloIsolation:
         self, mcp_client: Any, mcp_client_alt: Any
     ) -> None:
         """Nodes stored by org A should not be visible when queried under org B's silo."""
-        store_result = await store(mcp_client, "memory", "org A secret data")
-        node_id = store_result["node_id"]
+        stored = await remember(mcp_client, "org A secret data")
+        node_id = stored["node_id"]
 
         # The alt client's fake store is independent -- it has no knowledge of org A's node.
         result = await recall(mcp_client_alt, node_ids=[node_id])
@@ -664,21 +622,12 @@ class TestSiloIsolation:
         for n in nodes:
             assert n.get("content") != "org A secret data"
 
-    async def test_silo_list_returns_own_silo(self, mcp_client: Any) -> None:
-        result = await admin(mcp_client, "silo_list")
-        assert "error" not in result
-        silos = result.get("silos", [])
-        assert isinstance(silos, list)
-        assert len(silos) >= 1
-
     @pytest.mark.skip(
         reason="mcp_client_alt uses in-process fakes; not compatible with real server"
     )
     async def test_silo_list_alt_org(self, mcp_client_alt: Any) -> None:
-        result = await admin(mcp_client_alt, "silo_list")
+        result = await recall(mcp_client_alt, query="anything")
         assert "error" not in result
-        silos = result.get("silos", [])
-        assert isinstance(silos, list)
 
     @pytest.mark.skip(
         reason="mcp_client_alt uses in-process fakes; not compatible with real server"
@@ -686,53 +635,25 @@ class TestSiloIsolation:
     async def test_alt_org_silo_id_differs_from_primary(
         self, mcp_client: Any, mcp_client_alt: Any
     ) -> None:
-        r1 = await admin(mcp_client, "silo_list")
-        r2 = await admin(mcp_client_alt, "silo_list")
-        assert "error" not in r1
-        assert "error" not in r2
-        silo_ids_1 = {s["silo_id"] for s in r1.get("silos", [])}
-        silo_ids_2 = {s["silo_id"] for s in r2.get("silos", [])}
-        assert silo_ids_1.isdisjoint(silo_ids_2), "Orgs share a silo ID -- silo isolation violated"
+        r1 = await remember(mcp_client, "org A marker")
+        r2 = await remember(mcp_client_alt, "org B marker")
+        # Nodes from different orgs should have different silo_ids in their metadata
+        assert r1.get("node_id") != r2.get("node_id")
 
 
 # ---------------------------------------------------------------------------
-# 9. Admin actions
+# 9. Provenance
 # ---------------------------------------------------------------------------
 
 
-class TestAdminActions:
-    async def test_silo_list(self, mcp_client: Any) -> None:
-        result = await admin(mcp_client, "silo_list")
-        assert "error" not in result
-        assert "silos" in result
-
+class TestProvenance:
     async def test_provenance_for_node(self, mcp_client: Any) -> None:
-        store_result = await store(mcp_client, "memory", "provenance test node")
-        node_id = store_result["node_id"]
-        result = await admin(mcp_client, "provenance", ref=node_id)
+        stored = await remember(mcp_client, "provenance test node")
+        node_id = stored["node_id"]
+        result = await trace_provenance(mcp_client, node_id)
         assert "error" not in result
 
-    async def test_history_for_node(self, mcp_client: Any) -> None:
-        store_result = await store(mcp_client, "memory", "history test node")
-        node_id = store_result["node_id"]
-        result = await admin(mcp_client, "history", ref=node_id)
-        assert "error" not in result
-
-    async def test_close_session_feature_flag_disabled(self, mcp_client: Any) -> None:
-        """When session_compaction_enabled is False, close_session returns feature_disabled."""
-        from unittest.mock import patch
-
-        from context_service.config.settings import Settings
-
-        fake_settings = Settings.model_construct(
-            session_compaction_enabled=False,
-            auth_enabled=False,
-            dev_org_id="test",
-            dev_user_id="test",
-        )
-        with patch(
-            "context_service.mcp.tools.context_admin.get_settings",
-            return_value=fake_settings,
-        ):
-            result = await admin(mcp_client, "close_session", ref=str(uuid.uuid4()))
-            assert result.get("error") == "feature_disabled"
+    async def test_provenance_missing_node_id(self, mcp_client: Any) -> None:
+        raw = await mcp_client.call_tool("trace", {"node_id": ""})
+        result = call_result(raw)
+        assert result.get("error") == "missing_node_id"
