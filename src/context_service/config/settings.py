@@ -43,10 +43,6 @@ class CustodianSettings(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     enabled: bool = Field(default=False, description="Master gate for the Custodian subsystem")
-    auto_publish_after_pass: bool = Field(
-        default=False,
-        description="If true, findings are published automatically at end of pass",
-    )
 
     cluster_min_members_for_deep_pass: int = Field(
         default=5,
@@ -72,11 +68,9 @@ class CustodianSettings(BaseModel):
 
     redis_trace_ttl_days: int = Field(default=30)
     concurrent_visit_limit: int = Field(default=4)
-    per_visit_timeout_seconds: int = Field(default=120)
 
     flash_model: str = Field(default="google-vertex:gemini-3.1-flash-lite")
     pro_model: str = Field(default="google-vertex:gemini-3.1-pro")
-    pro_escalation_ab_sample_ratio: float = Field(default=0.10)
 
     min_edge_confidence: float = Field(
         default=0.7,
@@ -724,15 +718,6 @@ class SecurityConfig(BaseModel):
     )
 
 
-class BearConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="ignore")
-
-    api_key: SecretStr | None = None
-    api_url: str = "https://api.thetokencompany.com/v1/compress"
-    timeout_ms: int = 200
-    enabled: bool = False
-
-
 class StripeConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -743,12 +728,6 @@ class StripeConfig(BaseModel):
     meter_event_name: str = "context_service_retrieval"
     mock: bool = False
     default_tier: str = "team"
-
-
-class ExternalConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="ignore")
-
-    bear: BearConfig = Field(default_factory=BearConfig)
 
 
 class PatternConfig(BaseModel):
@@ -882,10 +861,6 @@ def _load_models_config() -> ModelsConfig:
     return load_models_config()
 
 
-class FeatureFlags(BaseModel):
-    """Feature flags for gradual rollout."""
-
-
 class UsageRetentionConfig(BaseModel):
     """Configuration for ToolUsage row retention."""
 
@@ -929,7 +904,6 @@ class Settings(BaseSettings):
     clustering: ClusteringConfig = Field(default_factory=ClusteringConfig)
     extraction: ExtractionConfig = Field(default_factory=ExtractionConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
-    external: ExternalConfig = Field(default_factory=ExternalConfig)
     stripe: StripeConfig = Field(default_factory=StripeConfig)
     custodian: CustodianSettings = Field(default_factory=CustodianSettings)
     retrieval_tuning: RetrievalTuning = Field(default_factory=RetrievalTuning)
@@ -949,7 +923,6 @@ class Settings(BaseSettings):
     evidence_enforcement: EvidenceEnforcementConfig = Field(
         default_factory=EvidenceEnforcementConfig
     )
-    feature_flags: FeatureFlags = Field(default_factory=FeatureFlags)
     usage: UsageRetentionConfig = Field(default_factory=UsageRetentionConfig)
 
     # =========================================================================
@@ -964,10 +937,6 @@ class Settings(BaseSettings):
     @property
     def is_development(self) -> bool:
         return self.environment == "development"
-
-    @property
-    def is_staging(self) -> bool:
-        return self.environment == "staging"
 
     @property
     def is_production(self) -> bool:

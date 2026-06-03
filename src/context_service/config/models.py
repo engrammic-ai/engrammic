@@ -128,7 +128,7 @@ def load_models_config() -> ModelsConfig:
     """Load ModelsConfig from config/models.yaml.
 
     Environment variable MODELS__TIER overrides the tier from yaml.
-    Cached after first call. Use clear_models_config_cache() to reload.
+    Cached after first call. Call load_models_config.cache_clear() to reload.
     """
     import os
 
@@ -141,8 +141,3 @@ def load_models_config() -> ModelsConfig:
         data["tier"] = env_tier
 
     return ModelsConfig(**data)
-
-
-def clear_models_config_cache() -> None:
-    """Clear the cached ModelsConfig. Call before reload_settings()."""
-    load_models_config.cache_clear()

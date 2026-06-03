@@ -21,10 +21,6 @@ class TraceContext:
 _trace_var: ContextVar[TraceContext] = ContextVar("context_service_trace", default=TraceContext())  # noqa: B039
 
 
-def current_trace() -> TraceContext:
-    return _trace_var.get()
-
-
 @asynccontextmanager
 async def trace_scope(**overrides: str | None) -> AsyncIterator[TraceContext]:
     prev = _trace_var.get()
@@ -36,12 +32,4 @@ async def trace_scope(**overrides: str | None) -> AsyncIterator[TraceContext]:
         _trace_var.reset(token)
 
 
-def update_current_trace(**overrides: str | None) -> TraceContext:
-    """Mutate the current-task trace context in place (no reset)."""
-    prev = _trace_var.get()
-    new = replace(prev, **{k: v for k, v in overrides.items() if v is not None})
-    _trace_var.set(new)
-    return new
-
-
-__all__ = ["TraceContext", "current_trace", "trace_scope", "update_current_trace"]
+__all__ = ["TraceContext", "trace_scope"]

@@ -7,12 +7,6 @@ from context_service.llm.litellm_provider import (
     build_litellm_provider,
 )
 
-# Backward-compat aliases for error types
-AnthropicError = LiteLLMError
-GeminiError = LiteLLMError
-OpenAIError = LiteLLMError
-VertexGeminiError = LiteLLMError
-
 # Backward-compat aliases for provider classes (all map to LiteLLMProvider)
 AnthropicProvider = LiteLLMProvider
 GeminiProvider = LiteLLMProvider
@@ -43,11 +37,7 @@ __all__ = [
     "LiteLLMError",
     # Backward-compat
     "AnthropicProvider",
-    "AnthropicError",
     "GeminiProvider",
-    "GeminiError",
     "OpenAIProvider",
-    "OpenAIError",
     "VertexGeminiProvider",
-    "VertexGeminiError",
 ]

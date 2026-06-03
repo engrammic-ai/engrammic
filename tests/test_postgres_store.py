@@ -2,14 +2,7 @@
 
 from __future__ import annotations
 
-import pytest
-
 from context_service.engine.postgres_store import PostgresStore
-
-
-@pytest.fixture
-def postgres_store() -> PostgresStore:
-    return PostgresStore()
 
 
 def test_postgres_store_has_required_methods() -> None:
