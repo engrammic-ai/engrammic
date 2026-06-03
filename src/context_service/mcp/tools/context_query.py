@@ -210,6 +210,8 @@ async def _context_query(
     search_mode: Literal["hybrid", "dense", "sparse"] = "hybrid",
     bypass_cache: bool = False,
     max_age_seconds: int | None = None,
+    min_threshold: float | None = None,
+    bypass_threshold: bool = False,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
 
@@ -383,7 +385,12 @@ async def _context_query(
     if silo_for_thresholds is not None:
         threshold_overrides = silo_for_thresholds.metadata.get("retrieval_thresholds") or None
 
-    result_dicts, below_threshold = apply_threshold_filter(raw_result_dicts, threshold_overrides)
+    result_dicts, below_threshold = apply_threshold_filter(
+        raw_result_dicts,
+        threshold_overrides,
+        min_threshold=min_threshold,
+        bypass=bypass_threshold,
+    )
     retrieval_quality, suggestion = compute_retrieval_quality(
         result_dicts, below_threshold, fallback_used=rerank_fallback
     )
