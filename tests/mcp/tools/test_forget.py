@@ -3,107 +3,95 @@
 
 from __future__ import annotations
 
+import uuid
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+from context_service.sage.transactions import ForgetResult, InvariantViolation, NodeState
+
+
+def _make_forget_result(
+    node_id: str = "node-1",
+    cascade_count: int = 0,
+) -> ForgetResult:
+    now = datetime.now(UTC)
+    return ForgetResult(
+        node_id=uuid.UUID(node_id) if len(node_id) == 36 else uuid.uuid4(),
+        state=NodeState.TOMBSTONED,
+        tombstoned_at=now,
+        cancel_window_expires=now + timedelta(hours=1),
+        cascade_count=cascade_count,
+    )
 
 
 @pytest.fixture
 def mock_auth():
     auth = MagicMock()
     auth.org_id = "test-org"
+    auth.agent_id = "test-agent"
     auth.session_id = "test-session"
     return auth
 
 
 @pytest.fixture
-def mock_graph_store():
-    store = AsyncMock()
-    store.execute_query.return_value = [{"id": "node-1", "downstream_count": 0}]
-    return store
-
-
-@pytest.fixture
-def mock_ctx_svc(mock_graph_store):
+def mock_ctx_svc():
     svc = MagicMock()
-    svc.graph_store = mock_graph_store
-    svc._qdrant = None
+    svc.graph_store = AsyncMock()
     svc._cache = AsyncMock()
     return svc
 
 
-@pytest.fixture
-def mock_forget_service_factory(mock_graph_store):
-    """Patch ForgetService to control its behavior in tests."""
-    return mock_graph_store
-
-
 @pytest.mark.asyncio
-async def test_forget_tombstones_node(mock_auth, mock_ctx_svc, mock_graph_store):
+async def test_forget_tombstones_node(mock_auth, mock_ctx_svc):
     """forget tool should tombstone the requested node."""
-    forget_svc = AsyncMock()
-    forget_svc.forget.return_value = {
-        "status": "tombstoned",
-        "node_id": "node-1",
-        "downstream_references": 0,
-        "tombstoned_at": "2026-01-01T00:00:00+00:00",
-    }
+    node_uuid = uuid.uuid4()
+    forget_result = _make_forget_result(str(node_uuid))
 
     with (
         patch(
             "context_service.mcp.tools.forget.get_mcp_auth_context",
             new=AsyncMock(return_value=mock_auth),
         ),
-        patch(
-            "context_service.mcp.tools.forget.track_tool_usage",
-            new=AsyncMock(),
-        ),
+        patch("context_service.mcp.tools.forget.track_tool_usage", new=AsyncMock()),
         patch(
             "context_service.mcp.tools.forget.get_context_service",
             return_value=mock_ctx_svc,
         ),
         patch(
-            "context_service.mcp.tools.forget.ForgetService",
-            return_value=forget_svc,
+            "context_service.mcp.tools.forget.brain_forget",
+            new=AsyncMock(return_value=(forget_result, [])),
         ),
+        patch("context_service.mcp.tools.forget.emit_reaction", new=AsyncMock()),
     ):
         from context_service.mcp.tools.forget import _forget_impl
 
-        result = await _forget_impl("node-1", reason="no longer needed", cascade=False)
+        result = await _forget_impl(str(node_uuid), reason="no longer needed", cascade=False)
 
     assert result["status"] == "tombstoned"
-    assert result["node_id"] == "node-1"
-    forget_svc.forget.assert_awaited_once()
-    # Reason is passed through to ForgetService.forget
-    call_args = forget_svc.forget.call_args
-    assert (
-        call_args.args[2] == "no longer needed"
-        or call_args.kwargs.get("reason") == "no longer needed"
-    )
+    assert result["node_id"] == str(node_uuid)
+    assert "tombstoned_at" in result
 
 
 @pytest.mark.asyncio
 async def test_forget_not_found(mock_auth, mock_ctx_svc):
     """forget tool returns not_found when the node does not exist."""
-    forget_svc = AsyncMock()
-    forget_svc.forget.return_value = {"status": "not_found", "node_id": "missing"}
-
     with (
         patch(
             "context_service.mcp.tools.forget.get_mcp_auth_context",
             new=AsyncMock(return_value=mock_auth),
         ),
-        patch(
-            "context_service.mcp.tools.forget.track_tool_usage",
-            new=AsyncMock(),
-        ),
+        patch("context_service.mcp.tools.forget.track_tool_usage", new=AsyncMock()),
         patch(
             "context_service.mcp.tools.forget.get_context_service",
             return_value=mock_ctx_svc,
         ),
         patch(
-            "context_service.mcp.tools.forget.ForgetService",
-            return_value=forget_svc,
+            "context_service.mcp.tools.forget.brain_forget",
+            new=AsyncMock(
+                side_effect=InvariantViolation("NODE_NOT_FOUND", "Node not found")
+            ),
         ),
     ):
         from context_service.mcp.tools.forget import _forget_impl
@@ -115,84 +103,90 @@ async def test_forget_not_found(mock_auth, mock_ctx_svc):
 
 
 @pytest.mark.asyncio
-async def test_forget_cascade_follows_downstream_references(mock_auth, mock_graph_store):
-    """cascade=True should also tombstone downstream nodes that reference the target."""
-    # ForgetService.forget uses execute_write for FORGET_NODE mutations
-    mock_graph_store.execute_write.side_effect = [
-        # First call: ForgetService.forget for node-1
-        [{"id": "node-1", "downstream_count": 2}],
-        # Second call: ForgetService.forget for node-2 (cascade)
-        [{"id": "node-2", "downstream_count": 0}],
-        # Third call: ForgetService.forget for node-3 (cascade)
-        [{"id": "node-3", "downstream_count": 0}],
-    ]
-    # execute_query is used only for _FIND_DOWNSTREAM_NODES
-    mock_graph_store.execute_query.side_effect = [
-        # _FIND_DOWNSTREAM_NODES returns two referencing nodes
-        [{"id": "node-2"}, {"id": "node-3"}],
-    ]
-
-    ctx_svc = MagicMock()
-    ctx_svc.graph_store = mock_graph_store
-    ctx_svc._qdrant = None
-    ctx_svc._cache = AsyncMock()
-
+async def test_forget_already_tombstoned_returns_not_found(mock_auth, mock_ctx_svc):
+    """forget tool maps ALREADY_TOMBSTONED to not_found."""
     with (
         patch(
             "context_service.mcp.tools.forget.get_mcp_auth_context",
             new=AsyncMock(return_value=mock_auth),
         ),
-        patch(
-            "context_service.mcp.tools.forget.track_tool_usage",
-            new=AsyncMock(),
-        ),
-        patch(
-            "context_service.mcp.tools.forget.get_context_service",
-            return_value=ctx_svc,
-        ),
-    ):
-        from context_service.mcp.tools.forget import _forget_impl
-
-        result = await _forget_impl("node-1", cascade=True)
-
-    assert result["status"] == "tombstoned"
-    assert "cascade_forgotten" in result
-    assert set(result["cascade_forgotten"]) == {"node-2", "node-3"}
-
-
-@pytest.mark.asyncio
-async def test_forget_no_cascade_when_not_requested(mock_auth, mock_ctx_svc, mock_graph_store):
-    """cascade=False should not query for downstream nodes."""
-    forget_svc = AsyncMock()
-    forget_svc.forget.return_value = {
-        "status": "tombstoned",
-        "node_id": "node-1",
-        "downstream_references": 5,
-        "tombstoned_at": "2026-01-01T00:00:00+00:00",
-    }
-
-    with (
-        patch(
-            "context_service.mcp.tools.forget.get_mcp_auth_context",
-            new=AsyncMock(return_value=mock_auth),
-        ),
-        patch(
-            "context_service.mcp.tools.forget.track_tool_usage",
-            new=AsyncMock(),
-        ),
+        patch("context_service.mcp.tools.forget.track_tool_usage", new=AsyncMock()),
         patch(
             "context_service.mcp.tools.forget.get_context_service",
             return_value=mock_ctx_svc,
         ),
         patch(
-            "context_service.mcp.tools.forget.ForgetService",
-            return_value=forget_svc,
+            "context_service.mcp.tools.forget.brain_forget",
+            new=AsyncMock(
+                side_effect=InvariantViolation("ALREADY_TOMBSTONED", "Node is already tombstoned")
+            ),
         ),
     ):
         from context_service.mcp.tools.forget import _forget_impl
 
         result = await _forget_impl("node-1", cascade=False)
 
-    assert "cascade_forgotten" not in result
-    # graph_store.execute_query should not be called for downstream discovery
-    mock_graph_store.execute_query.assert_not_called()
+    assert result["status"] == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_forget_cascade_marks_staleness(mock_auth, mock_ctx_svc):
+    """cascade=True triggers CASCADE_STALENESS on dependents via brain_forget."""
+    node_uuid = uuid.uuid4()
+    forget_result = _make_forget_result(str(node_uuid), cascade_count=2)
+
+    with (
+        patch(
+            "context_service.mcp.tools.forget.get_mcp_auth_context",
+            new=AsyncMock(return_value=mock_auth),
+        ),
+        patch("context_service.mcp.tools.forget.track_tool_usage", new=AsyncMock()),
+        patch(
+            "context_service.mcp.tools.forget.get_context_service",
+            return_value=mock_ctx_svc,
+        ),
+        patch(
+            "context_service.mcp.tools.forget.brain_forget",
+            new=AsyncMock(return_value=(forget_result, [])),
+        ) as mock_brain_forget,
+        patch("context_service.mcp.tools.forget.emit_reaction", new=AsyncMock()),
+    ):
+        from context_service.mcp.tools.forget import _forget_impl
+
+        result = await _forget_impl(str(node_uuid), cascade=True)
+
+    assert result["status"] == "tombstoned"
+    assert result.get("cascade_count") == 2
+    call_kwargs = mock_brain_forget.call_args.kwargs
+    assert call_kwargs["cascade"] is True
+
+
+@pytest.mark.asyncio
+async def test_forget_no_cascade_when_not_requested(mock_auth, mock_ctx_svc):
+    """cascade=False passes cascade=False to brain_forget."""
+    node_uuid = uuid.uuid4()
+    forget_result = _make_forget_result(str(node_uuid))
+
+    with (
+        patch(
+            "context_service.mcp.tools.forget.get_mcp_auth_context",
+            new=AsyncMock(return_value=mock_auth),
+        ),
+        patch("context_service.mcp.tools.forget.track_tool_usage", new=AsyncMock()),
+        patch(
+            "context_service.mcp.tools.forget.get_context_service",
+            return_value=mock_ctx_svc,
+        ),
+        patch(
+            "context_service.mcp.tools.forget.brain_forget",
+            new=AsyncMock(return_value=(forget_result, [])),
+        ) as mock_brain_forget,
+        patch("context_service.mcp.tools.forget.emit_reaction", new=AsyncMock()),
+    ):
+        from context_service.mcp.tools.forget import _forget_impl
+
+        result = await _forget_impl(str(node_uuid), cascade=False)
+
+    assert "cascade_count" not in result
+    call_kwargs = mock_brain_forget.call_args.kwargs
+    assert call_kwargs["cascade"] is False
