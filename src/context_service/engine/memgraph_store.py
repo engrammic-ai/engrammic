@@ -255,7 +255,7 @@ class MemgraphStore(EAGKnowledgeStore):
             stale=n.get("stale", False),
             version=version,
             created_at=_parse_dt(n["created_at"]),
-            updated_at=_parse_dt(n["updated_at"]),
+            updated_at=_parse_dt(n.get("updated_at") or n["created_at"]),
             last_accessed_at=_parse_dt(n["last_accessed_at"])
             if n.get("last_accessed_at")
             else None,

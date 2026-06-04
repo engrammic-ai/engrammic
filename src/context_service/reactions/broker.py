@@ -96,7 +96,15 @@ class DeadLetterMiddleware(TaskiqMiddleware):
                     },
                 }
             )
-            await self._dlq_broker.kick(dlq_message)
+            dlq_bytes = dlq_message.model_dump_json().encode()
+
+            class _DLQPayload:
+                __slots__ = ("message",)
+
+                def __init__(self, data: bytes) -> None:
+                    self.message = data
+
+            await self._dlq_broker.kick(_DLQPayload(dlq_bytes))
             logger.warning(
                 "task_sent_to_dlq",
                 task_name=message.task_name,
