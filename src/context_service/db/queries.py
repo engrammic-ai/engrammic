@@ -1850,6 +1850,16 @@ RETURN h.id AS id,
        h.properties.state AS state
 """
 
+GET_HYPOTHESIS_BY_ID = """
+MATCH (h:WorkingHypothesis {id: $hypothesis_id})
+WHERE h.silo_id = $silo_id
+RETURN h.id AS id,
+       h.content AS content,
+       h.properties.confidence AS confidence,
+       h.properties.crystallized AS crystallized,
+       h.properties.state AS state
+"""
+
 GET_HYPOTHESIS_ABOUT_REFS = """
 MATCH (h:WorkingHypothesis {id: $hypothesis_id, silo_id: $silo_id})-[:ABOUT]->(a)
 RETURN a.id AS id, a.properties.state AS state

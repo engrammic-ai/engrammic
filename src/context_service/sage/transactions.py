@@ -1246,22 +1246,31 @@ async def _validate_hypothesis(
     store: HyperGraphStore,
     hypothesis_id: str,
     silo_id: str,
-    session_id: str,
+    session_id: str | None,
 ) -> dict[str, Any]:
     """Validate hypothesis exists, belongs to session, not crystallized, not tombstoned."""
     from context_service.db import queries as q
 
-    results = await store.execute_query(
-        q.GET_HYPOTHESIS_FOR_CRYSTALLIZE,
-        {
-            "hypothesis_id": hypothesis_id,
-            "silo_id": silo_id,
-            "session_id": session_id,
-        },
-    )
+    params: dict[str, Any] = {
+        "hypothesis_id": hypothesis_id,
+        "silo_id": silo_id,
+    }
+
+    if session_id is not None:
+        params["session_id"] = session_id
+        results = await store.execute_query(
+            q.GET_HYPOTHESIS_FOR_CRYSTALLIZE,
+            params,
+        )
+    else:
+        results = await store.execute_query(
+            q.GET_HYPOTHESIS_BY_ID,
+            params,
+        )
 
     if not results:
-        return {"error": "HYPOTHESIS_NOT_FOUND", "message": "Hypothesis not found or wrong session"}
+        msg = "Hypothesis not found" if session_id is None else "Hypothesis not found or wrong session"
+        return {"error": "HYPOTHESIS_NOT_FOUND", "message": msg}
 
     row = results[0]
     if row.get("state") == NodeState.TOMBSTONED.value:
@@ -1285,7 +1294,7 @@ async def crystallize(
     hypothesis_id: str,
     silo_id: str,
     agent_id: str,
-    session_id: str,
+    session_id: str | None = None,
     *,
     emit: bool = True,
 ) -> tuple[CrystallizeResult, list[ReactionEvent]]:
