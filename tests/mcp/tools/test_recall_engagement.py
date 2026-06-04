@@ -33,6 +33,7 @@ def _patch_recall_base(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
         top_k: int,
         bypass_cache: bool = False,
         max_age_seconds: int | None = None,
+        min_threshold: float | None = None,
     ) -> dict[str, object]:
         captured["silo_id"] = silo_id
         return {

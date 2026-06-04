@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 @rate_limited("commit")
 async def _commit_impl(
     belief_ids: list[str],
-    reason: str | None = None,
+    _reason: str | None = None,
 ) -> dict[str, Any]:
     """Implementation for commit tool."""
     auth = await get_mcp_auth_context()
@@ -36,13 +36,15 @@ async def _commit_impl(
     errors: list[dict[str, Any]] = []
     all_events: list[Any] = []
 
+    agent_id = auth.agent_id or auth.org_id
+
     for belief_id in belief_ids:
         try:
             result, events = await crystallize(
                 store=ctx_svc.graph_store,
                 hypothesis_id=belief_id,
                 silo_id=silo_id,
-                agent_id=auth.agent_id,
+                agent_id=agent_id,
                 session_id=auth.session_id,
             )
             committed.append(str(result.commitment_id))

@@ -26,6 +26,7 @@ def _patch(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
         top_k: int,
         bypass_cache: bool = False,
         max_age_seconds: int | None = None,
+        min_threshold: float | None = None,
     ) -> dict[str, object]:
         captured["top_k"] = top_k
         return {"results": []}
