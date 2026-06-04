@@ -57,3 +57,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:3000/server_info')"
 
 ENTRYPOINT ["/entrypoint.sh"]
+CMD ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-m", "context_service.pipelines.definitions"]
