@@ -25,11 +25,11 @@ status env="beta":
     gcloud compute ssh engrammic-{{env}}-stateful --zone={{zone}} --project={{project}} --tunnel-through-iap \
         --command="docker ps --format 'table {{{{.Names}}}}\t{{{{.Status}}}}'"
 
-# Tunnel services to localhost (Memgraph, Qdrant, Redis, Dagster, Postgres)
+# Tunnel services to localhost (Memgraph 7687, Qdrant, Redis, Dagster 3000, Postgres). Memgraph binds 0.0.0.0 so the memgraph-lab container can reach it.
 [group('ops')]
 tunnel env="beta":
     gcloud compute ssh engrammic-{{env}}-stateful --zone={{zone}} --project={{project}} --tunnel-through-iap \
-        -- -NL 7687:localhost:7687 -L 6333:localhost:6333 -L 6334:localhost:6334 -L 6379:localhost:6379 -L 3000:localhost:3000 -L 5432:10.162.0.3:5432
+        -- -N -L 0.0.0.0:7687:localhost:7687 -L 6333:localhost:6333 -L 6334:localhost:6334 -L 6379:localhost:6379 -L 3000:localhost:3000 -L 5432:10.162.0.3:5432
 
 # Start stateful instance
 [group('ops')]
@@ -41,10 +41,13 @@ start env="beta":
 stop env="beta":
     gcloud compute instances stop engrammic-{{env}}-stateful --zone={{zone}} --project={{project}}
 
-# Run Memgraph Lab locally (connects to tunneled or local Memgraph on 7687)
+# Run Memgraph Lab UI locally against beta. Run `just tunnel beta` concurrently first. UI: http://localhost:3002
 [group('ops')]
 memgraph-lab:
-    docker run --rm -p 3002:3000 --add-host=host.docker.internal:host-gateway -e QUICK_CONNECT_MG_HOST=host.docker.internal -e QUICK_CONNECT_MG_PORT=7687 memgraph/lab
+    docker run --rm -p 3002:3000 \
+        --add-host=host.docker.internal:host-gateway \
+        -e QUICK_CONNECT_MG_HOST=host.docker.internal -e QUICK_CONNECT_MG_PORT=7687 \
+        memgraph/lab
 
 # =============================================================================
 # Observability

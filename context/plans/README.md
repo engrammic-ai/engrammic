@@ -2,62 +2,29 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-05-31)
+## Current state (2026-06-04)
 
-**Shipped:**
+**Recent:**
 - v2.36 Self-Serve Org Provisioning - Auto-provision personal org for no-org signups (PR #55)
-- v2.35 Multi-Format Skill Installation — Cursor .mdc and Gemini GEMINI.md formats for installer CLI
-- v2.34 Harness-Agnostic Enforcement — Write-time affinity, tick() enhancement, session state, nudges
-- v2.33 Codebase Audit Fixes — Orphan jobs, commitment label, mcp-client sync, dead code cleanup
-- v2.32 Dagster Pipeline Deps Fix — Add missing asset dependencies for correct execution order (custodian, synthesizer, groundskeeper)
-- v2.31 PostgreSQL Telemetry — Replace SigNoz/OTEL with PostgreSQL tables, in-process buffer, Dagster jobs
-- v2.30 Self-Hosted Distribution Phase 2 — Version deprecation warnings, /versions endpoint, quickstart docs
-- v2.29 Self-Hosted Distribution Phase 1 — License validation, Docker bundle, installer CLI (docker/doctor/scale commands)
-- v2.28 Engagement Plan E — Hooks and Distribution (session ID config, engage hook, skill, AGENTS.md, docs)
-- v2.27 Engagement Plan D — Hard Checkpoint (touch counter, soft-to-hard escalation, empty results on hard mode)
-- v2.26 Engagement Plan C — Recall Surfacing (engagement field in recall, dismiss/tick verbs)
-- v2.25 Engagement Plan B — SAGE Prerequisites (sage.validator, Contradiction/StaleCommitment markers, inline flagging, Redis index)
-- v2.24 Telemetry & Observability (SigNoz infra, OTEL instrumentation for cache/recall/epistemic health)
-- v2.23 Verb Promotion Plan A (accept/reject tools promoted to agent-facing in reasoning profile)
-- v2.22 Rate Limiting (tiered rate limiting for MCP tools and REST routes)
-- v2.21 Beacon Telemetry Pipeline (Metabase dashboards, replaces Cloud Trace)
-- v2.20 Documentation Site (docs.engrammic.ai)
-- v2.19 Closed Beta Deployment (Cloud SQL, StatefulHost, CI/CD, DNS)
-- v2.18 MCP OAuth + Middleware (OAuth flow for Cursor/Claude Code, FastMCP error/logging/timing middleware, 20+ client allowlist)
-- v2.17 Wire Unpopulated Fields (optional schema fields in recall responses)
-- v2.16 MCP Connection Stability (error boundaries + Direct VPC Egress)
-- v2.15 Supersession Head Pointer (O(1) chain lookups via tail_id/head_id pointers)
-- v2.14 Recall Optimization Phase 4 (similarity cache for semantic near-matches)
-- v2.13 Recall Optimization Phase 3 (Qdrant scalar quantization, Matryoshka 512-dim validation)
-- v2.12 Recall Optimization Phase 2 (tiered result cache, version-based invalidation, bypass_cache/max_age_seconds params)
-- v2.11 Recall Optimization Phase 1 (embedding cache + TEI backend, 500ms -> 50ms)
-- v2.10 GCP Deployment (Pulumi infra, Cloud Run API, GCE stateful host)
-- v2.9 Review Followup (P0 security/reliability fixes, N+1 batching, LLM timeout/retry)
-- v2.8 Content-Hash Dedup (full SHA256 hashes, dedup index, claim dedup tests)
-- v2.7 MCP Tool Surface Redesign (intent-based tools with YAML config and profiles)
-- v2.6 Semantic Reranking (Vertex AI reranking + LLM query expansion for entailment)
-- v2.5 SAGE Job Consolidation (replaced 8 sensors with 3 scheduled jobs, pending work queries)
-- v2.4 Heat Diffusion (Dagster asset, edge heat propagation, prewarm sweep)
-- Self-Hosted Telemetry (two-tier beacon system, install ID, collector, docs)
-- v2.3 Telemetry Expansion (OTEL metrics for all storage backends, LLM tokens, chain reuse)
-- v2.2 Reasoning Chain Applicability (three-layer matching, DTW, implicit feedback)
-- v2.1 Custodian Identity Split (4 identities with full LLM wiring + Dagster jobs/sensors)
-- v2 Architecture Fixes (error envelopes, outbox pattern, raw Cypher mixin, hydration registry, ProposedBelief flow)
-- v1.7 Auto-Tagging (tag config, cosine matching, Dagster pipelines)
-- v1.6 Hybrid Storage (Postgres+Memgraph saga, consolidation, crystallization, GC)
-- v1.5 Agent Identity (agent nodes, reflection filtering, chain continuity, per-silo config)
-- v1.4.1 MCP QoL (consolidated to 10 tools: store, recall, link, admin, belief_state, update_belief, crystallize, accept_belief, reject_belief, skills)
-- v1d Signals Enhancement (heat ranking, unified decay, write events)
-- OSS Adoption Helpers (manifesto, quickstart READMEs for primitives/engine/mcp-client)
-- MCP Client Scaffold (engrammic-mcp repo shipped)
-- Pipeline Validation (heat, extraction, pattern detection validated)
+- v2.35 Multi-Format Skill Installation - Cursor .mdc and Gemini GEMINI.md formats
+- v2.34 Harness-Agnostic Enforcement - Write-time affinity, tick() enhancement, session state
+- v2.33 Codebase Audit Fixes - Orphan jobs, commitment label, mcp-client sync
+- v2.32-v2.1 (see archive for full history)
 
 ## Active plans
 
 | Plan | Description | Status |
 |------|-------------|--------|
-| [2026-06-01-brain-architecture.md](./2026-06-01-brain-architecture.md) | Reactive brain architecture replacing SAGE: 20 transactions, 8 invariants, write-time enforcement, event-driven reactions | Ready to execute |
-| [2026-05-30-join-engrammic-onboarding-plan.md](./2026-05-30-join-engrammic-onboarding-plan.md) ([design](./2026-05-30-join-engrammic-onboarding-design.md)) | join.engrammic.ai onboarding app: install hero + searchable harness catalog, docs-quickstart slim, post-signup CTA re-point (web/join, own Cloud Run) | Ready to execute |
+| [2026-06-04-heat-utilization-phase1.md](./2026-06-04-heat-utilization-phase1.md) ([design](./2026-06-04-heat-utilization-design.md)) | Brain path decay floor + tier-driven summaries for Somnus benchmark | Ready to execute |
+| [2026-06-01-brain-architecture.md](./2026-06-01-brain-architecture.md) | Reactive brain architecture: 20 transactions, 8 invariants | Phases 2-7 complete, cutover blocked |
+| [2026-06-03-brain-cutover-and-quality-fixes.md](./2026-06-03-brain-cutover-and-quality-fixes.md) | Wire MCP to brain transactions, coverage reporting | Blocked on invariant fixes |
+
+## Pending (not started)
+
+| Plan | Description | Status |
+|------|-------------|--------|
+| [2026-05-30-join-engrammic-onboarding-plan.md](./2026-05-30-join-engrammic-onboarding-plan.md) ([design](./2026-05-30-join-engrammic-onboarding-design.md)) | join.engrammic.ai onboarding app | Ready to execute |
+| [2026-05-30-evidence-verification.md](./2026-05-30-evidence-verification.md) | Evidence verification via Nango | Ready to execute |
 | [2026-05-20-self-hosted-rest-api-phase1.md](./2026-05-20-self-hosted-rest-api-phase1.md) | Self-hosted REST API: auth + Memory/Knowledge endpoints | Ready to execute |
 
 ## Future work
