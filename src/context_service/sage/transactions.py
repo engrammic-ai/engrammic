@@ -620,7 +620,8 @@ async def store_memory(
         silo_id: $silo_id,
         content: $content,
         created_at: $created_at,
-        properties: $props
+        properties: $props,
+        committed: true
     }})
     RETURN n.id AS id
     """
@@ -794,7 +795,8 @@ async def store_claim(
         silo_id: $silo_id,
         content: $content,
         created_at: $created_at,
-        properties: $props
+        properties: $props,
+        committed: true
     })
     RETURN n.id AS id
     """
