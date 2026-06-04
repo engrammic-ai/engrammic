@@ -4,8 +4,15 @@ from __future__ import annotations
 
 import asyncio
 import uuid
+import warnings
 from datetime import UTC, datetime
 from typing import Any
+
+warnings.warn(
+    "context_crystallize module is deprecated. Use sage.transactions.crystallize instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 async def _crystallize_one(
