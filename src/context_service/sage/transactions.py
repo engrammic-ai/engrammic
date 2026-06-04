@@ -614,14 +614,19 @@ async def store_memory(
         props["tags"] = tags
 
     # Build Cypher with literal label (labels can't be parameterized in Cypher)
+    # Must include all fields expected by _node_from_record in memgraph_store.py
     cypher = f"""
     CREATE (n:Node:{label} {{
         id: $id,
+        type: $type,
         silo_id: $silo_id,
         content: $content,
         created_at: $created_at,
+        updated_at: $updated_at,
+        valid_from: $valid_from,
         properties: $props,
-        committed: true
+        committed: true,
+        version: 1
     }})
     RETURN n.id AS id
     """
@@ -630,9 +635,12 @@ async def store_memory(
         cypher,
         {
             "id": str(node_id),
+            "type": label,
             "silo_id": silo_id,
             "content": content,
             "created_at": created_at.isoformat(),
+            "updated_at": created_at.isoformat(),
+            "valid_from": created_at.isoformat(),
             "props": props,
         },
     )
@@ -792,11 +800,15 @@ async def store_claim(
     cypher = """
     CREATE (n:Node:Claim {
         id: $id,
+        type: $type,
         silo_id: $silo_id,
         content: $content,
         created_at: $created_at,
+        updated_at: $updated_at,
+        valid_from: $valid_from,
         properties: $props,
-        committed: true
+        committed: true,
+        version: 1
     })
     RETURN n.id AS id
     """
@@ -805,9 +817,12 @@ async def store_claim(
         cypher,
         {
             "id": str(node_id),
+            "type": "Claim",
             "silo_id": silo_id,
             "content": content,
             "created_at": created_at.isoformat(),
+            "updated_at": created_at.isoformat(),
+            "valid_from": created_at.isoformat(),
             "props": props,
         },
     )
