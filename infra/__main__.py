@@ -122,7 +122,7 @@ context_service = ContextServiceRun(
         else f"https://{env}.engrammic.ai",
         # Telemetry beacon (URL set via config, secret from Pulumi secrets)
         "TELEMETRY__BEACON_SECRET": config.get_secret("beacon_secret") or "",
-        "TELEMETRY__BEACON_URL": f"https://tel.engrammic.ai/v1/beacon"
+        "TELEMETRY__BEACON_URL": "https://tel.engrammic.ai/v1/beacon"
         if env in ("beta", "prod")
         else "",
         # Feature flags

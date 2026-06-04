@@ -27,18 +27,16 @@ from context_service.models.mcp import (
     SourceType,
     SPOClaim,
 )
-from context_service.services.models import ScopeContext, derive_silo_id
-from context_service.services.silo import validate_silo_ownership
 from context_service.reactions.events import emit_reaction
 from context_service.sage.transactions import (
     commit as brain_commit,
-    crystallize,
-    forget as brain_forget,
-    link as brain_link,
-    revise_belief,
+)
+from context_service.sage.transactions import (
     store_claim,
     store_memory,
 )
+from context_service.services.models import ScopeContext, derive_silo_id
+from context_service.services.silo import validate_silo_ownership
 from context_service.services.source_tier_resolver import resolve_source_tier
 
 # Query to get embedding for contradiction check

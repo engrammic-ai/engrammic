@@ -10,7 +10,8 @@ from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.server import get_context_service, get_mcp_auth_context, track_tool_usage
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.reactions.events import emit_reaction
-from context_service.sage.transactions import InvariantViolation, forget as brain_forget
+from context_service.sage.transactions import InvariantViolation
+from context_service.sage.transactions import forget as brain_forget
 from context_service.services.models import derive_silo_id
 from context_service.telemetry.metrics import record_mcp_tool
 

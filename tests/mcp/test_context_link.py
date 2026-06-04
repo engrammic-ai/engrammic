@@ -10,7 +10,6 @@ import pytest
 from context_service.sage.transactions import (
     BrainError,
     CrossSiloViolation,
-    CycleError,
     LinkResult,
     LinkType,
 )

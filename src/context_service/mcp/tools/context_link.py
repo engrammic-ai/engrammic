@@ -17,6 +17,8 @@ from context_service.sage.transactions import (
     CrossSiloViolation,
     CycleError,
     LinkType,
+)
+from context_service.sage.transactions import (
     link as brain_link,
 )
 from context_service.services.models import derive_silo_id
