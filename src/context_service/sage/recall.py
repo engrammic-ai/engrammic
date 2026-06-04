@@ -8,13 +8,15 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 import structlog
 
+from context_service.config.settings import get_settings
 from context_service.sage.epistemology import ppr_cache
+from context_service.signals.freshness import compute_freshness
 from context_service.sage.transactions import ClusterState, NodeState, SynthesisState
 
 if TYPE_CHECKING:
@@ -139,7 +141,18 @@ def compute_recall_score(node: dict[str, Any], similarity: float, heat: float = 
             age_days = 0.0
 
     if layer == Layer.MEMORY:
-        layer_score = similarity * gaussian_decay(age_days)
+        settings = get_settings()
+        # Reuse existing age_days calculation - derive datetime for compute_freshness
+        # age_days is already computed from created_at at lines 132-139
+        now = datetime.now(UTC)
+        if age_days <= 0:
+            freshness = 1.0
+        else:
+            # Reconstruct created_at from age_days to call compute_freshness
+            created_at_dt = now - timedelta(days=age_days)
+            freshness = compute_freshness(created_at_dt, now, sigma_days=MEMORY_DECAY_SIGMA)
+        weight = settings.freshness_weight
+        layer_score = similarity * ((1.0 - weight) + weight * freshness)
     elif layer == Layer.KNOWLEDGE:
         corroboration_count = int(node.get("corroboration_count", 0))
         corroboration_boost = (
