@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
-from collections.abc import Generator
+from collections.abc import Callable, Coroutine, Generator
 from contextlib import contextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import dagster as dg
 from pydantic import PrivateAttr
@@ -29,18 +29,20 @@ if TYPE_CHECKING:
     from context_service.llm.base import LLMProvider
 
 
-def _close_async(coro: object) -> None:
-    # asyncio.run() raises RuntimeError if a loop is already running (Dagster runs
-    # teardown from within its own event loop). Submit the close to a fresh thread
-    # that gets its own loop; block until it completes so the resource is released.
+def _close_async(close_fn: Callable[[], Coroutine[Any, Any, None]]) -> None:
+    """Close an async resource from sync teardown context.
+
+    Args:
+        close_fn: A callable that returns the close coroutine (e.g. `driver.close`
+            NOT `driver.close()`). The coroutine must be created inside the thread
+            to avoid cross-loop Future binding errors.
+    """
 
     async def _safe_close() -> None:
-        # Wrap the close in try/except to handle drivers that fail during
-        # event loop teardown (e.g. neo4j raising "Event loop is closed").
         try:
-            await coro  # type: ignore[misc]
+            await close_fn()
         except RuntimeError as e:
-            if "Event loop is closed" not in str(e):
+            if "Event loop is closed" not in str(e) and "different loop" not in str(e):
                 raise
 
     try:
@@ -97,7 +99,7 @@ class PostgresResource(dg.ConfigurableResource):  # type: ignore[type-arg]
         if self._pool is not None:
             pool = self._pool
             self._pool = None
-            _close_async(pool.close())
+            _close_async(pool.close)
 
 
 class MemgraphResource(dg.ConfigurableResource):  # type: ignore[type-arg]
@@ -142,7 +144,7 @@ class MemgraphResource(dg.ConfigurableResource):  # type: ignore[type-arg]
         if self._driver is not None:
             driver = self._driver
             self._driver = None
-            _close_async(driver.close())
+            _close_async(driver.close)
 
 
 class RedisResource(dg.ConfigurableResource):  # type: ignore[type-arg]
@@ -169,7 +171,7 @@ class RedisResource(dg.ConfigurableResource):  # type: ignore[type-arg]
         if self._client is not None:
             client = self._client
             self._client = None
-            _close_async(client.aclose())
+            _close_async(client.aclose)
 
 
 class QdrantResource(dg.ConfigurableResource):  # type: ignore[type-arg]
@@ -213,7 +215,7 @@ class QdrantResource(dg.ConfigurableResource):  # type: ignore[type-arg]
         if self._client is not None:
             client = self._client
             self._client = None
-            _close_async(client.close())
+            _close_async(client.close)
 
 
 class LLMResource(dg.ConfigurableResource):  # type: ignore[type-arg]
@@ -238,7 +240,7 @@ class LLMResource(dg.ConfigurableResource):  # type: ignore[type-arg]
         if self._llm is not None:
             llm = self._llm
             self._llm = None
-            _close_async(llm.close())
+            _close_async(llm.close)
 
 
 class EmbeddingResource(dg.ConfigurableResource):  # type: ignore[type-arg]
@@ -255,7 +257,7 @@ class EmbeddingResource(dg.ConfigurableResource):  # type: ignore[type-arg]
         if self._service is not None:
             svc = self._service
             self._service = None
-            _close_async(svc.close())
+            _close_async(svc.close)
 
 
 def build_default_resources() -> dict[str, dg.ConfigurableResource]:  # type: ignore[type-arg]
