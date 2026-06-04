@@ -43,8 +43,8 @@ async def _fetch_chain_steps(
 _SUMMARY_MAX_CHARS = 200
 
 
-def _project_node_without_content(node: dict[str, Any]) -> dict[str, Any]:
-    """Project a node dict to {node_id, layer, summary, created_at, confidence}.
+def _project_node_without_content(node: dict[str, Any], include_expandable: bool = False) -> dict[str, Any]:
+    """Project a node dict to {node_id, layer, summary, created_at, confidence, tier}.
 
     `summary` falls back to the first 200 chars of `content` when no
     pre-computed summary is present. Error/sentinel entries are passed
@@ -64,7 +64,11 @@ def _project_node_without_content(node: dict[str, Any]) -> dict[str, Any]:
         "summary": summary,
         "created_at": node.get("created_at"),
         "confidence": node.get("confidence"),
+        "tier": node.get("tier", "COLD"),
+        "relevance_score": node.get("relevance_score"),
     }
+    if include_expandable:
+        projected["expandable"] = True
     if "steps" in node:
         projected["steps"] = node["steps"]
     if "reflections" in node:
@@ -79,6 +83,41 @@ def _strip_content(response: dict[str, Any]) -> dict[str, Any]:
     if isinstance(response.get("results"), list):
         response["results"] = [_project_node_without_content(r) for r in response["results"]]
     return response
+
+
+def _apply_tier_content_policy(
+    response: dict[str, Any],
+    include_content: bool | None,
+) -> dict[str, Any]:
+    """Apply tier-based content policy to response nodes.
+
+    - include_content=True: return full content for all nodes
+    - include_content=False: return summary for all nodes
+    - include_content=None: HOT/WARM get content, COLD gets summary
+
+    Returns a new dict to avoid mutating the input.
+    """
+    if include_content is True:
+        return response
+    if include_content is False:
+        return _strip_content(response)
+
+    # Tier-based logic for include_content=None - return copy to avoid mutation
+    result = dict(response)
+
+    def process_node(node: dict[str, Any]) -> dict[str, Any]:
+        if "node_id" not in node or "error" in node:
+            return node
+        tier = node.get("tier", "COLD")
+        if tier in ("HOT", "WARM"):
+            return node
+        return _project_node_without_content(node, include_expandable=True)
+
+    if isinstance(response.get("nodes"), list):
+        result["nodes"] = [process_node(n) for n in response["nodes"]]
+    if isinstance(response.get("results"), list):
+        result["results"] = [process_node(r) for r in response["results"]]
+    return result
 
 
 async def _fetch_pending_proposals(silo_id: str, limit: int = 20) -> list[dict[str, Any]]:
@@ -117,7 +156,7 @@ async def _context_recall(
     include_reflections: bool = False,
     reflections_agent_id: str | None = None,
     include_steps: bool = False,
-    include_content: bool = True,
+    include_content: bool | None = None,
     include_proposals: bool = False,
     bypass_cache: bool = False,
     max_age_seconds: int | None = None,
@@ -149,8 +188,7 @@ async def _context_recall(
                     if nid in steps_by_id:
                         node["steps"] = steps_by_id[nid]
 
-        if not include_content:
-            response = _strip_content(response)
+        response = _apply_tier_content_policy(response, include_content)
         if include_proposals:
             response["pending_proposals"] = await _fetch_pending_proposals(silo_id)
         return response
@@ -162,8 +200,7 @@ async def _context_recall(
             max_depth=depth,
             layers=layers,
         )
-        if not include_content:
-            response = _strip_content(response)
+        response = _apply_tier_content_policy(response, include_content)
         if include_proposals:
             response["pending_proposals"] = await _fetch_pending_proposals(silo_id)
         return response
@@ -181,8 +218,7 @@ async def _context_recall(
             min_threshold=min_threshold,
             bypass_threshold=is_wildcard,
         )
-        if not include_content:
-            response = _strip_content(response)
+        response = _apply_tier_content_policy(response, include_content)
         if include_proposals:
             response["pending_proposals"] = await _fetch_pending_proposals(silo_id)
         return response
@@ -194,8 +230,7 @@ async def _context_recall(
         max_nodes=top_k,
         layers=layers,
     )
-    if not include_content:
-        response = _strip_content(response)
+    response = _apply_tier_content_policy(response, include_content)
 
     if include_proposals:
         proposals = await _fetch_pending_proposals(silo_id)
@@ -227,7 +262,7 @@ def register(mcp: FastMCP) -> None:
         include_reflections: bool = False,
         reflections_agent_id: str | None = None,
         include_steps: bool = False,
-        include_content: bool = True,
+        include_content: bool | None = None,
         include_proposals: bool = False,
         bypass_cache: bool = False,
         max_age_seconds: int | None = None,
