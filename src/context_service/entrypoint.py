@@ -26,20 +26,22 @@ if __name__ == "__main__":
         sys.exit(1)
 
     port = os.environ.get("PORT", "8000")
-    print(f"Starting server on port {port}...")
-    sys.exit(
-        os.execvp(
-            "python",
-            [
-                "python",
-                "-m",
-                "uvicorn",
-                "context_service.api.app:create_app",
-                "--factory",
-                "--host",
-                "0.0.0.0",
-                "--port",
-                port,
-            ],
-        )
-    )
+    reload = os.environ.get("RELOAD", "false").lower() in ("true", "1", "yes")
+
+    print(f"Starting server on port {port}{'  (reload enabled)' if reload else ''}...")
+
+    cmd = [
+        "python",
+        "-m",
+        "uvicorn",
+        "context_service.api.app:create_app",
+        "--factory",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        port,
+    ]
+    if reload:
+        cmd.extend(["--reload", "--reload-dir", "/app/src"])
+
+    sys.exit(os.execvp("python", cmd))
