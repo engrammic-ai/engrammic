@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -140,6 +140,47 @@ class TestComputeRecallScore:
         }
         score_low = compute_recall_score(node_low, similarity=0.0)
         assert score_low >= 0.0
+
+    def test_memory_layer_old_node_retains_floor_score(self) -> None:
+        """A 365-day-old memory should retain ~77% of similarity, not ~0%."""
+        mock_settings = MagicMock()
+        mock_settings.freshness_weight = 0.3
+
+        with patch("context_service.sage.recall.get_settings", return_value=mock_settings):
+            old_node = {
+                "layer": Layer.MEMORY,
+                "confidence": 1.0,
+                "created_at": datetime.now(UTC) - timedelta(days=365),
+            }
+            score = compute_recall_score(old_node, similarity=1.0)
+            # With floor=0.25 and weight=0.3: score = 1.0 * (0.7 + 0.3 * 0.25) = 0.775
+            assert score == pytest.approx(0.775, abs=0.05), f"365-day memory should score ~0.775, got {score}"
+
+    def test_memory_layer_fresh_node_scores_full(self) -> None:
+        """A fresh memory should score close to full similarity."""
+        mock_settings = MagicMock()
+        mock_settings.freshness_weight = 0.3
+
+        with patch("context_service.sage.recall.get_settings", return_value=mock_settings):
+            fresh_node = {
+                "layer": Layer.MEMORY,
+                "confidence": 1.0,
+                "created_at": datetime.now(UTC) - timedelta(hours=1),
+            }
+            score = compute_recall_score(fresh_node, similarity=0.9)
+            # Fresh node: freshness ~1.0, score = 0.9 * (0.7 + 0.3 * 1.0) = 0.9
+            assert score == pytest.approx(0.9, abs=0.05), f"Fresh memory should score ~0.9, got {score}"
+
+    def test_memory_layer_uses_freshness_floor(self) -> None:
+        """Verify compute_freshness floor is applied at extreme ages."""
+        from context_service.signals.freshness import FRESHNESS_FLOOR, compute_freshness
+
+        freshness = compute_freshness(
+            datetime.now(UTC) - timedelta(days=365),
+            datetime.now(UTC),
+            sigma_days=90,
+        )
+        assert freshness == FRESHNESS_FLOOR, f"365-day freshness should hit floor {FRESHNESS_FLOOR}, got {freshness}"
 
 
 class TestRecall:
