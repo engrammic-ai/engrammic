@@ -28,6 +28,9 @@ if layer == Layer.MEMORY:
 ```python
 from context_service.signals.freshness import compute_freshness
 
+# MEMORY_DECAY_SIGMA = 90 (existing constant in sage/recall.py)
+# Wider than live path's 30d — intentional for long-horizon epistemic recall
+
 if layer == Layer.MEMORY:
     freshness = compute_freshness(created_at_dt, now, sigma_days=MEMORY_DECAY_SIGMA)
     layer_score = similarity * ((1.0 - settings.freshness_weight) + settings.freshness_weight * freshness)
@@ -36,8 +39,13 @@ if layer == Layer.MEMORY:
 **Rationale:**
 - Reuses existing `compute_freshness` which has floor=0.25 built in
 - Pulls weight from settings (not hardcoded) to stay in sync with live path
-- Keeps sigma at 90d (wider than live path's 30d, intentional for long-horizon)
+- Keeps existing `MEMORY_DECAY_SIGMA = 90` constant (wider than live path's 30d for long-horizon)
 - Requires passing datetime instead of pre-computed age_days
+
+**Weight semantics:** At `freshness_weight=0.3` (default):
+- Fresh node (freshness=1.0): score = similarity * 1.0
+- Old node (freshness=0.25 floor): score = similarity * 0.775
+- This matches the live path convention in `services/context.py:1532`
 
 **Behavior change:**
 | Age | Before | After |
@@ -63,21 +71,37 @@ if layer == Layer.MEMORY:
 **Implementation:**
 ```python
 def _format_result(node_props, include_content=None):
-    tier = node_props.get("tier", "COLD")
+    tier = node_props.get("tier", "COLD")  # Default COLD for unscored nodes (safe)
     
     if include_content is None:
         include_content = tier in ("HOT", "WARM")
     
+    base = {
+        "node_id": node_props["id"],
+        "layer": node_props.get("layer"),
+        "relevance_score": node_props.get("relevance_score"),
+        "created_at": node_props.get("created_at"),
+        "tier": tier,
+    }
+    
     if include_content:
-        return {"content": node_props["content"], ...}
+        return {**base, "content": node_props["content"]}
     else:
         summary = node_props.get("summary") or node_props["content"][:200]
-        return {"summary": summary, "node_id": node_props["id"], ...}
+        return {**base, "summary": summary, "expandable": True}
 ```
+
+**Override mechanism:** The `include_content` param is passed through from the MCP tool call:
+- `recall(query="...", include_content=True)` forces full content for all results
+- `recall(query="...", include_content=False)` forces summaries for all results
+- `recall(query="...")` (default) uses tier-based logic
 
 **Risk mitigation:**
 - `node_id` always returned for expand-on-demand
-- Explicit `include_content=True` available for benchmark override
+- `expandable: True` signals to caller that full content is available
+- Benchmark can pass `include_content=True` to get full content if needed
+
+**Known limitation:** 200-char truncation fallback produces low-quality summaries for nodes with important content after char 200. Addressed in Phase 2 via pre-computed summaries.
 
 **Token savings:** COLD nodes drop from ~500-2000 tokens to ~50-200 tokens each.
 
@@ -112,4 +136,9 @@ Not in scope for this spec. To be planned post-benchmark:
 ## Success Criteria
 
 - Long-horizon memory test: year-old memories surface with >50% of similarity score
-- Token usage: average tokens per recall drops measurably (target: 30-50% reduction)
+- Token usage: average tokens per recall drops 30-50% from baseline
+
+**Baseline measurement (before implementation):**
+- Run 10 representative recall queries on beta
+- Record average response size in tokens
+- Use as comparison point post-implementation
