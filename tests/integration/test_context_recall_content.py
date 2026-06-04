@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 
 
-def _full_node(node_id: str, *, layer: str = "memory", content: str = "hello world") -> dict:
+def _full_node(node_id: str, *, layer: str = "memory", content: str = "hello world", tier: str = "HOT") -> dict:
     return {
         "node_id": node_id,
         "content": content,
@@ -22,6 +22,7 @@ def _full_node(node_id: str, *, layer: str = "memory", content: str = "hello wor
         "confidence": 0.9,
         "tags": ["t1"],
         "created_at": "2026-05-07T00:00:00+00:00",
+        "tier": tier,
     }
 
 
@@ -237,3 +238,82 @@ async def test_include_content_false_passes_through_error_entries() -> None:
         # always rely on seeing the error sentinel.
         errors = [n for n in result["nodes"] if n.get("error")]
         assert len(errors) == 1
+
+
+@pytest.mark.asyncio
+async def test_cold_node_returns_summary_by_default() -> None:
+    """COLD tier nodes should return summary instead of content when include_content=None."""
+    from context_service.mcp.tools.context_recall import _context_recall
+
+    nid = str(uuid4())
+    silo_id = str(uuid4())
+    full = _full_node(nid, content="x" * 500, tier="COLD")
+    full["summary"] = "pre-computed summary"
+
+    with patch("context_service.mcp.tools.context_recall._context_get") as mock_get:
+        mock_get.return_value = {"nodes": [full]}
+
+        result = await _context_recall(silo_id=silo_id, node_ids=[nid], include_content=None)
+
+        node = result["nodes"][0]
+        assert "summary" in node
+        assert "expandable" in node
+        assert node["expandable"] is True
+        assert "content" not in node
+
+
+@pytest.mark.asyncio
+async def test_hot_node_returns_content_by_default() -> None:
+    """HOT tier nodes should return full content when include_content=None."""
+    from context_service.mcp.tools.context_recall import _context_recall
+
+    nid = str(uuid4())
+    silo_id = str(uuid4())
+    full = _full_node(nid, content="full content here", tier="HOT")
+
+    with patch("context_service.mcp.tools.context_recall._context_get") as mock_get:
+        mock_get.return_value = {"nodes": [full]}
+
+        result = await _context_recall(silo_id=silo_id, node_ids=[nid], include_content=None)
+
+        node = result["nodes"][0]
+        assert "content" in node
+        assert node["content"] == "full content here"
+
+
+@pytest.mark.asyncio
+async def test_warm_node_returns_content_by_default() -> None:
+    """WARM tier nodes should return full content when include_content=None."""
+    from context_service.mcp.tools.context_recall import _context_recall
+
+    nid = str(uuid4())
+    silo_id = str(uuid4())
+    full = _full_node(nid, content="warm content here", tier="WARM")
+
+    with patch("context_service.mcp.tools.context_recall._context_get") as mock_get:
+        mock_get.return_value = {"nodes": [full]}
+
+        result = await _context_recall(silo_id=silo_id, node_ids=[nid], include_content=None)
+
+        node = result["nodes"][0]
+        assert "content" in node
+        assert node["content"] == "warm content here"
+
+
+@pytest.mark.asyncio
+async def test_include_content_true_overrides_cold_tier() -> None:
+    """Explicit include_content=True should return full content even for COLD nodes."""
+    from context_service.mcp.tools.context_recall import _context_recall
+
+    nid = str(uuid4())
+    silo_id = str(uuid4())
+    full = _full_node(nid, content="full content", tier="COLD")
+
+    with patch("context_service.mcp.tools.context_recall._context_get") as mock_get:
+        mock_get.return_value = {"nodes": [full]}
+
+        result = await _context_recall(silo_id=silo_id, node_ids=[nid], include_content=True)
+
+        node = result["nodes"][0]
+        assert "content" in node
+        assert node["content"] == "full content"
