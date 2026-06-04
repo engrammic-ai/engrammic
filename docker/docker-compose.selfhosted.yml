@@ -22,6 +22,9 @@ services:
       - POSTGRES_USER=engrammic
       - POSTGRES_DATABASE=engrammic
       - LICENSE_VALIDATION_ENABLED=true
+      # LiteLLM Vertex AI env vars (mapped from .env)
+      - VERTEXAI_PROJECT=${VERTEX_PROJECT:-}
+      - VERTEXAI_LOCATION=${VERTEX_LOCATION:-}
       # Migrations run automatically on startup. Set to false to disable:
       # - RUN_MIGRATIONS=false
     depends_on:
@@ -101,6 +104,37 @@ services:
       dagster:
         condition: service_healthy
       postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    restart: unless-stopped
+
+  reaction-worker:
+    image: europe-north1-docker.pkg.dev/engrammic/releases/engrammic-api:latest
+    container_name: engrammic-reaction-worker
+    command: ["taskiq", "worker", "context_service.reactions.worker_entrypoint:broker", "--workers", "1"]
+    env_file:
+      - .env
+    volumes:
+      # Mount gcloud credentials for Vertex AI (optional)
+      - ~/.config/gcloud:/mnt/gcloud:ro
+    environment:
+      - ENVIRONMENT=self-hosted
+      - MEMGRAPH_HOST=memgraph
+      - QDRANT_HOST=qdrant
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=engrammic
+      - POSTGRES_DATABASE=engrammic
+      - GOOGLE_APPLICATION_CREDENTIALS=/mnt/gcloud/application_default_credentials.json
+      - VERTEXAI_PROJECT=${VERTEX_PROJECT:-}
+      - VERTEXAI_LOCATION=${VERTEX_LOCATION:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+      app:
         condition: service_healthy
     deploy:
       resources:
