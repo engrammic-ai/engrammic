@@ -31,18 +31,23 @@
 
 ```python
 # Add to TestComputeRecallScore class in tests/sage/test_recall.py
+from unittest.mock import patch, MagicMock
 
 def test_memory_layer_old_node_retains_floor_score(self) -> None:
     """A 365-day-old memory should retain ~77% of similarity, not ~0%."""
-    old_node = {
-        "layer": Layer.MEMORY,
-        "confidence": 1.0,
-        "created_at": datetime.now(UTC) - timedelta(days=365),
-    }
-    score = compute_recall_score(old_node, similarity=1.0)
-    # With floor=0.25 and weight=0.3: score = 1.0 * (0.7 + 0.3 * 0.25) = 0.775
-    assert score >= 0.70, f"365-day memory should retain >=70% score, got {score}"
-    assert score <= 0.85, f"365-day memory should not exceed 85%, got {score}"
+    # Mock settings to ensure consistent freshness_weight=0.3
+    mock_settings = MagicMock()
+    mock_settings.freshness_weight = 0.3
+    
+    with patch("context_service.sage.recall.get_settings", return_value=mock_settings):
+        old_node = {
+            "layer": Layer.MEMORY,
+            "confidence": 1.0,
+            "created_at": datetime.now(UTC) - timedelta(days=365),
+        }
+        score = compute_recall_score(old_node, similarity=1.0)
+        # With floor=0.25 and weight=0.3: score = 1.0 * (0.7 + 0.3 * 0.25) = 0.775
+        assert score == pytest.approx(0.775, abs=0.05), f"365-day memory should score ~0.775, got {score}"
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -56,14 +61,29 @@ Expected: FAIL - score will be ~0.0003 (no floor currently)
 ```python
 def test_memory_layer_fresh_node_scores_full(self) -> None:
     """A fresh memory should score close to full similarity."""
-    fresh_node = {
-        "layer": Layer.MEMORY,
-        "confidence": 1.0,
-        "created_at": datetime.now(UTC) - timedelta(hours=1),
-    }
-    score = compute_recall_score(fresh_node, similarity=0.9)
-    # Fresh node: freshness ~1.0, score = 0.9 * (0.7 + 0.3 * 1.0) = 0.9
-    assert score >= 0.85, f"Fresh memory should retain >=85% of similarity, got {score}"
+    mock_settings = MagicMock()
+    mock_settings.freshness_weight = 0.3
+    
+    with patch("context_service.sage.recall.get_settings", return_value=mock_settings):
+        fresh_node = {
+            "layer": Layer.MEMORY,
+            "confidence": 1.0,
+            "created_at": datetime.now(UTC) - timedelta(hours=1),
+        }
+        score = compute_recall_score(fresh_node, similarity=0.9)
+        # Fresh node: freshness ~1.0, score = 0.9 * (0.7 + 0.3 * 1.0) = 0.9
+        assert score == pytest.approx(0.9, abs=0.05), f"Fresh memory should score ~0.9, got {score}"
+
+def test_memory_layer_uses_freshness_floor(self) -> None:
+    """Verify compute_freshness floor is applied at extreme ages."""
+    from context_service.signals.freshness import compute_freshness, FRESHNESS_FLOOR
+    
+    freshness = compute_freshness(
+        datetime.now(UTC) - timedelta(days=365),
+        datetime.now(UTC),
+        sigma_days=90
+    )
+    assert freshness == FRESHNESS_FLOOR, f"365-day freshness should hit floor {FRESHNESS_FLOOR}, got {freshness}"
 ```
 
 - [ ] **Step 4: Run test to verify baseline**
@@ -86,13 +106,16 @@ git commit -m "test: add decay floor tests for long-horizon memory"
 **Files:**
 - Modify: `src/context_service/sage/recall.py:123-142`
 
-- [ ] **Step 1: Add import for compute_freshness**
+- [ ] **Step 1: Add imports for compute_freshness and timedelta**
 
 At the top of `src/context_service/sage/recall.py`, add to imports:
 
 ```python
+from datetime import timedelta
 from context_service.signals.freshness import compute_freshness
 ```
+
+(Note: `timedelta` may already be imported; verify and add only if missing)
 
 - [ ] **Step 2: Add settings import for freshness_weight**
 
@@ -116,19 +139,15 @@ With:
 ```python
     if layer == Layer.MEMORY:
         settings = get_settings()
-        # Parse created_at to datetime for compute_freshness
-        if isinstance(created_at, datetime):
-            created_at_dt = created_at
-        elif isinstance(created_at, str):
-            try:
-                created_at_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-            except ValueError:
-                created_at_dt = datetime.now(UTC)
-        else:
-            created_at_dt = datetime.now(UTC)
-        
+        # Reuse existing age_days calculation - derive datetime for compute_freshness
+        # age_days is already computed from created_at at lines 132-139
         now = datetime.now(UTC)
-        freshness = compute_freshness(created_at_dt, now, sigma_days=MEMORY_DECAY_SIGMA)
+        if age_days <= 0:
+            freshness = 1.0
+        else:
+            # Reconstruct created_at from age_days to call compute_freshness
+            created_at_dt = now - timedelta(days=age_days)
+            freshness = compute_freshness(created_at_dt, now, sigma_days=MEMORY_DECAY_SIGMA)
         weight = settings.freshness_weight
         layer_score = similarity * ((1.0 - weight) + weight * freshness)
 ```
@@ -171,7 +190,30 @@ Fixes long-horizon recall for Somnus benchmark."
 **Files:**
 - Modify: `tests/integration/test_context_recall_content.py`
 
-- [ ] **Step 1: Add test for COLD node returning summary by default**
+- [ ] **Step 1: Update _full_node helper for backward compatibility**
+
+Update the `_full_node` helper to include `tier='HOT'` by default, so existing tests that don't specify tier continue to get full content:
+
+```python
+def _full_node(node_id: str, *, layer: str = "memory", content: str = "hello world", tier: str = "HOT") -> dict:
+    return {
+        "node_id": node_id,
+        "content": content,
+        "type": "context",
+        "silo_id": str(uuid4()),
+        "properties": {"foo": "bar"},
+        "source_uri": None,
+        "content_hash": "abc123",
+        "layer": layer,
+        "summary": None,
+        "confidence": 0.9,
+        "tags": ["t1"],
+        "created_at": "2026-05-07T00:00:00+00:00",
+        "tier": tier,
+    }
+```
+
+- [ ] **Step 2: Add test for COLD node returning summary by default**
 
 ```python
 @pytest.mark.asyncio
@@ -181,15 +223,12 @@ async def test_cold_node_returns_summary_by_default() -> None:
 
     nid = str(uuid4())
     silo_id = str(uuid4())
-    full = _full_node(nid, content="x" * 500)
-    full["tier"] = "COLD"
+    full = _full_node(nid, content="x" * 500, tier="COLD")
     full["summary"] = "pre-computed summary"
 
     with patch("context_service.mcp.tools.context_recall._context_get") as mock_get:
         mock_get.return_value = {"nodes": [full]}
 
-        # Default include_content=True currently, but we want tier-based
-        # For now this test documents expected behavior after implementation
         result = await _context_recall(silo_id=silo_id, node_ids=[nid], include_content=None)
 
         node = result["nodes"][0]
@@ -199,7 +238,7 @@ async def test_cold_node_returns_summary_by_default() -> None:
         assert "content" not in node
 ```
 
-- [ ] **Step 2: Add test for HOT node returning content by default**
+- [ ] **Step 3: Add test for HOT node returning content by default**
 
 ```python
 @pytest.mark.asyncio
@@ -209,8 +248,7 @@ async def test_hot_node_returns_content_by_default() -> None:
 
     nid = str(uuid4())
     silo_id = str(uuid4())
-    full = _full_node(nid, content="full content here")
-    full["tier"] = "HOT"
+    full = _full_node(nid, content="full content here", tier="HOT")
 
     with patch("context_service.mcp.tools.context_recall._context_get") as mock_get:
         mock_get.return_value = {"nodes": [full]}
@@ -222,7 +260,29 @@ async def test_hot_node_returns_content_by_default() -> None:
         assert node["content"] == "full content here"
 ```
 
-- [ ] **Step 3: Add test for explicit include_content=True overriding tier**
+- [ ] **Step 4: Add test for WARM node returning content by default**
+
+```python
+@pytest.mark.asyncio
+async def test_warm_node_returns_content_by_default() -> None:
+    """WARM tier nodes should return full content when include_content=None."""
+    from context_service.mcp.tools.context_recall import _context_recall
+
+    nid = str(uuid4())
+    silo_id = str(uuid4())
+    full = _full_node(nid, content="warm content here", tier="WARM")
+
+    with patch("context_service.mcp.tools.context_recall._context_get") as mock_get:
+        mock_get.return_value = {"nodes": [full]}
+
+        result = await _context_recall(silo_id=silo_id, node_ids=[nid], include_content=None)
+
+        node = result["nodes"][0]
+        assert "content" in node
+        assert node["content"] == "warm content here"
+```
+
+- [ ] **Step 5: Add test for explicit include_content=True overriding tier**
 
 ```python
 @pytest.mark.asyncio
@@ -232,8 +292,7 @@ async def test_include_content_true_overrides_cold_tier() -> None:
 
     nid = str(uuid4())
     silo_id = str(uuid4())
-    full = _full_node(nid, content="full content")
-    full["tier"] = "COLD"
+    full = _full_node(nid, content="full content", tier="COLD")
 
     with patch("context_service.mcp.tools.context_recall._context_get") as mock_get:
         mock_get.return_value = {"nodes": [full]}
@@ -245,13 +304,13 @@ async def test_include_content_true_overrides_cold_tier() -> None:
         assert node["content"] == "full content"
 ```
 
-- [ ] **Step 4: Run tests to verify they fail**
+- [ ] **Step 6: Run tests to verify they fail**
 
-Run: `uv run pytest tests/integration/test_context_recall_content.py::test_cold_node_returns_summary_by_default tests/integration/test_context_recall_content.py::test_hot_node_returns_content_by_default -v`
+Run: `uv run pytest tests/integration/test_context_recall_content.py::test_cold_node_returns_summary_by_default tests/integration/test_context_recall_content.py::test_hot_node_returns_content_by_default tests/integration/test_context_recall_content.py::test_warm_node_returns_content_by_default -v`
 
 Expected: FAIL (tier-based logic not implemented yet)
 
-- [ ] **Step 5: Commit test file**
+- [ ] **Step 7: Commit test file**
 
 ```bash
 git add tests/integration/test_context_recall_content.py
@@ -317,13 +376,17 @@ def _apply_tier_content_policy(
     - include_content=True: return full content for all nodes
     - include_content=False: return summary for all nodes
     - include_content=None: HOT/WARM get content, COLD gets summary
+    
+    Returns a new dict to avoid mutating the input.
     """
     if include_content is True:
         return response
     if include_content is False:
         return _strip_content(response)
     
-    # Tier-based logic for include_content=None
+    # Tier-based logic for include_content=None - return copy to avoid mutation
+    result = dict(response)
+    
     def process_node(node: dict[str, Any]) -> dict[str, Any]:
         if "node_id" not in node or "error" in node:
             return node
@@ -333,10 +396,10 @@ def _apply_tier_content_policy(
         return _project_node_without_content(node, include_expandable=True)
     
     if isinstance(response.get("nodes"), list):
-        response["nodes"] = [process_node(n) for n in response["nodes"]]
+        result["nodes"] = [process_node(n) for n in response["nodes"]]
     if isinstance(response.get("results"), list):
-        response["results"] = [process_node(r) for r in response["results"]]
-    return response
+        result["results"] = [process_node(r) for r in response["results"]]
+    return result
 ```
 
 - [ ] **Step 3: Update _context_recall to use tier-based policy**
