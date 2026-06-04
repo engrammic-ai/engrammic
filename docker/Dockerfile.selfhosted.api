@@ -29,10 +29,9 @@ COPY alembic.ini /app/alembic.ini
 COPY alembic/ /app/alembic/
 COPY skills/ /app/skills/
 
-# Compile to bytecode and remove source
+# Compile to bytecode and remove source (keep alembic .py for migrations)
 RUN python -m compileall -b -q /app/src && \
-    find /app/src -name "*.py" -type f -delete && \
-    find /app/alembic -name "*.py" -type f ! -name "env.py" -exec sh -c 'python -m py_compile "$1" && rm "$1"' _ {} \;
+    find /app/src -name "*.py" -type f -delete
 
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app/src"
