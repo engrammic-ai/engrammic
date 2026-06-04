@@ -5,6 +5,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 ## Current state (2026-06-04)
 
 **Recent:**
+- v2.37 Heat Utilization Phase 1 - Brain path decay floor + tier-driven summaries (complete)
 - v2.36 Self-Serve Org Provisioning - Auto-provision personal org for no-org signups (PR #55)
 - v2.35 Multi-Format Skill Installation - Cursor .mdc and Gemini GEMINI.md formats
 - v2.34 Harness-Agnostic Enforcement - Write-time affinity, tick() enhancement, session state
@@ -15,7 +16,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
-| [2026-06-04-heat-utilization-phase1.md](./2026-06-04-heat-utilization-phase1.md) ([design](./2026-06-04-heat-utilization-design.md)) | Brain path decay floor + tier-driven summaries for Somnus benchmark | Ready to execute |
+| [2026-06-04-heat-utilization-phase1.md](./2026-06-04-heat-utilization-phase1.md) ([design](./2026-06-04-heat-utilization-design.md)) | Brain path decay floor + tier-driven summaries for Somnus benchmark | **Complete** |
 | [2026-06-01-brain-architecture.md](./2026-06-01-brain-architecture.md) | Reactive brain architecture: 20 transactions, 8 invariants | Phases 2-7 complete, cutover blocked |
 | [2026-06-03-brain-cutover-and-quality-fixes.md](./2026-06-03-brain-cutover-and-quality-fixes.md) | Wire MCP to brain transactions, coverage reporting | Blocked on invariant fixes |
 

@@ -1,5 +1,7 @@
 # Heat Utilization Phase 1 Implementation Plan
 
+> **Status: COMPLETE (2026-06-04)**
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix long-horizon memory recall and reduce token usage for the Somnus benchmark.
@@ -27,7 +29,7 @@
 **Files:**
 - Modify: `tests/sage/test_recall.py`
 
-- [ ] **Step 1: Add test for year-old memory retaining score**
+- [x] **Step 1: Add test for year-old memory retaining score**
 
 ```python
 # Add to TestComputeRecallScore class in tests/sage/test_recall.py
@@ -50,13 +52,13 @@ def test_memory_layer_old_node_retains_floor_score(self) -> None:
         assert score == pytest.approx(0.775, abs=0.05), f"365-day memory should score ~0.775, got {score}"
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `uv run pytest tests/sage/test_recall.py::TestComputeRecallScore::test_memory_layer_old_node_retains_floor_score -v`
 
 Expected: FAIL - score will be ~0.0003 (no floor currently)
 
-- [ ] **Step 3: Add test for fresh memory scoring unchanged**
+- [x] **Step 3: Add test for fresh memory scoring unchanged**
 
 ```python
 def test_memory_layer_fresh_node_scores_full(self) -> None:
@@ -86,13 +88,13 @@ def test_memory_layer_uses_freshness_floor(self) -> None:
     assert freshness == FRESHNESS_FLOOR, f"365-day freshness should hit floor {FRESHNESS_FLOOR}, got {freshness}"
 ```
 
-- [ ] **Step 4: Run test to verify baseline**
+- [x] **Step 4: Run test to verify baseline**
 
 Run: `uv run pytest tests/sage/test_recall.py::TestComputeRecallScore::test_memory_layer_fresh_node_scores_full -v`
 
 Expected: PASS (fresh nodes already work, this confirms baseline)
 
-- [ ] **Step 5: Commit test file**
+- [x] **Step 5: Commit test file**
 
 ```bash
 git add tests/sage/test_recall.py
@@ -106,7 +108,7 @@ git commit -m "test: add decay floor tests for long-horizon memory"
 **Files:**
 - Modify: `src/context_service/sage/recall.py:123-142`
 
-- [ ] **Step 1: Add imports for compute_freshness and timedelta**
+- [x] **Step 1: Add imports for compute_freshness and timedelta**
 
 At the top of `src/context_service/sage/recall.py`, add to imports:
 
@@ -117,7 +119,7 @@ from context_service.signals.freshness import compute_freshness
 
 (Note: `timedelta` may already be imported; verify and add only if missing)
 
-- [ ] **Step 2: Add settings import for freshness_weight**
+- [x] **Step 2: Add settings import for freshness_weight**
 
 Add to imports section:
 
@@ -125,7 +127,7 @@ Add to imports section:
 from context_service.config.settings import get_settings
 ```
 
-- [ ] **Step 3: Modify compute_recall_score MEMORY branch**
+- [x] **Step 3: Modify compute_recall_score MEMORY branch**
 
 Replace lines 141-142 in `compute_recall_score`:
 
@@ -152,25 +154,25 @@ With:
         layer_score = similarity * ((1.0 - weight) + weight * freshness)
 ```
 
-- [ ] **Step 4: Run decay floor tests**
+- [x] **Step 4: Run decay floor tests**
 
 Run: `uv run pytest tests/sage/test_recall.py::TestComputeRecallScore::test_memory_layer_old_node_retains_floor_score tests/sage/test_recall.py::TestComputeRecallScore::test_memory_layer_fresh_node_scores_full -v`
 
 Expected: PASS for both tests
 
-- [ ] **Step 5: Run full sage recall test suite**
+- [x] **Step 5: Run full sage recall test suite**
 
 Run: `uv run pytest tests/sage/test_recall.py -v`
 
 Expected: All tests pass (existing tests should still work)
 
-- [ ] **Step 6: Run type check**
+- [x] **Step 6: Run type check**
 
 Run: `uv run mypy src/context_service/sage/recall.py`
 
 Expected: No errors
 
-- [ ] **Step 7: Commit implementation**
+- [x] **Step 7: Commit implementation**
 
 ```bash
 git add src/context_service/sage/recall.py
@@ -190,7 +192,7 @@ Fixes long-horizon recall for Somnus benchmark."
 **Files:**
 - Modify: `tests/integration/test_context_recall_content.py`
 
-- [ ] **Step 1: Update _full_node helper for backward compatibility**
+- [x] **Step 1: Update _full_node helper for backward compatibility**
 
 Update the `_full_node` helper to include `tier='HOT'` by default, so existing tests that don't specify tier continue to get full content:
 
@@ -213,7 +215,7 @@ def _full_node(node_id: str, *, layer: str = "memory", content: str = "hello wor
     }
 ```
 
-- [ ] **Step 2: Add test for COLD node returning summary by default**
+- [x] **Step 2: Add test for COLD node returning summary by default**
 
 ```python
 @pytest.mark.asyncio
@@ -238,7 +240,7 @@ async def test_cold_node_returns_summary_by_default() -> None:
         assert "content" not in node
 ```
 
-- [ ] **Step 3: Add test for HOT node returning content by default**
+- [x] **Step 3: Add test for HOT node returning content by default**
 
 ```python
 @pytest.mark.asyncio
@@ -260,7 +262,7 @@ async def test_hot_node_returns_content_by_default() -> None:
         assert node["content"] == "full content here"
 ```
 
-- [ ] **Step 4: Add test for WARM node returning content by default**
+- [x] **Step 4: Add test for WARM node returning content by default**
 
 ```python
 @pytest.mark.asyncio
@@ -282,7 +284,7 @@ async def test_warm_node_returns_content_by_default() -> None:
         assert node["content"] == "warm content here"
 ```
 
-- [ ] **Step 5: Add test for explicit include_content=True overriding tier**
+- [x] **Step 5: Add test for explicit include_content=True overriding tier**
 
 ```python
 @pytest.mark.asyncio
@@ -304,13 +306,13 @@ async def test_include_content_true_overrides_cold_tier() -> None:
         assert node["content"] == "full content"
 ```
 
-- [ ] **Step 6: Run tests to verify they fail**
+- [x] **Step 6: Run tests to verify they fail**
 
 Run: `uv run pytest tests/integration/test_context_recall_content.py::test_cold_node_returns_summary_by_default tests/integration/test_context_recall_content.py::test_hot_node_returns_content_by_default tests/integration/test_context_recall_content.py::test_warm_node_returns_content_by_default -v`
 
 Expected: FAIL (tier-based logic not implemented yet)
 
-- [ ] **Step 7: Commit test file**
+- [x] **Step 7: Commit test file**
 
 ```bash
 git add tests/integration/test_context_recall_content.py
@@ -324,7 +326,7 @@ git commit -m "test: add tier-driven summary tests"
 **Files:**
 - Modify: `src/context_service/mcp/tools/context_recall.py:46-72, 109-125`
 
-- [ ] **Step 1: Update _project_node_without_content to include tier fields**
+- [x] **Step 1: Update _project_node_without_content to include tier fields**
 
 Replace `_project_node_without_content` function (lines 46-72):
 
@@ -362,7 +364,7 @@ def _project_node_without_content(node: dict[str, Any], include_expandable: bool
     return projected
 ```
 
-- [ ] **Step 2: Add tier-based content stripping helper**
+- [x] **Step 2: Add tier-based content stripping helper**
 
 Add after `_strip_content` function (around line 82):
 
@@ -402,7 +404,7 @@ def _apply_tier_content_policy(
     return result
 ```
 
-- [ ] **Step 3: Update _context_recall to use tier-based policy**
+- [x] **Step 3: Update _context_recall to use tier-based policy**
 
 In `_context_recall` function, replace each occurrence of:
 
@@ -419,7 +421,7 @@ With:
 
 There are 4 occurrences at approximately lines 152-153, 165-166, 184-185, and 197-198.
 
-- [ ] **Step 4: Update function signature default**
+- [x] **Step 4: Update function signature default**
 
 Change the `_context_recall` function signature (line 109):
 
@@ -435,19 +437,19 @@ To:
 
 Also update the MCP tool signature (line 230) the same way.
 
-- [ ] **Step 5: Run tier-driven tests**
+- [x] **Step 5: Run tier-driven tests**
 
 Run: `uv run pytest tests/integration/test_context_recall_content.py -v`
 
 Expected: All tests pass including new tier-driven tests
 
-- [ ] **Step 6: Run type check**
+- [x] **Step 6: Run type check**
 
 Run: `uv run mypy src/context_service/mcp/tools/context_recall.py`
 
 Expected: No errors
 
-- [ ] **Step 7: Commit implementation**
+- [x] **Step 7: Commit implementation**
 
 ```bash
 git add src/context_service/mcp/tools/context_recall.py
@@ -467,25 +469,25 @@ Reduces token usage for recall results containing mostly COLD nodes."
 **Files:**
 - None (verification only)
 
-- [ ] **Step 1: Run full test suite**
+- [x] **Step 1: Run full test suite**
 
 Run: `uv run just check`
 
 Expected: lint + typecheck pass
 
-- [ ] **Step 2: Run all related tests**
+- [x] **Step 2: Run all related tests**
 
 Run: `uv run pytest tests/sage/test_recall.py tests/integration/test_context_recall_content.py tests/mcp/test_context_recall.py -v`
 
 Expected: All tests pass
 
-- [ ] **Step 3: Verify no regressions in context_query**
+- [x] **Step 3: Verify no regressions in context_query**
 
 Run: `uv run pytest tests/ -k "context" -v --tb=short`
 
 Expected: All context-related tests pass
 
-- [ ] **Step 4: Final commit if any fixes needed**
+- [x] **Step 4: Final commit if any fixes needed**
 
 Only if fixes were made in previous steps:
 
