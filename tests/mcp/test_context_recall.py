@@ -232,7 +232,7 @@ async def test_get_returns_seeded_node_data():
         ),
         patch("context_service.mcp.tools.context_get.get_redis", return_value=None),
     ):
-        result = await _context_recall_import(silo_id=_SILO_ID, node_ids=[str(node_id)], depth=0)
+        result = await _context_recall_import(silo_id=_SILO_ID, node_ids=[str(node_id)], depth=0, include_content=True)
 
     assert "nodes" in result
     nodes = result["nodes"]
@@ -295,7 +295,7 @@ async def test_include_content_false_projects_node_fields():
 
     assert "nodes" in result
     projected = result["nodes"][0]
-    assert set(projected.keys()) == {"node_id", "layer", "summary", "created_at", "confidence"}
+    assert set(projected.keys()) == {"node_id", "layer", "summary", "created_at", "confidence", "tier", "relevance_score"}
     assert "content" not in projected
     assert projected["summary"] == "brief summary"
     assert projected["confidence"] == 0.7
@@ -486,7 +486,7 @@ def test_project_node_without_content_uses_summary():
     node = _make_node_record(summary="precomputed summary", content="full long content")
     projected = _project_node_without_content(node)
 
-    assert set(projected.keys()) == {"node_id", "layer", "summary", "created_at", "confidence"}
+    assert set(projected.keys()) == {"node_id", "layer", "summary", "created_at", "confidence", "tier", "relevance_score"}
     assert projected["summary"] == "precomputed summary"
 
 

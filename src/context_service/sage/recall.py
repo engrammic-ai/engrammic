@@ -16,8 +16,8 @@ import structlog
 
 from context_service.config.settings import get_settings
 from context_service.sage.epistemology import ppr_cache
-from context_service.signals.freshness import compute_freshness
 from context_service.sage.transactions import ClusterState, NodeState, SynthesisState
+from context_service.signals.freshness import compute_freshness
 
 if TYPE_CHECKING:
     from context_service.engine.protocols import HyperGraphStore
