@@ -2,7 +2,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-06-05-embedding-batching-design.md`  
 **Effort:** 3-4 hours  
-**Status:** Ready to execute
+**Status:** Complete (2026-06-05)
+**Commit:** `c4904c7`
 
 ## Goal
 
@@ -10,8 +11,8 @@ Batch multiple `embed_single()` calls into single Vertex AI API calls using the 
 
 ## Prerequisites
 
-- [ ] Confirm `batched` library is compatible with Python 3.12+
-- [ ] Review `batched` library shutdown behavior
+- [x] Confirm `batched` library is compatible with Python 3.12+ (requires >=3.9, we use 3.13)
+- [x] Review `batched` library shutdown behavior (not needed - uses asyncio primitives)
 
 ## Tasks
 
@@ -325,10 +326,18 @@ Manual verification:
 
 ## Success Criteria
 
-- [ ] `just check` passes
-- [ ] All new tests pass
+- [x] `just check` passes
+- [x] All new tests pass (7 tests: 5 unit + 2 integration)
 - [ ] During 100-node seeding, API call count < 50 (vs 100 without batching)
 - [ ] Metrics show batch sizes > 1 during bursts
+
+## Implementation Notes
+
+- Skipped Task 3 (settings.py dataclass) - config loaded directly in `from_config`
+- Changed from module-level singleton to per-instance batched function (fixes multi-instance bug)
+- Added `asyncio.Lock` for thread-safe lazy initialization
+- Preserved cache behavior in `embed_single` (was missing in initial plan)
+- Used `batched>=0.1.5` (plan said 0.2.0 but latest is 0.1.5)
 
 ## Post-Implementation
 
