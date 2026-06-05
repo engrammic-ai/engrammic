@@ -102,6 +102,92 @@ def register_tasks(broker: ListQueueBroker) -> None:
         )
         log.info("compute_embedding_task_done", vector_length=len(vector), node_type=node.type)
 
+    @broker.task(
+        task_name=ReactionEventType.BATCH_COMPUTE_EMBEDDING,
+        timeout=_TIMEOUT_EMBEDDING * 2,
+    )
+    async def batch_compute_embedding_task(
+        items: list[dict], **_payload: Any
+    ) -> None:
+        """Embed a pre-collected batch of nodes and upsert vectors to Qdrant.
+
+        Accepts a list of ``{"node_id": str, "silo_id": str}`` dicts, fetches
+        each node from the graph store, embeds all non-empty content in a
+        single batched call, and writes the resulting vectors to Qdrant.
+
+        This task is invoked by the batch accumulator (or a scheduled job)
+        rather than being enqueued by ``emit_reaction`` for individual nodes.
+        The single-node ``compute_embedding_task`` is kept as a fallback for
+        cases where a lone node must be embedded outside the normal flow.
+
+        Args:
+            items: List of dicts, each with ``node_id`` and ``silo_id`` keys.
+            **_payload: Additional event payload (unused).
+        """
+        log = logger.bind(task=ReactionEventType.BATCH_COMPUTE_EMBEDDING, item_count=len(items))
+        log.info("batch_compute_embedding_task_start")
+
+        if not items:
+            log.debug("batch_compute_embedding_task_empty_items_skip")
+            return
+
+        from context_service.embeddings import build_embedding_service
+        from context_service.mcp.server import get_context_service
+
+        try:
+            ctx_svc = get_context_service()
+        except RuntimeError:
+            log.error("batch_compute_embedding_services_not_configured")
+            return
+
+        store = ctx_svc.graph_store
+        qdrant = ctx_svc.vector_store
+        embedder = build_embedding_service()
+
+        # Fetch all nodes; collect those with content.
+        node_contents: list[tuple[str, str, str]] = []  # (node_id, silo_id, content)
+        for item in items:
+            node_id: str = item.get("node_id", "")
+            silo_id: str = item.get("silo_id", "")
+            if not node_id or not silo_id:
+                log.warning("batch_compute_embedding_invalid_item_skip", item=item)
+                continue
+
+            node = await store.get_node(uuid.UUID(node_id), silo_id)
+            if node is None:
+                log.warning("batch_compute_embedding_node_not_found", node_id=node_id)
+                continue
+
+            if not node.content:
+                log.debug("batch_compute_embedding_no_content_skip", node_id=node_id)
+                continue
+
+            node_contents.append((node_id, silo_id, node.content))
+
+        if not node_contents:
+            log.info("batch_compute_embedding_task_no_embeddable_nodes")
+            return
+
+        texts = [content for _, _, content in node_contents]
+        vectors = await embedder.embed_batch(texts)
+
+        upserted = 0
+        for (node_id, silo_id, _), vector in zip(node_contents, vectors, strict=True):
+            await qdrant.upsert(
+                node_id=node_id,
+                vector=vector,
+                payload={},
+                silo_id=silo_id,
+            )
+            upserted += 1
+
+        log.info(
+            "batch_compute_embedding_task_done",
+            requested=len(items),
+            embeddable=len(node_contents),
+            upserted=upserted,
+        )
+
     @broker.task(task_name=ReactionEventType.UPDATE_HEAT, timeout=_TIMEOUT_SIMPLE)
     async def update_heat_task(
         node_id: str, silo_id: str, delta: float = 1.0, **_payload: Any

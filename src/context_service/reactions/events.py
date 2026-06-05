@@ -29,6 +29,7 @@ class ReactionEventType(StrEnum):
     """
 
     COMPUTE_EMBEDDING = "compute_embedding"
+    BATCH_COMPUTE_EMBEDDING = "batch_compute_embedding"  # batched version
     CASCADE_STALENESS = "cascade_staleness"
     CASCADE_STALENESS_COMPLETE = "cascade_staleness_complete"  # notification-only
     UPDATE_HEAT = "update_heat"
@@ -62,9 +63,39 @@ async def emit_reaction(event: ReactionEvent) -> None:
     Silo isolation is enforced at the task level via the ``silo_id`` kwarg,
     not at the queue level - all silos share the same queue.
 
+    ``COMPUTE_EMBEDDING`` events are intercepted before broker dispatch and
+    routed to the batch accumulator so that embeddings are processed in
+    token-budget batches rather than one task per node.
+
     Args:
         event: The reaction event to enqueue.
     """
+    # For embedding events, delegate to the batch accumulator instead of
+    # dispatching an individual task.  The accumulator flushes automatically
+    # when the batch is full or the flush interval elapses.
+    if event.event_type == ReactionEventType.COMPUTE_EMBEDDING:
+        try:
+            from context_service.reactions.batch_embedding import (
+                get_batch_embedding_accumulator,
+            )
+
+            accumulator = get_batch_embedding_accumulator()
+            await accumulator.add(node_id=event.node_id, silo_id=event.silo_id)
+            logger.debug(
+                "reaction_emit_batched",
+                event_type=event.event_type,
+                node_id=event.node_id,
+                silo_id=event.silo_id,
+            )
+        except Exception:
+            logger.exception(
+                "reaction_emit_batch_accumulator_failed",
+                event_type=event.event_type,
+                node_id=event.node_id,
+                silo_id=event.silo_id,
+            )
+        return
+
     from context_service.reactions.broker import get_broker
 
     broker = get_broker()
