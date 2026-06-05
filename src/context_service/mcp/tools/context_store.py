@@ -240,7 +240,7 @@ async def _context_remember(
     metadata: dict[str, Any] | None = None,
     tags: list[str] | None = None,
     decay_class: str = "standard",
-    observed_from: str | None = None,
+    observed_from: str | None = None,  # noqa: ARG001  FIXME: accepted but never persisted
     supersedes: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
@@ -259,7 +259,7 @@ async def _context_remember(
             return err
 
     try:
-        decay = DecayClass(decay_class)
+        DecayClass(decay_class)
     except ValueError:
         return {
             "error": "invalid_decay_class",
@@ -267,7 +267,6 @@ async def _context_remember(
         }
 
     ctx_svc = get_context_service()
-    scope = ScopeContext(org_id=auth.org_id, silo_id=validated_silo_id)
     _start = time.perf_counter()
 
     result_tx, events = await store_memory(
@@ -526,9 +525,9 @@ async def _context_commit(
     belief: str,
     about: list[str],
     confidence: float = 0.8,
-    reasoning: str | None = None,
+    reasoning: str | None = None,  # noqa: ARG001  FIXME: accepted but never persisted
     metadata: dict[str, Any] | None = None,
-    tags: list[str] | None = None,
+    tags: list[str] | None = None,  # noqa: ARG001  FIXME: accepted but never persisted
     chain_id: str | None = None,
     supersedes: str | None = None,
 ) -> dict[str, Any]:
@@ -638,7 +637,7 @@ async def _context_reflect(
     observation: str,
     observation_type: str,
     about: list[str],
-    confidence: float = 0.8,
+    confidence: float = 0.8,  # noqa: ARG001  FIXME: accepted but never persisted
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Internal implementation."""
