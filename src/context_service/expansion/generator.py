@@ -14,12 +14,13 @@ from context_service.llm import LLMProvider, build_llm_provider
 logger = get_logger(__name__)
 
 _PROMPT_TEMPLATE = """\
-Given the following content, generate 3-5 short search queries that a user \
-might type to find this information. Focus on synonyms and alternative phrasings.
+Given the following content, generate 3-5 questions that this content answers. \
+Focus on value-seeking questions (what, when, where, how much, who) and \
+possessive queries ("my X", "the X").
 
 Content: {content}
 
-Queries (one per line):"""
+Questions (one per line):"""
 
 
 class ExpansionGenerator:

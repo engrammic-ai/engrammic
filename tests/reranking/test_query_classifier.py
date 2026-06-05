@@ -20,9 +20,14 @@ class TestIsHardQuery:
             ("which approach was abandoned?", True),
             ("is the proposal approved?", True),
             ("what was rejected!", True),
+            # Question-word queries are now all hard (benefit from expansion)
+            ("how to configure the database", True),
+            ("what is my 5K personal best?", True),
+            ("where is the config file?", True),
+            ("when did we last deploy?", True),
+            ("who approved this change?", True),
             # Normal queries - should return False
             ("meeting notes from last week", False),
-            ("how to configure the database", False),
             ("list all users in the system", False),
             ("performance metrics for Q1", False),
             ("", False),

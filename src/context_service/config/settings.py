@@ -367,7 +367,7 @@ class RetrievalConfig(BaseModel):
     rrf_k: int = 60
     # Per-channel RRF weights. Empty dict = unweighted RRF.
     rrf_channel_weights: dict[str, float] = Field(default_factory=dict)
-    hybrid_enabled: bool = False
+    hybrid_enabled: bool = True
     fresh_floor: float = 0.25
     staleness_weight: float = 0.15
     tiebreak: TiebreakConfig = Field(default_factory=TiebreakConfig)
@@ -1078,7 +1078,7 @@ class Settings(BaseSettings):
 
     embedding_provider: str = Field(default="jina")
 
-    hybrid_search_enabled: bool = Field(default=False)
+    hybrid_search_enabled: bool = Field(default=True)
 
     entity_retrieval_enabled: bool = Field(default=False)
     entity_retrieval_max_entities: int = Field(default=10)

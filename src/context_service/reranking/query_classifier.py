@@ -27,16 +27,36 @@ ABSTRACT_VERBS = frozenset(
     }
 )
 
+# Question words that indicate value-seeking queries
+QUESTION_WORDS = frozenset(
+    {"what", "where", "when", "how", "which", "who", "why"}
+)
+
+# Patterns for specific hard query types
 QUESTION_PATTERNS = [
+    # Original patterns (kept for backwards compat)
     re.compile(r"^what (was|were|got|is|are) \w+\??$", re.IGNORECASE),
     re.compile(r"^why did .+\??$", re.IGNORECASE),
     re.compile(r"^(is|are|was|were) .+ (approved|rejected|denied)\??$", re.IGNORECASE),
     re.compile(r"^which .+ (was|were|got) \w+\??$", re.IGNORECASE),
+    # Value-seeking questions (What was my X, What is the Y)
+    re.compile(r"^what (was|were|is|are) (my|the|our) .+\??$", re.IGNORECASE),
+    # "My" possessive queries (personal data recall)
+    re.compile(r"^(my|our) .+\??$", re.IGNORECASE),
+    # How many/much questions
+    re.compile(r"^how (many|much|long|often|far) .+\??$", re.IGNORECASE),
+    # When/where questions
+    re.compile(r"^(when|where) (did|was|were|is|are|have|has) .+\??$", re.IGNORECASE),
 ]
 
 
 def is_hard_query(query: str) -> bool:
     """Detect queries requiring semantic reasoning.
+
+    Hard queries benefit from query expansion because the answer may be
+    phrased differently than the question. Examples:
+    - "What was my 5K time?" -> answer: "hoping to beat 25:50"
+    - "Where is the config?" -> answer: "stored in ~/.config/app"
 
     Args:
         query: The search query.
@@ -54,5 +74,10 @@ def is_hard_query(query: str) -> bool:
     if len(words) <= 5 and any(w.rstrip(string.punctuation) in ABSTRACT_VERBS for w in words):
         return True
 
-    # Question patterns that need inference
+    # Any question starting with question word is considered hard
+    # (embedding search often fails when query is a question and answer is a statement)
+    if words and words[0].rstrip(string.punctuation) in QUESTION_WORDS:
+        return True
+
+    # Specific patterns for complex hard queries
     return any(pattern.match(query_lower) for pattern in QUESTION_PATTERNS)
