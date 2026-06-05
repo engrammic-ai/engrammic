@@ -123,6 +123,31 @@ class EvidenceEnforcementConfig(BaseModel):
     enforce: bool = Field(default=False, description="If false, log-only mode (no rejection)")
 
 
+class TrustGateConfig(BaseModel):
+    """Settings for the recall trust gate (A1).
+
+    Withholds memory the system cannot stand behind from recall results.
+    Superseded nodes are already dropped upstream by query(); this gate adds
+    unresolved-contradiction and below-floor-confidence withholding.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    enabled: bool = Field(default=True, description="Enable the recall trust gate")
+    confidence_floor: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Withhold results with confidence below this floor. "
+        "Default 0.0 (off) to avoid hiding low-confidence-but-useful knowledge; "
+        "calibrate per deployment.",
+    )
+    withhold_unresolved_conflicts: bool = Field(
+        default=True,
+        description="Withhold results whose conflict_status is 'unresolved'",
+    )
+
+
 class RerankingSettings(BaseModel):
     """Settings for semantic reranking and query expansion."""
 
@@ -905,6 +930,7 @@ class Settings(BaseSettings):
     evidence_enforcement: EvidenceEnforcementConfig = Field(
         default_factory=EvidenceEnforcementConfig
     )
+    trust_gate: TrustGateConfig = Field(default_factory=TrustGateConfig)
     usage: UsageRetentionConfig = Field(default_factory=UsageRetentionConfig)
 
     # =========================================================================
