@@ -79,6 +79,13 @@ tools:
     description: "Trace the provenance of a belief back to its sources."
     maps_to: provenance
 
+  history:
+    description: |
+      Show how a belief evolved over time. Returns the supersession chain
+      from oldest to newest. Use when you need to understand how knowledge
+      changed, not just what it is now.
+    maps_to: history
+
   link:
     description: "Create a typed relationship between nodes."
     maps_to: link

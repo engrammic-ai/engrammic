@@ -826,27 +826,24 @@ class ContextService:
         subject: str | None = None,
         node_id: str | None = None,
     ) -> HistoryResult:
-        """Return belief evolution via SUPERSEDES chain."""
+        """Return belief evolution via SUPERSEDES chain.
+
+        Uses bidirectional traversal to find the full chain regardless of
+        which node in the chain is queried. Timeline is ordered oldest to newest.
+        """
         from context_service.db import queries as q
         from context_service.services.context_meta import HistoryEntry, HistoryResult
 
         if node_id:
-            rows, current_rows = await asyncio.gather(
-                self._memgraph.execute_query(
-                    q.BELIEF_HISTORY_BY_NODE,
-                    {"node_id": node_id, "silo_id": silo_id},
-                ),
-                self._memgraph.execute_query(
-                    q.BELIEF_HISTORY_CURRENT,
-                    {"node_id": node_id, "silo_id": silo_id},
-                ),
+            rows = await self._memgraph.execute_query(
+                q.BELIEF_HISTORY_BIDIRECTIONAL,
+                {"node_id": node_id, "silo_id": silo_id},
             )
         else:
             rows = await self._memgraph.execute_query(
                 q.BELIEF_HISTORY_BY_SUBJECT,
                 {"subject": subject, "silo_id": silo_id},
             )
-            current_rows = rows[-1:] if rows else []
 
         timeline = [
             HistoryEntry(
@@ -860,17 +857,7 @@ class ContextService:
             for r in rows
         ]
 
-        current: dict[str, Any] | None = None
-        if current_rows:
-            cr = current_rows[0]
-            current = {
-                "node_id": cr.get("node_id") or node_id,
-                "content": cr.get("content") or "",
-                "confidence": float(cr.get("confidence") or 1.0),
-                "superseded_by": cr.get("superseded_by"),
-            }
-
-        return HistoryResult(timeline=timeline, current=current)
+        return HistoryResult(timeline=timeline, current=None)
 
     async def reason(
         self,

@@ -188,28 +188,27 @@ Notes:
 
 ### Phase 1: Backend — unified graph traversal (~45 min)
 
-- [ ] Create `src/context_service/services/graph_walk.py`
-  - Generalized traversal: `graph_walk(node_id, edge_types, direction, max_depth)`
-  - Cycle detection built-in
-  - Both `trace` and `history` will dispatch here
-- [ ] Add Cypher query for bidirectional SUPERSEDES walk (find full chain from any node)
-- [ ] Update `ContextService.history()` to use `graph_walk`
+- [x] Add Cypher query for bidirectional SUPERSEDES walk (BELIEF_HISTORY_BIDIRECTIONAL)
+- [x] Update `ContextService.history()` to use bidirectional query
+
+Note: Skipped separate `graph_walk.py` module — the bidirectional query handles all cases.
+Unified backend can be extracted later if trace needs similar generalization.
 
 ### Phase 2: MCP tool (~20 min)
 
-- [ ] Create `src/context_service/mcp/tools/history.py`
+- [x] Create `src/context_service/mcp/tools/history.py`
   - Single param: `node_id`
   - Returns `{timeline: [...]}`
-  - Rate limiting, auth, telemetry (copy pattern from trace.py)
-- [ ] Add to `mcp_tools.yaml`
-- [ ] Register in `src/context_service/mcp/tools/__init__.py`
-- [ ] Add test in `tests/mcp/test_history.py`
+  - Rate limiting, auth, telemetry (copied pattern from trace.py)
+- [x] Add to `mcp_tools.yaml`
+- [x] Register in `src/context_service/mcp/tools/__init__.py` and `registry.py`
+- [x] Add test in `tests/mcp/tools/test_history.py`
 
 ### Phase 3: Skill updates (~15 min)
 
-- [ ] Create `~/.claude/skills/engrammic-history/SKILL.md`
-- [ ] Update `engrammic-eag-guide` supersession section — mention `history` for reading chains
-- [ ] Update `engrammic-recall` to cross-reference history for evolution queries
+- [x] Create `~/.claude/skills/engrammic-history/SKILL.md`
+- [x] Update `engrammic-eag-guide` supersession section — mention `history` for reading chains
+- [x] Update `engrammic-recall` to cross-reference history for evolution queries
 
 ### Phase 4: Verify on Somnus (~10 min)
 

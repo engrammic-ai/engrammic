@@ -525,6 +525,37 @@ RETURN
 ORDER BY depth DESC
 """
 
+# Bidirectional supersession chain traversal.
+# Walks both directions from any node in a chain to return the full history.
+# Edge direction: (newer)-[:SUPERSEDES]->(older)
+# Walking <- finds newer versions, walking -> finds older versions.
+BELIEF_HISTORY_BIDIRECTIONAL = """
+MATCH (start {id: $node_id, silo_id: $silo_id})
+OPTIONAL MATCH newer_path = (start)<-[:SUPERSEDES*1..20]-(newer)
+WHERE ALL(n IN nodes(newer_path) WHERE n.silo_id = $silo_id)
+OPTIONAL MATCH older_path = (start)-[:SUPERSEDES*1..20]->(older)
+WHERE ALL(n IN nodes(older_path) WHERE n.silo_id = $silo_id)
+WITH start, collect(DISTINCT newer) AS newer_raw, collect(DISTINCT older) AS older_raw
+WITH start,
+     [n IN newer_raw WHERE n IS NOT NULL] AS newer_nodes,
+     [n IN older_raw WHERE n IS NOT NULL] AS older_nodes
+WITH older_nodes + [start] + newer_nodes AS all_nodes
+UNWIND all_nodes AS n
+WITH DISTINCT n
+OPTIONAL MATCH (superseder)-[:SUPERSEDES]->(n)
+WHERE superseder.silo_id = $silo_id
+RETURN
+    n.id AS node_id,
+    n.content AS content,
+    n.valid_from AS valid_from,
+    n.valid_to AS valid_to,
+    n.confidence AS confidence,
+    n.supersession_reason AS supersession_reason,
+    n.tombstoned_at AS tombstoned_at,
+    superseder.id AS superseded_by
+ORDER BY n.valid_from ASC NULLS FIRST
+"""
+
 # Meta-memory: reflections about a node filtered by agent_id.
 # Pass $agent_id = null to return observations from all agents.
 GET_REFLECTIONS_FOR_NODE_BY_AGENT = """
