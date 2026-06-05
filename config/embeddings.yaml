@@ -10,3 +10,15 @@ model_version: text-embedding-005
 
 # Qdrant collection name (tests use context_vectors_test)
 qdrant_collection: context_vectors
+
+# Rate limiting (override in settings.yaml or env vars for production)
+# Vertex AI text-embedding-005 defaults:
+#   - 1500 QPM (queries per minute)
+#   - 250 requests per minute per region
+# These defaults are conservative for dev-box use
+# rate_limit:
+#   max_retries: 3
+#   retry_base_delay_seconds: 1.0
+#   retry_max_delay_seconds: 60.0
+#   max_concurrent_requests: 10
+#   timeout_seconds: 60.0

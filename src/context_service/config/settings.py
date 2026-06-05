@@ -399,6 +399,37 @@ class SpladeConfig(BaseModel):
     model: str = "prithivida/Splade_PP_en_v1"  # verified 2026-05-19
 
 
+class ModelRateLimitConfig(BaseModel):
+    """Rate limiting and retry configuration for AI model calls."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    max_retries: int = Field(
+        default=3,
+        description="Maximum number of retries on rate limit or transient errors.",
+    )
+    retry_base_delay_seconds: float = Field(
+        default=1.0,
+        description="Base delay for exponential backoff between retries.",
+    )
+    retry_max_delay_seconds: float = Field(
+        default=60.0,
+        description="Maximum delay between retries.",
+    )
+    max_concurrent_requests: int = Field(
+        default=10,
+        description="Maximum concurrent API requests (semaphore limit).",
+    )
+    timeout_seconds: float = Field(
+        default=60.0,
+        description="Timeout for individual API calls.",
+    )
+    requests_per_minute: int = Field(
+        default=250,
+        description="Max requests per minute (Vertex AI default: 250/region).",
+    )
+
+
 class EmbeddingConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -406,6 +437,7 @@ class EmbeddingConfig(BaseModel):
     jina: JinaConfig = Field(default_factory=JinaConfig)
     vertex: VertexConfig = Field(default_factory=VertexConfig)
     splade: SpladeConfig = Field(default_factory=SpladeConfig)
+    rate_limit: ModelRateLimitConfig = Field(default_factory=ModelRateLimitConfig)
 
 
 class ProviderConfig(BaseModel):
@@ -425,6 +457,7 @@ class LLMConfig(BaseModel):
         default=60.0,
         description="Default timeout for LLM API calls when caller passes None.",
     )
+    rate_limit: ModelRateLimitConfig = Field(default_factory=ModelRateLimitConfig)
     providers: dict[str, ProviderConfig] = Field(
         default_factory=lambda: {
             "anthropic": ProviderConfig(api_url="https://api.anthropic.com/v1/messages"),

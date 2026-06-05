@@ -9,6 +9,12 @@ from context_service.embeddings.litellm_embeddings import (
     LiteLLMEmbeddingError,
     LiteLLMEmbeddingService,
 )
+from context_service.embeddings.rate_limit import (
+    EmbeddingRateLimiter,
+    EmbeddingRateLimitExceeded,
+    get_embedding_rate_limiter,
+    set_embedding_rate_limiter,
+)
 from context_service.embeddings.splade import SpladeEncoder, SpladeEncoderError
 from context_service.embeddings.tei_embeddings import (
     TEIEmbeddingError,
@@ -54,7 +60,11 @@ def build_embedding_service(
 
 __all__ = [
     "EmbeddingService",
+    "EmbeddingRateLimitExceeded",
+    "EmbeddingRateLimiter",
     "build_embedding_service",
+    "get_embedding_rate_limiter",
+    "set_embedding_rate_limiter",
     "LiteLLMEmbeddingError",
     "LiteLLMEmbeddingService",
     "SpladeEncoder",

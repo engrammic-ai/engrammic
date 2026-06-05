@@ -235,6 +235,21 @@ def _register_worker_hooks(broker: ListQueueBroker) -> None:
             redis_client = RedisClient(redis_pool)
             logger.info("worker_redis_connected")
 
+            # Initialize embedding rate limiter for distributed coordination
+            from context_service.embeddings import set_embedding_rate_limiter
+
+            rate_limit_config = settings.embedding.rate_limit
+            set_embedding_rate_limiter(
+                redis=redis_client,
+                config=rate_limit_config,
+                requests_per_minute=rate_limit_config.requests_per_minute,
+            )
+            logger.info(
+                "worker_embedding_rate_limiter_configured",
+                rpm=rate_limit_config.requests_per_minute,
+                max_concurrent=rate_limit_config.max_concurrent_requests,
+            )
+
             qdrant_client = QdrantClient.from_settings(settings)
             await qdrant_client.ensure_collection(hybrid=settings.hybrid_search_enabled)
             logger.info("worker_qdrant_connected")
