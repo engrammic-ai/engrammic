@@ -267,13 +267,14 @@ async def _context_remember(
         }
 
     ctx_svc = get_context_service()
+    agent_id = auth.agent_id or auth.org_id
     _start = time.perf_counter()
 
     result_tx, events = await store_memory(
         store=ctx_svc.graph_store,
         content=content,
         silo_id=str(validated_silo_id),
-        agent_id=auth.agent_id,
+        agent_id=agent_id,
         layer="memory",
         tags=tags,
         content_type=content_type,
@@ -375,16 +376,17 @@ async def _context_assert(
         validation_results = await asyncio.gather(
             *[ev_validator.validate(ev_ref, str(expected_silo_id)) for ev_ref in evidence_list]
         )
-        for ev_ref, result in zip(evidence_list, validation_results, strict=True):
-            if result.status != "valid":
+        for ev_ref, ev_result in zip(evidence_list, validation_results, strict=True):
+            if ev_result.status != "valid":
                 return {
                     "error": "invalid_evidence",
                     "evidence": ev_ref,
-                    "reason": result.reason,
+                    "reason": ev_result.reason,
                 }
-            if result.node_id:
-                evidence_nodes.append(result.node_id)
+            if ev_result.node_id:
+                evidence_nodes.append(ev_result.node_id)
 
+    agent_id = auth.agent_id or auth.org_id
     _start = time.perf_counter()
     # Use validated node IDs if available, else fall back to raw refs
     evidence_refs = [f"node:{nid}" for nid in evidence_nodes] if evidence_nodes else evidence_list
@@ -399,14 +401,14 @@ async def _context_assert(
         )
         resolved_tier = tier_enum.value
 
-    spo_kwargs: dict[str, str] = {}
+    subject: str | None = None
+    predicate: str | None = None
+    object_value: str | None = None
     if isinstance(parsed_claim, SPOClaim):
         claim_text = f"{parsed_claim.subject} {parsed_claim.predicate} {parsed_claim.object}"
-        spo_kwargs = {
-            "subject": parsed_claim.subject,
-            "predicate": parsed_claim.predicate,
-            "object_value": parsed_claim.object,
-        }
+        subject = parsed_claim.subject
+        predicate = parsed_claim.predicate
+        object_value = parsed_claim.object
     else:
         claim_text = parsed_claim
 
@@ -415,13 +417,15 @@ async def _context_assert(
         content=claim_text,
         evidence_refs=evidence_refs,
         silo_id=str(expected_silo_id),
-        agent_id=auth.agent_id,
+        agent_id=agent_id,
         source_tier=resolved_tier,
         confidence=confidence,
         tags=tags,
         metadata=metadata,
         supersedes=supersedes,
-        **spo_kwargs,
+        subject=subject,
+        predicate=predicate,
+        object_value=object_value,
     )
 
     for event in events:

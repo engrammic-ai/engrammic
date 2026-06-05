@@ -13,7 +13,13 @@ from functools import lru_cache
 from typing import Any
 
 import structlog
-from taskiq import SmartRetryMiddleware, TaskiqMessage, TaskiqMiddleware, TaskiqResult
+from taskiq import (
+    BrokerMessage,
+    SmartRetryMiddleware,
+    TaskiqMessage,
+    TaskiqMiddleware,
+    TaskiqResult,
+)
 from taskiq_redis import ListQueueBroker
 
 from context_service.config.settings import get_settings
@@ -88,23 +94,17 @@ class DeadLetterMiddleware(TaskiqMiddleware):
                     await self._dlq_broker.startup()
                     self._started = True
 
-            dlq_message = message.model_copy(
-                update={
-                    "labels": {
-                        **message.labels,
-                        "_dlq_reason": repr(exception),
-                    },
-                }
+            updated_labels = {
+                **message.labels,
+                "_dlq_reason": repr(exception),
+            }
+            dlq_message = BrokerMessage(
+                task_id=message.task_id,
+                task_name=message.task_name,
+                message=message.model_dump_json().encode(),
+                labels=updated_labels,
             )
-            dlq_bytes = dlq_message.model_dump_json().encode()
-
-            class _DLQPayload:
-                __slots__ = ("message",)
-
-                def __init__(self, data: bytes) -> None:
-                    self.message = data
-
-            await self._dlq_broker.kick(_DLQPayload(dlq_bytes))
+            await self._dlq_broker.kick(dlq_message)
             logger.warning(
                 "task_sent_to_dlq",
                 task_name=message.task_name,
