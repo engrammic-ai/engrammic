@@ -43,6 +43,7 @@ async def _learn_impl(
     settings = get_settings()
     cfg = settings.evidence_enforcement
 
+    evidence_warning: str | None = None
     if cfg.enabled and not validate_evidence_non_empty(evidence):
         log.warning(
             "evidence_violation",
@@ -52,10 +53,10 @@ async def _learn_impl(
         )
         if cfg.enforce:
             raise MissingEvidenceError()
-        return {
-            "error": "missing_evidence",
-            "message": "evidence must reference at least one node or URI",
-        }
+        evidence_warning = (
+            "stored without evidence; add a source node or URI so this "
+            "claim can be trusted and surfaced later"
+        )
 
     result = await _context_assert(
         silo_id=None,  # auto-derived from auth
@@ -71,6 +72,8 @@ async def _learn_impl(
         record_node_confidence(confidence, layer="knowledge", silo_id=None)
         if supersedes:
             record_supersession_used("learn", silo_id=None)
+    if evidence_warning and isinstance(result, dict) and "error" not in result:
+        result["warning"] = evidence_warning
     return result
 
 

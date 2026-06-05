@@ -58,7 +58,7 @@ async def test_include_content_false_projects_node_in_flat_get() -> None:
         result = await _context_recall(silo_id=silo_id, node_ids=[nid], include_content=False)
 
         node = result["nodes"][0]
-        assert set(node.keys()) == {"node_id", "layer", "summary", "created_at", "confidence"}
+        assert set(node.keys()) == {"node_id", "layer", "summary", "created_at", "confidence", "tier", "relevance_score"}
         assert node["node_id"] == nid
         assert node["layer"] == "memory"
         assert node["confidence"] == 0.9
@@ -164,7 +164,7 @@ async def test_include_content_false_in_query_mode() -> None:
         result = await _context_recall(silo_id=silo_id, query="anything", include_content=False)
 
         out = result["results"][0]
-        assert set(out.keys()) == {"node_id", "layer", "summary", "created_at", "confidence"}
+        assert set(out.keys()) == {"node_id", "layer", "summary", "created_at", "confidence", "tier", "relevance_score"}
         assert out["node_id"] == nid
         assert out["layer"] == "knowledge"
         assert out["summary"] == "y" * 200
@@ -205,7 +205,7 @@ async def test_include_content_false_in_graph_mode() -> None:
         )
 
         out = result["nodes"][0]
-        assert set(out.keys()) == {"node_id", "layer", "summary", "created_at", "confidence"}
+        assert set(out.keys()) == {"node_id", "layer", "summary", "created_at", "confidence", "tier", "relevance_score"}
         assert out["summary"] == "z" * 200
         # Graph nodes lack created_at; projection preserves None
         assert out["created_at"] is None
