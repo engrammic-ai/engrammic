@@ -236,9 +236,13 @@ def _register_worker_hooks(broker: ListQueueBroker) -> None:
             logger.info("worker_redis_connected")
 
             # Initialize embedding rate limiter for distributed coordination
+            from context_service.config.config_loader import load_config
+            from context_service.config.settings import ModelRateLimitConfig
             from context_service.embeddings import set_embedding_rate_limiter
 
-            rate_limit_config = settings.embedding.rate_limit
+            embeddings_config = load_config("embeddings")
+            rate_limit_dict = embeddings_config.get("rate_limit", {})
+            rate_limit_config = ModelRateLimitConfig(**rate_limit_dict)
             set_embedding_rate_limiter(
                 redis=redis_client,
                 config=rate_limit_config,

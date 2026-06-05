@@ -91,15 +91,17 @@ class LiteLLMEmbeddingService:
         Returns:
             Configured LiteLLMEmbeddingService.
         """
-        from context_service.config.settings import get_settings
-
         config = load_config("embeddings")
-        settings = get_settings()
+
+        # Load rate_limit from YAML, fall back to defaults
+        rate_limit_dict = config.get("rate_limit", {})
+        rate_limit = ModelRateLimitConfig(**rate_limit_dict)
+
         return cls(
             model=config["model"],
             dimensions=config["dimensions"],
             max_input_chars=config.get("max_input_chars", 30000),
-            rate_limit=settings.embedding.rate_limit,
+            rate_limit=rate_limit,
             _embedding_cache=_embedding_cache,
         )
 
