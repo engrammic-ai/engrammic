@@ -139,9 +139,9 @@ class SemanticRerankCache:
         doc_hash = _doc_ids_hash(doc_ids)
         try:
             client = await self._get_client()
-            results = await client.search(
+            response = await client.query_points(
                 collection_name=self._collection,
-                query_vector=query_embedding,
+                query=query_embedding,
                 query_filter=Filter(
                     must=[
                         FieldCondition(key="silo_id", match=MatchValue(value=silo_id)),
@@ -151,6 +151,7 @@ class SemanticRerankCache:
                 limit=1,
                 score_threshold=self._threshold,
             )
+            results = response.points
         except Exception as e:
             logger.warning("rerank_cache_l2_search_failed", error=str(e))
             record_cache_miss("rerank", silo_id=silo_id)
