@@ -71,7 +71,7 @@ async def test_conflict_status_promoted_for_query_path(monkeypatch: pytest.Monke
         },
     )
 
-    result = await recall_mod._recall_impl(query="test query")
+    result = await recall_mod._recall_impl(query="test query", include_withheld=True)
 
     items = result["results"]
     assert len(items) == 1
@@ -105,7 +105,7 @@ async def test_conflict_status_promoted_from_properties_for_get_path(
         },
     )
 
-    result = await recall_mod._recall_impl(node_ids=[node_id])
+    result = await recall_mod._recall_impl(node_ids=[node_id], include_withheld=True)
 
     items = result["results"]
     assert len(items) == 1
@@ -227,7 +227,7 @@ async def test_nodes_path_also_gets_conflict_fields(
         },
     )
 
-    result = await recall_mod._recall_impl(query="q", depth=1)
+    result = await recall_mod._recall_impl(query="q", depth=1, include_withheld=True)
 
     items = result["nodes"]
     assert items[0]["conflict_status"] == "unresolved"
