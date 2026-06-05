@@ -11,7 +11,6 @@ from context_service.config.settings import get_settings
 from context_service.engine.engagement import MODE_HARD
 from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.rate_limit import rate_limited
-from context_service.mcp.tools.trust_gate import apply_trust_gate
 from context_service.mcp.server import (
     get_mcp_auth_context,
     get_preset_resolver,
@@ -20,6 +19,7 @@ from context_service.mcp.server import (
 )
 from context_service.mcp.tools.context_recall import _context_recall
 from context_service.mcp.tools.registry import get_tool_description
+from context_service.mcp.tools.trust_gate import apply_trust_gate
 from context_service.services.models import derive_silo_id
 from context_service.telemetry.metrics import (
     record_engagement_latency,
