@@ -11,7 +11,7 @@
 **Source spec:** `context/plans/2026-06-04-enforcement-architecture-design.md` (A1 section).
 
 **Key facts (verified against code):**
-- `recall.py` builds the final response dict and promotes `conflict_status`/`credibility` to top-level on each item (recall.py:100-195). This is the single place all three retrieval paths converge, so the gate goes here.
+- `recall.py` is where all three retrieval paths converge into the final response dict. It promotes `conflict_status`, `credibility`, and `credibility_factors` to top-level on each item (recall.py:100-118). `confidence` is ALREADY top-level on each item (set upstream by `_project_node_without_content`), so do NOT add a confidence promotion. The gate goes at the END of `_recall_impl`, after the hard-mode block (recall.py:159-167) and immediately before the single `return result` (recall.py:195). Hard mode sets `result["results"] = []` at 159-167, so running the gate after it avoids a contradictory empty-results-plus-withheld-count response.
 - The core `query()` (services/context.py:1506-1507) ALREADY drops superseded nodes (`if not include_superseded and props.get("superseded_by"): continue`). A1 adds the contradiction + confidence gate on top, plus the withheld accounting.
 - A node's `confidence` and `conflict_status` live in `node.properties` and are surfaced onto each recall result item as `confidence` and `conflict_status` (values: `none`, `unresolved`, `resolved_supersede`).
 - Settings sub-configs are frozen `BaseModel`s registered on `Settings` via `Field(default_factory=...)` (settings.py:117-124, 905-907).
@@ -63,7 +63,7 @@ Expected: FAIL on `test_recall_description_mentions_session_start_and_withholdin
 
 - [ ] **Step 3: Edit `mcp_tools.yaml`**
 
-Update the `recall` description (lines ~63-69) to:
+Update the `recall` description (lines ~66-72) to:
 
 ```yaml
   recall:
@@ -272,14 +272,12 @@ def apply_trust_gate(
     Returns (surfaced_results, withheld_summary). withheld_summary is
     {"count": int, "by_reason": {"unresolved_conflict": int, "low_confidence": int}}.
     """
-    summary = {
-        "count": 0,
-        "by_reason": {"unresolved_conflict": 0, "low_confidence": 0},
-    }
+    by_reason: dict[str, int] = {"unresolved_conflict": 0, "low_confidence": 0}
     if include_withheld:
-        return list(results), summary
+        return list(results), {"count": 0, "by_reason": by_reason}
 
     surfaced: list[dict[str, Any]] = []
+    count = 0
     for item in results:
         status = item.get("conflict_status") or "none"
         raw_conf = item.get("confidence")
@@ -294,9 +292,10 @@ def apply_trust_gate(
         if reason is None:
             surfaced.append(item)
         else:
-            summary["count"] += 1
-            summary["by_reason"][reason] += 1
+            count += 1
+            by_reason[reason] += 1
 
+    summary: dict[str, Any] = {"count": count, "by_reason": by_reason}
     return surfaced, summary
 ```
 
@@ -317,59 +316,52 @@ git commit -m "feat(mcp): add apply_trust_gate helper"
 ### Task 4: Wire the trust gate into recall
 
 **Files:**
-- Modify: `src/context_service/mcp/tools/recall.py` (add `include_withheld` param to `recall` register fn ~235-292 and `_recall_impl` ~34-45; apply gate after the conflict/credibility promotion ~118)
+- Modify: `src/context_service/mcp/tools/recall.py` (add `include_withheld` to `_recall_impl` 35-45, the registered `recall` wrapper 243-253, and thread it through the POSITIONAL `_recall_impl(...)` call at 277-287; apply the gate at the END of `_recall_impl`, after the hard-mode block 159-167, immediately before `return result` at 195)
 - Test: `tests/mcp/tools/test_recall_trust_gate.py` (create)
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
 # tests/mcp/tools/test_recall_trust_gate.py
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
 from context_service.mcp.tools import recall as recall_mod
 
+# CRITICAL: _recall_impl has several dependencies that must be patched on the
+# recall_mod namespace (get_mcp_auth_context, derive_silo_id, get_preset_resolver,
+# track_tool_usage, get_redis, ...). Do NOT rely on conftest's mock_mcp_context: it
+# does not patch recall. Copy the proven helper
+# tests/mcp/tools/test_recall_engagement.py::_patch_recall_base VERBATIM as the
+# `patched_recall` fixture below, then set _context_recall's return value to FAKE.
 
-@pytest.fixture
-def fake_recall_result():
-    return {
-        "results": [
-            {"node_id": "ok", "confidence": 0.9, "properties": {}},
-            {
-                "node_id": "contested",
-                "confidence": 0.9,
-                "properties": {"conflict_status": "unresolved"},
-                "conflict_status": "unresolved",
-            },
-        ],
-        "total_candidates": 2,
-    }
+FAKE = {
+    "results": [
+        {"node_id": "ok", "confidence": 0.9, "conflict_status": "none"},
+        {"node_id": "contested", "confidence": 0.9, "conflict_status": "unresolved"},
+    ],
+    "total_candidates": 2,
+}
 
 
 @pytest.mark.asyncio
-async def test_recall_withholds_unresolved_conflict(mock_mcp_context, fake_recall_result):
-    with patch.object(
-        recall_mod, "_context_recall", new=AsyncMock(return_value=fake_recall_result)
-    ):
-        out = await recall_mod._recall_impl(query="anything")
-    ids = [n["node_id"] for n in out["results"]]
-    assert ids == ["ok"]
+async def test_recall_withholds_unresolved_conflict(patched_recall):
+    # patched_recall: the _patch_recall_base fixture with _context_recall -> FAKE
+    out = await recall_mod._recall_impl(query="anything")
+    assert [n["node_id"] for n in out["results"]] == ["ok"]
     assert out["withheld"]["count"] == 1
     assert "include_withheld" in out["withheld"]["message"]
 
 
 @pytest.mark.asyncio
-async def test_recall_include_withheld_returns_all(mock_mcp_context, fake_recall_result):
-    with patch.object(
-        recall_mod, "_context_recall", new=AsyncMock(return_value=fake_recall_result)
-    ):
-        out = await recall_mod._recall_impl(query="anything", include_withheld=True)
+async def test_recall_include_withheld_returns_all(patched_recall):
+    out = await recall_mod._recall_impl(query="anything", include_withheld=True)
     assert len(out["results"]) == 2
     assert out["withheld"]["count"] == 0
 ```
 
-Note: confirm the auth patch target. `mock_mcp_context` patches `context_store.get_mcp_auth_context`; recall imports its own `get_mcp_auth_context`, so add a patch for `context_service.mcp.tools.recall.get_mcp_auth_context` to the test (or extend `mock_mcp_context` in conftest). Inspect recall.py imports during Step 3 and adjust the fixture accordingly.
+Note: Build the `patched_recall` fixture by reading `tests/mcp/tools/test_recall_engagement.py` and copying `_patch_recall_base` exactly (it monkeypatches `recall_mod._context_recall`, `get_mcp_auth_context`, `derive_silo_id`, `get_preset_resolver`, `track_tool_usage`, and per-test `recall.get_redis` and `engine.engagement.get_engagement_for_about_set`). Override `_context_recall`'s return with `FAKE`. The `@rate_limited` wrapper does not interfere: in tests `_rate_limiter is None`, so calling `_recall_impl` directly is fine.
 
 - [ ] **Step 2: Run test to verify it fails**
 
@@ -387,7 +379,7 @@ from context_service.mcp.tools.trust_gate import apply_trust_gate
 
 Add `include_withheld: bool = False` to BOTH the `recall(...)` register function signature (recall.py:235-292) and `_recall_impl(...)` (recall.py:34-45), and pass it through from `recall` to `_recall_impl`.
 
-After the conflict_status/credibility promotion block (recall.py ~118), before the function returns, insert:
+At the END of `_recall_impl`, after the hard-mode block (recall.py:159-167) and immediately before the final `return result` (recall.py:195), insert:
 
 ```python
         tg = get_settings().trust_gate
@@ -411,7 +403,7 @@ After the conflict_status/credibility promotion block (recall.py ~118), before t
                 result["withheld"] = withheld
 ```
 
-Place this AFTER the hard-mode engagement early-return (recall.py:128-157) is NOT hit, i.e., in the normal path where `result` holds items. If the promotion and engagement logic sit in `_recall_impl`, insert there so both `recall` and any internal callers benefit.
+Hard mode (recall.py:159-167) sets `result["results"] = []` and falls through to the same `return result`, so placing the gate just before that return means hard mode reports `count: 0` instead of a contradictory empty-results-plus-withheld-count response. Also add `include_withheld: bool = False` to the registered `recall` wrapper (243-253) and pass it through the positional `_recall_impl(...)` call at 277-287 by keyword: `include_withheld=include_withheld`.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -473,7 +465,7 @@ async def test_hard_mode_rejects_without_evidence(
     mock_mcp_context, mock_context_service, monkeypatch
 ):
     import context_service.mcp.tools.learn as learn_mod
-    from context_service.mcp.errors import MissingEvidenceError  # confirm import path in Step 3
+    from primitives.eag.transitions import MissingEvidenceError
 
     fake_settings = type("S", (), {"evidence_enforcement": _Cfg(enabled=True, enforce=True)})()
     monkeypatch.setattr(learn_mod, "get_settings", lambda: fake_settings)
@@ -533,7 +525,7 @@ Then after the `_context_assert(...)` call returns `result`, before returning it
         result["warning"] = evidence_warning
 ```
 
-Confirm the `MissingEvidenceError` import path used by learn.py and mirror it in the test (Step 1).
+learn.py imports `MissingEvidenceError` from `primitives.eag.transitions` (learn.py:10); the test imports it from the same place.
 
 - [ ] **Step 4: Run test to verify it passes**
 
