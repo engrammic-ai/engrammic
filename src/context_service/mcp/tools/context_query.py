@@ -10,6 +10,7 @@ from typing import Any, Literal
 import structlog
 from opentelemetry import trace
 
+from context_service.cache.rerank_cache import SemanticRerankCache
 from context_service.cache.result_cache import ResultCacheStore, get_knowledge_version
 from context_service.config.models import load_models_config
 from context_service.config.settings import get_settings
@@ -44,6 +45,7 @@ tracer = trace.get_tracer(__name__)
 _VALID_SEARCH_MODES = frozenset({"hybrid", "dense", "sparse"})
 
 _result_cache: ResultCacheStore | None = None
+_rerank_cache: SemanticRerankCache | None = None
 
 
 def _get_result_cache() -> ResultCacheStore:
@@ -51,6 +53,21 @@ def _get_result_cache() -> ResultCacheStore:
     if _result_cache is None:
         _result_cache = ResultCacheStore()
     return _result_cache
+
+
+def _get_rerank_cache(qdrant: Any, settings: Any) -> SemanticRerankCache | None:
+    """Get or create the rerank cache singleton."""
+    global _rerank_cache
+    if not settings.reranking.cache_enabled:
+        return None
+    if _rerank_cache is None:
+        _rerank_cache = SemanticRerankCache(
+            qdrant=qdrant,
+            similarity_threshold=settings.reranking.cache_similarity_threshold,
+            l1_ttl_seconds=settings.reranking.cache_l1_ttl_seconds,
+            l1_maxsize=settings.reranking.cache_l1_maxsize,
+        )
+    return _rerank_cache
 
 
 def _layer_ttls_for(layers: list[str] | None) -> dict[str, int]:
@@ -95,6 +112,9 @@ async def _apply_reranking(
     query: str,
     results: list[Any],
     settings: Any,
+    query_embedding: list[float] | None = None,
+    silo_id: str | None = None,
+    rerank_cache: SemanticRerankCache | None = None,
 ) -> tuple[list[Any], bool]:
     """Apply reranking to search results if enabled.
 
@@ -110,13 +130,28 @@ async def _apply_reranking(
     if reranker_model is None:
         return results, False
 
+    node_ids = [str(r.node_id) for r in results]
+    id_to_result = {str(r.node_id): r for r in results}
+
+    # Check rerank cache first
+    if rerank_cache is not None and query_embedding is not None and silo_id is not None:
+        cached_scores = await rerank_cache.get(query, query_embedding, node_ids, silo_id)
+        if cached_scores is not None:
+            # Reorder results by cached scores
+            score_map = dict(cached_scores)
+            reranked_results = sorted(
+                results,
+                key=lambda r: score_map.get(str(r.node_id), 0.0),
+                reverse=True,
+            )
+            return reranked_results, False
+
     reranker = LiteLLMReranker(
         model=reranker_model,
         timeout_seconds=settings.reranking.reranker_timeout_seconds,
         vertex_project=settings.vertex_project,
     )
     documents = [r.content or "" for r in results]
-    node_ids = [str(r.node_id) for r in results]
 
     with tracer.start_as_current_span("recall.rerank") as span:
         span.set_attribute("query_length", len(query))
@@ -141,7 +176,11 @@ async def _apply_reranking(
             fallback_used = True
             return results, fallback_used
 
-    id_to_result = {str(r.node_id): r for r in results}
+    # Store in cache for future queries
+    if rerank_cache is not None and query_embedding is not None and silo_id is not None:
+        scores = [(rr.node_id, rr.score) for rr in reranked]
+        await rerank_cache.set(query, query_embedding, node_ids, scores, silo_id)
+
     reranked_results = [id_to_result[rr.node_id] for rr in reranked if rr.node_id in id_to_result]
     return reranked_results, fallback_used
 
@@ -344,7 +383,23 @@ async def _context_query(
     record_mcp_tool("context_query", elapsed_s * 1000)
     elapsed_ms = int(elapsed_s * 1000)
 
-    results, rerank_fallback = await _apply_reranking(effective_query, results, settings)
+    # Get query embedding for rerank cache (reuses cached embedding from vector search)
+    query_embedding: list[float] | None = None
+    rerank_cache = _get_rerank_cache(ctx_svc.vector_store, settings)
+    if rerank_cache is not None and ctx_svc.embedding_client is not None:
+        try:
+            query_embedding = await ctx_svc.embedding_client.embed_query(effective_query)
+        except Exception as e:
+            logger.warning("rerank_cache_embed_failed", error=str(e))
+
+    results, rerank_fallback = await _apply_reranking(
+        effective_query,
+        results,
+        settings,
+        query_embedding=query_embedding,
+        silo_id=silo_id,
+        rerank_cache=rerank_cache,
+    )
 
     await _emit_access_events(redis, silo_id, results)
 

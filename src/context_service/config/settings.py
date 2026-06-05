@@ -167,6 +167,19 @@ class RerankingSettings(BaseModel):
         default=5.0, description="Timeout for query expansion LLM calls"
     )
 
+    # Semantic rerank cache settings
+    cache_enabled: bool = Field(
+        default=True, description="Enable semantic caching of rerank results"
+    )
+    cache_similarity_threshold: float = Field(
+        default=0.95,
+        ge=0.8,
+        le=1.0,
+        description="Cosine similarity threshold for L2 cache hits",
+    )
+    cache_l1_ttl_seconds: int = Field(default=300, description="TTL for L1 (exact match) cache")
+    cache_l1_maxsize: int = Field(default=1000, description="Max entries in L1 cache per process")
+
 
 class DecayClassConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
