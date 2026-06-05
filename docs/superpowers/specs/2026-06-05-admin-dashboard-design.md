@@ -362,8 +362,72 @@ CORS_ORIGINS=https://dashboard.engrammic.ai
 
 ---
 
+## Prerequisites
+
+Before implementation can begin:
+
+1. **REST API endpoints:** Self-hosted REST API Phase 1 must ship first — provides `/v1/memory/`, `/v1/knowledge/`, `/v1/search/recall`. See `2026-05-20-self-hosted-rest-api-phase1.md`.
+2. **Dismiss endpoint:** `/v1/dismiss` not yet implemented — add to REST API or call MCP directly via internal route.
+3. **Telemetry tables:** `pg-telemetry` plan shipped — tables exist in Postgres.
+4. **Access events stream:** `silo:{silo_id}:access_events` published by context-service per signals-port spec.
+
+---
+
+## Auth & Authorization
+
+### Scopes
+
+Inherited from context-service REST API design:
+
+| Scope | Access |
+|-------|--------|
+| `read` | View activity, nodes, metrics |
+| `write` | read + edit/forget nodes |
+| `admin` | write + silo management, job triggers |
+
+### Silo Authorization
+
+WorkOS organization maps to silo:
+1. User authenticates via WorkOS
+2. WorkOS returns `organization_id` in token claims
+3. BFF resolves `organization_id` → `silo_id` via Postgres lookup
+4. All queries scoped to resolved silo_id
+5. Super-admin role (internal) can access all silos
+
+---
+
+## Error Responses
+
+```typescript
+interface ErrorResponse {
+  error: {
+    code: string;           // e.g., "not_found", "forbidden", "validation_error"
+    message: string;        // human-readable
+    details?: Record<string, unknown>;
+  };
+  meta: {
+    request_id: string;
+  };
+}
+```
+
+| Status | Code | When |
+|--------|------|------|
+| 400 | `validation_error` | Invalid params |
+| 401 | `unauthorized` | Missing/invalid token |
+| 403 | `forbidden` | Token valid but no access to silo |
+| 404 | `not_found` | Node/resource doesn't exist |
+| 429 | `rate_limited` | Too many requests |
+
+### Bulk Operation Limits
+
+- `POST /api/nodes/batch/forget`: max 100 nodes per request
+- Rate limit: 10 bulk operations per minute per silo
+
+---
+
 ## Open Questions
 
-1. **Memgraph connection pooling:** What's the right pool size for BFF alongside context-service?
-2. **Cold node threshold:** What heat_score counts as "cold"? Configurable per silo?
-3. **Metrics retention:** How long to keep latency/query volume data in Postgres?
+1. **Memgraph connection pooling:** What's the right pool size for BFF alongside context-service? (Default: 10, tune post-launch)
+2. **Cold node threshold:** Default 0.1, configurable per silo via settings
+3. **Metrics retention:** Default 90 days, configurable
