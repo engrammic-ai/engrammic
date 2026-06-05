@@ -54,7 +54,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.api
     container_name: engrammic-reaction-worker
-    command: ["taskiq", "worker", "context_service.reactions.worker_entrypoint:broker", "--workers", "1"]
+    command: ["taskiq", "worker", "context_service.reactions.worker_entrypoint:broker", "--workers", "2"]
     env_file:
       - ../.env
     environment:
