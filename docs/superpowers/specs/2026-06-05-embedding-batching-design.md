@@ -38,29 +38,54 @@ Use the [`batched`](https://pypi.org/project/batched/) Python library to auto-ba
 ```python
 import batched
 
+# Module-level batched function (created once at import time)
+_batched_embed_fn = None
+
+def _get_batched_embed(embed_batch_fn, batch_size: int, timeout_ms: int, small_batch_threshold: int):
+    """Create or return the batched embed function."""
+    global _batched_embed_fn
+    if _batched_embed_fn is None:
+        @batched.aio.dynamically(
+            batch_size=batch_size,
+            timeout_ms=timeout_ms,
+            small_batch_threshold=small_batch_threshold,
+        )
+        async def _batched_embed(texts: list[str]) -> list[list[float]]:
+            return await embed_batch_fn(texts)
+        _batched_embed_fn = _batched_embed
+    return _batched_embed_fn
+
 class LiteLLMEmbeddingService:
     def __init__(self, ..., batching_enabled: bool = True, batch_size: int = 32,
                  timeout_ms: int = 100, small_batch_threshold: int = 4):
         # ... existing init ...
-        
         self._batching_enabled = batching_enabled
-        
-        if batching_enabled:
-            @batched.aio.dynamically(
-                batch_size=batch_size,
-                timeout_ms=timeout_ms,
-                small_batch_threshold=small_batch_threshold,
-            )
-            async def _batched_embed(texts: list[str]) -> list[list[float]]:
-                return await self._embed_batch(texts)
-            
-            self._batched_embed = _batched_embed
+        self._batch_size = batch_size
+        self._timeout_ms = timeout_ms
+        self._small_batch_threshold = small_batch_threshold
     
     async def embed_single(self, text: str) -> list[float]:
         if self._batching_enabled:
-            results = await self._batched_embed([text])
+            batched_fn = _get_batched_embed(
+                self._embed_batch, self._batch_size, self._timeout_ms, self._small_batch_threshold
+            )
+            results = await batched_fn([text])
             return results[0]
         return (await self._embed_batch([text]))[0]
+    
+    @classmethod
+    def from_config(cls, _embedding_cache = None) -> "LiteLLMEmbeddingService":
+        config = load_config("embeddings")
+        batching = config.get("batching", {})
+        return cls(
+            model=config["model"],
+            dimensions=config["dimensions"],
+            # ... existing params ...
+            batching_enabled=batching.get("enabled", True),
+            batch_size=batching.get("batch_size", 32),
+            timeout_ms=batching.get("timeout_ms", 100),
+            small_batch_threshold=batching.get("small_batch_threshold", 4),
+        )
 ```
 
 **Task handler:** `reactions/tasks.py` unchanged. Still calls `embed_single()`, batching is transparent.
@@ -85,48 +110,24 @@ batching:
 
 **Feature flag:** `batching.enabled` allows disabling if issues arise.
 
-#### Embedding Cache Before Upsert
+#### Embedding Cache Handles Retries
 
 **Problem identified in review:** If embedding succeeds for a batch of 32 but Qdrant upsert fails for node 17, that node retries and re-embeds solo (wasted API call).
 
-**Fix:** Cache embeddings in Redis immediately after batch completes, before Qdrant upsert.
+**Resolution:** The existing `embed()` method already caches embeddings in Redis (lines 128-165 of `litellm_embeddings.py`). When `embed_single()` is called:
+1. It calls `embed([text])` which checks cache first
+2. On cache miss, embeds and caches the result
+3. Returns the vector
 
-```python
-# In compute_embedding_task (tasks.py)
-embedder = build_embedding_service()
-vector = await embedder.embed_single(content)
+If Qdrant upsert fails and the task retries, the subsequent `embed_single()` call hits the cache. **No task.py changes needed** — caching is already handled at the embedding layer.
 
-# Cache embedding before upsert (new)
-if embedding_cache:
-    await embedding_cache.set(content, "passage", vector)
-
-# Then upsert to Qdrant
-await qdrant.upsert(...)
-```
-
-This way, if Qdrant fails and the task retries, the embedding is served from cache.
-
-#### Graceful Shutdown Handler
+#### Graceful Shutdown
 
 **Problem identified in review:** On SIGTERM, pending batches may be lost.
 
-**Fix:** Add shutdown handler to flush pending batches.
+**Resolution:** The `batched` library flushes pending items when the event loop closes. Taskiq workers already support graceful shutdown (SIGTERM triggers clean exit after in-flight tasks complete). No additional code needed — just ensure deployments use graceful shutdown (e.g., `docker stop` with timeout, not `docker kill`).
 
-```python
-# In worker.py
-import signal
-import atexit
-
-def _flush_pending_embeddings():
-    """Flush any pending embedding batches on shutdown."""
-    # batched library flushes on event loop close, but we ensure
-    # worker waits for pending tasks before exiting
-    logger.info("worker_shutdown_flushing_embeddings")
-
-atexit.register(_flush_pending_embeddings)
-```
-
-Note: The `batched` library handles flush on event loop close. The worker should use graceful shutdown (wait for in-flight tasks) rather than hard kill.
+**Verification:** Add integration test that shuts down worker mid-batch and confirms no embeddings are lost.
 
 #### Data Flow
 
@@ -206,11 +207,10 @@ log.info("embedding_batch_fired",
 
 1. `pyproject.toml` — add `batched` dependency
 2. `config/embeddings.yaml` — add `batching` section
-3. `src/context_service/embeddings/litellm_embeddings.py` — wrap with `@batched.aio.dynamically`
-4. `src/context_service/reactions/tasks.py` — add embedding cache before Qdrant upsert
-5. `src/context_service/reactions/worker.py` — add shutdown handler
-6. `src/context_service/telemetry/metrics.py` — add batch metrics
-7. `tests/test_embedding_batching.py` — new test file
+3. `src/context_service/embeddings/litellm_embeddings.py` — add batching wrapper and config params
+4. `src/context_service/telemetry/metrics.py` — add batch metrics
+5. `tests/test_embedding_batching.py` — new test file
+6. `tests/integration/test_batch_embedding_flow.py` — new integration test
 
 **Estimated effort:** 3-4 hours
 
