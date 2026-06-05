@@ -9,8 +9,9 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # Copy dependency files
 COPY pyproject.toml uv.lock README.md ./
 
-# Install production dependencies with auth group
-RUN uv sync --frozen --no-dev --no-install-project --group auth
+# Install production dependencies with auth and splade groups
+# Note: splade adds torch (~2GB) - consider a separate image variant if size is critical
+RUN uv sync --frozen --no-dev --no-install-project --group auth --group splade
 
 # Stage 2: Runtime
 FROM python:3.13-slim
