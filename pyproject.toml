@@ -55,6 +55,8 @@ dependencies = [
     "cachetools>=5.3",
     # LLM providers (unified)
     "litellm>=1.40",
+    # Async batching (combines concurrent calls into batch API requests)
+    "batched>=0.1.5",
 ]
 
 [dependency-groups]

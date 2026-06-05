@@ -305,6 +305,15 @@ wheels = [
 ]
 
 [[package]]
+name = "batched"
+version = "0.1.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/c9/40/8d9a8ed9b95cb95acf599698557b7074b462df652823a61e7e43899aa519/batched-0.1.5.tar.gz", hash = "sha256:58b8a41d3f8d4d39a0edba79c6238ed204938cfc2c8908224919d70af07c610d", size = 23940, upload-time = "2025-07-14T09:58:31.862Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fb/c8/16a977fd90cdc974ef7781e237b8a0e0008a6204768ededbef2b2ff1bb43/batched-0.1.5-py3-none-any.whl", hash = "sha256:356dae99f15c906629992e4bd3481a857114790b5316268fa38fe8ad0d0b9480", size = 29367, upload-time = "2025-07-14T09:58:30.968Z" },
+]
+
+[[package]]
 name = "beartype"
 version = "0.22.9"
 source = { registry = "https://pypi.org/simple" }
@@ -537,6 +546,7 @@ source = { editable = "." }
 dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
+    { name = "batched" },
     { name = "cachetools" },
     { name = "dagster" },
     { name = "dagster-postgres" },
@@ -600,6 +610,7 @@ splade = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.13" },
     { name = "asyncpg", specifier = ">=0.29" },
+    { name = "batched", specifier = ">=0.1.5" },
     { name = "cachetools", specifier = ">=5.3" },
     { name = "dagster", specifier = ">=1.7" },
     { name = "dagster-postgres", specifier = ">=0.23" },

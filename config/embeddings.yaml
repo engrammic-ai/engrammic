@@ -22,3 +22,10 @@ rate_limit:
   max_concurrent_requests: 5      # conservative for dev-box
   timeout_seconds: 60.0
   requests_per_minute: 100        # conservative for dev-box (prod: 250)
+
+# Batching config
+batching:
+  enabled: true
+  batch_size: 32
+  timeout_ms: 100
+  small_batch_threshold: 4

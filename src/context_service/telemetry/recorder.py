@@ -351,5 +351,16 @@ def record_engagement_latency(duration_ms: float, silo_id: str | None = None) ->
     )
 
 
+def record_embedding_batch_size(batch_size: int, silo_id: str | None = None) -> None:
+    """Record embedding batch size for batching effectiveness analysis."""
+    if _buffer is None:
+        return
+    _buffer.record(
+        metric_name="embedding.batch_size",
+        silo_id=silo_id or "system",
+        count=batch_size,
+    )
+
+
 ORPHAN_CHAINS_EXHAUSTED = record_orphan_chain_exhausted
 ORPHAN_CHAINS_RECOVERED = record_orphan_chain_recovered

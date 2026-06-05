@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import random
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
+import batched  # type: ignore[import-untyped]
 import litellm
 from opentelemetry import trace
 
@@ -14,7 +15,11 @@ from context_service.config.config_loader import load_config
 from context_service.config.logging import get_logger
 from context_service.config.settings import ModelRateLimitConfig
 from context_service.embeddings.rate_limit import get_embedding_rate_limiter
-from context_service.telemetry.metrics import record_embedding, record_embedding_cache_miss
+from context_service.telemetry.metrics import (
+    record_embedding,
+    record_embedding_batch_size,
+    record_embedding_cache_miss,
+)
 from context_service.telemetry.tracing import traced
 
 if TYPE_CHECKING:
@@ -56,6 +61,10 @@ class LiteLLMEmbeddingService:
         max_input_chars: int = 30000,
         rate_limit: ModelRateLimitConfig | None = None,
         _embedding_cache: EmbeddingCache | None = None,
+        batching_enabled: bool = True,
+        batch_size: int = 32,
+        timeout_ms: int = 100,
+        small_batch_threshold: int = 4,
     ) -> None:
         """Initialize the LiteLLM embedding service.
 
@@ -67,12 +76,22 @@ class LiteLLMEmbeddingService:
                 with a warning to avoid silent model-side truncation.
             rate_limit: Rate limiting configuration. Defaults to ModelRateLimitConfig().
             _embedding_cache: Optional Redis-backed embedding cache.
+            batching_enabled: Whether to use dynamic batching for single-text embeds.
+            batch_size: Maximum batch size for the batched decorator.
+            timeout_ms: Max wait time in ms before flushing a partial batch.
+            small_batch_threshold: Batch sizes at or below this bypass the timeout wait.
         """
         self._model = model
         self._dimensions = dimensions
         self._max_input_chars = max_input_chars
         self._rate_limit = rate_limit or ModelRateLimitConfig()
         self._embedding_cache = _embedding_cache
+        self._batching_enabled = batching_enabled
+        self._batch_size = batch_size
+        self._timeout_ms = timeout_ms
+        self._small_batch_threshold = small_batch_threshold
+        self._batched_fn: Any | None = None
+        self._batched_fn_lock: asyncio.Lock = asyncio.Lock()
 
     @property
     def dimensions(self) -> int:
@@ -97,12 +116,18 @@ class LiteLLMEmbeddingService:
         rate_limit_dict = config.get("rate_limit", {})
         rate_limit = ModelRateLimitConfig(**rate_limit_dict)
 
+        batching = config.get("batching", {})
+
         return cls(
             model=config["model"],
             dimensions=config["dimensions"],
             max_input_chars=config.get("max_input_chars", 30000),
             rate_limit=rate_limit,
             _embedding_cache=_embedding_cache,
+            batching_enabled=batching.get("enabled", True),
+            batch_size=batching.get("batch_size", 32),
+            timeout_ms=batching.get("timeout_ms", 100),
+            small_batch_threshold=batching.get("small_batch_threshold", 4),
         )
 
     @traced(capture_args=["texts"])
@@ -178,6 +203,7 @@ class LiteLLMEmbeddingService:
         Raises:
             LiteLLMEmbeddingError: If embedding generation fails after retries.
         """
+        record_embedding_batch_size(len(texts))
         truncated: list[str] = []
         for text in texts:
             if len(text) > self._max_input_chars:
@@ -296,8 +322,32 @@ class LiteLLMEmbeddingService:
         ]
         return any(pattern in error_str for pattern in retryable_patterns)
 
+    async def _get_or_create_batched_fn(self) -> Any:
+        """Lazily create the batched embedding function for this instance."""
+        if self._batched_fn is not None:
+            return self._batched_fn
+
+        async with self._batched_fn_lock:
+            # Double-check after acquiring lock
+            if self._batched_fn is not None:
+                return self._batched_fn
+
+            @batched.aio.dynamically(  # type: ignore[untyped-decorator]
+                batch_size=self._batch_size,
+                timeout_ms=self._timeout_ms,
+                small_batch_threshold=self._small_batch_threshold,
+            )
+            async def _batched_embed(texts: list[str]) -> list[list[float]]:
+                return await self._embed_batch(texts)
+
+            self._batched_fn = _batched_embed
+            return self._batched_fn
+
     async def embed_single(self, text: str) -> list[float]:
         """Generate embedding for a single text.
+
+        Uses cache when available. When batching is enabled, concurrent calls
+        are batched together for efficiency.
 
         Args:
             text: Text to embed.
@@ -305,8 +355,28 @@ class LiteLLMEmbeddingService:
         Returns:
             Embedding vector.
         """
-        results = await self.embed([text])
-        return results[0]
+        # Check cache first
+        if self._embedding_cache:
+            cached = await self._embedding_cache.get(text, "passage")
+            if cached is not None:
+                return cached
+            record_embedding_cache_miss("passage")
+
+        # Get embedding (batched or direct)
+        if self._batching_enabled:
+            batched_fn = await self._get_or_create_batched_fn()
+            results: list[list[float]] = await batched_fn([text])
+            if not results:
+                raise LiteLLMEmbeddingError("Batched embedding returned empty results")
+            vector = results[0]
+        else:
+            vector = (await self._embed_batch([text]))[0]
+
+        # Store in cache
+        if self._embedding_cache:
+            await self._embedding_cache.set(text, "passage", vector)
+
+        return vector
 
     async def embed_query(self, query: str) -> list[float]:
         """Generate embedding for a search query.
