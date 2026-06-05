@@ -105,6 +105,7 @@ class TestBrokerTaskRegistration:
     _HANDLER_BACKED = frozenset(
         {
             ReactionEventType.COMPUTE_EMBEDDING,
+            ReactionEventType.BATCH_COMPUTE_EMBEDDING,
             ReactionEventType.UPDATE_HEAT,
             ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP,
             ReactionEventType.CASCADE_STALENESS,

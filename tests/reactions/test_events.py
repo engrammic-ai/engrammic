@@ -38,6 +38,7 @@ class TestReactionEventType:
     def test_all_expected_members_present(self) -> None:
         expected = {
             "COMPUTE_EMBEDDING",
+            "BATCH_COMPUTE_EMBEDDING",
             "CASCADE_STALENESS",
             "CASCADE_STALENESS_COMPLETE",
             "UPDATE_HEAT",
