@@ -71,7 +71,8 @@ Source of truth: `src/context_service/config/mcp_tools.yaml`. Names and descript
 | `learn` | knowledge (claim, evidence required) |
 | `believe` | wisdom (commitment, requires `about` nodes) |
 | `recall` | retrieval (query or node_id) |
-| `trace` | provenance |
+| `trace` | provenance (where did this come from?) |
+| `history` | versioning (how did this evolve?) |
 | `link` | typed relationship |
 | `reason` | intelligence (reasoning steps) |
 | `reflect` | meta-observation |

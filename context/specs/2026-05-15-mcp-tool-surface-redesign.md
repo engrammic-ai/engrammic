@@ -27,11 +27,11 @@ Based on research ([arxiv MCP study](https://arxiv.org/html/2602.14878v1), [agen
 
 Two profiles, selectable per-silo or per-connection:
 
-### standard (default) - 6 tools
+### standard (default) - 7 tools
 
-For most agents. Covers observe, claim, believe, search, trace, connect.
+For most agents. Covers observe, claim, believe, search, trace, history, connect.
 
-### reasoning - 11 tools
+### reasoning - 12 tools
 
 For extended reasoning sessions with tentative belief management. Adds reasoning chains, meta-observations, hypothesis workflow.
 
@@ -43,6 +43,7 @@ profiles:
     - believe
     - recall
     - trace
+    - history
     - link
 
   reasoning:
@@ -53,6 +54,7 @@ profiles:
     - reflect
     - recall
     - trace
+    - history
     - link
     - hypothesize
     - revise
@@ -154,6 +156,22 @@ trace(
 **Description:** "Trace the provenance of a belief or claim back to its sources. Returns the citation chain showing what evidence supports it."
 
 **Maps to:** context_admin(action="provenance") - extracted to standalone tool
+
+---
+
+#### history
+
+Show how a belief evolved over time.
+
+```python
+history(
+    node_id: str,              # Node to trace history for
+) -> {timeline: [...]}
+```
+
+**Description:** "Returns the supersession chain from oldest to newest. Use when you need to understand how knowledge changed, not just what it is now."
+
+**Maps to:** ContextService.history() with bidirectional SUPERSEDES traversal
 
 ---
 

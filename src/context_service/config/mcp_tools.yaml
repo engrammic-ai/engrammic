@@ -10,7 +10,8 @@ mcp_instructions: |
   - learn: record claims WITH evidence
   - believe: declare conclusions
   - recall: search your knowledge
-  - trace: understand why you believe something
+  - trace: understand why you believe something (provenance)
+  - history: see how a belief evolved over time (versioning)
   - link: connect related knowledge
 
   Always recall before you store, and at the start of a task.
@@ -25,7 +26,8 @@ mcp_instructions: |
     3. learn("The API uses OAuth2 with PKCE", evidence=[...], supersedes="abc123")
 
   This creates a version chain - old node stays for history, new node becomes current.
-  If you skip recall, duplicates may exist (Custodian catches these later, but explicit is better).
+  Use history(node_id) to view the full chain. If you skip recall, duplicates may exist
+  (Custodian catches these later, but explicit is better).
 
   Guidelines:
   - Always provide evidence when using learn

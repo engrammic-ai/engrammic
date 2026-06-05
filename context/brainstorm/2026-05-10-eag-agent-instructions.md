@@ -376,7 +376,7 @@ Beliefs are not permanent. When new evidence arrives:
 2. **Contradicting evidence** - creates tension, surfaces via CONTRADICTS edge
 3. **Superseding evidence** - newer understanding replaces older via SUPERSEDES edge
 
-The system doesn't delete old beliefs. It chains them via SUPERSEDES. This means you can always trace "what did we believe before?"
+The system doesn't delete old beliefs. It chains them via SUPERSEDES. This means you can always trace "what did we believe before?" Use `history(node_id)` to view the full evolution chain from oldest to newest.
 
 ### Working with uncertainty
 
