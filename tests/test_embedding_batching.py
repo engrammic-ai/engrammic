@@ -154,3 +154,70 @@ class TestEmbeddingBatching:
         assert service._batch_size == 16
         assert service._timeout_ms == 50
         assert service._small_batch_threshold == 2
+
+    @pytest.mark.asyncio
+    async def test_from_config_loads_token_budget_settings(self) -> None:
+        """from_config reads token budget settings from the YAML config dict."""
+        with patch("context_service.embeddings.litellm_embeddings.load_config") as mock_config:
+            mock_config.return_value = {
+                "model": "test-model",
+                "dimensions": 768,
+                "batching": {
+                    "enabled": True,
+                    "mode": "token_budget",
+                    "token_budget": 4000,
+                    "max_batch_size": 32,
+                    "timeout_ms": 75,
+                },
+            }
+
+            service = LiteLLMEmbeddingService.from_config()
+
+        assert service._batching_mode == "token_budget"
+        assert service._token_budget == 4000
+        assert service._max_batch_size == 32
+        assert service._timeout_ms == 75
+
+    @pytest.mark.asyncio
+    async def test_token_budget_mode_single_text(
+        self, mock_litellm: object, mock_telemetry: object
+    ) -> None:
+        """Token budget mode works for single text embeddings."""
+        with patch("litellm.token_counter", return_value=50):
+            service = LiteLLMEmbeddingService(
+                model="test-model",
+                batching_enabled=True,
+                batching_mode="token_budget",
+                token_budget=8000,
+                max_batch_size=64,
+                timeout_ms=50,
+            )
+            result = await service.embed_single("test text")
+
+        assert len(result) == 768
+        assert mock_litellm.aembedding.call_count == 1  # type: ignore[union-attr]
+
+    @pytest.mark.asyncio
+    async def test_token_budget_mode_concurrent(
+        self, mock_litellm: object, mock_telemetry: object
+    ) -> None:
+        """Token budget mode batches concurrent calls."""
+        with patch("litellm.token_counter", return_value=50):
+            service = LiteLLMEmbeddingService(
+                model="test-model",
+                batching_enabled=True,
+                batching_mode="token_budget",
+                token_budget=8000,
+                max_batch_size=64,
+                timeout_ms=100,
+            )
+
+            results = await asyncio.gather(
+                *[service.embed_single(f"text {i}") for i in range(5)]
+            )
+
+        assert len(results) == 5
+        for result in results:
+            assert len(result) == 768
+        # All should batch into one call
+        assert mock_litellm.aembedding.call_count == 1  # type: ignore[union-attr]

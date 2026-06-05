@@ -15,6 +15,7 @@ from context_service.config.config_loader import load_config
 from context_service.config.logging import get_logger
 from context_service.config.settings import ModelRateLimitConfig
 from context_service.embeddings.rate_limit import get_embedding_rate_limiter
+from context_service.embeddings.token_budget_batcher import TokenBudgetBatcher
 from context_service.telemetry.metrics import (
     record_embedding,
     record_embedding_batch_size,
@@ -65,6 +66,9 @@ class LiteLLMEmbeddingService:
         batch_size: int = 32,
         timeout_ms: int = 100,
         small_batch_threshold: int = 4,
+        batching_mode: str = "count",
+        token_budget: int = 8000,
+        max_batch_size: int = 64,
     ) -> None:
         """Initialize the LiteLLM embedding service.
 
@@ -77,9 +81,12 @@ class LiteLLMEmbeddingService:
             rate_limit: Rate limiting configuration. Defaults to ModelRateLimitConfig().
             _embedding_cache: Optional Redis-backed embedding cache.
             batching_enabled: Whether to use dynamic batching for single-text embeds.
-            batch_size: Maximum batch size for the batched decorator.
+            batch_size: Maximum batch size for count-based batching.
             timeout_ms: Max wait time in ms before flushing a partial batch.
             small_batch_threshold: Batch sizes at or below this bypass the timeout wait.
+            batching_mode: "count" for count-based or "token_budget" for token-based.
+            token_budget: Maximum tokens per batch (token_budget mode only).
+            max_batch_size: Hard cap on texts per batch (token_budget mode only).
         """
         self._model = model
         self._dimensions = dimensions
@@ -90,6 +97,9 @@ class LiteLLMEmbeddingService:
         self._batch_size = batch_size
         self._timeout_ms = timeout_ms
         self._small_batch_threshold = small_batch_threshold
+        self._batching_mode = batching_mode
+        self._token_budget = token_budget
+        self._max_batch_size = max_batch_size
         self._batched_fn: Any | None = None
         self._batched_fn_lock: asyncio.Lock = asyncio.Lock()
 
@@ -128,6 +138,9 @@ class LiteLLMEmbeddingService:
             batch_size=batching.get("batch_size", 32),
             timeout_ms=batching.get("timeout_ms", 100),
             small_batch_threshold=batching.get("small_batch_threshold", 4),
+            batching_mode=batching.get("mode", "count"),
+            token_budget=batching.get("token_budget", 8000),
+            max_batch_size=batching.get("max_batch_size", 64),
         )
 
     @traced(capture_args=["texts"])
@@ -332,15 +345,25 @@ class LiteLLMEmbeddingService:
             if self._batched_fn is not None:
                 return self._batched_fn
 
-            @batched.aio.dynamically(  # type: ignore[untyped-decorator]
-                batch_size=self._batch_size,
-                timeout_ms=self._timeout_ms,
-                small_batch_threshold=self._small_batch_threshold,
-            )
-            async def _batched_embed(texts: list[str]) -> list[list[float]]:
-                return await self._embed_batch(texts)
+            if self._batching_mode == "token_budget":
+                self._batched_fn = TokenBudgetBatcher(
+                    model=self._model,
+                    embed_fn=self._embed_batch,
+                    token_budget=self._token_budget,
+                    max_batch_size=self._max_batch_size,
+                    timeout_ms=self._timeout_ms,
+                )
+            else:
+                @batched.aio.dynamically(  # type: ignore[untyped-decorator]
+                    batch_size=self._batch_size,
+                    timeout_ms=self._timeout_ms,
+                    small_batch_threshold=self._small_batch_threshold,
+                )
+                async def _batched_embed(texts: list[str]) -> list[list[float]]:
+                    return await self._embed_batch(texts)
 
-            self._batched_fn = _batched_embed
+                self._batched_fn = _batched_embed
+
             return self._batched_fn
 
     async def embed_single(self, text: str) -> list[float]:
@@ -363,12 +386,16 @@ class LiteLLMEmbeddingService:
             record_embedding_cache_miss("passage")
 
         # Get embedding (batched or direct)
+        vector: list[float]
         if self._batching_enabled:
-            batched_fn = await self._get_or_create_batched_fn()
-            results: list[list[float]] = await batched_fn([text])
-            if not results:
-                raise LiteLLMEmbeddingError("Batched embedding returned empty results")
-            vector = results[0]
+            batcher = await self._get_or_create_batched_fn()
+            if self._batching_mode == "token_budget":
+                vector = await batcher.embed_single(text)
+            else:
+                results: list[list[float]] = await batcher([text])
+                if not results:
+                    raise LiteLLMEmbeddingError("Batched embedding returned empty results")
+                vector = results[0]
         else:
             vector = (await self._embed_batch([text]))[0]
 

@@ -26,6 +26,11 @@ rate_limit:
 # Batching config
 batching:
   enabled: true
+  mode: count  # "count" (Phase 1) or "token_budget" (Phase 2)
+  # Count mode settings (Phase 1)
   batch_size: 32
   timeout_ms: 100
   small_batch_threshold: 4
+  # Token budget mode settings (Phase 2)
+  token_budget: 8000
+  max_batch_size: 64

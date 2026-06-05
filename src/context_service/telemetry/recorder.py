@@ -362,5 +362,20 @@ def record_embedding_batch_size(batch_size: int, silo_id: str | None = None) -> 
     )
 
 
+def record_embedding_token_utilization(tokens_used: int, budget: int) -> None:
+    """Record token budget utilization for batching analysis.
+
+    Buckets utilization into 10% bands (0, 10, 20, ..., 90, 100).
+    """
+    if _buffer is None:
+        return
+    utilization_pct = min(100, int((tokens_used / budget) * 100))
+    bucket = (utilization_pct // 10) * 10
+    _buffer.record(
+        metric_name=f"embedding.token_utilization.{bucket}",
+        silo_id="system",
+    )
+
+
 ORPHAN_CHAINS_EXHAUSTED = record_orphan_chain_exhausted
 ORPHAN_CHAINS_RECOVERED = record_orphan_chain_recovered
