@@ -1286,7 +1286,11 @@ async def _validate_hypothesis(
         )
 
     if not results:
-        msg = "Hypothesis not found" if session_id is None else "Hypothesis not found or wrong session"
+        msg = (
+            "Hypothesis not found"
+            if session_id is None
+            else "Hypothesis not found or wrong session"
+        )
         return {"error": "HYPOTHESIS_NOT_FOUND", "message": msg}
 
     row = results[0]

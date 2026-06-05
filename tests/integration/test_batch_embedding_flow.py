@@ -10,6 +10,7 @@ from context_service.embeddings.litellm_embeddings import LiteLLMEmbeddingServic
 
 class MockEmbeddingResponse:
     """Mock response from litellm.aembedding."""
+
     def __init__(self, embeddings: list[list[float]]):
         self.data = [{"embedding": emb} for emb in embeddings]
 
@@ -30,12 +31,16 @@ class TestBatchEmbeddingFlow:
             # Return embeddings for all texts in the batch
             return MockEmbeddingResponse([[0.1] * 768 for _ in texts])
 
-        with patch("context_service.embeddings.litellm_embeddings.litellm") as mock_litellm, \
-             patch("context_service.embeddings.litellm_embeddings.record_embedding"), \
-             patch("context_service.embeddings.litellm_embeddings.record_embedding_cache_miss"), \
-             patch("context_service.embeddings.litellm_embeddings.record_embedding_batch_size"), \
-             patch("context_service.embeddings.litellm_embeddings.get_embedding_rate_limiter", return_value=None):
-
+        with (
+            patch("context_service.embeddings.litellm_embeddings.litellm") as mock_litellm,
+            patch("context_service.embeddings.litellm_embeddings.record_embedding"),
+            patch("context_service.embeddings.litellm_embeddings.record_embedding_cache_miss"),
+            patch("context_service.embeddings.litellm_embeddings.record_embedding_batch_size"),
+            patch(
+                "context_service.embeddings.litellm_embeddings.get_embedding_rate_limiter",
+                return_value=None,
+            ),
+        ):
             mock_litellm.aembedding = AsyncMock(side_effect=mock_aembedding)
 
             service = LiteLLMEmbeddingService(
@@ -48,9 +53,9 @@ class TestBatchEmbeddingFlow:
 
             # Fire 20 concurrent embedding requests
             n_requests = 20
-            results = await asyncio.gather(*[
-                service.embed_single(f"text {i}") for i in range(n_requests)
-            ])
+            results = await asyncio.gather(
+                *[service.embed_single(f"text {i}") for i in range(n_requests)]
+            )
 
             # All results should be returned
             assert len(results) == n_requests
@@ -75,12 +80,16 @@ class TestBatchEmbeddingFlow:
             texts = kwargs["input"]
             return MockEmbeddingResponse([[0.1] * 768 for _ in texts])
 
-        with patch("context_service.embeddings.litellm_embeddings.litellm") as mock_litellm, \
-             patch("context_service.embeddings.litellm_embeddings.record_embedding"), \
-             patch("context_service.embeddings.litellm_embeddings.record_embedding_cache_miss"), \
-             patch("context_service.embeddings.litellm_embeddings.record_embedding_batch_size"), \
-             patch("context_service.embeddings.litellm_embeddings.get_embedding_rate_limiter", return_value=None):
-
+        with (
+            patch("context_service.embeddings.litellm_embeddings.litellm") as mock_litellm,
+            patch("context_service.embeddings.litellm_embeddings.record_embedding"),
+            patch("context_service.embeddings.litellm_embeddings.record_embedding_cache_miss"),
+            patch("context_service.embeddings.litellm_embeddings.record_embedding_batch_size"),
+            patch(
+                "context_service.embeddings.litellm_embeddings.get_embedding_rate_limiter",
+                return_value=None,
+            ),
+        ):
             mock_litellm.aembedding = AsyncMock(side_effect=mock_aembedding)
 
             service = LiteLLMEmbeddingService(

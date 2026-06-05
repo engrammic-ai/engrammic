@@ -311,7 +311,9 @@ async def get_mcp_auth_context() -> AuthContext:
         if settings.auth_enabled:
             base = await resolve_mcp_auth_from_header(auth_header)
             agent_id = headers.get("x-agent-id") or f"user:{base.user_id}"
-            session_id = headers.get("x-session-id") or hashlib.sha256(auth_header.encode()).hexdigest()
+            session_id = (
+                headers.get("x-session-id") or hashlib.sha256(auth_header.encode()).hexdigest()
+            )
             return AuthContext(
                 org_id=base.org_id,
                 user_id=base.user_id,

@@ -51,11 +51,13 @@ async def _commit_impl(
             confidences.append(result.confidence)
             all_events.extend(events)
         except InvariantViolation as e:
-            errors.append({
-                "belief_id": belief_id,
-                "error": e.code,
-                "message": e.message,
-            })
+            errors.append(
+                {
+                    "belief_id": belief_id,
+                    "error": e.code,
+                    "message": e.message,
+                }
+            )
 
     for event in all_events:
         await emit_reaction(event)

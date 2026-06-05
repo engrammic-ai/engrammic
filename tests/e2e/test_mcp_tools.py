@@ -42,21 +42,15 @@ async def learn(
     return call_result(raw)
 
 
-async def believe(
-    client: Any, belief: str, about: list[str], **kwargs: Any
-) -> dict[str, Any]:
-    raw = await client.call_tool(
-        "believe", {"belief": belief, "about": about, **kwargs}
-    )
+async def believe(client: Any, belief: str, about: list[str], **kwargs: Any) -> dict[str, Any]:
+    raw = await client.call_tool("believe", {"belief": belief, "about": about, **kwargs})
     return call_result(raw)
 
 
 async def reason(
     client: Any, steps: list[dict[str, Any]], conclusion: str | None = None, **kwargs: Any
 ) -> dict[str, Any]:
-    raw = await client.call_tool(
-        "reason", {"steps": steps, "conclusion": conclusion, **kwargs}
-    )
+    raw = await client.call_tool("reason", {"steps": steps, "conclusion": conclusion, **kwargs})
     return call_result(raw)
 
 
@@ -196,17 +190,13 @@ class TestStoreAllLayers:
 
         ref_node = str(uuid.uuid4())
         with pytest.raises(ToolError):
-            await mcp_client.call_tool(
-                "reflect", {"observation": "obs", "about": [ref_node]}
-            )
+            await mcp_client.call_tool("reflect", {"observation": "obs", "about": [ref_node]})
 
     async def test_store_meta_missing_about(self, mcp_client: Any) -> None:
         from fastmcp.exceptions import ToolError
 
         with pytest.raises(ToolError):
-            await mcp_client.call_tool(
-                "reflect", {"observation": "obs", "type": "pattern"}
-            )
+            await mcp_client.call_tool("reflect", {"observation": "obs", "type": "pattern"})
 
 
 # ---------------------------------------------------------------------------
@@ -521,9 +511,7 @@ class TestErrorCases:
         assert result.get("error") == "missing_about"
 
     async def test_store_intelligence_empty_steps(self, mcp_client: Any) -> None:
-        raw = await mcp_client.call_tool(
-            "reason", {"steps": [], "conclusion": "conclusion"}
-        )
+        raw = await mcp_client.call_tool("reason", {"steps": [], "conclusion": "conclusion"})
         result = call_result(raw)
         assert result.get("error") == "missing_steps"
 

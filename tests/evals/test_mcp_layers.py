@@ -231,7 +231,10 @@ class TestIntelligenceLayer:
                 "steps": [
                     {"reasoning": "Acme has budget constraints in Q3", "confidence": 0.85},
                     {"reasoning": "Flexible payment terms reduce friction", "confidence": 0.8},
-                    {"reasoning": "Quarterly payments align with their budget cycles", "confidence": 0.75},
+                    {
+                        "reasoning": "Quarterly payments align with their budget cycles",
+                        "confidence": 0.75,
+                    },
                 ],
             },
         )

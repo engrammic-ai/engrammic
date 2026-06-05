@@ -64,9 +64,7 @@ class TestEmbeddingBatching:
     """Tests for the batched embedding functionality."""
 
     @pytest.mark.asyncio
-    async def test_single_text_batched(
-        self, mock_litellm: object, mock_telemetry: object
-    ) -> None:
+    async def test_single_text_batched(self, mock_litellm: object, mock_telemetry: object) -> None:
         """Single call returns a correctly-shaped vector."""
         service = LiteLLMEmbeddingService(
             model="test-model",
@@ -92,9 +90,7 @@ class TestEmbeddingBatching:
             small_batch_threshold=2,
         )
 
-        results = await asyncio.gather(
-            *[service.embed_single(f"text {i}") for i in range(5)]
-        )
+        results = await asyncio.gather(*[service.embed_single(f"text {i}") for i in range(5)])
 
         assert len(results) == 5
         for result in results:
@@ -140,9 +136,7 @@ class TestEmbeddingBatching:
     @pytest.mark.asyncio
     async def test_from_config_loads_batching_settings(self) -> None:
         """from_config reads batching settings from the YAML config dict."""
-        with patch(
-            "context_service.embeddings.litellm_embeddings.load_config"
-        ) as mock_config:
+        with patch("context_service.embeddings.litellm_embeddings.load_config") as mock_config:
             mock_config.return_value = {
                 "model": "test-model",
                 "dimensions": 768,

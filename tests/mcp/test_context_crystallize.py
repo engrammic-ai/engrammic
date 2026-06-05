@@ -153,5 +153,3 @@ class TestContextCrystallizeGuards:
 
         assert result["error"] == "missing_belief_ids"
         assert fake_store.write_log == []
-
-

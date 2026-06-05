@@ -599,7 +599,9 @@ async def _context_commit(
 
     if supersedes is not None:
         try:
-            await create_supersession(commit_result.commitment_id, supersedes, str(expected_silo_id))
+            await create_supersession(
+                commit_result.commitment_id, supersedes, str(expected_silo_id)
+            )
             result["supersedes"] = supersedes
         except SupersessionCycleError as e:
             return {

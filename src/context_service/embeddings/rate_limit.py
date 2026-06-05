@@ -79,9 +79,7 @@ class EmbeddingRateLimiter:
 
             # Increment counter with TTL
             try:
-                current = await self._redis.incr_with_expire(
-                    key, self.WINDOW_SECONDS + 10
-                )
+                current = await self._redis.incr_with_expire(key, self.WINDOW_SECONDS + 10)
             except Exception as e:
                 # Fail-open on Redis errors
                 logger.warning("embedding_rate_limit_redis_error", error=str(e))

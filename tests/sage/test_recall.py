@@ -154,7 +154,9 @@ class TestComputeRecallScore:
             }
             score = compute_recall_score(old_node, similarity=1.0)
             # With floor=0.25 and weight=0.3: score = 1.0 * (0.7 + 0.3 * 0.25) = 0.775
-            assert score == pytest.approx(0.775, abs=0.05), f"365-day memory should score ~0.775, got {score}"
+            assert score == pytest.approx(0.775, abs=0.05), (
+                f"365-day memory should score ~0.775, got {score}"
+            )
 
     def test_memory_layer_fresh_node_scores_full(self) -> None:
         """A fresh memory should score close to full similarity."""
@@ -169,7 +171,9 @@ class TestComputeRecallScore:
             }
             score = compute_recall_score(fresh_node, similarity=0.9)
             # Fresh node: freshness ~1.0, score = 0.9 * (0.7 + 0.3 * 1.0) = 0.9
-            assert score == pytest.approx(0.9, abs=0.05), f"Fresh memory should score ~0.9, got {score}"
+            assert score == pytest.approx(0.9, abs=0.05), (
+                f"Fresh memory should score ~0.9, got {score}"
+            )
 
     def test_memory_layer_uses_freshness_floor(self) -> None:
         """Verify compute_freshness floor is applied at extreme ages."""
@@ -180,7 +184,9 @@ class TestComputeRecallScore:
             datetime.now(UTC),
             sigma_days=90,
         )
-        assert freshness == FRESHNESS_FLOOR, f"365-day freshness should hit floor {FRESHNESS_FLOOR}, got {freshness}"
+        assert freshness == FRESHNESS_FLOOR, (
+            f"365-day freshness should hit floor {FRESHNESS_FLOOR}, got {freshness}"
+        )
 
 
 class TestRecall:

@@ -102,8 +102,15 @@ async def test_link_all_relationship_types(mock_deps):
 
     silo = str(uuid.uuid5(uuid.NAMESPACE_DNS, "silo:test-org"))
     all_rels = [
-        "REFERENCES", "SUPPORTS", "CONTRADICTS", "DERIVED_FROM", "RELATED_TO",
-        "CAUSES", "CORROBORATES", "PREVENTS", "SUPERSEDES",
+        "REFERENCES",
+        "SUPPORTS",
+        "CONTRADICTS",
+        "DERIVED_FROM",
+        "RELATED_TO",
+        "CAUSES",
+        "CORROBORATES",
+        "PREVENTS",
+        "SUPERSEDES",
     ]
     for rel in all_rels:
         from_id = str(uuid.uuid4())
@@ -300,9 +307,7 @@ async def test_link_duplicate_edge(mock_deps):
 
     with patch(
         "context_service.mcp.tools.context_link.brain_link",
-        new=AsyncMock(
-            side_effect=BrainError("DUPLICATE_EDGE", "Edge already exists")
-        ),
+        new=AsyncMock(side_effect=BrainError("DUPLICATE_EDGE", "Edge already exists")),
     ):
         result = await _context_link(
             silo_id=str(uuid.uuid5(uuid.NAMESPACE_DNS, "silo:test-org")),
@@ -357,8 +362,16 @@ def mock_deps_real_store(fake_graph_store, mock_auth):
 def _seed_valid_link(store: FakeGraphStore, silo_id: str, from_id: str, to_id: str) -> None:
     """Seed FakeGraphStore for a valid brain_link call (no conflicts)."""
     # _validate_link: first query checks nodes exist + same silo
-    store.seed_query_result([{"source_silo": silo_id, "target_silo": silo_id,
-                               "source_state": "ACTIVE", "target_state": "ACTIVE"}])
+    store.seed_query_result(
+        [
+            {
+                "source_silo": silo_id,
+                "target_silo": silo_id,
+                "source_state": "ACTIVE",
+                "target_state": "ACTIVE",
+            }
+        ]
+    )
     # _validate_link: second query checks for duplicate edge
     store.seed_query_result([])  # no duplicates
 

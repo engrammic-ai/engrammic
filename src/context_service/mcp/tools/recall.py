@@ -197,9 +197,7 @@ async def _recall_impl(
 
     tg = get_settings().trust_gate
     if tg.enabled:
-        list_key = "results" if "results" in result else (
-            "nodes" if "nodes" in result else None
-        )
+        list_key = "results" if "results" in result else ("nodes" if "nodes" in result else None)
         if list_key is not None and isinstance(result[list_key], list):
             surfaced, withheld = apply_trust_gate(
                 result[list_key],

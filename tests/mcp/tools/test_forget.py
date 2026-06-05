@@ -89,9 +89,7 @@ async def test_forget_not_found(mock_auth, mock_ctx_svc):
         ),
         patch(
             "context_service.mcp.tools.forget.brain_forget",
-            new=AsyncMock(
-                side_effect=InvariantViolation("NODE_NOT_FOUND", "Node not found")
-            ),
+            new=AsyncMock(side_effect=InvariantViolation("NODE_NOT_FOUND", "Node not found")),
         ),
     ):
         from context_service.mcp.tools.forget import _forget_impl

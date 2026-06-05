@@ -43,7 +43,9 @@ async def _fetch_chain_steps(
 _SUMMARY_MAX_CHARS = 200
 
 
-def _project_node_without_content(node: dict[str, Any], include_expandable: bool = False) -> dict[str, Any]:
+def _project_node_without_content(
+    node: dict[str, Any], include_expandable: bool = False
+) -> dict[str, Any]:
     """Project a node dict to {node_id, layer, summary, created_at, confidence, tier}.
 
     `summary` falls back to the first 200 chars of `content` when no
