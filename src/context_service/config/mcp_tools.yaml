@@ -13,6 +13,8 @@ mcp_instructions: |
   - trace: understand why you believe something
   - link: connect related knowledge
 
+  Always recall before you store, and at the start of a task.
+
   Supersession pattern (important):
   Before storing, recall to check if you're updating existing knowledge.
   If found, pass supersedes:<node_id> to chain the update.
@@ -65,10 +67,12 @@ tools:
 
   recall:
     description: |
-      Search or fetch knowledge. Returns immediately. Use query for semantic
-      search, node_ids for direct fetch. Use query="*" to list all nodes
-      (bypasses relevance filtering). Optional min_threshold overrides the
-      default relevance cutoff (0.0-1.0, lower = more results).
+      Search or fetch knowledge. Call this at the START of any task and
+      before storing anything (to supersede, not duplicate). Use query for
+      semantic search, node_ids for direct fetch, query="*" to list all.
+      Low-confidence and unresolved-contradiction memories are withheld by
+      default and reported as a withheld count; pass include_withheld=true
+      to see them. min_threshold overrides the relevance cutoff (0.0-1.0).
     maps_to: retrieve
 
   trace:
