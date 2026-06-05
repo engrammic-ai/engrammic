@@ -7,9 +7,11 @@ import contextlib
 import time
 from typing import TYPE_CHECKING, Any
 
+from context_service.config.settings import get_settings
 from context_service.engine.engagement import MODE_HARD
 from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.rate_limit import rate_limited
+from context_service.mcp.tools.trust_gate import apply_trust_gate
 from context_service.mcp.server import (
     get_mcp_auth_context,
     get_preset_resolver,
@@ -42,6 +44,7 @@ async def _recall_impl(
     bypass_cache: bool = False,
     max_age_seconds: int | None = None,
     min_threshold: float | None = None,
+    include_withheld: bool = False,
 ) -> dict[str, Any]:
     """Implementation for recall tool."""
     auth = await get_mcp_auth_context()
@@ -192,6 +195,26 @@ async def _recall_impl(
         else:
             result["hypotheses"] = []
 
+    tg = get_settings().trust_gate
+    if tg.enabled:
+        list_key = "results" if "results" in result else (
+            "nodes" if "nodes" in result else None
+        )
+        if list_key is not None and isinstance(result[list_key], list):
+            surfaced, withheld = apply_trust_gate(
+                result[list_key],
+                confidence_floor=tg.confidence_floor,
+                withhold_conflicts=tg.withhold_unresolved_conflicts,
+                include_withheld=include_withheld,
+            )
+            result[list_key] = surfaced
+            if withheld["count"] > 0:
+                withheld["message"] = (
+                    f"{withheld['count']} memories withheld (low confidence or "
+                    "unresolved contradiction). Pass include_withheld=true to see them."
+                )
+            result["withheld"] = withheld
+
     return result
 
 
@@ -250,6 +273,7 @@ def register(mcp: FastMCP) -> None:
         bypass_cache: bool = False,
         max_age_seconds: int | None = None,
         min_threshold: float | None = None,
+        include_withheld: bool = False,
     ) -> dict[str, Any]:
         """Retrieve knowledge.
 
@@ -284,6 +308,7 @@ def register(mcp: FastMCP) -> None:
                 bypass_cache,
                 max_age_seconds,
                 min_threshold,
+                include_withheld=include_withheld,
             )
         except Exception:
             success = False
