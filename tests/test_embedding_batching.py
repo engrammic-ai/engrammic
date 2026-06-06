@@ -212,9 +212,7 @@ class TestEmbeddingBatching:
                 timeout_ms=100,
             )
 
-            results = await asyncio.gather(
-                *[service.embed_single(f"text {i}") for i in range(5)]
-            )
+            results = await asyncio.gather(*[service.embed_single(f"text {i}") for i in range(5)])
 
         assert len(results) == 5
         for result in results:

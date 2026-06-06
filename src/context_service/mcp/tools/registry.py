@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any
 import structlog
 import yaml
 
+from context_service.config.paths import resolve_config_file
+
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
@@ -26,10 +28,11 @@ def load_tool_config() -> dict[str, Any]:
     if _cached_config is not None:
         return _cached_config
 
-    with open(_CONFIG_PATH) as f:
+    path = resolve_config_file("mcp_tools.yaml", _CONFIG_PATH)
+    with open(path) as f:
         _cached_config = yaml.safe_load(f)
 
-    logger.info("mcp_tool_config_loaded", path=str(_CONFIG_PATH))
+    logger.info("mcp_tool_config_loaded", path=str(path))
     return _cached_config
 
 

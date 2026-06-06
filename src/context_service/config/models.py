@@ -17,7 +17,7 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field
 
-from context_service.config.paths import config_dir
+from context_service.config.paths import config_dir, resolve_config_file
 
 
 class ModelSpec(BaseModel):
@@ -132,7 +132,7 @@ def load_models_config() -> ModelsConfig:
     """
     import os
 
-    path = config_dir() / "models.yaml"
+    path = resolve_config_file("models.yaml", config_dir() / "models.yaml")
     data = _load_models_yaml(path)
 
     # Allow env var to override tier

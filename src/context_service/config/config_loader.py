@@ -13,7 +13,7 @@ from typing import Any
 
 import yaml
 
-from context_service.config.paths import config_dir
+from context_service.config.paths import config_dir, resolve_config_file
 
 CONFIG_DIR: Path = config_dir()
 
@@ -42,7 +42,7 @@ def load_config(name: str) -> dict[str, Any]:
     Raises:
         FileNotFoundError: If the config file doesn't exist.
     """
-    path = CONFIG_DIR / f"{name}.yaml"
+    path = resolve_config_file(f"{name}.yaml", CONFIG_DIR / f"{name}.yaml")
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {path}")
 

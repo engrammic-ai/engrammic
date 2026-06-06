@@ -13,6 +13,8 @@ import structlog
 import yaml
 from pydantic import BaseModel, Field
 
+from context_service.config.paths import resolve_config_file
+
 logger = structlog.get_logger(__name__)
 
 _CONFIG_PATH = Path(__file__).parent.parent.parent / "config" / "mcp_presets.yaml"
@@ -38,14 +40,15 @@ def load_preset_config() -> dict[str, Any]:
     if _cached_config is not None:
         return _cached_config
 
-    with open(_CONFIG_PATH) as f:
+    path = resolve_config_file("mcp_presets.yaml", _CONFIG_PATH)
+    with open(path) as f:
         data = yaml.safe_load(f)
 
     if not isinstance(data, dict) or "presets" not in data:
-        raise ValueError(f"Malformed {_CONFIG_PATH}: missing 'presets' key")
+        raise ValueError(f"Malformed {path}: missing 'presets' key")
 
     _cached_config = data
-    logger.info("mcp_preset_config_loaded", path=str(_CONFIG_PATH))
+    logger.info("mcp_preset_config_loaded", path=str(path))
     return _cached_config
 
 

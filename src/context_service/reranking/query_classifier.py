@@ -28,9 +28,7 @@ ABSTRACT_VERBS = frozenset(
 )
 
 # Question words that indicate value-seeking queries
-QUESTION_WORDS = frozenset(
-    {"what", "where", "when", "how", "which", "who", "why"}
-)
+QUESTION_WORDS = frozenset({"what", "where", "when", "how", "which", "who", "why"})
 
 # Patterns for specific hard query types
 QUESTION_PATTERNS = [

@@ -154,9 +154,7 @@ class TestBatchEmbeddingFlow:
             )
 
             # Fire all 12 requests concurrently
-            results = await asyncio.gather(
-                *[service.embed_single(f"text {i}") for i in range(12)]
-            )
+            results = await asyncio.gather(*[service.embed_single(f"text {i}") for i in range(12)])
 
             assert len(results) == 12
             for result in results:

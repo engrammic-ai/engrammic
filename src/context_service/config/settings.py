@@ -895,7 +895,9 @@ class WeakLinksSettings(BaseModel):
 
 
 def _load_identities_config() -> IdentitiesConfig:
-    config_path = Path(__file__).parent / "identities.yaml"
+    from context_service.config.paths import resolve_config_file
+
+    config_path = resolve_config_file("identities.yaml", Path(__file__).parent / "identities.yaml")
     if not config_path.exists():
         return IdentitiesConfig()
     try:

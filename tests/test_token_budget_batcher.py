@@ -47,9 +47,7 @@ class TestTokenBudgetBatcher:
         mock_embed_fn.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_budget_triggers_flush(
-        self, mock_embed_fn: AsyncMock
-    ) -> None:
+    async def test_budget_triggers_flush(self, mock_embed_fn: AsyncMock) -> None:
         """Batch flushes when token budget is exceeded."""
         batcher = TokenBudgetBatcher(
             model="test-model",
@@ -83,9 +81,7 @@ class TestTokenBudgetBatcher:
         assert mock_embed_fn.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_max_batch_size_triggers_flush(
-        self, mock_embed_fn: AsyncMock
-    ) -> None:
+    async def test_max_batch_size_triggers_flush(self, mock_embed_fn: AsyncMock) -> None:
         """Batch flushes at max count even if under token budget."""
         batcher = TokenBudgetBatcher(
             model="test-model",
@@ -97,10 +93,7 @@ class TestTokenBudgetBatcher:
 
         with patch("litellm.token_counter", return_value=10):
             # Queue 4 texts - should trigger flush after 3rd
-            tasks = [
-                asyncio.create_task(batcher.embed_single(f"text {i}"))
-                for i in range(4)
-            ]
+            tasks = [asyncio.create_task(batcher.embed_single(f"text {i}")) for i in range(4)]
             results = await asyncio.gather(*tasks)
 
         assert len(results) == 4
@@ -108,9 +101,7 @@ class TestTokenBudgetBatcher:
         assert mock_embed_fn.call_count >= 2
 
     @pytest.mark.asyncio
-    async def test_timeout_flushes_partial(
-        self, mock_embed_fn: AsyncMock
-    ) -> None:
+    async def test_timeout_flushes_partial(self, mock_embed_fn: AsyncMock) -> None:
         """Partial batch flushes after timeout expires."""
         batcher = TokenBudgetBatcher(
             model="test-model",
@@ -129,9 +120,7 @@ class TestTokenBudgetBatcher:
         # Should have been called via timeout, not budget/count trigger
 
     @pytest.mark.asyncio
-    async def test_concurrent_calls_batched(
-        self, mock_embed_fn: AsyncMock
-    ) -> None:
+    async def test_concurrent_calls_batched(self, mock_embed_fn: AsyncMock) -> None:
         """Multiple concurrent calls are batched together."""
         batcher = TokenBudgetBatcher(
             model="test-model",
@@ -143,10 +132,7 @@ class TestTokenBudgetBatcher:
 
         with patch("litellm.token_counter", return_value=10):
             # Start 5 concurrent embeds
-            tasks = [
-                asyncio.create_task(batcher.embed_single(f"text {i}"))
-                for i in range(5)
-            ]
+            tasks = [asyncio.create_task(batcher.embed_single(f"text {i}")) for i in range(5)]
             results = await asyncio.gather(*tasks)
 
         assert len(results) == 5
@@ -157,9 +143,7 @@ class TestTokenBudgetBatcher:
         assert len(call_args) == 5
 
     @pytest.mark.asyncio
-    async def test_long_text_solo_batch(
-        self, mock_embed_fn: AsyncMock
-    ) -> None:
+    async def test_long_text_solo_batch(self, mock_embed_fn: AsyncMock) -> None:
         """Text near budget limit batches alone."""
         batcher = TokenBudgetBatcher(
             model="test-model",
@@ -188,9 +172,7 @@ class TestTokenBudgetBatcher:
         assert mock_embed_fn.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_error_propagates_to_all(
-        self, mock_embed_fn: AsyncMock
-    ) -> None:
+    async def test_error_propagates_to_all(self, mock_embed_fn: AsyncMock) -> None:
         """API error fails all waiters in the batch."""
         mock_embed_fn.side_effect = RuntimeError("API error")
 
@@ -203,10 +185,7 @@ class TestTokenBudgetBatcher:
         )
 
         with patch("litellm.token_counter", return_value=10):
-            tasks = [
-                asyncio.create_task(batcher.embed_single(f"text {i}"))
-                for i in range(3)
-            ]
+            tasks = [asyncio.create_task(batcher.embed_single(f"text {i}")) for i in range(3)]
 
             # All should raise the same error
             for task in tasks:
@@ -224,9 +203,7 @@ class TestTokenBudgetBatcher:
         mock_counter.assert_called_once_with(model="test-model", text="test text")
 
     @pytest.mark.asyncio
-    async def test_close_flushes_pending(
-        self, mock_embed_fn: AsyncMock
-    ) -> None:
+    async def test_close_flushes_pending(self, mock_embed_fn: AsyncMock) -> None:
         """close() flushes any remaining pending items."""
         batcher = TokenBudgetBatcher(
             model="test-model",

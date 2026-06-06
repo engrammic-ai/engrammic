@@ -10,10 +10,17 @@ of file depth and of where the checkout lives on disk.
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 from pathlib import Path
 
 _MARKER_FILE = "pyproject.toml"
+
+# Env var pointing at a host-mounted directory of override YAML files. When set,
+# any config file present there (matched by filename) takes precedence over the
+# copy baked into the image. Lets self-hosters edit config (e.g. models.yaml)
+# without rebuilding or clobbering the shipped defaults. See the self-hosting docs.
+_OVERRIDE_DIR_ENV = "ENGRAMMIC_CONFIG_DIR"
 
 
 @lru_cache(maxsize=1)
@@ -43,3 +50,26 @@ def config_dir() -> Path:
     consumer's prompts/configs live where.
     """
     return repo_root() / "config"
+
+
+def resolve_config_file(filename: str, default: Path) -> Path:
+    """Resolve a config file, preferring a host-mounted override.
+
+    If ``ENGRAMMIC_CONFIG_DIR`` is set and contains ``filename``, that path is
+    returned. Otherwise ``default`` (the copy shipped in the image or repo) is
+    used. Overrides are matched by bare filename, so a single override directory
+    can shadow config files that otherwise live in different locations.
+
+    Args:
+        filename: Bare file name to look for in the override dir (e.g. "models.yaml").
+        default: Path to fall back to when no override is present.
+
+    Returns:
+        The override path when present and readable, otherwise ``default``.
+    """
+    raw = os.environ.get(_OVERRIDE_DIR_ENV)
+    if raw:
+        candidate = Path(raw) / filename
+        if candidate.is_file():
+            return candidate
+    return default

@@ -354,6 +354,7 @@ class LiteLLMEmbeddingService:
                     timeout_ms=self._timeout_ms,
                 )
             else:
+
                 @batched.aio.dynamically(  # type: ignore[untyped-decorator]
                     batch_size=self._batch_size,
                     timeout_ms=self._timeout_ms,
