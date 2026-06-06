@@ -330,14 +330,14 @@ class QdrantClient:
             "qdrant.upsert", attributes={"node_id": node_id, "hybrid": has_sparse}
         ):
             try:
-                if has_sparse:
-                    point_vector: Any = {
-                        DENSE_VECTOR_NAME: vector,
-                        SPARSE_VECTOR_NAME: models.SparseVector(
+                # Hybrid collections require named vectors even without sparse
+                if self._hybrid_mode:
+                    point_vector: Any = {DENSE_VECTOR_NAME: vector}
+                    if has_sparse:
+                        point_vector[SPARSE_VECTOR_NAME] = models.SparseVector(
                             indices=sparse_indices,  # type: ignore[arg-type]
                             values=sparse_values,  # type: ignore[arg-type]
-                        ),
-                    }
+                        )
                 else:
                     point_vector = vector
 

@@ -21,7 +21,10 @@ services:
       # LiteLLM Vertex AI (reranker, embeddings)
       - VERTEX_PROJECT=${VERTEX_PROJECT:-}
       - VERTEX_LOCATION=${VERTEX_LOCATION:-europe-north1}
+      # HuggingFace cache for SPLADE
+      - HF_HOME=/app/.cache/huggingface
     volumes:
+      - hf-cache:/app/.cache/huggingface
       - ~/.config/gcloud:/mnt/gcloud:ro
       - ../src:/app/src
       - ../pyproject.toml:/app/pyproject.toml:ro
@@ -68,7 +71,9 @@ services:
       - OTEL_SERVICE_NAME=engrammic-worker
       - VERTEX_PROJECT=${VERTEX_PROJECT:-}
       - VERTEX_LOCATION=${VERTEX_LOCATION:-europe-north1}
+      - HF_HOME=/app/.cache/huggingface
     volumes:
+      - hf-cache:/app/.cache/huggingface
       - ~/.config/gcloud:/mnt/gcloud:ro
       - ../src:/app/src
       - ../pyproject.toml:/app/pyproject.toml:ro
@@ -302,3 +307,4 @@ volumes:
   qdrant-data:
   redis-data:
   postgres-data:
+  hf-cache:
