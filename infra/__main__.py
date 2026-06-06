@@ -113,7 +113,7 @@ context_service = ContextServiceRun(
         "VERTEX_LOCATION": "europe-north1",
         "EMBEDDING_PROVIDER": "vertex",
         "LLM_PROVIDER": "vertex_gemini",
-        "DEFAULT_LLM_MODEL": "gemini-2.5-flash",
+        "DEFAULT_LLM_MODEL": "gemini-3.1-flash-lite",
         "AUTH_ENABLED": "false" if env == "dev" else "true",
         "CUSTODIAN__ENABLED": "true",
         "LOG_LEVEL": "INFO",
@@ -135,6 +135,7 @@ context_service = ContextServiceRun(
         "WORKOS_CLIENT_ID": secrets.secrets["workos-client-id"].id,
         "WORKOS_COOKIE_PASSWORD": secrets.secrets["workos-cookie-password"].id,
         "LICENSE_PRIVATE_KEY": license_private_key.id,
+        "GEMINI_API_KEY": secrets.secrets["gemini-api-key"].id,
     },
 )
 

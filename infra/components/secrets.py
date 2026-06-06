@@ -19,6 +19,7 @@ class SecretsStack(pulumi.ComponentResource):
             "workos-api-key",
             "workos-client-id",
             "workos-cookie-password",
+            "gemini-api-key",
         ]
 
         self.secrets: dict[str, secretmanager.Secret] = {}

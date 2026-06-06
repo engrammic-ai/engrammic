@@ -61,7 +61,7 @@ DAGSTER_SERVICES = """
       - VERTEX_LOCATION=europe-north1
       - EMBEDDING_PROVIDER=vertex
       - LLM_PROVIDER=vertex_gemini
-      - DEFAULT_LLM_MODEL=gemini-2.5-flash
+      - DEFAULT_LLM_MODEL=gemini-3.1-flash-lite
       - CUSTODIAN__ENABLED=true
     depends_on:
       - memgraph
@@ -88,7 +88,7 @@ DAGSTER_SERVICES = """
       - VERTEX_LOCATION=europe-north1
       - EMBEDDING_PROVIDER=vertex
       - LLM_PROVIDER=vertex_gemini
-      - DEFAULT_LLM_MODEL=gemini-2.5-flash
+      - DEFAULT_LLM_MODEL=gemini-3.1-flash-lite
       - CUSTODIAN__ENABLED=true
     depends_on:
       - dagster-code-server
@@ -111,7 +111,7 @@ DAGSTER_SERVICES = """
       - VERTEX_LOCATION=europe-north1
       - EMBEDDING_PROVIDER=vertex
       - LLM_PROVIDER=vertex_gemini
-      - DEFAULT_LLM_MODEL=gemini-2.5-flash
+      - DEFAULT_LLM_MODEL=gemini-3.1-flash-lite
       - CUSTODIAN__ENABLED=true
     depends_on:
       - dagster-code-server
