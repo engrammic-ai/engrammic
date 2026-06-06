@@ -70,7 +70,7 @@ class SpladeEncoder:
 
             logger.info("splade_loading", model=self._model_name)
             try:
-                from transformers import (  # type: ignore[import-not-found]
+                from transformers import (
                     AutoModelForMaskedLM,
                     AutoTokenizer,
                 )
@@ -95,7 +95,7 @@ class SpladeEncoder:
 
     def _encode_batch_sync(self, texts: list[str]) -> list[dict[int, float]]:
         """CPU-bound encoding — called via run_in_executor."""
-        import torch  # type: ignore[import-not-found]
+        import torch
 
         inputs = self._tokenizer(
             texts,

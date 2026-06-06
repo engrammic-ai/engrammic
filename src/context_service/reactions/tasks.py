@@ -106,7 +106,7 @@ def register_tasks(broker: ListQueueBroker) -> None:
         task_name=ReactionEventType.BATCH_COMPUTE_EMBEDDING,
         timeout=_TIMEOUT_EMBEDDING * 2,
     )
-    async def batch_compute_embedding_task(items: list[dict], **_payload: Any) -> None:
+    async def batch_compute_embedding_task(items: list[dict[str, str]], **_payload: Any) -> None:
         """Embed a pre-collected batch of nodes and upsert vectors to Qdrant.
 
         Accepts a list of ``{"node_id": str, "silo_id": str}`` dicts, fetches
@@ -167,7 +167,7 @@ def register_tasks(broker: ListQueueBroker) -> None:
             return
 
         texts = [content for _, _, content in node_contents]
-        vectors = await embedder.embed_batch(texts)
+        vectors = await embedder.embed(texts)
 
         upserted = 0
         for (node_id, silo_id, _), vector in zip(node_contents, vectors, strict=True):
