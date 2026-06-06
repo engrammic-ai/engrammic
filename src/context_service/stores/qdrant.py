@@ -502,9 +502,12 @@ class QdrantClient:
                         score_threshold=score_threshold,
                     )
                 else:
+                    # Hybrid collections require named vector reference
+                    using = DENSE_VECTOR_NAME if self._hybrid_mode else None
                     response = await client.query_points(
                         collection_name=self._collection_name,
                         query=vector,
+                        using=using,
                         limit=limit,
                         score_threshold=score_threshold,
                         query_filter=query_filter,
