@@ -15,7 +15,8 @@ services:
       - ~/.config/gcloud:/mnt/gcloud:ro
       # Host-editable config overrides (e.g. models.yaml to switch the SAGE LLM).
       # Files dropped here win over the defaults baked into the image.
-      - ~/.engrammic/config:/app/config-override:ro
+      # Relative path resolves to <compose dir>/config (the install directory).
+      - ./config:/app/config-override:ro
     environment:
       - ENVIRONMENT=self-hosted
       - ENGRAMMIC_CONFIG_DIR=/app/config-override
@@ -61,7 +62,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ~/.engrammic/config:/app/config-override:ro
+      - ./config:/app/config-override:ro
     environment:
       - ENVIRONMENT=self-hosted
       - ENGRAMMIC_CONFIG_DIR=/app/config-override
@@ -99,7 +100,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ~/.engrammic/config:/app/config-override:ro
+      - ./config:/app/config-override:ro
     environment:
       - ENVIRONMENT=self-hosted
       - ENGRAMMIC_CONFIG_DIR=/app/config-override
@@ -130,7 +131,7 @@ services:
     volumes:
       # Mount gcloud credentials for Vertex AI (optional)
       - ~/.config/gcloud:/mnt/gcloud:ro
-      - ~/.engrammic/config:/app/config-override:ro
+      - ./config:/app/config-override:ro
     environment:
       - ENVIRONMENT=self-hosted
       - ENGRAMMIC_CONFIG_DIR=/app/config-override
