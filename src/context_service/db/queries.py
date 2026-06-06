@@ -117,8 +117,8 @@ GET_CLUSTERS_FOR_NODES = """
 MATCH (n {silo_id: $silo_id})-[:MEMBER_OF]->(cluster:Cluster)
 WHERE n.id IN $node_ids
 RETURN cluster.id AS cluster_id,
-       cluster.properties.state AS state,
-       cluster.properties.current_belief_id AS current_belief_id
+       cluster.state AS state,
+       cluster.current_belief_id AS current_belief_id
 """
 
 # Cluster CRUD queries

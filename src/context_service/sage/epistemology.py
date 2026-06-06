@@ -333,7 +333,11 @@ def personalized_pagerank(
 
 
 def _column_normalize(matrix: np.ndarray) -> np.ndarray:
-    """Column-normalize a matrix (columns sum to 1, or uniform if all zeros)."""
+    """Column-normalize a matrix (columns sum to 1, or uniform if zero/negative).
+
+    Negative column sums can occur when contradiction edges outweigh support
+    edges. We treat these the same as zero columns (uniform distribution).
+    """
     col_sums = matrix.sum(axis=0, keepdims=True)
-    col_sums = np.where(col_sums == 0, 1.0, col_sums)
+    col_sums = np.where(col_sums <= 0, 1.0, col_sums)
     return matrix / col_sums

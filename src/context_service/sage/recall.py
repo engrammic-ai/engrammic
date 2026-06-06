@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
+import numpy as np
 import structlog
 
 from context_service.config.settings import get_settings
@@ -231,6 +232,7 @@ async def _get_ppr_scores(
     support_matrix, contra_matrix = build_adjacency_matrices(node_ids, support_edges, contra_edges)
 
     combined_adjacency = support_matrix - 0.5 * contra_matrix
+    np.clip(combined_adjacency, 0.0, None, out=combined_adjacency)
 
     ppr_scores = personalized_pagerank(
         node_ids=node_ids,
