@@ -224,9 +224,14 @@ def build_litellm_provider(
         litellm_model = f"openai/{model_name}"
         return LiteLLMProvider(model=litellm_model, api_key=api_key)
 
-    if provider in ("vertex_gemini", "vertex"):
-        # Vertex uses ADC, no API key needed
+    if provider in ("vertex_gemini", "vertex", "vertex_ai"):
         model_name = model or _default_model()
+        # Gemini 3.x requires google-genai SDK with enterprise mode
+        if model_name.startswith("gemini-3"):
+            from context_service.llm.google_genai_provider import build_google_genai_provider
+
+            return build_google_genai_provider(model_name)
+        # 2.x and earlier use Vertex AI REST API
         project = (
             settings.models.vertex_project or settings.vertex_project or settings.vertex_project_id
         )

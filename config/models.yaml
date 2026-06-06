@@ -31,16 +31,16 @@ tiers:
       model: text-embedding-005
       dimensions: 768
     reasoning:
-      provider: vertex
+      provider: vertex_ai
       model: gemini-2.5-flash
     fast:
-      provider: vertex
+      provider: vertex_ai
       model: gemini-2.5-flash
     reranker:
       provider: vertex_ai
       model: semantic-ranker-default@latest
     query_expander:
-      provider: vertex
+      provider: vertex_ai
       model: gemini-2.5-flash
 
   balanced:
@@ -49,17 +49,17 @@ tiers:
       model: text-embedding-005
       dimensions: 768
     reasoning:
-      provider: vertex
-      model: gemini-2.5-pro
+      provider: vertex_ai
+      model: gemini-3.1-pro
     fast:
-      provider: vertex
-      model: gemini-2.5-flash
+      provider: vertex_ai
+      model: gemini-3.1-flash-lite
     reranker:
       provider: vertex_ai
       model: semantic-ranker-default@latest
     query_expander:
-      provider: vertex
-      model: gemini-2.5-flash
+      provider: vertex_ai
+      model: gemini-3.1-flash-lite
 
   premium:
     embeddings:
@@ -67,16 +67,16 @@ tiers:
       model: text-embedding-005
       dimensions: 768
     reasoning:
-      provider: vertex
+      provider: vertex_ai
       model: gemini-2.5-pro
     fast:
-      provider: vertex
+      provider: vertex_ai
       model: gemini-2.5-pro
     reranker:
       provider: vertex_ai
       model: semantic-ranker-default@latest
     query_expander:
-      provider: vertex
+      provider: vertex_ai
       model: gemini-2.5-pro
 
   # Hybrid: self-hosted embeddings + Vertex LLMs
@@ -87,16 +87,16 @@ tiers:
       model: nomic-ai/nomic-embed-text-v1.5  # 137M params, 4x faster, Matryoshka
       dimensions: 768
     reasoning:
-      provider: vertex
+      provider: vertex_ai
       model: gemini-2.5-pro
     fast:
-      provider: vertex
+      provider: vertex_ai
       model: gemini-2.5-flash
     reranker:
       provider: vertex_ai
       model: semantic-ranker-default@latest
     query_expander:
-      provider: vertex
+      provider: vertex_ai
       model: gemini-2.5-flash
 
   # Fully self-hosted (vLLM + TEI)

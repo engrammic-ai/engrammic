@@ -14,8 +14,11 @@ from context_service.custodian.rejection_reasons import (
 logger = get_logger(__name__)
 
 # Pricing table sourced from https://cloud.google.com/vertex-ai/generative-ai/pricing
-# as of 2026-04-05. Update when prices change.
+# as of 2026-06-06. Update when prices change.
 MODEL_PRICING_USD_PER_1K_TOKENS: dict[str, dict[str, float]] = {
+    "gemini-3.5-flash": {"input": 0.000075, "output": 0.0003},
+    "gemini-3.1-flash-lite": {"input": 0.00005, "output": 0.0002},
+    "gemini-3.1-pro": {"input": 0.00125, "output": 0.005},
     "gemini-2.5-flash": {"input": 0.000075, "output": 0.0003},
     "gemini-2.5-pro": {"input": 0.00125, "output": 0.005},
     "text-embedding-004": {"input": 0.00001, "output": 0.0},
