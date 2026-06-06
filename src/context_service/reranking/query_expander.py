@@ -45,9 +45,9 @@ class QueryExpander:
         self._cache_ttl = cache_ttl_seconds
         self._timeout = timeout_seconds
 
-    async def expand(self, query: str) -> str:
+    async def expand(self, query: str, silo_id: str) -> str:
         """Expand query with semantic equivalents."""
-        cache_key = f"{self.CACHE_PREFIX}{self._normalize(query)}"
+        cache_key = f"{self.CACHE_PREFIX}{silo_id}:{self._normalize(query)}"
 
         # Check cache
         try:

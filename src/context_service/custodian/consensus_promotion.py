@@ -52,6 +52,7 @@ async def promote_consensus_to_finding(
             BATCH_CREATE_PROMOTED_FROM_EDGES,
             finding_id=finding_id,
             chain_ids=contributing_chain_ids,
+            silo_id=silo_id,
         )
 
     return finding_id

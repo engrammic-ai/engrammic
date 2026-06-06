@@ -66,6 +66,7 @@ def _get_rerank_cache(qdrant: Any, settings: Any) -> SemanticRerankCache | None:
             similarity_threshold=settings.reranking.cache_similarity_threshold,
             l1_ttl_seconds=settings.reranking.cache_l1_ttl_seconds,
             l1_maxsize=settings.reranking.cache_l1_maxsize,
+            embedding_dimensions=settings.embedding_dimensions,
         )
     return _rerank_cache
 
@@ -189,6 +190,7 @@ async def _maybe_expand_query(
     query: str,
     settings: Any,
     redis: Any,
+    silo_id: str,
 ) -> tuple[str, bool]:
     """Expand query if it's a hard query and expansion is enabled.
 
@@ -224,7 +226,7 @@ async def _maybe_expand_query(
         span.set_attribute("is_hard_query", True)
         expand_start = time.perf_counter()
         try:
-            expanded = await expander.expand(query)
+            expanded = await expander.expand(query, silo_id)
             latency_ms = (time.perf_counter() - expand_start) * 1000
             span.set_attribute("latency_ms", latency_ms)
             span.set_attribute("was_expanded", expanded != query)
@@ -319,7 +321,7 @@ async def _context_query(
         return response
 
     # Query expansion for hard queries
-    effective_query, was_expanded = await _maybe_expand_query(query, settings, redis)
+    effective_query, was_expanded = await _maybe_expand_query(query, settings, redis, silo_id)
     if was_expanded:
         logger.info("query_expanded", original=query, expanded=effective_query)
 

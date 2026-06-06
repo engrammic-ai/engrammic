@@ -65,7 +65,7 @@ class TestSemanticRerankCache:
         embedding = [0.1] * 768
 
         # Prime the L1 cache
-        l1_key = cache._l1_key(query, doc_ids)
+        l1_key = cache._l1_key(query, doc_ids, "silo1")
         cache._l1[l1_key] = scores
 
         # Should hit L1, not touch Qdrant
@@ -83,7 +83,7 @@ class TestSemanticRerankCache:
         embedding = [0.1] * 768
 
         # Prime L1 with one query
-        cache._l1[cache._l1_key("query1", doc_ids)] = scores
+        cache._l1[cache._l1_key("query1", doc_ids, "silo1")] = scores
 
         # Mock L2 to return no results
         mock_client = AsyncMock()
@@ -129,7 +129,7 @@ class TestSemanticRerankCache:
         mock_hit.assert_called_once_with("rerank_l2", silo_id="silo1")
 
         # Should also warm L1
-        assert cache._l1_key(query, doc_ids) in cache._l1
+        assert cache._l1_key(query, doc_ids, "silo1") in cache._l1
 
     @pytest.mark.asyncio
     async def test_l2_below_threshold_miss(
@@ -177,7 +177,7 @@ class TestSemanticRerankCache:
         await cache.set(query, embedding, doc_ids, scores, "silo1")
 
         # L1 should be populated
-        assert cache._l1[cache._l1_key(query, doc_ids)] == scores
+        assert cache._l1[cache._l1_key(query, doc_ids, "silo1")] == scores
 
         # L2 should have been called
         mock_client.upsert.assert_called_once()
@@ -192,7 +192,7 @@ class TestSemanticRerankCache:
         embedding = [0.1] * 768
 
         # Prime L1 with doc1, doc2
-        cache._l1[cache._l1_key(query, ["doc1", "doc2"])] = scores
+        cache._l1[cache._l1_key(query, ["doc1", "doc2"], "silo1")] = scores
 
         # Query with doc1, doc3 should miss
         mock_client = AsyncMock()

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import structlog
 
 from context_service.config.settings import get_settings
+from context_service.services.models import derive_silo_id
 
 if TYPE_CHECKING:
     from context_service.auth.context import AuthContext
@@ -95,7 +96,8 @@ class RateLimiter:
     async def _get_tier(self, org_id: str) -> str:
         """Resolve tier for org: cache -> default."""
         settings = get_settings()
-        cache_key = f"{self.TIER_CACHE_PREFIX}{org_id}"
+        silo_id = str(derive_silo_id(org_id))
+        cache_key = f"{self.TIER_CACHE_PREFIX}{silo_id}"
 
         # Check cache first
         cached = await self._redis._redis.get(cache_key)

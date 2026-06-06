@@ -60,7 +60,8 @@ RETURN r
 # Excludes already-visited nodes and inactive neighbors.
 TRAVERSE_NEIGHBORS = """
 MATCH (n {id: $node_id, silo_id: $silo_id})-[e]-(neighbor)
-WHERE neighbor.properties.state = 'ACTIVE'
+WHERE neighbor.silo_id = $silo_id
+  AND neighbor.properties.state = 'ACTIVE'
   AND NOT neighbor.id IN $visited
 RETURN neighbor.id AS id,
        type(e) AS edge_type,

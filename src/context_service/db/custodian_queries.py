@@ -272,8 +272,8 @@ RETURN r.id AS id
 #   node_id    (str)
 #   kind       (str)  -- "primary" | "supporting"
 CITES_EDGE_CREATE_NODE = f"""
-MATCH (f:Finding {{id: $finding_id}})
-MATCH (n {{id: $node_id}})
+MATCH (f:Finding {{id: $finding_id, silo_id: $silo_id}})
+MATCH (n {{id: $node_id, silo_id: $silo_id}})
 WHERE {content_union_predicate("n")}
 MERGE (f)-[e:CITES {{kind: $kind}}]->(n)
 RETURN e.kind AS kind
@@ -346,8 +346,8 @@ RETURN p.source_node_id AS source_node_id,
 #   pairs      (list[dict]) -- each has keys: node_id (str), kind (str)
 CITES_EDGE_CREATE_NODE_BATCH = f"""
 UNWIND $pairs AS pair
-MATCH (f:Finding {{id: $finding_id}})
-MATCH (n {{id: pair.node_id}})
+MATCH (f:Finding {{id: $finding_id, silo_id: $silo_id}})
+MATCH (n {{id: pair.node_id, silo_id: $silo_id}})
 WHERE {content_union_predicate("n")}
 MERGE (f)-[e:CITES {{kind: pair.kind}}]->(n)
 RETURN e.kind AS kind

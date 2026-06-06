@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import time
 import uuid
@@ -60,6 +61,7 @@ class SemanticRerankCache:
         similarity_threshold: float = 0.95,
         l1_ttl_seconds: int = 300,
         l1_maxsize: int = 1000,
+        embedding_dimensions: int = 768,
     ) -> None:
         self._qdrant = qdrant
         self._collection = collection_name
@@ -68,44 +70,52 @@ class SemanticRerankCache:
             maxsize=l1_maxsize, ttl=l1_ttl_seconds
         )
         self._collection_ensured = False
+        self._ensure_lock = asyncio.Lock()
+        self._embedding_dimensions = embedding_dimensions
 
     async def _get_client(self) -> Any:
         """Get the underlying AsyncQdrantClient."""
         return await self._qdrant._get_client()
 
-    def _l1_key(self, query: str, doc_ids: list[str]) -> str:
-        """Build L1 cache key from query and doc IDs."""
+    def _l1_key(self, query: str, doc_ids: list[str], silo_id: str) -> str:
+        """Build L1 cache key from query, doc IDs, and silo_id."""
         query_hash = _sha256_short(query.lower().strip())
         docs_hash = _doc_ids_hash(doc_ids)
-        return f"{query_hash}:{docs_hash}"
+        return f"{silo_id}:{query_hash}:{docs_hash}"
 
     async def _ensure_collection(self) -> None:
         """Create rerank cache collection if it doesn't exist."""
         if self._collection_ensured:
             return
 
-        client = await self._get_client()
-        collections = await client.get_collections()
-        existing = {c.name for c in collections.collections}
+        async with self._ensure_lock:
+            if self._collection_ensured:
+                return
 
-        if self._collection not in existing:
-            await client.create_collection(
-                collection_name=self._collection,
-                vectors_config=VectorParams(size=768, distance=Distance.COSINE),
-            )
-            await client.create_payload_index(
-                collection_name=self._collection,
-                field_name="silo_id",
-                field_schema=PayloadSchemaType.KEYWORD,
-            )
-            await client.create_payload_index(
-                collection_name=self._collection,
-                field_name="doc_ids_hash",
-                field_schema=PayloadSchemaType.KEYWORD,
-            )
-            logger.info("rerank_cache_collection_created", collection=self._collection)
+            client = await self._get_client()
+            collections = await client.get_collections()
+            existing = {c.name for c in collections.collections}
 
-        self._collection_ensured = True
+            if self._collection not in existing:
+                await client.create_collection(
+                    collection_name=self._collection,
+                    vectors_config=VectorParams(
+                        size=self._embedding_dimensions, distance=Distance.COSINE
+                    ),
+                )
+                await client.create_payload_index(
+                    collection_name=self._collection,
+                    field_name="silo_id",
+                    field_schema=PayloadSchemaType.KEYWORD,
+                )
+                await client.create_payload_index(
+                    collection_name=self._collection,
+                    field_name="doc_ids_hash",
+                    field_schema=PayloadSchemaType.KEYWORD,
+                )
+                logger.info("rerank_cache_collection_created", collection=self._collection)
+
+            self._collection_ensured = True
 
     async def get(
         self,
@@ -126,7 +136,7 @@ class SemanticRerankCache:
             List of (doc_id, score) tuples if cache hit, None otherwise.
             Scores are in descending order (highest relevance first).
         """
-        l1_key = self._l1_key(query, doc_ids)
+        l1_key = self._l1_key(query, doc_ids, silo_id)
 
         # L1: exact match
         if l1_key in self._l1:
@@ -191,7 +201,7 @@ class SemanticRerankCache:
             scores: List of (doc_id, score) tuples, highest score first
             silo_id: Silo ID for scoping
         """
-        l1_key = self._l1_key(query, doc_ids)
+        l1_key = self._l1_key(query, doc_ids, silo_id)
         self._l1[l1_key] = scores
 
         # L2: store in Qdrant for semantic matching

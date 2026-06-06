@@ -373,6 +373,7 @@ class WritePath:
                     CITES_EDGE_CREATE_NODE_BATCH,
                     finding_id=finding_id,
                     pairs=cites_batch,
+                    silo_id=finding.silo_id,
                 )
 
             # 4f. MERGE each surviving proposed edge (single UNWIND query).

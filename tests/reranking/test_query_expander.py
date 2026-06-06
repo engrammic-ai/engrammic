@@ -31,7 +31,7 @@ class TestQueryExpander:
                 llm_model="vertex/gemini-2.5-flash",
                 redis=mock_redis,
             )
-            result = await expander.expand("what was rejected?")
+            result = await expander.expand("what was rejected?", "silo1")
 
             assert "rejected" in result
             assert "denied" in result
@@ -47,7 +47,7 @@ class TestQueryExpander:
             llm_model="vertex/gemini-2.5-flash",
             redis=mock_redis,
         )
-        result = await expander.expand("what was rejected?")
+        result = await expander.expand("what was rejected?", "silo1")
 
         assert result == cached_expansion
         mock_redis.get.assert_called_once()
@@ -70,7 +70,7 @@ class TestQueryExpander:
                 redis=mock_redis,
                 cache_ttl_seconds=86400,
             )
-            await expander.expand("test query")
+            await expander.expand("test query", "silo1")
 
             mock_redis.set.assert_called_once()
 
@@ -86,7 +86,7 @@ class TestQueryExpander:
                 llm_model="vertex/gemini-2.5-flash",
                 redis=mock_redis,
             )
-            result = await expander.expand("test query")
+            result = await expander.expand("test query", "silo1")
 
             # Fallback: returns original query
             assert result == "test query"
@@ -106,7 +106,7 @@ class TestQueryExpander:
                 llm_model="vertex/gemini-2.5-flash",
                 redis=mock_redis,
             )
-            result = await expander.expand("test query")
+            result = await expander.expand("test query", "silo1")
 
             # Fallback: returns original query
             assert result == "test query"

@@ -66,15 +66,15 @@ class ForgetService:
     ) -> dict[str, Any]:
         """Tombstone a node. Returns downstream reference count."""
         now = datetime.now(UTC)
-        now_micros = int(now.timestamp() * 1_000_000)
+        now_iso = now.isoformat()
 
         result = await self._store.execute_write(
             FORGET_NODE,
             {
                 "id": node_id,
                 "silo_id": silo_id,
-                "tombstoned_at": now_micros,
-                "forget_requested_at": now_micros,
+                "tombstoned_at": now_iso,
+                "forget_requested_at": now_iso,
             },
         )
 
