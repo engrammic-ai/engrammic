@@ -9,10 +9,10 @@ from context_service.models.mcp import Layer
 # Default per-layer minimum relevance thresholds.
 # Results below the threshold for their layer are filtered from recall output.
 LAYER_THRESHOLDS: dict[str, float] = {
-    Layer.KNOWLEDGE: 0.5,
-    Layer.WISDOM: 0.5,
-    Layer.MEMORY: 0.3,
-    Layer.INTELLIGENCE: 0.3,
+    Layer.KNOWLEDGE: 0.35,
+    Layer.WISDOM: 0.35,
+    Layer.MEMORY: 0.25,
+    Layer.INTELLIGENCE: 0.25,
 }
 
 RetrievalQuality = Literal["high", "partial", "low", "none"]
