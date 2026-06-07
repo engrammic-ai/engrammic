@@ -33,7 +33,7 @@ jobs:
 
       - name: Build API image with Cloud Build
         run: |
-          gcloud builds submit --config deploy/cloudbuild/api.yaml --timeout 600s \
+          gcloud builds submit --config deploy/cloudbuild/api.yaml --timeout 1200s \
             --substitutions SHORT_SHA=${{ env.SHORT_SHA }}
 
   build-beacon:
@@ -85,7 +85,7 @@ jobs:
 
       - name: Build Dagster image with Cloud Build
         run: |
-          gcloud builds submit --config deploy/cloudbuild/dagster.yaml --timeout 600s \
+          gcloud builds submit --config deploy/cloudbuild/dagster.yaml --timeout 1200s \
             --substitutions SHORT_SHA=${{ env.SHORT_SHA }}
 
   deploy:
