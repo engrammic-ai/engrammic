@@ -99,8 +99,10 @@ class GoogleGenAIProvider(LLMProvider):
                 role = "model"
             contents.append({"role": role, "parts": [{"text": msg["content"]}]})
 
+        effective_timeout = timeout if timeout is not None else self._timeout
         config = types.GenerateContentConfig(
             max_output_tokens=max_tokens,
+            http_options=types.HttpOptions(timeout=int(effective_timeout * 1000)),
         )
         if temperature is not None:
             config.temperature = temperature
@@ -150,9 +152,12 @@ class GoogleGenAIProvider(LLMProvider):
                 role = "model"
             contents.append({"role": role, "parts": [{"text": msg["content"]}]})
 
+        effective_timeout = timeout if timeout is not None else self._timeout
         config = types.GenerateContentConfig(
             max_output_tokens=max_tokens,
             response_mime_type="application/json",
+            response_schema=schema,
+            http_options=types.HttpOptions(timeout=int(effective_timeout * 1000)),
         )
 
         @_genai_retry
