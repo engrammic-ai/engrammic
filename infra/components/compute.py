@@ -363,7 +363,7 @@ echo "Stateful host ready"
             boot_disk=compute.InstanceBootDiskArgs(
                 initialize_params=compute.InstanceBootDiskInitializeParamsArgs(
                     image="debian-cloud/debian-12",
-                    size=30,
+                    size=100,
                     type="pd-balanced",
                 ),
             ),
