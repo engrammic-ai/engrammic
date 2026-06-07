@@ -21,6 +21,7 @@ services:
       # LiteLLM Vertex AI (reranker, embeddings)
       - VERTEX_PROJECT=${VERTEX_PROJECT:-}
       - VERTEX_LOCATION=${VERTEX_LOCATION:-europe-north1}
+      - GOOGLE_APPLICATION_CREDENTIALS=/mnt/gcloud/application_default_credentials.json
       # HuggingFace cache for SPLADE
       - HF_HOME=/app/.cache/huggingface
     volumes:
