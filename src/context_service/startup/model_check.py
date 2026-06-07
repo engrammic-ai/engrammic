@@ -84,7 +84,10 @@ async def verify_models(*, timeout: float = 120.0) -> None:
             if reranker_spec is None:
                 logger.info("model_check_skip", model="reranker", reason="no reranker in config")
                 return
-            reranker = LiteLLMReranker(model=reranker_spec.get("model", "rerank-v3.5"))
+            provider = reranker_spec.get("provider", "")
+            model = reranker_spec.get("model", "rerank-v3.5")
+            full_model = f"{provider}/{model}" if provider else model
+            reranker = LiteLLMReranker(model=full_model)
             await reranker.rerank("test query", ["test document"], ["test-node"])
             logger.info("model_check_ok", model="reranker")
         except Exception as e:
