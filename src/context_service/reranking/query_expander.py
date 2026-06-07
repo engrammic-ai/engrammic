@@ -39,11 +39,13 @@ class QueryExpander:
         redis: Redis,
         cache_ttl_seconds: int = 86400 * 7,
         timeout_seconds: float = 5.0,
+        vertex_project: str | None = None,
     ) -> None:
         self._model = llm_model
         self._redis = redis
         self._cache_ttl = cache_ttl_seconds
         self._timeout = timeout_seconds
+        self._vertex_project = vertex_project
 
     async def expand(self, query: str, silo_id: str) -> str:
         """Expand query with semantic equivalents."""
@@ -79,6 +81,7 @@ class QueryExpander:
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             timeout=self._timeout,
+            vertex_ai_project=self._vertex_project,
         )
         content = response.choices[0].message.content or ""
         try:

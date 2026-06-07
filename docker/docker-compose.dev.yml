@@ -3,8 +3,6 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.api
-      args:
-        INCLUDE_SPLADE: "true"
     container_name: engrammic-app
     ports:
       - "8000:8000"
