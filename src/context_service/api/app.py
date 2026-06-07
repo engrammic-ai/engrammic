@@ -25,6 +25,7 @@ from context_service.config.settings import get_settings
 from context_service.core.service_registry import ServiceRegistry
 from context_service.license import check_license_on_startup
 from context_service.license.version_check import check_version
+from context_service.startup import verify_models
 from context_service.stores import (
     MemgraphClient,
     QdrantClient,
@@ -265,6 +266,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         # Start periodic version check (every 24h)
         asyncio.create_task(_periodic_version_check())
+
+    # Verify all configured models are accessible before accepting traffic
+    await verify_models()
 
     yield
 
