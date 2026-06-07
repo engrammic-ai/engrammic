@@ -8,6 +8,12 @@ from typing import Any
 from context_service.config.logging import get_logger
 from context_service.telemetry.tracing import traced
 
+# Fail at import time if torch isn't installed, so callers can catch ImportError
+try:
+    import torch  # noqa: F401
+except ImportError as e:
+    raise ImportError("SPLADE requires torch. Install with: uv sync --group splade") from e
+
 logger = get_logger(__name__)
 
 _DEFAULT_MODEL = "prithivida/Splade_PP_en_v1"
