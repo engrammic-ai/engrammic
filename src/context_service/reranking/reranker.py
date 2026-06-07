@@ -52,7 +52,6 @@ class LiteLLMReranker:
                 f"documents ({len(documents)}) and node_ids ({len(node_ids)}) must have same length"
             )
 
-        last_error: Exception | None = None
         for attempt in range(MAX_RETRIES + 1):
             try:
                 response = await litellm.arerank(
@@ -72,7 +71,6 @@ class LiteLLMReranker:
                     for r in response.results
                 ]
             except Exception as e:
-                last_error = e
                 if attempt < MAX_RETRIES:
                     logger.debug("reranking_retry", attempt=attempt + 1, error=str(e))
                     await asyncio.sleep(RETRY_DELAY)
