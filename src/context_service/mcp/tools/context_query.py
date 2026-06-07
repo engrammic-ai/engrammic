@@ -146,18 +146,25 @@ async def _apply_reranking(
     if rerank_cache is not None and query_embedding is not None and silo_id is not None:
         cached_scores = await rerank_cache.get(query, query_embedding, node_ids, silo_id)
         if cached_scores is not None:
-            # Write cached reranker scores back into each result object
+            # Write cached reranker scores back into each result object.
+            wrote_any = False
             for node_id, score in cached_scores:
                 if node_id in id_to_result:
                     id_to_result[node_id].relevance_score = score
-            # Reorder results by cached scores
-            score_map = dict(cached_scores)
-            reranked_results = sorted(
-                results,
-                key=lambda r: score_map.get(str(r.node_id), 0.0),
-                reverse=True,
-            )
-            return reranked_results, False, True
+                    wrote_any = True
+            # Only treat this as a cache hit if at least one cached id matched
+            # the current result set. A stale cache (no overlap) falls through
+            # to a fresh rerank rather than reporting reranked_applied=True with
+            # no scores actually written (which would threshold cosine scores
+            # against the rerank floor).
+            if wrote_any:
+                score_map = dict(cached_scores)
+                reranked_results = sorted(
+                    results,
+                    key=lambda r: score_map.get(str(r.node_id), 0.0),
+                    reverse=True,
+                )
+                return reranked_results, False, True
 
     reranker = LiteLLMReranker(
         model=reranker_model,

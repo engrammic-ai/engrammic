@@ -283,6 +283,67 @@ class TestContextQueryReranking:
         assert score_map["node-2"] == 0.42
 
     @pytest.mark.asyncio
+    async def test_apply_reranking_stale_cache_falls_through_to_fresh(self) -> None:
+        """A cache hit whose ids do not match the current results is ignored;
+        the function falls through to a fresh rerank instead of reporting
+        reranked_applied=True with no scores written."""
+        mock_results = [
+            MagicMock(node_id="node-1", content="First", relevance_score=0.34),
+            MagicMock(node_id="node-2", content="Second", relevance_score=0.80),
+        ]
+        mock_settings = MagicMock()
+        mock_settings.reranking.enabled = True
+        mock_settings.reranking.reranker_timeout_seconds = 2.0
+        mock_settings.vertex_project = None
+
+        mock_models_config = MagicMock()
+        mock_models_config.litellm_reranker_model = "test-model"
+
+        # Stale cache: scores for ids that are not in the current result set.
+        stale_scores: list[tuple[str, float]] = [
+            ("ghost-1", 0.99),
+            ("ghost-2", 0.97),
+        ]
+        mock_cache = AsyncMock()
+        mock_cache.get = AsyncMock(return_value=stale_scores)
+        mock_cache.set = AsyncMock()
+
+        # Fresh rerank returns real scores for the actual nodes.
+        reranked = [
+            RerankResult(node_id="node-1", score=0.91, original_rank=1),
+            RerankResult(node_id="node-2", score=0.50, original_rank=0),
+        ]
+
+        with (
+            patch(
+                "context_service.mcp.tools.context_query.load_models_config",
+                return_value=mock_models_config,
+            ),
+            patch(
+                "context_service.mcp.tools.context_query.LiteLLMReranker",
+            ) as mock_reranker_cls,
+        ):
+            mock_reranker_cls.return_value.rerank = AsyncMock(return_value=reranked)
+
+            from context_service.mcp.tools.context_query import _apply_reranking
+
+            output, fallback_used, reranked_applied = await _apply_reranking(
+                "query",
+                mock_results,
+                mock_settings,
+                query_embedding=[0.1, 0.2],
+                silo_id="silo-1",
+                rerank_cache=mock_cache,
+            )
+
+        # Stale cache ignored; fresh rerank ran and wrote real scores.
+        assert reranked_applied is True
+        assert fallback_used is False
+        score_map = {str(r.node_id): r.relevance_score for r in output}
+        assert score_map["node-1"] == 0.91
+        assert score_map["node-2"] == 0.50
+
+    @pytest.mark.asyncio
     async def test_apply_reranking_fallback_keeps_cosine_scores(self) -> None:
         """When reranker raises, cosine scores are preserved, reranked_applied=False."""
         mock_results = [
