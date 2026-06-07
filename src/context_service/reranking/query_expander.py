@@ -63,7 +63,7 @@ class QueryExpander:
             expanded = await self._llm_expand(query)
             # Cache the result
             try:
-                await self._redis.set(cache_key, expanded.encode(), ex=self._cache_ttl)
+                await self._redis.set(cache_key, expanded.encode(), self._cache_ttl)
             except Exception as e:
                 logger.warning("query_expansion_cache_set_error", error=str(e))
             return expanded
