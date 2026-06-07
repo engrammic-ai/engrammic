@@ -9,8 +9,14 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # Copy dependency files
 COPY pyproject.toml uv.lock README.md ./
 
-# Install production dependencies (no splade/torch - that runs on VM only)
-RUN uv sync --frozen --no-dev --no-install-project --group auth
+# Install production dependencies
+# INCLUDE_SPLADE=true adds torch (~2GB) for hybrid search
+ARG INCLUDE_SPLADE=false
+RUN if [ "$INCLUDE_SPLADE" = "true" ]; then \
+      uv sync --frozen --no-dev --no-install-project --group auth --group splade; \
+    else \
+      uv sync --frozen --no-dev --no-install-project --group auth; \
+    fi
 
 # Stage 2: Runtime
 FROM python:3.13-slim
