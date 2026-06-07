@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 
 import litellm
 import structlog
 
 logger = structlog.get_logger(__name__)
+
+MAX_RETRIES = 2
+RETRY_DELAY = 0.1
 
 
 @dataclass
@@ -48,23 +52,30 @@ class LiteLLMReranker:
                 f"documents ({len(documents)}) and node_ids ({len(node_ids)}) must have same length"
             )
 
-        try:
-            response = await litellm.arerank(
-                model=self._model,
-                query=query,
-                documents=documents,
-                top_n=top_k,
-                timeout=self._timeout,
-                vertex_ai_project=self._vertex_project,
-            )
-            return [
-                RerankResult(
-                    node_id=node_ids[r["index"]],
-                    score=r["relevance_score"],
-                    original_rank=r["index"],
+        last_error: Exception | None = None
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                response = await litellm.arerank(
+                    model=self._model,
+                    query=query,
+                    documents=documents,
+                    top_n=top_k,
+                    timeout=self._timeout,
+                    vertex_ai_project=self._vertex_project,
                 )
-                for r in response.results
-            ]
-        except Exception as e:
-            logger.warning("reranking_failed", error=str(e), model=self._model)
-            raise
+                return [
+                    RerankResult(
+                        node_id=node_ids[r["index"]],
+                        score=r["relevance_score"],
+                        original_rank=r["index"],
+                    )
+                    for r in response.results
+                ]
+            except Exception as e:
+                last_error = e
+                if attempt < MAX_RETRIES:
+                    logger.debug("reranking_retry", attempt=attempt + 1, error=str(e))
+                    await asyncio.sleep(RETRY_DELAY)
+                    continue
+                logger.warning("reranking_failed", error=str(e), model=self._model)
+                raise
