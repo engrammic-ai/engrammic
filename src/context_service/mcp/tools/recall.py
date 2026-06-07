@@ -292,7 +292,9 @@ def register(mcp: FastMCP) -> None:
                 Only applies to query + depth=0 mode.
             min_threshold: Override relevance threshold (0.0-1.0). Lower values
                 return more results. When query="*", threshold is bypassed.
-            include_content: When True (default), return full node content; False returns summaries.
+            include_content: When True (default), return full node content.
+                False returns summaries only. None defers to the tier policy
+                (HOT/WARM return content, COLD returns a summary).
 
         Returns:
             {results|nodes, hypotheses?, ...}
