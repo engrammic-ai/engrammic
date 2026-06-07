@@ -47,7 +47,10 @@ async def verify_models(*, timeout: float = 120.0) -> None:
             return
         try:
             from context_service.embeddings.splade import SpladeEncoder
-
+        except ImportError:
+            logger.info("model_check_skip", model="splade", reason="torch not installed")
+            return
+        try:
             encoder = SpladeEncoder(settings.embedding.splade.model)
             await encoder.encode("startup check")
             logger.info("model_check_ok", model="splade")

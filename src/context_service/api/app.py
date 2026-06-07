@@ -196,10 +196,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         splade_encoder = None
         if settings.hybrid_search_enabled:
-            from context_service.embeddings.splade import SpladeEncoder
+            try:
+                from context_service.embeddings.splade import SpladeEncoder
 
-            splade_encoder = SpladeEncoder(model_name=settings.embedding.splade.model)
-            logger.info("splade_encoder_configured")
+                splade_encoder = SpladeEncoder(model_name=settings.embedding.splade.model)
+                logger.info("splade_encoder_configured")
+            except ImportError:
+                logger.warning("splade_unavailable", reason="torch not installed, hybrid search disabled")
 
         from context_service.engine.memgraph_store import MemgraphStore
         from context_service.services.auto_tagging import AutoTaggingService

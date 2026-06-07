@@ -15,7 +15,13 @@ from context_service.embeddings.rate_limit import (
     get_embedding_rate_limiter,
     set_embedding_rate_limiter,
 )
-from context_service.embeddings.splade import SpladeEncoder, SpladeEncoderError
+
+# SPLADE is optional (requires torch) - only available when splade group is installed
+try:
+    from context_service.embeddings.splade import SpladeEncoder, SpladeEncoderError
+except ImportError:
+    SpladeEncoder = None  # type: ignore[misc,assignment]
+    SpladeEncoderError = None  # type: ignore[misc,assignment]
 from context_service.embeddings.tei_embeddings import (
     TEIEmbeddingError,
     TEIEmbeddingService,
