@@ -34,8 +34,10 @@ def _patch_recall_base(monkeypatch: pytest.MonkeyPatch) -> dict[str, object]:
         bypass_cache: bool = False,
         max_age_seconds: int | None = None,
         min_threshold: float | None = None,
+        include_content: bool | None = True,
     ) -> dict[str, object]:
         captured["silo_id"] = silo_id
+        captured["include_content"] = include_content
         return {
             "results": [
                 {"node_id": "node-1", "content": "test 1"},

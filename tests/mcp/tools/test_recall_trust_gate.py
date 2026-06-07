@@ -42,6 +42,7 @@ def patched_recall(monkeypatch: pytest.MonkeyPatch) -> None:
         bypass_cache: bool = False,
         max_age_seconds: int | None = None,
         min_threshold: float | None = None,
+        include_content: bool | None = True,
     ) -> dict[str, object]:
         import copy
 
