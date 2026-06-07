@@ -161,7 +161,7 @@ class RerankingSettings(BaseModel):
         default=7, description="TTL for cached query expansions in Redis"
     )
     reranker_timeout_seconds: float = Field(
-        default=2.0, description="Timeout for reranker API calls"
+        default=10.0, description="Timeout for reranker API calls"
     )
     expander_timeout_seconds: float = Field(
         default=5.0, description="Timeout for query expansion LLM calls"
