@@ -134,6 +134,16 @@ async def _apply_reranking(
     if not settings.reranking.enabled or len(results) <= 1:
         return results, False, False
 
+    # Skip reranking if top result has high confidence (saves a round-trip)
+    top_score = max((r.relevance_score or 0.0) for r in results)
+    if top_score >= settings.reranking.skip_rerank_threshold:
+        logger.debug(
+            "rerank_skipped_high_confidence",
+            top_score=top_score,
+            threshold=settings.reranking.skip_rerank_threshold,
+        )
+        return results, False, False
+
     models_config = load_models_config()
     reranker_model = models_config.litellm_reranker_model
     if reranker_model is None:

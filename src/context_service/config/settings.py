@@ -166,6 +166,12 @@ class RerankingSettings(BaseModel):
     expander_timeout_seconds: float = Field(
         default=5.0, description="Timeout for query expansion LLM calls"
     )
+    skip_rerank_threshold: float = Field(
+        default=0.85,
+        ge=0.0,
+        le=1.0,
+        description="Skip reranking if top cosine score exceeds this threshold",
+    )
 
     # Semantic rerank cache settings
     cache_enabled: bool = Field(

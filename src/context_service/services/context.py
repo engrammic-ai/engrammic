@@ -1419,25 +1419,31 @@ class ContextService:
             logger.warning("query_no_embedding_service")
             return []
 
-        query_vector = await self._embedding.embed_query(query)
-
         sparse_indices: list[int] | None = None
         sparse_values: list[float] | None = None
         effective_mode = search_mode
+
+        # Run dense embedding and sparse encoding in parallel when both are needed
         if search_mode in ("hybrid", "sparse") and self._splade is not None:
+            embed_task = self._embedding.embed_query(query)
+            sparse_task = self._splade.encode_query(query)
             try:
-                sparse = await self._splade.encode_query(query)
+                query_vector, sparse = await asyncio.gather(embed_task, sparse_task)
                 sparse_indices, sparse_values = self._splade.to_qdrant(sparse)
             except Exception as exc:
                 logger.warning(
-                    "splade_query_failed",
+                    "parallel_encode_failed",
                     error=str(exc),
                     fallback="dense",
                 )
+                # Fallback: try dense-only
+                query_vector = await self._embedding.embed_query(query)
                 effective_mode = "dense"
-        elif search_mode in ("hybrid", "sparse") and self._splade is None:
-            logger.debug("splade_not_configured", fallback="dense")
-            effective_mode = "dense"
+        else:
+            query_vector = await self._embedding.embed_query(query)
+            if search_mode in ("hybrid", "sparse") and self._splade is None:
+                logger.debug("splade_not_configured", fallback="dense")
+                effective_mode = "dense"
 
         search_results = await self._qdrant.search(
             vector=query_vector,
