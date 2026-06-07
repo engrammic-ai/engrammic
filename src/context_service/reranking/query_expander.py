@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import TYPE_CHECKING
 
@@ -12,6 +13,9 @@ if TYPE_CHECKING:
     from redis.asyncio import Redis
 
 logger = structlog.get_logger(__name__)
+
+MAX_RETRIES = 2
+RETRY_DELAY = 0.1
 
 EXPANSION_PROMPT = """Expand this search query with semantically equivalent phrases.
 The goal is to find documents that ANSWER the query, even if they use different words.
@@ -76,20 +80,32 @@ class QueryExpander:
     async def _llm_expand(self, query: str) -> str:
         """Expand query using LLM."""
         prompt = EXPANSION_PROMPT.format(query=query)
-        response = await litellm.acompletion(
-            model=self._model,
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-            timeout=self._timeout,
-            vertex_ai_project=self._vertex_project,
-        )
-        content = response.choices[0].message.content or ""
-        try:
-            data = json.loads(content)
-            return str(data.get("expanded", query))
-        except (json.JSONDecodeError, TypeError) as e:
-            logger.warning("query_expansion_json_parse_failed", error=str(e), content=content[:100])
-            raise  # Let outer handler catch and fallback
+        last_error: Exception | None = None
+
+        for attempt in range(MAX_RETRIES + 1):
+            try:
+                response = await litellm.acompletion(
+                    model=self._model,
+                    messages=[{"role": "user", "content": prompt}],
+                    response_format={"type": "json_object"},
+                    timeout=self._timeout,
+                    vertex_ai_project=self._vertex_project,
+                )
+                content = response.choices[0].message.content or ""
+                try:
+                    data = json.loads(content)
+                    return str(data.get("expanded", query))
+                except (json.JSONDecodeError, TypeError) as e:
+                    logger.warning("query_expansion_json_parse_failed", error=str(e), content=content[:100])
+                    raise
+            except Exception as e:
+                last_error = e
+                if attempt < MAX_RETRIES:
+                    logger.debug("query_expansion_retry", attempt=attempt + 1, error=str(e))
+                    await asyncio.sleep(RETRY_DELAY)
+                    continue
+                raise
+        raise last_error  # type: ignore[misc]
 
     def _normalize(self, query: str) -> str:
         """Normalize query for cache key."""
