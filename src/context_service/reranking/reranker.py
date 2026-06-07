@@ -55,7 +55,7 @@ class LiteLLMReranker:
                 documents=documents,
                 top_n=top_k,
                 timeout=self._timeout,
-                vertex_project=self._vertex_project,
+                vertex_ai_project=self._vertex_project,
             )
             return [
                 RerankResult(
