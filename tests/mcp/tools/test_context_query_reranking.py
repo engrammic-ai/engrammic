@@ -322,3 +322,116 @@ class TestContextQueryReranking:
         score_map = {str(r.node_id): r.relevance_score for r in output}
         assert score_map["node-1"] == 0.34
         assert score_map["node-2"] == 0.80
+
+    @pytest.mark.asyncio
+    async def test_end_to_end_fallback_applies_per_layer_floors_not_rerank_floor(self) -> None:
+        """Integration: when reranker raises, per-layer cosine floors apply (NOT the rerank floor).
+
+        A knowledge-layer result with cosine 0.30 is:
+        - dropped under per-layer knowledge floor (0.35)  <-- expected when fallback
+        - would be kept under rerank_floor (0.05)         <-- must NOT happen on fallback
+
+        This validates the call-site wiring:
+          rerank_floor=RERANK_SCORE_FLOOR if reranked_applied else None
+        """
+        mock_auth = MagicMock()
+        mock_auth.org_id = "test-org"
+
+        # Two knowledge-layer results:
+        # node-1: cosine 0.30  -> below knowledge floor 0.35, would pass rerank_floor 0.05
+        # node-2: cosine 0.80  -> above both floors
+        mock_results = [
+            MagicMock(
+                node_id="node-1",
+                layer="knowledge",
+                content="Borderline result",
+                summary=None,
+                confidence=0.7,
+                relevance_score=0.30,
+                tags=[],
+                created_at=None,
+                conflict_status=None,
+                credibility=None,
+                credibility_factors=None,
+            ),
+            MagicMock(
+                node_id="node-2",
+                layer="knowledge",
+                content="Strong result",
+                summary=None,
+                confidence=0.9,
+                relevance_score=0.80,
+                tags=[],
+                created_at=None,
+                conflict_status=None,
+                credibility=None,
+                credibility_factors=None,
+            ),
+        ]
+
+        mock_settings = MagicMock()
+        mock_settings.reranking.enabled = True
+        mock_settings.reranking.reranker_timeout_seconds = 2.0
+        mock_settings.vertex_project = None
+        mock_settings.causal = MagicMock()
+        mock_settings.causal.query_enabled = False
+
+        mock_silo = MagicMock()
+        mock_silo.freshness_decay_lambda = 0.01
+        mock_silo.default_recall_threshold = 0.5
+        mock_silo.metadata = {}
+        mock_silo_service = MagicMock()
+        mock_silo_service.get_by_id = AsyncMock(return_value=mock_silo)
+
+        mock_models_config = MagicMock()
+        mock_models_config.litellm_reranker_model = "test-model"
+
+        with (
+            patch(
+                "context_service.mcp.tools.context_query.get_mcp_auth_context",
+                return_value=mock_auth,
+            ),
+            patch("context_service.mcp.tools.context_query.get_context_service") as mock_svc,
+            patch(
+                "context_service.mcp.tools.context_query.get_silo_service",
+                return_value=mock_silo_service,
+            ),
+            patch(
+                "context_service.mcp.tools.context_query.validate_silo_ownership", return_value=None
+            ),
+            patch(
+                "context_service.mcp.tools.context_query.get_settings", return_value=mock_settings
+            ),
+            patch("context_service.mcp.tools.context_query.get_redis", return_value=None),
+            patch(
+                "context_service.mcp.tools.context_query.load_models_config",
+                return_value=mock_models_config,
+            ),
+            patch(
+                "context_service.mcp.tools.context_query.LiteLLMReranker",
+            ) as mock_reranker_cls,
+        ):
+            mock_reranker_cls.return_value.rerank = AsyncMock(
+                side_effect=RuntimeError("reranker unavailable")
+            )
+            mock_svc.return_value.query = AsyncMock(return_value=mock_results)
+
+            from context_service.mcp.tools.context_query import _context_query
+
+            result = await _context_query(
+                silo_id="test-silo",
+                query="find something",
+                top_k=10,
+            )
+
+        assert "results" in result
+        # node-1 (cosine 0.30 < knowledge floor 0.35) must be dropped
+        # proving per-layer floor was applied, NOT the rerank_floor=0.05
+        result_ids = [r["node_id"] for r in result["results"]]
+        assert "node-1" not in result_ids, (
+            "node-1 with cosine 0.30 should be filtered by per-layer knowledge floor 0.35"
+        )
+        assert "node-2" in result_ids
+
+        # retrieval_quality must be capped at "partial" (fallback_used=True caps "high" to "partial")
+        assert result["retrieval_quality"] != "high"
