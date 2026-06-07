@@ -2,6 +2,7 @@
 
 from context_service.reranking.quality import (
     LAYER_THRESHOLDS,
+    RERANK_SCORE_FLOOR,
     RetrievalQuality,
     apply_threshold_filter,
     classify_quality,
@@ -13,6 +14,7 @@ from context_service.reranking.reranker import LiteLLMReranker, RerankResult
 
 __all__ = [
     "LAYER_THRESHOLDS",
+    "RERANK_SCORE_FLOOR",
     "LiteLLMReranker",
     "QueryExpander",
     "RerankResult",
