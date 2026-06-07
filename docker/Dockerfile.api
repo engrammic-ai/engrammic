@@ -39,8 +39,8 @@ ENV PYTHONPATH="/app/src"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Validate critical imports at build time
-RUN python /app/scripts/validate_imports.py
+# Validate critical imports at build time (skip model verification)
+RUN SKIP_MODEL_CHECK=1 python /app/scripts/validate_imports.py
 
 USER engrammic
 

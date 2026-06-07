@@ -7,11 +7,15 @@ Fails fast with clear error messages for permission/download issues.
 from __future__ import annotations
 
 import asyncio
+import os
 
 from context_service.config.logging import get_logger
 from context_service.config.settings import get_settings
 
 logger = get_logger(__name__)
+
+# Skip model checks in CI/build environments
+SKIP_MODEL_CHECK = os.getenv("SKIP_MODEL_CHECK", "").lower() in ("1", "true", "yes")
 
 
 class ModelCheckError(Exception):
@@ -30,6 +34,10 @@ async def verify_models(*, timeout: float = 120.0) -> None:
     Raises:
         ModelCheckError: If any model fails to load.
     """
+    if SKIP_MODEL_CHECK:
+        logger.info("model_check_skipped", reason="SKIP_MODEL_CHECK env var set")
+        return
+
     settings = get_settings()
     errors: list[str] = []
 
