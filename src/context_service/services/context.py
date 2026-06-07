@@ -1545,6 +1545,7 @@ class ContextService:
                     conflict_status=str(props.get("conflict_status") or "none"),
                     credibility=float(props.get("credibility") or 0.0),
                     credibility_factors=credibility_factors,
+                    tier=props.get("tier"),
                 )
             )
 

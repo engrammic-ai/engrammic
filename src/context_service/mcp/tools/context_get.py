@@ -143,6 +143,7 @@ async def _context_get(
                 "confidence": props.get("confidence"),
                 "tags": props.get("tags"),
                 "created_at": (node.created_at.isoformat() if node.created_at else None),
+                "tier": props.get("tier"),
             }
             nodes_out.append(node_dict)
 

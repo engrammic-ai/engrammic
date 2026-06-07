@@ -453,6 +453,7 @@ async def _context_query(
             "conflict_status": r.conflict_status,
             "credibility": r.credibility,
             "credibility_factors": r.credibility_factors,
+            "tier": r.tier,
         }
         for r in results
     ]

@@ -81,6 +81,7 @@ class QueryResult:
     conflict_status: str = "none"
     credibility: float = 0.0
     credibility_factors: dict[str, Any] | None = None
+    tier: str | None = None
 
 
 @dataclass
