@@ -107,6 +107,13 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Cleanup old images on VM
+        run: |
+          gcloud compute ssh engrammic-beta-stateful \
+            --zone ${{ env.REGION }}-a \
+            --tunnel-through-iap \
+            --command "sudo docker image prune -af --filter 'until=72h' && sudo docker system prune -f --volumes"
+
       - name: Deploy to VM
         run: |
           gcloud compute ssh engrammic-beta-stateful \
