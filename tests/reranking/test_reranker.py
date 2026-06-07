@@ -54,6 +54,7 @@ class TestLiteLLMReranker:
                 documents=["doc zero", "doc one", "doc two"],
                 top_n=3,
                 timeout=2.0,
+                vertex_project=None,
             )
 
     @pytest.mark.asyncio
@@ -68,22 +69,16 @@ class TestLiteLLMReranker:
         assert results == []
 
     @pytest.mark.asyncio
-    async def test_rerank_fallback_on_error(self) -> None:
+    async def test_rerank_raises_on_litellm_failure(self) -> None:
+        """rerank() must propagate exceptions so callers can apply their own fallback."""
         with patch("context_service.reranking.reranker.litellm") as mock_litellm:
             mock_litellm.arerank = AsyncMock(side_effect=Exception("API error"))
 
             reranker = LiteLLMReranker(model="vertex_ai/semantic-ranker-default@latest")
-            results = await reranker.rerank(
-                query="test",
-                documents=["doc0", "doc1"],
-                node_ids=["node-0", "node-1"],
-                top_k=2,
-            )
-
-            # Fallback: returns original order
-            assert len(results) == 2
-            assert results[0].node_id == "node-0"
-            assert results[1].node_id == "node-1"
-            assert results[0].score > results[1].score  # Verify decaying scores
-            assert results[0].score == 1.0
-            assert results[1].score == 0.99
+            with pytest.raises(Exception, match="API error"):
+                await reranker.rerank(
+                    query="test",
+                    documents=["doc0", "doc1"],
+                    node_ids=["node-0", "node-1"],
+                    top_k=2,
+                )

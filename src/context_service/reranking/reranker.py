@@ -67,7 +67,4 @@ class LiteLLMReranker:
             ]
         except Exception as e:
             logger.warning("reranking_failed", error=str(e), model=self._model)
-            return [
-                RerankResult(node_id=nid, score=1.0 - i * 0.01, original_rank=i)
-                for i, nid in enumerate(node_ids[:top_k])
-            ]
+            raise

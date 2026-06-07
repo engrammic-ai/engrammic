@@ -23,6 +23,7 @@ from context_service.mcp.server import (
 )
 from context_service.models.mcp import Layer, QueryFilters
 from context_service.reranking import (
+    RERANK_SCORE_FLOOR,
     LiteLLMReranker,
     QueryExpander,
     apply_threshold_filter,
@@ -116,20 +117,27 @@ async def _apply_reranking(
     query_embedding: list[float] | None = None,
     silo_id: str | None = None,
     rerank_cache: SemanticRerankCache | None = None,
-) -> tuple[list[Any], bool]:
+) -> tuple[list[Any], bool, bool]:
     """Apply reranking to search results if enabled.
 
     Returns:
-        (reranked_results, fallback_used) where ``fallback_used`` is True when
-        the reranker service failed and passthrough scores were substituted.
+        (reranked_results, fallback_used, reranked_applied)
+
+        ``fallback_used`` is True when the reranker service failed and cosine
+        scores were preserved (i.e. reranking did NOT apply).
+
+        ``reranked_applied`` is True only when reranking ran successfully
+        (fresh or cache-hit) and the reranker scores have been written back
+        into each result's ``relevance_score``.  It is False for all
+        early-return paths and for the fallback path.
     """
     if not settings.reranking.enabled or len(results) <= 1:
-        return results, False
+        return results, False, False
 
     models_config = load_models_config()
     reranker_model = models_config.litellm_reranker_model
     if reranker_model is None:
-        return results, False
+        return results, False, False
 
     node_ids = [str(r.node_id) for r in results]
     id_to_result = {str(r.node_id): r for r in results}
@@ -138,14 +146,25 @@ async def _apply_reranking(
     if rerank_cache is not None and query_embedding is not None and silo_id is not None:
         cached_scores = await rerank_cache.get(query, query_embedding, node_ids, silo_id)
         if cached_scores is not None:
-            # Reorder results by cached scores
-            score_map = dict(cached_scores)
-            reranked_results = sorted(
-                results,
-                key=lambda r: score_map.get(str(r.node_id), 0.0),
-                reverse=True,
-            )
-            return reranked_results, False
+            # Write cached reranker scores back into each result object.
+            wrote_any = False
+            for node_id, score in cached_scores:
+                if node_id in id_to_result:
+                    id_to_result[node_id].relevance_score = score
+                    wrote_any = True
+            # Only treat this as a cache hit if at least one cached id matched
+            # the current result set. A stale cache (no overlap) falls through
+            # to a fresh rerank rather than reporting reranked_applied=True with
+            # no scores actually written (which would threshold cosine scores
+            # against the rerank floor).
+            if wrote_any:
+                score_map = dict(cached_scores)
+                reranked_results = sorted(
+                    results,
+                    key=lambda r: score_map.get(str(r.node_id), 0.0),
+                    reverse=True,
+                )
+                return reranked_results, False, True
 
     reranker = LiteLLMReranker(
         model=reranker_model,
@@ -174,8 +193,14 @@ async def _apply_reranking(
             span.set_attribute("latency_ms", latency_ms)
             record_reranking(latency_ms=latency_ms, success=False)
             # Return in original order with fallback flag; do not propagate.
+            # Leave cosine scores intact -- do not write reranker scores back.
             fallback_used = True
-            return results, fallback_used
+            return results, fallback_used, False
+
+    # Write reranker scores back into each result object (only on success)
+    for rr in reranked:
+        if rr.node_id in id_to_result:
+            id_to_result[rr.node_id].relevance_score = rr.score
 
     # Store in cache for future queries
     if rerank_cache is not None and query_embedding is not None and silo_id is not None:
@@ -183,7 +208,7 @@ async def _apply_reranking(
         await rerank_cache.set(query, query_embedding, node_ids, scores, silo_id)
 
     reranked_results = [id_to_result[rr.node_id] for rr in reranked if rr.node_id in id_to_result]
-    return reranked_results, fallback_used
+    return reranked_results, fallback_used, True
 
 
 async def _maybe_expand_query(
@@ -394,7 +419,7 @@ async def _context_query(
         except Exception as e:
             logger.warning("rerank_cache_embed_failed", error=str(e))
 
-    results, rerank_fallback = await _apply_reranking(
+    results, rerank_fallback, reranked_applied = await _apply_reranking(
         effective_query,
         results,
         settings,
@@ -428,6 +453,7 @@ async def _context_query(
             "conflict_status": r.conflict_status,
             "credibility": r.credibility,
             "credibility_factors": r.credibility_factors,
+            "tier": r.tier,
         }
         for r in results
     ]
@@ -447,6 +473,7 @@ async def _context_query(
         threshold_overrides,
         min_threshold=min_threshold,
         bypass=bypass_threshold,
+        rerank_floor=RERANK_SCORE_FLOOR if reranked_applied else None,
     )
     retrieval_quality, suggestion = compute_retrieval_quality(
         result_dicts, below_threshold, fallback_used=rerank_fallback

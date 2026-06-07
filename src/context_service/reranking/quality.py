@@ -15,6 +15,12 @@ LAYER_THRESHOLDS: dict[str, float] = {
     Layer.INTELLIGENCE: 0.25,
 }
 
+# Minimum relevance threshold applied when reranking actually ran and wrote back
+# its scores.  A zero floor is intentionally avoided: the benchmark includes
+# adversarial questions where the correct answer is abstention; returning every
+# weak node at score 0.0 would induce hallucination.
+RERANK_SCORE_FLOOR: float = 0.05
+
 RetrievalQuality = Literal["high", "partial", "low", "none"]
 
 
@@ -51,12 +57,19 @@ def apply_threshold_filter(
     threshold_overrides: dict[str, float] | None = None,
     min_threshold: float | None = None,
     bypass: bool = False,
+    rerank_floor: float | None = None,
 ) -> tuple[list[dict[str, Any]], int]:
     """Filter result dicts by per-layer threshold.
 
     Each result dict is expected to have ``layer`` and ``relevance_score``
     fields.  Results without a ``relevance_score`` are passed through unchanged
     (they came from a non-search path that has no score).
+
+    When ``rerank_floor`` is provided the per-layer thresholds and
+    ``threshold_overrides`` are ignored; every scored result is compared to
+    ``rerank_floor`` instead.  ``min_threshold``, when set, can only lower the
+    effective floor (it is applied as ``min(rerank_floor, min_threshold)``).
+    ``bypass=True`` always returns all results regardless of ``rerank_floor``.
 
     Returns:
         (kept_results, below_threshold_count)
@@ -71,10 +84,15 @@ def apply_threshold_filter(
             # No score available; keep without filtering.
             kept.append(r)
             continue
-        layer = r.get("layer", "memory")
-        threshold = _threshold_for_layer(layer, threshold_overrides)
-        if min_threshold is not None:
-            threshold = min(threshold, min_threshold)
+        if rerank_floor is not None:
+            threshold: float = rerank_floor
+            if min_threshold is not None:
+                threshold = min(rerank_floor, min_threshold)
+        else:
+            layer = r.get("layer", "memory")
+            threshold = _threshold_for_layer(layer, threshold_overrides)
+            if min_threshold is not None:
+                threshold = min(threshold, min_threshold)
         if score >= threshold:
             kept.append(r)
         else:

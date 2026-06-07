@@ -2,10 +2,29 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _reset_query_cache_singletons():
+    """Reset context_query's module-global cache singletons to isolate tests.
+
+    context_query holds ``_result_cache`` / ``_rerank_cache`` as process-level
+    globals. Without a per-test reset, a cached result dict populated by another
+    test in the suite can be served to these tests, masking the tier field and
+    making results pass standalone but fail in the full suite.
+    """
+    import context_service.mcp.tools.context_query as _cq
+
+    _cq._result_cache = None
+    _cq._rerank_cache = None
+    yield
+    _cq._result_cache = None
+    _cq._rerank_cache = None
 
 
 def _full_node(
@@ -343,3 +362,153 @@ async def test_include_content_true_overrides_cold_tier() -> None:
         node = result["nodes"][0]
         assert "content" in node
         assert node["content"] == "full content"
+
+
+# ---------------------------------------------------------------------------
+# TDD: tier propagation for search (query) results
+# ---------------------------------------------------------------------------
+
+
+def _make_query_result(
+    node_id: str,
+    *,
+    tier: str | None,
+    content: str = "full content here",
+    layer: str = "memory",
+) -> Any:
+    """Build a QueryResult-like object for mocking ctx_svc.query()."""
+    import uuid as _uuid
+    from datetime import UTC, datetime
+
+    from context_service.services.models import QueryResult
+
+    return QueryResult(
+        node_id=_uuid.UUID(node_id),
+        layer=layer,
+        content=content,
+        confidence=0.9,
+        relevance_score=0.8,
+        summary=None,
+        tags=[],
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        conflict_status="none",
+        credibility=0.0,
+        credibility_factors=None,
+        tier=tier,
+    )
+
+
+def _make_query_mocks(query_results: list) -> tuple:
+    """Return (auth_mock, ctx_svc_mock, silo_svc_mock) for _context_query patching."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    auth = MagicMock()
+    auth.org_id = "org-test"
+
+    ctx_svc = MagicMock()
+    ctx_svc.query = AsyncMock(return_value=query_results)
+    ctx_svc.embedding_client = None
+    ctx_svc.vector_store = None
+
+    silo_svc = MagicMock()
+    silo_svc.get_by_id = AsyncMock(return_value=None)
+
+    return auth, ctx_svc, silo_svc
+
+
+@pytest.mark.asyncio
+async def test_tier_is_propagated_to_search_result_dicts() -> None:
+    """context_query result dicts must carry the 'tier' field from QueryResult.
+
+    This is the red-first test: before propagating tier through QueryResult and
+    raw_result_dicts, the 'tier' key is absent from result dicts, making the
+    tier-based content policy treat every search result as COLD.
+    """
+    import uuid as _uuid
+
+    from context_service.mcp.tools.context_query import _context_query
+
+    hot_id = str(_uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"))
+    cold_id = str(_uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"))
+
+    hot_result = _make_query_result(hot_id, tier="HOT", content="hot content")
+    cold_result = _make_query_result(cold_id, tier="COLD", content="cold content")
+
+    auth, ctx_svc, silo_svc = _make_query_mocks([hot_result, cold_result])
+
+    with (
+        patch(
+            "context_service.mcp.tools.context_query.get_mcp_auth_context",
+            return_value=auth,
+        ),
+        patch(
+            "context_service.mcp.tools.context_query.get_context_service",
+            return_value=ctx_svc,
+        ),
+        patch(
+            "context_service.mcp.tools.context_query.get_silo_service",
+            return_value=silo_svc,
+        ),
+        patch(
+            "context_service.mcp.tools.context_query.validate_silo_ownership",
+            return_value=None,
+        ),
+        patch("context_service.mcp.tools.context_query.get_redis", return_value=None),
+    ):
+        result = await _context_query(silo_id="silo-1", query="anything")
+
+    assert "error" not in result
+    result_by_id = {r["node_id"]: r for r in result["results"]}
+
+    # Both results must carry a 'tier' key
+    assert "tier" in result_by_id[hot_id], "HOT result is missing 'tier' field"
+    assert "tier" in result_by_id[cold_id], "COLD result is missing 'tier' field"
+
+    assert result_by_id[hot_id]["tier"] == "HOT"
+    assert result_by_id[cold_id]["tier"] == "COLD"
+
+
+def test_tier_policy_keeps_hot_strips_cold_for_search_results() -> None:
+    """With tier propagated onto search-result dicts, the include_content=None
+    tier policy keeps HOT content and strips COLD to a summary.
+
+    Paired with test_tier_is_propagated_to_search_result_dicts (which proves the
+    real query path now carries 'tier'), this verifies the end goal of tier
+    propagation: the policy can finally distinguish HOT/WARM from COLD for search
+    results instead of defaulting every result to COLD.
+    """
+    from context_service.mcp.tools.context_recall import _apply_tier_content_policy
+
+    response = {
+        "results": [
+            {
+                "node_id": "hot",
+                "layer": "memory",
+                "content": "hot content here",
+                "summary": None,
+                "confidence": 0.9,
+                "relevance_score": 0.8,
+                "created_at": None,
+                "tier": "HOT",
+            },
+            {
+                "node_id": "cold",
+                "layer": "memory",
+                "content": "x" * 300,
+                "summary": "cold summary",
+                "confidence": 0.9,
+                "relevance_score": 0.8,
+                "created_at": None,
+                "tier": "COLD",
+            },
+        ]
+    }
+
+    out = _apply_tier_content_policy(response, None)
+    by_id = {r["node_id"]: r for r in out["results"]}
+
+    # HOT retains full content
+    assert by_id["hot"].get("content") == "hot content here"
+    # COLD is stripped to its summary
+    assert "content" not in by_id["cold"]
+    assert by_id["cold"]["summary"] == "cold summary"

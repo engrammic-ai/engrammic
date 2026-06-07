@@ -6,6 +6,7 @@ import pytest
 
 from context_service.reranking.quality import (
     LAYER_THRESHOLDS,
+    RERANK_SCORE_FLOOR,
     apply_threshold_filter,
     classify_quality,
     compute_retrieval_quality,
@@ -14,10 +15,10 @@ from context_service.reranking.quality import (
 
 class TestLayerThresholds:
     def test_defaults_present(self) -> None:
-        assert LAYER_THRESHOLDS["knowledge"] == 0.5
-        assert LAYER_THRESHOLDS["wisdom"] == 0.5
-        assert LAYER_THRESHOLDS["memory"] == 0.3
-        assert LAYER_THRESHOLDS["intelligence"] == 0.3
+        assert LAYER_THRESHOLDS["knowledge"] == 0.35
+        assert LAYER_THRESHOLDS["wisdom"] == 0.35
+        assert LAYER_THRESHOLDS["memory"] == 0.25
+        assert LAYER_THRESHOLDS["intelligence"] == 0.25
 
     def test_knowledge_stricter_than_memory(self) -> None:
         assert LAYER_THRESHOLDS["knowledge"] > LAYER_THRESHOLDS["memory"]
@@ -47,7 +48,7 @@ class TestApplyThresholdFilter:
     def test_filters_below_knowledge_threshold(self) -> None:
         results = [
             self._make_result("knowledge", 0.6),
-            self._make_result("knowledge", 0.4),  # below 0.5
+            self._make_result("knowledge", 0.3),  # below 0.35
         ]
         kept, below = apply_threshold_filter(results)
         assert len(kept) == 1
@@ -57,7 +58,7 @@ class TestApplyThresholdFilter:
     def test_filters_below_memory_threshold(self) -> None:
         results = [
             self._make_result("memory", 0.35),
-            self._make_result("memory", 0.2),  # below 0.3
+            self._make_result("memory", 0.2),  # below 0.25
         ]
         kept, below = apply_threshold_filter(results)
         assert len(kept) == 1
@@ -71,9 +72,9 @@ class TestApplyThresholdFilter:
 
     def test_per_silo_override(self) -> None:
         results = [
-            self._make_result("knowledge", 0.45),  # below default 0.5 but above override 0.4
+            self._make_result("knowledge", 0.30),  # below default 0.35 but above override 0.25
         ]
-        kept, below = apply_threshold_filter(results, threshold_overrides={"knowledge": 0.4})
+        kept, below = apply_threshold_filter(results, threshold_overrides={"knowledge": 0.25})
         assert len(kept) == 1
         assert below == 0
 
@@ -88,9 +89,9 @@ class TestApplyThresholdFilter:
 
     def test_unknown_layer_uses_memory_threshold(self) -> None:
         results = [
-            {"node_id": "n", "layer": "unknown_layer", "relevance_score": 0.25, "content": ""},
+            {"node_id": "n", "layer": "unknown_layer", "relevance_score": 0.20, "content": ""},
         ]
-        # 0.25 < 0.3 (memory fallback) -> filtered
+        # 0.20 < 0.25 (memory fallback) -> filtered
         kept, below = apply_threshold_filter(results)
         assert kept == []
         assert below == 1
@@ -112,6 +113,63 @@ class TestApplyThresholdFilter:
         kept, below = apply_threshold_filter(results, bypass=True)
         assert len(kept) == 2
         assert below == 0
+
+    def test_rerank_floor_constant_is_nonzero(self) -> None:
+        assert RERANK_SCORE_FLOOR > 0.0
+
+    def test_rerank_floor_keeps_above_floor(self) -> None:
+        results = [
+            self._make_result("knowledge", 0.05),  # exactly at floor
+            self._make_result("memory", 0.10),  # above floor
+        ]
+        kept, below = apply_threshold_filter(results, rerank_floor=RERANK_SCORE_FLOOR)
+        assert len(kept) == 2
+        assert below == 0
+
+    def test_rerank_floor_drops_below_floor(self) -> None:
+        results = [
+            self._make_result("knowledge", 0.04),  # below 0.05 floor
+            self._make_result("memory", 0.80),  # above floor
+        ]
+        kept, below = apply_threshold_filter(results, rerank_floor=RERANK_SCORE_FLOOR)
+        assert len(kept) == 1
+        assert kept[0]["relevance_score"] == 0.80
+        assert below == 1
+
+    def test_rerank_floor_ignores_per_layer_thresholds(self) -> None:
+        # knowledge floor is 0.35, but with rerank_floor=0.05 a score of 0.20 should pass
+        results = [
+            self._make_result("knowledge", 0.20),
+        ]
+        kept, below = apply_threshold_filter(results, rerank_floor=0.05)
+        assert len(kept) == 1
+        assert below == 0
+
+    def test_rerank_floor_bypass_returns_all(self) -> None:
+        results = [
+            self._make_result("knowledge", 0.01),  # below floor
+            self._make_result("memory", 0.02),  # below floor
+        ]
+        kept, below = apply_threshold_filter(results, rerank_floor=0.05, bypass=True)
+        assert len(kept) == 2
+        assert below == 0
+
+    def test_rerank_floor_none_score_passthrough(self) -> None:
+        results = [{"node_id": "n", "layer": "knowledge", "content": ""}]
+        kept, below = apply_threshold_filter(results, rerank_floor=0.05)
+        assert len(kept) == 1
+        assert below == 0
+
+    def test_rerank_floor_min_threshold_lowers_effective_floor(self) -> None:
+        # min_threshold=0.02 < rerank_floor=0.05 -> effective floor is 0.02
+        results = [
+            self._make_result("knowledge", 0.03),  # between 0.02 and 0.05
+            self._make_result("knowledge", 0.01),  # below 0.02
+        ]
+        kept, below = apply_threshold_filter(results, rerank_floor=0.05, min_threshold=0.02)
+        assert len(kept) == 1
+        assert kept[0]["relevance_score"] == 0.03
+        assert below == 1
 
 
 class TestComputeRetrievalQuality:
