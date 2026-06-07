@@ -72,6 +72,16 @@ logs *args:
 reset:
     {{dc}} down -v
 
+# Force recreate all containers (fixes state mismatches)
+recreate:
+    {{dc}} up -d --force-recreate --remove-orphans
+
+# Nuke everything and start fresh (kills ALL engrammic containers)
+nuke:
+    docker ps -aq --filter "name=engrammic" | xargs -r docker rm -f
+    docker network rm engrammic 2>/dev/null || true
+    {{dc}} up -d --build
+
 # =============================================================================
 # Database (Local)
 # =============================================================================

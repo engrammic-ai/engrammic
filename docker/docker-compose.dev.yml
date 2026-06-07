@@ -307,3 +307,8 @@ volumes:
   redis-data:
   postgres-data:
   hf-cache:
+
+networks:
+  default:
+    name: engrammic
+    driver: bridge
