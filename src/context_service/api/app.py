@@ -1,5 +1,12 @@
 """FastAPI application factory with lifespan management."""
 
+import os
+
+# Disable litellm's buggy aiohttp transport BEFORE any litellm import
+# Fixes instant "timeout" failures from stale session reuse
+# See: https://github.com/BerriAI/litellm/issues/12425
+os.environ.setdefault("DISABLE_AIOHTTP_TRANSPORT", "true")
+
 import asyncio
 import time
 from collections.abc import AsyncIterator

@@ -22,6 +22,8 @@ services:
       - RELOAD=true
       # HuggingFace cache for SPLADE
       - HF_HOME=/app/.cache/huggingface
+      # Fix litellm aiohttp stale session bug
+      - DISABLE_AIOHTTP_TRANSPORT=true
     volumes:
       - hf-cache:/app/.cache/huggingface
       - ~/.config/gcloud:/mnt/gcloud:ro

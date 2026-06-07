@@ -1,6 +1,11 @@
 """Entrypoint for self-hosted container - runs migrations then starts server."""
 
 import os
+
+# Disable litellm's buggy aiohttp transport BEFORE any litellm import
+# See: https://github.com/BerriAI/litellm/issues/12425
+os.environ["DISABLE_AIOHTTP_TRANSPORT"] = "true"
+
 import subprocess
 import sys
 
