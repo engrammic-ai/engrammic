@@ -1,15 +1,22 @@
 steps:
-  - name: 'gcr.io/kaniko-project/executor:latest'
+  - name: 'gcr.io/cloud-builders/docker'
     args:
-      - '--destination=${_IMAGE}:latest'
-      - '--destination=${_IMAGE}:${SHORT_SHA}'
-      - '--dockerfile=docker/Dockerfile.beacon'
-      - '--context=.'
-      - '--cache=true'
-      - '--cache-repo=${_IMAGE}/cache'
-      - '--cache-ttl=168h'
-      - '--snapshot-mode=redo'
-      - '--use-new-run'
+      - 'build'
+      - '--cache-from=${_IMAGE}:latest'
+      - '--build-arg=BUILDKIT_INLINE_CACHE=1'
+      - '-f'
+      - 'docker/Dockerfile.beacon'
+      - '-t'
+      - '${_IMAGE}:latest'
+      - '-t'
+      - '${_IMAGE}:${SHORT_SHA}'
+      - '.'
+    env:
+      - 'DOCKER_BUILDKIT=1'
+
+images:
+  - '${_IMAGE}:latest'
+  - '${_IMAGE}:${SHORT_SHA}'
 
 substitutions:
   _IMAGE: 'europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-beacon'
