@@ -307,6 +307,11 @@ async def callback(
         )
 
     # Direct signup flow (no MCP client) - state is None
+    # Note: No CSRF protection here. Accepted risk because:
+    # 1. WorkOS controls the authorization code issuance
+    # 2. Attacker would need victim to complete WorkOS auth flow
+    # 3. Result is account creation, not privilege escalation
+    # TODO: Add explicit signup=true param for defense-in-depth
     if state is None:
         try:
             user_info = await exchange_code_for_user(code)
