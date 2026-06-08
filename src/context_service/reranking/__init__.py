@@ -6,6 +6,7 @@ from context_service.reranking.quality import (
     RetrievalQuality,
     apply_threshold_filter,
     classify_quality,
+    compute_adaptive_threshold,
     compute_retrieval_quality,
 )
 from context_service.reranking.query_classifier import is_hard_query
@@ -21,6 +22,7 @@ __all__ = [
     "RetrievalQuality",
     "apply_threshold_filter",
     "classify_quality",
+    "compute_adaptive_threshold",
     "compute_retrieval_quality",
     "is_hard_query",
 ]

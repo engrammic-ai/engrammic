@@ -52,6 +52,37 @@ def classify_quality(avg_score: float) -> RetrievalQuality:
     return "low"
 
 
+def compute_adaptive_threshold(
+    results: list[dict[str, Any]],
+    alpha: float = 0.7,
+    floor: float = 0.2,
+) -> tuple[float, float]:
+    """Compute score-adaptive threshold tau = alpha * max(scores).
+
+    Based on SmartSearch (arXiv:2603.15599): instead of fixed truncation,
+    use a query-dependent threshold proportional to the best score.
+    High-confidence queries (max ~0.9) get more results; low-confidence
+    queries (max ~0.5) get fewer, reducing noise.
+
+    Args:
+        results: Result dicts with relevance_score field
+        alpha: Proportion of max score to use as threshold (0.5-0.8 recommended)
+        floor: Minimum threshold regardless of alpha calculation
+
+    Returns:
+        (threshold, max_score) tuple for metrics
+    """
+    scores: list[float] = []
+    for r in results:
+        score = r.get("relevance_score")
+        if isinstance(score, (int, float)):
+            scores.append(float(score))
+    if not scores:
+        return floor, 0.0
+    max_score = max(scores)
+    return max(alpha * max_score, floor), max_score
+
+
 def apply_threshold_filter(
     results: list[dict[str, Any]],
     threshold_overrides: dict[str, float] | None = None,

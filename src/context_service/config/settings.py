@@ -186,6 +186,18 @@ class RerankingSettings(BaseModel):
     cache_l1_ttl_seconds: int = Field(default=300, description="TTL for L1 (exact match) cache")
     cache_l1_maxsize: int = Field(default=1000, description="Max entries in L1 cache per process")
 
+    # Score-adaptive truncation (SmartSearch-style)
+    adaptive_threshold_enabled: bool = Field(
+        default=False,
+        description="Use score-adaptive truncation (tau = alpha * max_score)",
+    )
+    adaptive_alpha: float = Field(
+        default=0.7,
+        ge=0.3,
+        le=0.9,
+        description="Alpha for adaptive threshold (0.5-0.8 recommended)",
+    )
+
 
 class DecayClassConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")

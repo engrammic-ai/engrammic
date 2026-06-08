@@ -27,6 +27,7 @@ from context_service.reranking import (
     LiteLLMReranker,
     QueryExpander,
     apply_threshold_filter,
+    compute_adaptive_threshold,
     compute_retrieval_quality,
     is_hard_query,
 )
@@ -34,6 +35,7 @@ from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 from context_service.signals import emit_access_event
 from context_service.telemetry.metrics import (
+    record_adaptive_threshold,
     record_hard_query_detection,
     record_mcp_tool,
     record_query_expansion,
@@ -479,10 +481,33 @@ async def _context_query(
     if silo_for_thresholds is not None:
         threshold_overrides = silo_for_thresholds.metadata.get("retrieval_thresholds") or None
 
+    # Score-adaptive truncation (SmartSearch-style): tau = alpha * max_score
+    effective_min_threshold = min_threshold
+    if settings.reranking.adaptive_threshold_enabled and reranked_applied:
+        adaptive_tau, max_score = compute_adaptive_threshold(
+            raw_result_dicts,
+            alpha=settings.reranking.adaptive_alpha,
+        )
+        if effective_min_threshold is None or adaptive_tau > effective_min_threshold:
+            effective_min_threshold = adaptive_tau
+
+        def _score_above_tau(r: dict[str, Any]) -> bool:
+            s = r.get("relevance_score")
+            return isinstance(s, (int, float)) and float(s) >= adaptive_tau
+
+        kept_count = len(list(filter(_score_above_tau, raw_result_dicts)))
+        record_adaptive_threshold(
+            tau=adaptive_tau,
+            max_score=max_score,
+            kept=kept_count,
+            filtered=len(raw_result_dicts) - kept_count,
+            silo_id=silo_id,
+        )
+
     result_dicts, below_threshold = apply_threshold_filter(
         raw_result_dicts,
         threshold_overrides,
-        min_threshold=min_threshold,
+        min_threshold=effective_min_threshold,
         bypass=bypass_threshold,
         rerank_floor=RERANK_SCORE_FLOOR if reranked_applied else None,
     )

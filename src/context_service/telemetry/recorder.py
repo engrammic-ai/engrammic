@@ -172,6 +172,19 @@ def record_reranking(latency_ms: float, success: bool) -> None:
     )
 
 
+def record_adaptive_threshold(
+    tau: float, max_score: float, kept: int, filtered: int, silo_id: str
+) -> None:
+    """Record adaptive threshold application."""
+    if _buffer is None:
+        return
+    _buffer.record(
+        metric_name="recall.adaptive_threshold",
+        silo_id=silo_id,
+        count=kept,
+    )
+
+
 def record_query_expansion(latency_ms: float, success: bool) -> None:
     """Record query expansion metrics."""
     if _buffer is None:
