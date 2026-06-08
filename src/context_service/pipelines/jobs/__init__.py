@@ -6,6 +6,7 @@ from context_service.pipelines.jobs.orphan_recovery import (
     orphan_chain_recovery_job,
     orphan_recovery_schedule,
 )
+from context_service.pipelines.jobs.reembed_job import reembed_migration
 from context_service.pipelines.jobs.usage_retention import (
     usage_retention_job,
     usage_retention_schedule,
@@ -17,6 +18,7 @@ __all__ = [
     "groundskeeper_nightly",
     "orphan_chain_recovery_job",
     "orphan_recovery_schedule",
+    "reembed_migration",
     "sage_validator_job",
     "usage_retention_job",
     "usage_retention_schedule",
