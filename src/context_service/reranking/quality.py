@@ -98,8 +98,8 @@ def apply_threshold_filter(
 
     When ``rerank_floor`` is provided the per-layer thresholds and
     ``threshold_overrides`` are ignored; every scored result is compared to
-    ``rerank_floor`` instead.  ``min_threshold``, when set, can only lower the
-    effective floor (it is applied as ``min(rerank_floor, min_threshold)``).
+    ``rerank_floor`` instead.  ``min_threshold``, when set, raises the
+    effective floor (results must score at least this high to be kept).
     ``bypass=True`` always returns all results regardless of ``rerank_floor``.
 
     Returns:
@@ -118,12 +118,12 @@ def apply_threshold_filter(
         if rerank_floor is not None:
             threshold: float = rerank_floor
             if min_threshold is not None:
-                threshold = min(rerank_floor, min_threshold)
+                threshold = max(rerank_floor, min_threshold)
         else:
             layer = r.get("layer", "memory")
             threshold = _threshold_for_layer(layer, threshold_overrides)
             if min_threshold is not None:
-                threshold = min(threshold, min_threshold)
+                threshold = max(threshold, min_threshold)
         if score >= threshold:
             kept.append(r)
         else:
