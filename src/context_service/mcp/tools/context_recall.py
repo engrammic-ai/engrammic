@@ -198,10 +198,9 @@ async def _context_recall(
         graph_depth = depth if depth > 0 else fusion_cfg.default_graph_depth
 
         # Run fusion
-        # Pass top_k * 2 here; FusionRetriever also doubles internally, giving
-        # an effective 4x over-fetch. The extra headroom is intentional: temporal
-        # filtering can discard a significant fraction of candidates before the
-        # final top_k slice, so more candidates reduces the chance of under-filling.
+        # Pass top_k * 2 here to give temporal filtering headroom. FusionRetriever
+        # fetches 4x from each channel internally but fuses down to this top_k * 2
+        # before returning, so temporal filter sees 2x candidates.
         fused = await retriever.retrieve(
             query=query,
             scope=scope,
