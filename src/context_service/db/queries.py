@@ -534,15 +534,14 @@ BELIEF_HISTORY_BIDIRECTIONAL = """
 MATCH (start {id: $node_id, silo_id: $silo_id})
 OPTIONAL MATCH (start)<-[:SUPERSEDES*1..20]-(newer)
 WHERE newer.silo_id = $silo_id
+WITH start, collect(DISTINCT newer) AS newer_nodes
 OPTIONAL MATCH (start)-[:SUPERSEDES*1..20]->(older)
 WHERE older.silo_id = $silo_id
-WITH start, collect(DISTINCT newer) AS newer_raw, collect(DISTINCT older) AS older_raw
-WITH start,
-     [n IN newer_raw WHERE n IS NOT NULL] AS newer_nodes,
-     [n IN older_raw WHERE n IS NOT NULL] AS older_nodes
-WITH older_nodes + [start] + newer_nodes AS all_nodes
-UNWIND all_nodes AS n
+WITH start, newer_nodes, collect(DISTINCT older) AS older_nodes
+WITH [start] + newer_nodes + older_nodes AS all_raw
+UNWIND all_raw AS n
 WITH DISTINCT n
+WHERE n IS NOT NULL
 OPTIONAL MATCH (superseder)-[:SUPERSEDES]->(n)
 WHERE superseder.silo_id = $silo_id
 RETURN
