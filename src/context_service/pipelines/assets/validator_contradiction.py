@@ -238,9 +238,9 @@ def validator_contradiction_asset(
 
     counts = run_async(_run())
     duration_s = time.monotonic() - t0
-    skipped = counts["candidates_processed"] == 0
+    skipped_no_work = counts["candidates_processed"] == 0 and counts["errors"] == 0
 
-    if skipped:
+    if skipped_no_work:
         context.log.info(f"validator_contradiction silo={silo_id} skipped_no_work duration={duration_s:.2f}s")
     else:
         context.log.info(
@@ -260,7 +260,7 @@ def validator_contradiction_asset(
             "false_positives": counts["false_positives"],
             "errors": counts["errors"],
             "duration_s": duration_s,
-            "skipped_no_work": skipped,
+            "skipped_no_work": skipped_no_work,
         },
         metadata={
             "silo_id": dg.MetadataValue.text(silo_id),
@@ -269,6 +269,6 @@ def validator_contradiction_asset(
             "false_positives": dg.MetadataValue.int(counts["false_positives"]),
             "errors": dg.MetadataValue.int(counts["errors"]),
             "duration_s": dg.MetadataValue.float(duration_s),
-            "skipped_no_work": dg.MetadataValue.bool(skipped),
+            "skipped_no_work": dg.MetadataValue.bool(skipped_no_work),
         },
     )

@@ -63,9 +63,9 @@ def reasoning_compaction(
 
     chains_compacted, event_ids = _run_async(_run())
     duration_s = time.monotonic() - t0
-    skipped = chains_compacted == 0
+    skipped_no_work = chains_compacted == 0
 
-    if skipped:
+    if skipped_no_work:
         context.log.info(f"silo={silo_id} skipped_no_work duration={duration_s:.2f}s")
     else:
         context.log.info(
@@ -78,13 +78,13 @@ def reasoning_compaction(
             "chains_compacted": chains_compacted,
             "event_ids": event_ids,
             "duration_s": duration_s,
-            "skipped_no_work": skipped,
+            "skipped_no_work": skipped_no_work,
         },
         metadata={
             "silo_id": dg.MetadataValue.text(silo_id),
             "chains_compacted": dg.MetadataValue.int(chains_compacted),
             "duration_s": dg.MetadataValue.float(duration_s),
-            "skipped_no_work": dg.MetadataValue.bool(skipped),
+            "skipped_no_work": dg.MetadataValue.bool(skipped_no_work),
         },
     )
 
