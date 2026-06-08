@@ -268,7 +268,9 @@ async def _write_trace_best_effort(
         await cache.write(pass_id, cluster_id, trace)
     except Exception:
         logger.warning(
-            f"Failed to write visit trace for pass={pass_id} cluster={cluster_id}",
+            "visit_trace_write_failed",
+            pass_id=pass_id,
+            cluster_id=cluster_id,
             exc_info=True,
         )
 
@@ -345,9 +347,10 @@ async def _write_and_trace(
         # return zero rows, and merge_result.single() would be None).
         if deps.scope == "cluster" and not member_ids:
             logger.warning(
-                f"Cluster {cluster_id} disappeared between visit-start and write "
-                f"(pass={pass_id} silo={deps.silo_id}); likely a concurrent "
-                f"clear_and_build_hierarchy_atomic. Skipping write."
+                "cluster_disappeared_before_write",
+                cluster_id=cluster_id,
+                pass_id=pass_id,
+                silo_id=deps.silo_id,
             )
             return await _finalize_visit(
                 redis_client,
@@ -415,7 +418,10 @@ async def _write_and_trace(
 
     except Exception as exc:
         logger.error(
-            f"Write path crashed for pass={pass_id} cluster={cluster_id}: {exc}",
+            "write_path_crashed",
+            pass_id=pass_id,
+            cluster_id=cluster_id,
+            error=str(exc),
             exc_info=True,
         )
         # Trace best-effort even on write crash.
@@ -552,7 +558,7 @@ async def _run_visit_body(
         if phase_callback:
             await phase_callback("fast", cluster_id)
     except UsageLimitExceeded as exc:
-        logger.info(f"Fast pass budget exceeded for cluster={cluster_id}: {exc}")
+        logger.info("fast_pass_budget_exceeded", cluster_id=cluster_id, error=str(exc))
         return await _finalize_visit(
             redis_client,
             ov,
@@ -568,7 +574,7 @@ async def _run_visit_body(
             skipped_reason="fast_pass_budget_exceeded",
         )
     except Exception as exc:
-        logger.error(f"Fast pass crashed for cluster={cluster_id}: {exc}", exc_info=True)
+        logger.error("fast_pass_crashed", cluster_id=cluster_id, error=str(exc), exc_info=True)
         return await _finalize_visit(
             redis_client,
             ov,
@@ -611,7 +617,7 @@ async def _run_visit_body(
         if phase_callback:
             await phase_callback("plan", cluster_id)
     except UsageLimitExceeded as exc:
-        logger.info(f"Plan phase budget exceeded for cluster={cluster_id}: {exc}")
+        logger.info("plan_phase_budget_exceeded", cluster_id=cluster_id, error=str(exc))
         return await _finalize_visit(
             redis_client,
             ov,
@@ -627,7 +633,7 @@ async def _run_visit_body(
             skipped_reason="plan_budget_exceeded",
         )
     except Exception as exc:
-        logger.error(f"Plan phase crashed for cluster={cluster_id}: {exc}", exc_info=True)
+        logger.error("plan_phase_crashed", cluster_id=cluster_id, error=str(exc), exc_info=True)
         return await _finalize_visit(
             redis_client,
             ov,
@@ -708,8 +714,10 @@ async def _run_visit_body(
         except UsageLimitExceeded as exc:
             elapsed = time.monotonic() - t0
             logger.info(
-                f"Deep pass budget exceeded for cluster={cluster_id} "
-                f"(expected, {len(deps.claims_buffer)} claims buffered): {exc}"
+                "deep_pass_budget_exceeded",
+                cluster_id=cluster_id,
+                claims_buffered=len(deps.claims_buffer),
+                error=str(exc),
             )
             record_hard_cap_hit("deep")
             # Partial usage -- no result object available.
@@ -722,7 +730,7 @@ async def _run_visit_body(
             # Proceed to stitch with whatever claims were committed.
         except Exception as exc:
             elapsed = time.monotonic() - t0
-            logger.error(f"Deep pass crashed for cluster={cluster_id}: {exc}", exc_info=True)
+            logger.error("deep_pass_crashed", cluster_id=cluster_id, error=str(exc), exc_info=True)
             usage_breakdown["deep"] = UsageBreakdown(
                 model=model_name,
                 input_tokens=0,
@@ -785,7 +793,7 @@ async def _run_visit_body(
                 await phase_callback("stitch", cluster_id)
         except UsageLimitExceeded as exc:
             elapsed = time.monotonic() - t0
-            logger.info(f"Stitch budget exceeded for cluster={cluster_id}: {exc}")
+            logger.info("stitch_budget_exceeded", cluster_id=cluster_id, error=str(exc))
             stitch_summary = None
             usage_breakdown["stitch"] = UsageBreakdown(
                 model=ov.flash_model,
@@ -795,7 +803,7 @@ async def _run_visit_body(
             )
         except Exception as exc:
             elapsed = time.monotonic() - t0
-            logger.warning(f"Stitch crashed for cluster={cluster_id}: {exc}", exc_info=True)
+            logger.warning("stitch_crashed", cluster_id=cluster_id, error=str(exc), exc_info=True)
             stitch_summary = None
             usage_breakdown["stitch"] = UsageBreakdown(
                 model=ov.flash_model,

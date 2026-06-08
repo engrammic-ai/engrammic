@@ -118,7 +118,7 @@ class ExtractionService:
                 )
             )
         except Exception as e:
-            logger.error(f"LLM extraction failed: {truncate(str(e))}", exc_info=True)
+            logger.error("llm_extraction_failed", error=truncate(str(e)), exc_info=True)
             raise ExtractionError(f"LLM extraction failed: {e}") from e
 
         entities = [
@@ -147,7 +147,9 @@ class ExtractionService:
             )
             if not raw_rel_type:
                 logger.warning(
-                    f"Skipping relationship {source} -> {target}: missing relationship_type"
+                    "extraction_skip_relationship_missing_type",
+                    source=source,
+                    target=target,
                 )
                 continue
             # Normalize to the closed vocabulary; fallback to RELATED_TO for unknowns.
@@ -186,8 +188,11 @@ class ExtractionService:
                 rel_type = RelationshipType(rel_type_str)
             except ValueError:
                 logger.warning(
-                    f"Unknown relationship_type {raw_rel_type!r} for {source} -> {target}; "
-                    f"falling back to RELATED_TO"
+                    "extraction_unknown_relationship_type",
+                    raw_rel_type=raw_rel_type,
+                    source=source,
+                    target=target,
+                    fallback="RELATED_TO",
                 )
                 rel_type = RelationshipType.RELATED_TO
 
@@ -223,7 +228,12 @@ class ExtractionService:
                     )
                 )
             except RelationshipValidationError as e:
-                logger.warning(f"Skipping invalid relationship {source} -> {target}: {e}")
+                logger.warning(
+                    "extraction_skip_invalid_relationship",
+                    source=source,
+                    target=target,
+                    error=str(e),
+                )
 
         if len(relationships) > self.MAX_RELATIONSHIPS:
             logger.warning(
@@ -272,8 +282,9 @@ class ExtractionService:
             target_id = entity_id_map.get(rel.target)
             if source_id is None or target_id is None:
                 logger.warning(
-                    f"Skipping relationship {rel.source} -> {rel.target}: "
-                    f"entity not found in extraction"
+                    "extraction_skip_relationship_entity_missing",
+                    source=rel.source,
+                    target=rel.target,
                 )
                 continue
             # Defensive: re-validate that the type is in the closed enum.
@@ -281,8 +292,10 @@ class ExtractionService:
                 rel_type_enum = RelationshipType(rel.relationship_type)
             except ValueError:
                 logger.warning(
-                    f"Skipping relationship {rel.source} -> {rel.target}: "
-                    f"invalid relationship_type {rel.relationship_type!r}"
+                    "extraction_skip_relationship_invalid_type",
+                    source=rel.source,
+                    target=rel.target,
+                    relationship_type=rel.relationship_type,
                 )
                 continue
             rels_data.append(
@@ -315,13 +328,17 @@ class ExtractionService:
                     relationships_created += result_rows[0].get("created", 0) if result_rows else 0
                 except Exception as e:
                     logger.warning(
-                        f"Failed to batch create {rel_type_enum} entity relationships: {e}",
+                        "extraction_batch_create_relationships_failed",
+                        rel_type=str(rel_type_enum),
+                        error=str(e),
                         exc_info=True,
                     )
 
         logger.info(
-            f"Applied extraction to node {node_id}: "
-            f"{entities_created} entities, {relationships_created} relationships"
+            "extraction_applied_to_node",
+            node_id=node_id,
+            entities_created=entities_created,
+            relationships_created=relationships_created,
         )
         return entities_created, relationships_created, entity_id_map
 
@@ -392,7 +409,7 @@ class ExtractionService:
             if eid is not None:
                 entity_id_map[ent.name] = eid
             else:
-                logger.warning(f"Batch entity upsert returned no id for {ent.name!r}; skipping")
+                logger.warning("extraction_entity_upsert_no_id", entity_name=ent.name)
         return entity_id_map
 
     async def apply_claims_to_graph(
@@ -491,7 +508,10 @@ MERGE (ps)<-[:EXTRACTED_FROM]-(c)
                 )
         except Exception as e:
             logger.warning(
-                f"Batch claim write failed for silo {silo_id!r} ({len(triples)} claims): {e}",
+                "extraction_batch_claim_write_failed",
+                silo_id=silo_id,
+                claim_count=len(triples),
+                error=str(e),
                 exc_info=True,
             )
             return 0
@@ -521,7 +541,10 @@ MERGE (ps)<-[:EXTRACTED_FROM]-(c)
             tgt_id = entity_id_map.get(rel.target)
             if not src_id or not tgt_id:
                 logger.warning(
-                    f"Claim synthesis skip {rel.source}->{rel.target}: missing entity id in map"
+                    "extraction_claim_synthesis_skip",
+                    source=rel.source,
+                    target=rel.target,
+                    reason="missing entity id in map",
                 )
                 continue
             predicate = (rel.kind or rel.relationship_type.value).strip().lower()
@@ -750,10 +773,10 @@ MERGE (ps)<-[:EXTRACTED_FROM]-(c)
                     t for t, d in zip(triples, decisions, strict=False) if d.action == "keep"
                 ]
                 logger.info(
-                    "extraction.filter: kept={} dropped={} silo={}",
-                    len(kept_triples),
-                    len(triples) - len(kept_triples),
-                    silo_id,
+                    "extraction_filter_applied",
+                    kept=len(kept_triples),
+                    dropped=len(triples) - len(kept_triples),
+                    silo_id=silo_id,
                 )
             else:
                 kept_triples = triples
@@ -761,9 +784,12 @@ MERGE (ps)<-[:EXTRACTED_FROM]-(c)
             claim_node_ids = await self.apply_document_claims(silo_id, job.node_id, kept_triples)
             claims_written = len(claim_node_ids)
             logger.info(
-                f"Extraction job {job.id} wrote "
-                f"{entities_created} entities, {relationships_created} rels, "
-                f"{claims_written} claims (from {len(triples)} synthesized)"
+                "extraction_job_wrote",
+                job_id=job.id,
+                entities_created=entities_created,
+                relationships_created=relationships_created,
+                claims_written=claims_written,
+                triples_synthesized=len(triples),
             )
             if kept_triples and claims_written == 0:
                 job.status = ExtractionStatus.FAILED
@@ -790,7 +816,7 @@ MERGE (ps)<-[:EXTRACTED_FROM]-(c)
             job.error = truncate(str(e))
             job.completed_at = datetime.now(UTC)
             await self._update_node_extraction_status(silo_id, job.node_id, "failed")
-            logger.error(f"Extraction job {job.id} failed: {e}")
+            logger.error("extraction_job_failed", job_id=job.id, error=str(e))
 
         await self._job_store.save(job)
 
@@ -799,7 +825,10 @@ MERGE (ps)<-[:EXTRACTED_FROM]-(c)
         from context_service.engine import queries as engine_queries
 
         logger.info(
-            f"_update_node_extraction_status: silo={silo_id} node={node_id} status={status}"
+            "extraction_update_node_status",
+            silo_id=silo_id,
+            node_id=node_id,
+            status=status,
         )
         try:
             rows = await self._graph.execute_write(
@@ -808,10 +837,14 @@ MERGE (ps)<-[:EXTRACTED_FROM]-(c)
             )
             if not rows:
                 logger.warning(
-                    f"UPDATE_EXTRACTION_STATUS matched 0 rows "
-                    f"for silo={silo_id} node={node_id} — id/label mismatch?"
+                    "extraction_update_status_no_match",
+                    silo_id=silo_id,
+                    node_id=node_id,
                 )
         except Exception as e:
             logger.warning(
-                f"Failed to update extraction_status for node {node_id}: {e}", exc_info=True
+                "extraction_update_status_failed",
+                node_id=node_id,
+                error=str(e),
+                exc_info=True,
             )

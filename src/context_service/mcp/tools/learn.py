@@ -15,6 +15,7 @@ from context_service.mcp.rate_limit import rate_limited
 from context_service.mcp.server import get_mcp_auth_context, track_tool_usage
 from context_service.mcp.tools.context_store import _context_assert
 from context_service.mcp.tools.registry import get_tool_description
+from context_service.services.models import derive_silo_id
 from context_service.telemetry.metrics import (
     record_mcp_tool,
     record_node_confidence,
@@ -50,6 +51,7 @@ async def _learn_impl(
             claim_preview=claim[:100] if claim else "",
             evidence_count=len(evidence) if evidence else 0,
             enforce_mode=cfg.enforce,
+            silo_id=str(derive_silo_id(auth.org_id)),
         )
         if cfg.enforce:
             raise MissingEvidenceError()
