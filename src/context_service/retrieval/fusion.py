@@ -1,7 +1,9 @@
-"""RRF fusion retriever — parallel semantic and graph channels.
+"""RRF fusion retriever — semantic-seeded graph channel with RRF fusion.
 
-Runs vector (Qdrant) and graph (Memgraph) retrieval in parallel, then fuses
-the ranked lists with Reciprocal Rank Fusion (RRF).
+Runs the semantic (vector) channel first, then uses its top results as seeds
+for the graph (BFS) channel. This avoids a redundant embedding call that
+graph_traversal would otherwise make when given a raw query string. Results
+are fused with Reciprocal Rank Fusion (RRF).
 
 Formula:
     score(node) = sum over channels: 1 / (k + rank)
@@ -11,7 +13,6 @@ where k=60 (default smoothing constant) and rank starts at 1.
 
 from __future__ import annotations
 
-import asyncio
 import re
 import time
 from dataclasses import dataclass, field
@@ -81,12 +82,18 @@ class FusionRetriever:
         graph_depth: int = 2,
         layers: list[str] | None = None,
     ) -> list[FusedResult]:
-        """Run both retrieval channels in parallel and fuse results with RRF.
+        """Run semantic channel first, then seed graph channel from its results.
+
+        Runs the semantic channel first to obtain top matches, then uses those
+        node IDs as seeds for the graph channel. This avoids a second embedding
+        call (graph_traversal embeds the query internally when given a query
+        string). Accepts ~50ms extra latency in exchange for halving embedding
+        cost per fusion request.
 
         Over-fetches (top_k * 2) from each channel before fusion, then returns
-        the top_k fused results. If one channel errors, the other's results are
-        returned ranked as-is (each node receives a contribution only from the
-        surviving channel).
+        the top_k fused results. If the semantic channel errors, the graph
+        channel is skipped and an empty result is returned for it. If the graph
+        channel errors, semantic results are used as-is.
 
         Args:
             query: Free-text search query.
@@ -100,35 +107,56 @@ class FusionRetriever:
         """
         fetch_k = top_k * 2
 
-        semantic_coro = self._semantic_channel(query, scope, fetch_k, layers)
-        graph_coro = self._graph_channel(query, scope, fetch_k, graph_depth, layers)
+        # Run semantic channel first — its results seed the graph channel.
+        semantic_result: ChannelResult
+        try:
+            semantic_result = await self._semantic_channel(query, scope, fetch_k, layers)
+        except Exception as exc:  # pragma: no cover
+            semantic_result = ChannelResult(
+                channel_name="semantic",
+                ranked_ids=[],
+                latency_ms=0.0,
+                error=str(exc),
+            )
 
-        results = await asyncio.gather(semantic_coro, graph_coro, return_exceptions=True)
+        logger.debug(
+            "fusion_channel_complete",
+            channel="semantic",
+            count=len(semantic_result.ranked_ids),
+            latency_ms=semantic_result.latency_ms,
+        )
 
-        channel_results: list[ChannelResult] = []
-        for i, result in enumerate(results):
-            channel_name = "semantic" if i == 0 else "graph"
-            if isinstance(result, BaseException):
+        # Use top-10 semantic hits as seeds so graph_traversal does not need
+        # to embed the query again.
+        seed_ids = semantic_result.ranked_ids[:10] if semantic_result.error is None else []
+
+        graph_result: ChannelResult
+        try:
+            graph_result = await self._graph_channel(
+                seed_ids, scope, fetch_k, graph_depth, layers
+            )
+        except Exception as exc:  # pragma: no cover
+            graph_result = ChannelResult(
+                channel_name="graph",
+                ranked_ids=[],
+                latency_ms=0.0,
+                error=str(exc),
+            )
+
+        logger.debug(
+            "fusion_channel_complete",
+            channel="graph",
+            count=len(graph_result.ranked_ids),
+            latency_ms=graph_result.latency_ms,
+        )
+
+        channel_results = [semantic_result, graph_result]
+        for result in channel_results:
+            if result.error is not None:
                 logger.warning(
                     "fusion_channel_error",
-                    channel=channel_name,
-                    error=str(result),
-                )
-                channel_results.append(
-                    ChannelResult(
-                        channel_name=channel_name,
-                        ranked_ids=[],
-                        latency_ms=0.0,
-                        error=str(result),
-                    )
-                )
-            else:
-                channel_results.append(result)
-                logger.debug(
-                    "fusion_channel_complete",
-                    channel=channel_name,
-                    count=len(result.ranked_ids),
-                    latency_ms=result.latency_ms,
+                    channel=result.channel_name,
+                    error=result.error,
                 )
 
         fused = self._fuse_rrf(channel_results, top_k)
@@ -186,7 +214,7 @@ class FusionRetriever:
 
     async def _graph_channel(
         self,
-        query: str,
+        seed_ids: list[str],
         scope: ScopeContext,
         top_k: int,
         graph_depth: int,
@@ -194,11 +222,12 @@ class FusionRetriever:
     ) -> ChannelResult:
         """Run graph traversal via ContextService.graph_traversal().
 
-        Seeds the BFS walk from the top semantic matches (done internally by
-        graph_traversal when a query is provided).
+        Seeds the BFS walk from the provided node IDs (top hits from the
+        semantic channel). Passing seed_nodes instead of a query string avoids
+        a redundant embedding call inside graph_traversal.
 
         Args:
-            query: Semantic seed query.
+            seed_ids: Node IDs to use as BFS starting points.
             scope: Org and silo scoping context (silo_id used as string).
             top_k: Maximum nodes to return.
             graph_depth: Maximum BFS traversal depth.
@@ -211,7 +240,7 @@ class FusionRetriever:
         try:
             graph_result = await self._ctx.graph_traversal(
                 str(scope.silo_id),
-                query=query,
+                seed_nodes=seed_ids,
                 max_depth=graph_depth,
                 max_nodes=top_k,
                 layers=layers,
