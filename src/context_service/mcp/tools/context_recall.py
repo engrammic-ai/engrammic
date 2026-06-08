@@ -172,6 +172,7 @@ async def _context_recall(
     fusion_mode: bool = False,
     since: str | None = None,
     until: str | None = None,
+    graph_depth: int | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     if not query and not node_ids:
@@ -195,7 +196,9 @@ async def _context_recall(
 
         # Create retriever with config
         retriever = FusionRetriever(ctx_svc, k=fusion_cfg.rrf_k)
-        graph_depth = depth if depth > 0 else fusion_cfg.default_graph_depth
+        effective_graph_depth = graph_depth if graph_depth is not None else (
+            depth if depth > 0 else fusion_cfg.default_graph_depth
+        )
 
         # Run fusion
         # Pass top_k * 2 here to give temporal filtering headroom. FusionRetriever
@@ -205,7 +208,7 @@ async def _context_recall(
             query=query,
             scope=scope,
             top_k=top_k * 2,
-            graph_depth=graph_depth,
+            graph_depth=effective_graph_depth,
             layers=layers,
         )
 
@@ -230,7 +233,7 @@ async def _context_recall(
         fusion_meta = {
             "enabled": True,
             "rrf_k": fusion_cfg.rrf_k,
-            "graph_depth": graph_depth,
+            "graph_depth": effective_graph_depth,
             "temporal_filter": {"since": since, "until": until} if (since or until) else None,
         }
 
@@ -378,6 +381,7 @@ def register(mcp: FastMCP) -> None:
         fusion_mode: bool = False,
         since: str | None = None,
         until: str | None = None,
+        graph_depth: int | None = None,
     ) -> dict[str, Any]:
         """Unified read across Memory, Knowledge, Wisdom, and Intelligence layers.
 
@@ -421,6 +425,8 @@ def register(mcp: FastMCP) -> None:
                 relative strings ("7d", "1w", "30d") or ISO datetime.
             until: Filter results to nodes created at or before this time. Same
                 format as since.
+            graph_depth: BFS depth for graph channel in fusion_mode. Defaults to
+                config value (2). Overrides depth when fusion_mode=True.
 
         Returns:
             Depends on mode:
@@ -453,6 +459,7 @@ def register(mcp: FastMCP) -> None:
                 fusion_mode=fusion_mode,
                 since=since,
                 until=until,
+                graph_depth=graph_depth,
             )
             node_count = len(result.get("results", result.get("nodes", [])))
             avg_node_bytes = 500 if include_content else 100

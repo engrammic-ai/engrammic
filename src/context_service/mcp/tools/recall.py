@@ -49,6 +49,7 @@ async def _recall_impl(
     fusion_mode: bool = False,
     since: str | None = None,
     until: str | None = None,
+    graph_depth: int | None = None,
 ) -> dict[str, Any]:
     """Implementation for recall tool."""
     auth = await get_mcp_auth_context()
@@ -87,6 +88,7 @@ async def _recall_impl(
         fusion_mode=fusion_mode,
         since=since,
         until=until,
+        graph_depth=graph_depth,
     )
     duration_ms = (time.perf_counter() - start) * 1000
 
@@ -285,6 +287,7 @@ def register(mcp: FastMCP) -> None:
         fusion_mode: bool = False,
         since: str | None = None,
         until: str | None = None,
+        graph_depth: int | None = None,
     ) -> dict[str, Any]:
         """Retrieve knowledge.
 
@@ -310,6 +313,8 @@ def register(mcp: FastMCP) -> None:
             since: Filter to nodes created at/after this time. Requires fusion_mode.
                 Accepts relative ("7d", "1w", "30d") or ISO datetime.
             until: Filter to nodes created at/before this time. Same format as since.
+            graph_depth: BFS depth for graph channel when fusion_mode=True.
+                Defaults to config value (2). Overrides depth when fusion_mode=True.
 
         Returns:
             {results|nodes, hypotheses?, ...}
@@ -332,6 +337,7 @@ def register(mcp: FastMCP) -> None:
                 fusion_mode=fusion_mode,
                 since=since,
                 until=until,
+                graph_depth=graph_depth,
             )
         except Exception:
             success = False
