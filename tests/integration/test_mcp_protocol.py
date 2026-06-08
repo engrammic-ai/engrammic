@@ -16,9 +16,11 @@ from context_service.mcp.tools import register_all
 EXPECTED_TOOLS = {
     "remember",
     "learn",
-    "believe",
+    "decide",
+    "accept",
     "recall",
     "trace",
+    "history",
     "link",
     "patterns",
     "reason",

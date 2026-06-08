@@ -32,7 +32,8 @@ WRITE_TOOLS = frozenset(
     {
         "remember",
         "learn",
-        "believe",
+        "decide",
+        "accept",
         "link",
         "reason",
         "reflect",

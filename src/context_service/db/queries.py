@@ -1528,8 +1528,9 @@ CREATE (b:Belief {
 })
 CREATE (b)-[:PROMOTED_FROM]->(pb)
 WITH pb, b
-MATCH (pb)-[:SYNTHESIZED_FROM]->(f)
-CREATE (b)-[:SYNTHESIZED_FROM]->(f)
+OPTIONAL MATCH (pb)-[:SYNTHESIZED_FROM]->(f)
+WITH b, collect(f) AS facts
+FOREACH (fact IN facts | CREATE (b)-[:SYNTHESIZED_FROM]->(fact))
 RETURN b.id AS belief_id, b.confidence AS confidence
 """
 
