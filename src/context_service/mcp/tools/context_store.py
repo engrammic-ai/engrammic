@@ -201,12 +201,14 @@ async def _upsert_chain_embedding(
         logger.warning(
             "chain_query_embedding_upsert_failed",
             chain_id=str(chain_id),
+            silo_id=silo_id,
             error=str(exc),
         )
     except Exception as exc:
         logger.warning(
             "chain_query_embedding_upsert_failed",
             chain_id=str(chain_id),
+            silo_id=silo_id,
             error=str(exc),
         )
 
@@ -455,6 +457,7 @@ async def _context_assert(
                 "claim_assert_promotion_failed",
                 exc_info=True,
                 claim_id=str(node_id),
+                silo_id=str(expected_silo_id),
             )
 
     # Fetch embedding once for both contradiction and affinity checks
@@ -508,7 +511,12 @@ async def _context_assert(
                     silo_id=str(expected_silo_id),
                 )
         except Exception as exc:
-            logger.warning("affinity_computation_failed", error=str(exc), node_id=str(node_id))
+            logger.warning(
+                "affinity_computation_failed",
+                error=str(exc),
+                node_id=str(node_id),
+                silo_id=str(expected_silo_id),
+            )
 
     response: dict[str, Any] = {
         "node_id": str(node_id),
@@ -605,6 +613,7 @@ async def _context_commit(
                 "context_commit_compaction_skip",
                 chain_id=chain_id,
                 reason=str(exc),
+                silo_id=str(expected_silo_id),
             )
 
     if supersedes is not None:
@@ -748,6 +757,7 @@ async def _context_reason(
                 "context_reason_agent_upsert_failed",
                 exc_info=True,
                 agent_id=agent_id,
+                silo_id=str(expected_silo_id),
             )
 
     # Validate parent_chain_id before chain creation so we can fail fast.
@@ -762,6 +772,7 @@ async def _context_reason(
                 "context_reason_parent_chain_lookup_failed",
                 exc_info=True,
                 parent_chain_id=parent_chain_id,
+                silo_id=str(expected_silo_id),
             )
             parent_rows = []
 
@@ -828,6 +839,7 @@ async def _context_reason(
                 "chain_query_embedding_failed",
                 exc_info=True,
                 chain_id=str(chain_id),
+                silo_id=str(expected_silo_id),
             )
 
     await attach_chain_to_session(store, str(chain_id), resolved_session_id, str(expected_silo_id))
@@ -851,6 +863,7 @@ async def _context_reason(
                 exc_info=True,
                 child_chain_id=str(chain_id),
                 parent_chain_id=parent_chain_id,
+                silo_id=str(expected_silo_id),
             )
 
     # Crystallize reasoning to Wisdom layer via T7 (commit).
@@ -888,6 +901,7 @@ async def _context_reason(
                     exc_info=True,
                     chain_id=str(chain_id),
                     claim=str(cryst.claim)[:100],
+                    silo_id=str(expected_silo_id),
                 )
                 return None
 
