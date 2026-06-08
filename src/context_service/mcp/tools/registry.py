@@ -60,6 +60,7 @@ def register_tools(mcp: FastMCP) -> None:
     from context_service.mcp.tools import (
         believe,
         commit,
+        decide,
         dismiss,
         forget,
         history,
@@ -80,6 +81,7 @@ def register_tools(mcp: FastMCP) -> None:
         "remember": remember.register,
         "learn": learn.register,
         "believe": believe.register,
+        "decide": decide.register,
         "recall": recall.register,
         "trace": trace.register,
         "history": history.register,
