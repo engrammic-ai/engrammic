@@ -120,6 +120,7 @@ class OAuthService:
         self,
         code: str,
         code_verifier: str,
+        client_id: str | None = None,
     ) -> dict[str, Any] | None:
         """Validate PKCE and exchange an authorization code for tokens.
 
@@ -158,6 +159,15 @@ class OAuthService:
             logger.warning(
                 "oauth.code_exchange.authorization_request_not_found",
                 request_id=str(auth_code.authorization_request_id),
+            )
+            return None
+
+        if client_id is not None and client_id != auth_request.client_id:
+            logger.warning(
+                "oauth.code_exchange.client_id_mismatch",
+                code_id=str(auth_code.id),
+                provided_client_id=client_id,
+                expected_client_id=auth_request.client_id,
             )
             return None
 

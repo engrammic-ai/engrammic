@@ -166,6 +166,7 @@ async def _recall_impl(
     hard_mode = bool(result.get("engagement") and result["engagement"].get("mode") == MODE_HARD)
     if hard_mode:
         result["results"] = []
+        result["message"] = "Results suppressed: engagement checkpoint requires resolution"
         if "nodes" in result:
             result["nodes"] = []
         if include_hypotheses:

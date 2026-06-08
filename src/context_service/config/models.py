@@ -137,7 +137,14 @@ def load_models_config() -> ModelsConfig:
 
     # Allow env var to override tier
     env_tier = os.environ.get("MODELS__TIER")
-    if env_tier and env_tier in ("economy", "balanced", "premium"):
+    if env_tier and env_tier in (
+        "economy",
+        "balanced",
+        "premium",
+        "hybrid",
+        "self_hosted",
+        "self_hosted_budget",
+    ):
         data["tier"] = env_tier
 
     return ModelsConfig(**data)

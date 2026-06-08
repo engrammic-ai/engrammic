@@ -5,6 +5,7 @@ from collections.abc import Awaitable
 from typing import Literal
 
 from fastapi import APIRouter, Query, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
@@ -193,11 +194,11 @@ async def health_check_stores(request: Request) -> HealthResponse:
     operation_id="readiness_check",
     summary="Kubernetes readiness probe",
 )
-async def readiness_check(request: Request) -> dict[str, str]:
+async def readiness_check(request: Request) -> JSONResponse:
     """Kubernetes readiness probe."""
     required_services = ["memgraph", "redis", "qdrant"]
     if not all(hasattr(request.app.state, s) for s in required_services):
-        return {"status": "not_ready"}
+        return JSONResponse(status_code=503, content={"status": "not_ready"})
 
     memgraph_ok = await request.app.state.memgraph.health_check()
     redis_ok = await request.app.state.redis.health_check()
@@ -205,5 +206,5 @@ async def readiness_check(request: Request) -> dict[str, str]:
     postgres_ok = await _postgres_health_check()
 
     if all([memgraph_ok, redis_ok, qdrant_ok, postgres_ok]):
-        return {"status": "ready"}
-    return {"status": "not_ready"}
+        return JSONResponse(status_code=200, content={"status": "ready"})
+    return JSONResponse(status_code=503, content={"status": "not_ready"})

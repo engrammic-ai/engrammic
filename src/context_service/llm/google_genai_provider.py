@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 
@@ -117,7 +118,7 @@ class GoogleGenAIProvider(LLMProvider):
 
         _start = time.perf_counter()
         try:
-            response = _call()
+            response = await asyncio.to_thread(_call)
             record_llm_call(self._model, (time.perf_counter() - _start) * 1000, success=True)
         except Exception as e:
             record_llm_call(self._model, (time.perf_counter() - _start) * 1000, success=False)
@@ -170,7 +171,7 @@ class GoogleGenAIProvider(LLMProvider):
 
         _start = time.perf_counter()
         try:
-            response = _call()
+            response = await asyncio.to_thread(_call)
             record_llm_call(self._model, (time.perf_counter() - _start) * 1000, success=True)
         except Exception as e:
             record_llm_call(self._model, (time.perf_counter() - _start) * 1000, success=False)

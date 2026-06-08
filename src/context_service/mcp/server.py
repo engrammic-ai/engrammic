@@ -214,7 +214,7 @@ async def _resolve_api_key_auth(token: str) -> AuthContext | None:
             db_user_id=None,
         )
     except Exception as exc:
-        logger.debug(
+        logger.warning(
             "api_key_auth_failed", reason="exception", key_prefix=key_prefix, error=str(exc)
         )
         return None

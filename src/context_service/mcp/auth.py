@@ -27,6 +27,8 @@ import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
+from context_service.config.settings import get_settings
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
@@ -155,10 +157,16 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
 
         except ValueError as e:
             logger.warning("MCP auth failed", error=str(e))
-            # Build resource_metadata URL for OAuth discovery
-            scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
-            host = request.headers.get("host", request.url.netloc)
-            resource_metadata_url = f"{scheme}://{host}/.well-known/oauth-protected-resource"
+            # Build resource_metadata URL for OAuth discovery.
+            # Prefer the configured issuer to avoid host header injection.
+            # Fall back to request headers only when issuer is not configured.
+            _issuer = get_settings().oauth.issuer
+            if _issuer:
+                resource_metadata_url = f"{_issuer}/.well-known/oauth-protected-resource"
+            else:
+                scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+                host = request.headers.get("host", request.url.netloc)
+                resource_metadata_url = f"{scheme}://{host}/.well-known/oauth-protected-resource"
 
             return JSONResponse(
                 status_code=401,
@@ -194,9 +202,15 @@ class MCPOAuthChallengeMiddleware(BaseHTTPMiddleware):
 
         if not authorization:
             logger.debug("mcp.oauth_challenge", path=request.url.path)
-            scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
-            host = request.headers.get("host", request.url.netloc)
-            resource_metadata_url = f"{scheme}://{host}/.well-known/oauth-protected-resource"
+            # Prefer the configured issuer to avoid host header injection.
+            # Fall back to request headers only when issuer is not configured.
+            _issuer = get_settings().oauth.issuer
+            if _issuer:
+                resource_metadata_url = f"{_issuer}/.well-known/oauth-protected-resource"
+            else:
+                scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+                host = request.headers.get("host", request.url.netloc)
+                resource_metadata_url = f"{scheme}://{host}/.well-known/oauth-protected-resource"
 
             return JSONResponse(
                 status_code=401,

@@ -56,9 +56,9 @@ services:
   dagster:
     image: europe-north1-docker.pkg.dev/engrammic/releases/engrammic-dagster:latest
     container_name: engrammic-dagster
-    command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-m", "context_service.pipelines.definitions"]
+    command: ["dagster-webserver", "-h", "127.0.0.1", "-p", "3000", "-m", "context_service.pipelines.definitions"]
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     env_file:
       - .env
     volumes:
@@ -216,7 +216,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
     environment:
       - POSTGRES_USER=engrammic
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-engrammic}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - POSTGRES_DB=engrammic
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U engrammic -d engrammic"]
