@@ -118,7 +118,9 @@ class TEIEmbeddingService:
         if isinstance(error, httpx.HTTPStatusError):
             retryable_status_codes = {429, 500, 502, 503, 504}
             return error.response.status_code in retryable_status_codes
-        if isinstance(error, (httpx.ConnectError, httpx.TimeoutException, httpx.RemoteProtocolError)):
+        if isinstance(
+            error, (httpx.ConnectError, httpx.TimeoutException, httpx.RemoteProtocolError)
+        ):
             return True
         error_str = str(error).lower()
         retryable_patterns = [
@@ -168,9 +170,7 @@ class TEIEmbeddingService:
                     is_retryable = self._is_retryable_error(e)
                     if not is_retryable or attempt >= self._max_retries:
                         status = (
-                            e.response.status_code
-                            if isinstance(e, httpx.HTTPStatusError)
-                            else None
+                            e.response.status_code if isinstance(e, httpx.HTTPStatusError) else None
                         )
                         logger.error(
                             "tei_embedding_failed",
