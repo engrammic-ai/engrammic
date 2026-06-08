@@ -2,9 +2,9 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-06-08)
+## Current state (2026-06-09)
 
-**Focus:** Recall quality (benchmark gap blocks Antler round)
+**Focus:** Credible benchmark numbers via official LongMemEval-V2 harness (Somnus has harness issues)
 
 **Recent:**
 - v2.38 Embedding Batching Phase 1 - Vertex AI batch calls via `batched` library (complete)
@@ -15,6 +15,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
+| [2026-06-09-longmemeval-v2-harness.md](./2026-06-09-longmemeval-v2-harness.md) | Official LongMemEval-V2 harness with Engrammic adapter | Ready |
 | [2026-06-07-fix-recall-read-path.md](./2026-06-07-fix-recall-read-path.md) | Fix rerank score write-back + threshold, full content by default | Active |
 | [recall-quality-improvement.md](./recall-quality-improvement.md) | Question-answer asymmetry research, query expansion | Draft |
 | [polish-audit-2026-06-08.md](./polish-audit-2026-06-08.md) | 7 critical + high findings from codebase audit | Triage |

@@ -235,9 +235,7 @@ def step_embedding_backfill(context) -> dg.Output[dict[str, Any]]:  # type: igno
     )
 
 
-async def get_unembedded_hypotheses(
-    memgraph_store: Any, limit: int = 100
-) -> list[dict[str, Any]]:
+async def get_unembedded_hypotheses(memgraph_store: Any, limit: int = 100) -> list[dict[str, Any]]:
     """Find WorkingHypotheses that don't have embeddings yet.
 
     Queries Memgraph for recent hypotheses, filters out those already

@@ -106,9 +106,7 @@ def groundskeeper_sensor(
         yield dg.SkipReason("No silos have pending access events")
         return
 
-    context.log.info(
-        f"groundskeeper_sensor found {len(silos_with_work)} silos with pending events"
-    )
+    context.log.info(f"groundskeeper_sensor found {len(silos_with_work)} silos with pending events")
 
     for silo_id, event_counts in silos_with_work.items():
         total_events = sum(event_counts.values())
