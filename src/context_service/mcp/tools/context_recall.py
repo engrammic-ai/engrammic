@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -10,7 +11,8 @@ from context_service.mcp.server import get_mcp_auth_context
 from context_service.mcp.tools.context_get import _context_get
 from context_service.mcp.tools.context_graph import _context_graph
 from context_service.mcp.tools.context_query import _context_query
-from context_service.services.models import derive_silo_id
+from context_service.retrieval.fusion import FusionRetriever, _filter_temporal, _parse_relative_time
+from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.telemetry.metrics import record_context_recall_size, record_mcp_tool
 
 if TYPE_CHECKING:
@@ -167,10 +169,99 @@ async def _context_recall(
     bypass_cache: bool = False,
     max_age_seconds: int | None = None,
     min_threshold: float | None = None,
+    fusion_mode: bool = False,
+    since: str | None = None,
+    until: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     if not query and not node_ids:
         return {"error": "missing_input", "message": "Provide query or node_ids"}
+
+    # Fusion mode: run semantic + graph in parallel, fuse with RRF
+    if fusion_mode and query:
+        from context_service.config.settings import get_settings
+        from context_service.mcp.server import get_context_service
+
+        ctx_svc = get_context_service()
+        settings = get_settings()
+        fusion_cfg = settings.retrieval.fusion
+
+        # Build scope context (need org_id from auth)
+        auth = await get_mcp_auth_context()
+        scope = ScopeContext(org_id=auth.org_id, silo_id=UUID(silo_id))
+
+        # Create retriever with config
+        retriever = FusionRetriever(ctx_svc, k=fusion_cfg.rrf_k)
+        graph_depth = depth if depth > 0 else fusion_cfg.default_graph_depth
+
+        # Run fusion
+        fused = await retriever.retrieve(
+            query=query,
+            scope=scope,
+            top_k=top_k * 2,  # over-fetch for post-filtering
+            graph_depth=graph_depth,
+            layers=layers,
+        )
+
+        # Apply temporal filter if since/until provided
+        now = datetime.now(UTC)
+        since_dt = _parse_relative_time(since, now) if since else None
+        until_dt = _parse_relative_time(until, now) if until else None
+
+        if since_dt or until_dt:
+            fused = await _filter_temporal(
+                results=fused,
+                since=since_dt,
+                until=until_dt,
+                store=ctx_svc.graph_store,
+                silo_id=silo_id,
+            )
+
+        # Take top_k after filtering
+        fused = fused[:top_k]
+
+        # Convert to standard response format
+        if not fused:
+            return {
+                "results": [],
+                "total_candidates": 0,
+                "fusion_meta": {
+                    "enabled": True,
+                    "temporal_filter": {"since": since, "until": until} if (since or until) else None,
+                },
+            }
+
+        # Fetch full node data for fused results
+        node_ids_to_fetch = [r.node_id for r in fused]
+        response = await _context_get(
+            node_ids=node_ids_to_fetch,
+            silo_id=silo_id,
+            as_of=as_of,
+        )
+
+        # Add RRF scores to results
+        rrf_scores = {r.node_id: r.rrf_score for r in fused}
+        channel_contribs = {r.node_id: r.channel_contributions for r in fused}
+
+        if isinstance(response.get("nodes"), list):
+            for node in response["nodes"]:
+                nid = node.get("node_id")
+                if nid in rrf_scores:
+                    node["rrf_score"] = rrf_scores[nid]
+                    node["channel_contributions"] = channel_contribs.get(nid, {})
+
+        response["fusion_meta"] = {
+            "enabled": True,
+            "rrf_k": fusion_cfg.rrf_k,
+            "graph_depth": graph_depth,
+            "temporal_filter": {"since": since, "until": until} if (since or until) else None,
+        }
+
+        response = _apply_tier_content_policy(response, include_content)
+        if include_proposals:
+            response["pending_proposals"] = await _fetch_pending_proposals(silo_id)
+
+        return response
 
     if node_ids and depth == 0:
         response = await _context_get(
@@ -272,6 +363,10 @@ def register(mcp: FastMCP) -> None:
         include_proposals: bool = False,
         bypass_cache: bool = False,
         max_age_seconds: int | None = None,
+        min_threshold: float | None = None,
+        fusion_mode: bool = False,
+        since: str | None = None,
+        until: str | None = None,
     ) -> dict[str, Any]:
         """Unified read across Memory, Knowledge, Wisdom, and Intelligence layers.
 
@@ -307,6 +402,14 @@ def register(mcp: FastMCP) -> None:
             max_age_seconds: Maximum acceptable cache age in seconds. If the
                 cached result is older than this, a fresh search is performed.
                 Only applies to query + depth=0 mode.
+            min_threshold: Minimum relevance score threshold for results.
+                Only applies to query + depth=0 mode.
+            fusion_mode: When True, runs semantic and graph retrieval in parallel
+                and fuses results with Reciprocal Rank Fusion. Requires query.
+            since: Filter results to nodes created at or after this time. Accepts
+                relative strings ("7d", "1w", "30d") or ISO datetime.
+            until: Filter results to nodes created at or before this time. Same
+                format as since.
 
         Returns:
             Depends on mode:
@@ -335,6 +438,10 @@ def register(mcp: FastMCP) -> None:
                 include_proposals=include_proposals,
                 bypass_cache=bypass_cache,
                 max_age_seconds=max_age_seconds,
+                min_threshold=min_threshold,
+                fusion_mode=fusion_mode,
+                since=since,
+                until=until,
             )
             node_count = len(result.get("results", result.get("nodes", [])))
             avg_node_bytes = 500 if include_content else 100
