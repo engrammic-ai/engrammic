@@ -351,10 +351,6 @@ class FusionConfig(BaseModel):
 
     model_config = ConfigDict(frozen=True, extra="ignore")
 
-    enabled: bool = Field(
-        default=False,
-        description="Enable cross-channel RRF fusion (semantic + graph)",
-    )
     rrf_k: int = Field(
         default=60,
         description="RRF smoothing constant (standard literature value)",
