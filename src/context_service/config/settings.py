@@ -192,10 +192,10 @@ class RerankingSettings(BaseModel):
         description="Use score-adaptive truncation (tau = alpha * max_score)",
     )
     adaptive_alpha: float = Field(
-        default=0.7,
+        default=0.5,
         ge=0.3,
         le=0.9,
-        description="Alpha for adaptive threshold (0.5-0.8 recommended)",
+        description="Alpha for adaptive threshold (0.5-0.7 recommended)",
     )
 
 

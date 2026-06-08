@@ -189,8 +189,8 @@ class LiteLLMEmbeddingService:
             for _ in uncached_texts:
                 record_embedding_cache_miss(task)
 
-            # Embed uncached texts
-            embeddings = await self._embed_batch(uncached_texts)
+            # Embed uncached texts with RETRIEVAL_DOCUMENT task type for Vertex AI
+            embeddings = await self._embed_batch(uncached_texts, task_type="RETRIEVAL_DOCUMENT")
 
             # Store in cache and merge results
             for idx, (text, embedding) in enumerate(zip(uncached_texts, embeddings, strict=True)):
@@ -202,13 +202,16 @@ class LiteLLMEmbeddingService:
                 raise AssertionError(f"Cache/batch length mismatch: {len(result)} vs {len(texts)}")
             return result
 
-        return await self._embed_batch(texts)
+        return await self._embed_batch(texts, task_type="RETRIEVAL_DOCUMENT")
 
-    async def _embed_batch(self, texts: list[str]) -> list[list[float]]:
+    async def _embed_batch(
+        self, texts: list[str], task_type: str | None = None
+    ) -> list[list[float]]:
         """Embed a batch of texts via LiteLLM with rate limiting and retry.
 
         Args:
             texts: List of texts to embed.
+            task_type: Vertex AI task type ("RETRIEVAL_DOCUMENT" or "RETRIEVAL_QUERY").
 
         Returns:
             List of embedding vectors.
@@ -248,7 +251,7 @@ class LiteLLMEmbeddingService:
             ) as span:
                 try:
                     result = await self._do_embed_request(
-                        texts, redis_limiter, fallback_semaphore, span
+                        texts, redis_limiter, fallback_semaphore, span, task_type
                     )
                     return result
                 except Exception as e:
@@ -289,28 +292,34 @@ class LiteLLMEmbeddingService:
         redis_limiter: object | None,
         fallback_semaphore: asyncio.Semaphore,
         span: trace.Span,
+        task_type: str | None = None,
     ) -> list[list[float]]:
-        """Execute the actual embedding request with rate limiting."""
+        """Execute the actual embedding request with rate limiting.
+
+        Args:
+            task_type: Vertex AI task type for optimized embeddings.
+                       "RETRIEVAL_DOCUMENT" for documents, "RETRIEVAL_QUERY" for queries.
+        """
         from context_service.embeddings.rate_limit import EmbeddingRateLimiter
 
         start = time.perf_counter()
 
+        # Build kwargs - only pass task_type for Vertex AI models
+        kwargs: dict[str, Any] = {
+            "model": self._model,
+            "input": texts,
+            "dimensions": self._dimensions,
+            "timeout": self._rate_limit.timeout_seconds,
+        }
+        if task_type and "vertex" in self._model.lower():
+            kwargs["task_type"] = task_type
+
         if redis_limiter and isinstance(redis_limiter, EmbeddingRateLimiter):
             async with redis_limiter:
-                response = await litellm.aembedding(
-                    model=self._model,
-                    input=texts,
-                    dimensions=self._dimensions,
-                    timeout=self._rate_limit.timeout_seconds,
-                )
+                response = await litellm.aembedding(**kwargs)
         else:
             async with fallback_semaphore:
-                response = await litellm.aembedding(
-                    model=self._model,
-                    input=texts,
-                    dimensions=self._dimensions,
-                    timeout=self._rate_limit.timeout_seconds,
-                )
+                response = await litellm.aembedding(**kwargs)
 
         duration_ms = (time.perf_counter() - start) * 1000
         span.set_attribute("duration_ms", duration_ms)
@@ -409,7 +418,7 @@ class LiteLLMEmbeddingService:
     async def embed_query(self, query: str) -> list[float]:
         """Generate embedding for a search query.
 
-        Uses task='query' cache key to separate from passage embeddings.
+        Uses task='query' cache key and RETRIEVAL_QUERY task type for Vertex AI.
 
         Args:
             query: Query text to embed.
@@ -422,10 +431,10 @@ class LiteLLMEmbeddingService:
             if cached is not None:
                 return cached
             record_embedding_cache_miss("query")
-            vector = (await self._embed_batch([query]))[0]
+            vector = (await self._embed_batch([query], task_type="RETRIEVAL_QUERY"))[0]
             await self._embedding_cache.set(query, "query", vector)
             return vector
-        return (await self._embed_batch([query]))[0]
+        return (await self._embed_batch([query], task_type="RETRIEVAL_QUERY"))[0]
 
     async def close(self) -> None:
         """Close any resources (no-op for LiteLLM)."""
