@@ -60,7 +60,7 @@ def register(mcp: FastMCP) -> None:
         Args:
             from_node: Source node ID.
             to_node: Target node ID.
-            relationship: Type: SUPPORTS|CONTRADICTS|DERIVES|REFERENCES|CAUSES|SUPERSEDES.
+            relationship: Type: SUPPORTS|CONTRADICTS|DERIVED_FROM|RELATED_TO|REFERENCES|CAUSES|CORROBORATES|PREVENTS|SUPERSEDES.
             weight: Strength 0.0-10.0 (default 1.0).
             note: Optional annotation.
 

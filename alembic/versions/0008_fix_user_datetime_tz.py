@@ -38,11 +38,13 @@ def downgrade() -> None:
         """
         ALTER TABLE users
         ALTER COLUMN created_at TYPE TIMESTAMP WITHOUT TIME ZONE
+        USING created_at AT TIME ZONE 'UTC'
         """
     )
     op.execute(
         """
         ALTER TABLE users
         ALTER COLUMN last_active_at TYPE TIMESTAMP WITHOUT TIME ZONE
+        USING last_active_at AT TIME ZONE 'UTC'
         """
     )

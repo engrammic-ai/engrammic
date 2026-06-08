@@ -90,7 +90,7 @@ def register(mcp: FastMCP) -> None:
 
         Returns:
             {status, node_id, tombstoned_at} or {status, node_id} on not_found.
-            When cascade=True and status is tombstoned, also includes cascade_forgotten list.
+            When cascade=True and status is tombstoned, also includes cascade_count (int) with the number of downstream nodes tombstoned.
         """
         start = time.perf_counter()
         success = True

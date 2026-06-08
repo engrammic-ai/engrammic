@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from context_service.config.logging import get_logger
+from context_service.custodian.metrics import compute_cost_usd
 from context_service.db import queries
 from context_service.db.queries import build_batch_entity_rel_query
 from context_service.extraction.identity import (
@@ -779,7 +780,9 @@ MERGE (ps)<-[:EXTRACTED_FROM]-(c)
                 job.entity_count = entities_created
                 job.relationship_count = relationships_created
                 job.claim_node_ids = claim_node_ids
-                job.cost_usd = 0.0
+                job.cost_usd = compute_cost_usd(
+                    usage.model, usage.input_tokens, usage.output_tokens
+                )
                 job.completed_at = now
                 await self._update_node_extraction_status(silo_id, job.node_id, "done")
         except Exception as e:
