@@ -251,6 +251,8 @@ async def _context_recall(
             node_ids=node_ids_to_fetch,
             silo_id=silo_id,
             as_of=as_of,
+            include_reflections=include_reflections,
+            reflections_agent_id=reflections_agent_id,
         )
 
         # Add RRF scores to results
