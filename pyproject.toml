@@ -69,7 +69,6 @@ dev = [
     "mypy>=1.10",
     "types-pyyaml>=6.0.12.20260408",
     "types-cachetools>=7.0.0.20260518",
-    "sentence-transformers>=5.5.1",
 ]
 embeddings = [
     "google-cloud-aiplatform>=1.50",  # Vertex AI
