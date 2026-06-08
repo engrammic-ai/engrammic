@@ -91,6 +91,14 @@ tools:
       default and reported as a withheld count; pass include_withheld=true
       to see them. min_threshold overrides the relevance cutoff (0.0-1.0).
       ProposedBeliefs appear with status="pending" for your review.
+
+      Fusion mode: Set fusion_mode=true to run semantic and graph retrieval
+      in parallel, fusing results with Reciprocal Rank Fusion (RRF). Requires
+      a query. Returns fusion_meta with rrf_score per node.
+
+      Temporal filtering (fusion_mode only): Use since="7d" or until="2024-01-01"
+      to filter by node creation time. Requires fusion_mode=True. Accepts
+      relative ("7d", "1w", "30d") or ISO datetime.
     maps_to: retrieve
 
   trace:

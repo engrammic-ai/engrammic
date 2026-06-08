@@ -346,6 +346,21 @@ class ClusterRetrievalConfig(BaseModel):
     top_k: int = 5
 
 
+class FusionConfig(BaseModel):
+    """Cross-channel RRF fusion settings."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    rrf_k: int = Field(
+        default=60,
+        description="RRF smoothing constant (standard literature value)",
+    )
+    default_graph_depth: int = Field(
+        default=2,
+        description="Default BFS depth for graph channel",
+    )
+
+
 class SupersessionConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -369,6 +384,7 @@ class RetrievalConfig(BaseModel):
     entity: EntityRetrievalConfig = Field(default_factory=EntityRetrievalConfig)
     cluster: ClusterRetrievalConfig = Field(default_factory=ClusterRetrievalConfig)
     supersession: SupersessionConfig = Field(default_factory=SupersessionConfig)
+    fusion: FusionConfig = Field(default_factory=FusionConfig)
 
 
 class ServerConfig(BaseModel):
