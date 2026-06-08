@@ -1,12 +1,12 @@
 """Dagster sensors for context-service.
 
-Most sensors have been consolidated into SAGE schedules.
-Remaining sensors handle edge cases not suitable for scheduled execution.
+Event-driven sensors that trigger runs based on actual work rather than polling.
 """
 
 from typing import Any
 
 from context_service.pipelines.sensors.cascade_review import cascade_review_sensor
+from context_service.pipelines.sensors.groundskeeper_sensor import groundskeeper_sensor
 from context_service.pipelines.sensors.poison_queue_sensor import poison_queue_sensor
 from context_service.pipelines.sensors.reaction_health import (
     reaction_dlq_sensor,
@@ -18,4 +18,5 @@ all_sensors: list[Any] = [
     cascade_review_sensor,
     reaction_queue_depth_sensor,
     reaction_dlq_sensor,
+    groundskeeper_sensor,
 ]

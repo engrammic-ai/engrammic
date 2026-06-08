@@ -38,6 +38,7 @@ RETURN DISTINCT d.silo_id AS silo_id
 _SILOS_WITH_PENDING_GROUNDSKEEPER_WORK = """
 MATCH (n:Fact|Belief|Claim)
 WHERE n.silo_id IS NOT NULL
+  AND n.created_at > datetime() - duration('PT2H')
   AND (n.heat_updated_at IS NULL
        OR n.heat_updated_at < datetime() - duration('PT1H'))
 RETURN DISTINCT n.silo_id AS silo_id
@@ -233,7 +234,7 @@ def _run_request_with_partition(
 
 
 @dg.schedule(
-    cron_schedule="*/15 * * * *",
+    cron_schedule="0 * * * *",
     name="sage_groundskeeper_schedule",
     target=dg.AssetSelection.assets(
         "heat",
@@ -241,9 +242,11 @@ def _run_request_with_partition(
         "heat_diffusion",
         "prewarm_sweep",
     ),
-    description="SAGE Groundskeeper (every 15 minutes): heat and maintenance.",
+    # DEPRECATED: Replaced by groundskeeper_sensor which triggers on actual events.
+    # Kept for fallback if sensor has issues.
+    description="SAGE Groundskeeper (hourly): heat and maintenance. DEPRECATED - use sensor.",
     execution_timezone="UTC",
-    default_status=dg.DefaultScheduleStatus.RUNNING,
+    default_status=dg.DefaultScheduleStatus.STOPPED,
 )
 def sage_groundskeeper_schedule(
     context: ScheduleEvaluationContext,
