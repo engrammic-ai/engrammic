@@ -66,11 +66,11 @@ async def _get_silos_with_pending_events(
 
 def _ensure_partition_exists(context: dg.SensorEvaluationContext, silo_id: str) -> None:
     """Ensure the silo_id partition exists in the dynamic partitions."""
-    from context_service.pipelines.partitions import silo_partitions_def
+    from context_service.pipelines.partitions import silo_partitions
 
     with contextlib.suppress(Exception):
         context.instance.add_dynamic_partitions(
-            partitions_def_name=silo_partitions_def.name,
+            partitions_def_name=silo_partitions.name,
             partition_keys=[silo_id],
         )
 
