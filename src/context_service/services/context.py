@@ -1777,7 +1777,8 @@ class ContextService:
                 n.type AS type,
                 n.content AS content,
                 COALESCE(n.layer, 'memory') AS layer,
-                n.confidence AS confidence
+                n.confidence AS confidence,
+                n.status AS status
             LIMIT $max_nodes
             """,
             {"start_ids": start_ids, "silo_id": silo_id, "max_nodes": max_nodes},
@@ -1811,6 +1812,7 @@ class ContextService:
                 "content": r.get("content", ""),
                 "layer": r.get("layer", "memory"),
                 "confidence": r.get("confidence"),
+                **({"status": r["status"]} if r.get("status") is not None else {}),
             }
             for r in rows
             if r.get("node_id")
