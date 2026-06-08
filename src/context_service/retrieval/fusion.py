@@ -12,13 +12,16 @@ where k=60 (default smoothing constant) and rank starts at 1.
 from __future__ import annotations
 
 import asyncio
+import re
 import time
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import structlog
 
 if TYPE_CHECKING:
+    from context_service.engine.protocols import HyperGraphStore
     from context_service.services.context import ContextService
     from context_service.services.models import ScopeContext
 
@@ -273,3 +276,106 @@ class FusionRetriever:
         ]
         fused.sort(key=lambda r: r.rrf_score, reverse=True)
         return fused[:top_k]
+
+
+_RELATIVE_TIME_PATTERN = re.compile(r'^(\d+)([dwm])$')
+
+
+def _parse_relative_time(s: str, now: datetime) -> datetime:
+    """Parse relative time string or ISO datetime.
+
+    Args:
+        s: Time string like "7d", "1w", "30d" or ISO datetime
+        now: Reference time for relative calculations
+
+    Returns:
+        Parsed datetime
+
+    Raises:
+        ValueError: If string cannot be parsed
+    """
+    match = _RELATIVE_TIME_PATTERN.match(s.strip().lower())
+    if match:
+        value = int(match.group(1))
+        unit = match.group(2)
+        if unit == 'd':
+            return now - timedelta(days=value)
+        elif unit == 'w':
+            return now - timedelta(weeks=value)
+        elif unit == 'm':
+            return now - timedelta(days=value * 30)  # approximate month
+
+    # Try ISO format
+    try:
+        return datetime.fromisoformat(s)
+    except ValueError as exc:
+        raise ValueError(f"Cannot parse time string: {s!r}") from exc
+
+
+async def _filter_temporal(
+    results: list[FusedResult],
+    since: datetime | None,
+    until: datetime | None,
+    store: HyperGraphStore,
+    silo_id: str,
+) -> list[FusedResult]:
+    """Filter fused results by node creation time.
+
+    Args:
+        results: List of FusedResult to filter
+        since: Include nodes created at or after this time
+        until: Include nodes created at or before this time
+        store: Graph store for fetching node timestamps
+        silo_id: Silo ID for scoping
+
+    Returns:
+        Filtered list of FusedResult (order preserved)
+    """
+    if not results or (since is None and until is None):
+        return results
+
+    node_ids = [r.node_id for r in results]
+
+    # Batch fetch created_at for all nodes
+    rows = await store.execute_query(
+        """
+        UNWIND $node_ids AS nid
+        MATCH (n:Node {id: nid, silo_id: $silo_id})
+        RETURN n.id AS node_id, n.created_at AS created_at
+        """,
+        {"node_ids": node_ids, "silo_id": silo_id},
+    )
+
+    # Build timestamp lookup
+    timestamps: dict[str, datetime | None] = {}
+    for row in rows:
+        node_id = row["node_id"]
+        created_at = row.get("created_at")
+        if created_at is not None:
+            # Handle Memgraph timestamp (microseconds) or datetime
+            if isinstance(created_at, (int, float)):
+                timestamps[node_id] = datetime.fromtimestamp(created_at / 1_000_000, tz=UTC)
+            elif isinstance(created_at, datetime):
+                timestamps[node_id] = created_at
+            else:
+                timestamps[node_id] = None
+        else:
+            timestamps[node_id] = None
+
+    # Filter results
+    filtered = []
+    for result in results:
+        ts = timestamps.get(result.node_id)
+        if ts is None:
+            # Keep nodes without timestamps (don't filter them out)
+            filtered.append(result)
+            continue
+
+        if since is not None and ts < since:
+            continue
+        if until is not None and ts > until:
+            continue
+
+        filtered.append(result)
+
+    return filtered
