@@ -553,7 +553,7 @@ RETURN
     n.supersession_reason AS supersession_reason,
     n.tombstoned_at AS tombstoned_at,
     superseder.id AS superseded_by
-ORDER BY n.valid_from ASC NULLS FIRST
+ORDER BY coalesce(n.valid_from, datetime('1970-01-01T00:00:00Z')) ASC
 """
 
 # Meta-memory: reflections about a node filtered by agent_id.
