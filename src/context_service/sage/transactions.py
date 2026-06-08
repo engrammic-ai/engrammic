@@ -1533,7 +1533,12 @@ async def accept_proposal(
             MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
             SET b.acceptance_reason = $reason, b.accepted_by = $agent_id
             """,
-            {"belief_id": str(belief_id), "silo_id": silo_id, "reason": reason, "agent_id": agent_id},
+            {
+                "belief_id": str(belief_id),
+                "silo_id": silo_id,
+                "reason": reason,
+                "agent_id": agent_id,
+            },
         )
 
     result = AcceptProposalResult(

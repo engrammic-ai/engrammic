@@ -256,7 +256,9 @@ def validator_stale_commitment_asset(
     skipped_no_work = counts["commitments_checked"] == 0 and counts["errors"] == 0
 
     if skipped_no_work:
-        context.log.info(f"validator_stale_commitment silo={silo_id} skipped_no_work duration={duration_s:.2f}s")
+        context.log.info(
+            f"validator_stale_commitment silo={silo_id} skipped_no_work duration={duration_s:.2f}s"
+        )
     else:
         context.log.info(
             f"validator_stale_commitment silo={silo_id} "

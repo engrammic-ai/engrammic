@@ -24,7 +24,6 @@ def mock_auth():
 async def test_decide_creates_commitment(mock_auth) -> None:
     """decide creates a Commitment with ABOUT edges."""
     from context_service.mcp.tools.decide import _decide_impl
-
     from context_service.sage.transactions import CommitResult
 
     about_node = str(uuid.uuid4())
@@ -37,10 +36,18 @@ async def test_decide_creates_commitment(mock_auth) -> None:
     )
 
     with (
-        patch("context_service.mcp.tools.decide.get_mcp_auth_context", new_callable=AsyncMock, return_value=mock_auth),
+        patch(
+            "context_service.mcp.tools.decide.get_mcp_auth_context",
+            new_callable=AsyncMock,
+            return_value=mock_auth,
+        ),
         patch("context_service.mcp.tools.decide.track_tool_usage", new_callable=AsyncMock),
         patch("context_service.mcp.tools.decide.get_context_service") as mock_ctx,
-        patch("context_service.mcp.tools.decide.tx_commit", new_callable=AsyncMock, return_value=(mock_result, [])),
+        patch(
+            "context_service.mcp.tools.decide.tx_commit",
+            new_callable=AsyncMock,
+            return_value=(mock_result, []),
+        ),
     ):
         mock_ctx.return_value.graph_store = MagicMock()
 
@@ -60,7 +67,11 @@ async def test_decide_requires_about(mock_auth) -> None:
     from context_service.mcp.tools.decide import _decide_impl
 
     with (
-        patch("context_service.mcp.tools.decide.get_mcp_auth_context", new_callable=AsyncMock, return_value=mock_auth),
+        patch(
+            "context_service.mcp.tools.decide.get_mcp_auth_context",
+            new_callable=AsyncMock,
+            return_value=mock_auth,
+        ),
         patch("context_service.mcp.tools.decide.track_tool_usage", new_callable=AsyncMock),
     ):
         result = await _decide_impl(

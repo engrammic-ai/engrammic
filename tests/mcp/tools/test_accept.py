@@ -36,10 +36,18 @@ async def test_accept_promotes_proposal(mock_auth) -> None:
     )
 
     with (
-        patch("context_service.mcp.tools.accept.get_mcp_auth_context", new_callable=AsyncMock, return_value=mock_auth),
+        patch(
+            "context_service.mcp.tools.accept.get_mcp_auth_context",
+            new_callable=AsyncMock,
+            return_value=mock_auth,
+        ),
         patch("context_service.mcp.tools.accept.track_tool_usage", new_callable=AsyncMock),
         patch("context_service.mcp.tools.accept.get_context_service") as mock_ctx,
-        patch("context_service.mcp.tools.accept.accept_proposal", new_callable=AsyncMock, return_value=(mock_result, [])),
+        patch(
+            "context_service.mcp.tools.accept.accept_proposal",
+            new_callable=AsyncMock,
+            return_value=(mock_result, []),
+        ),
     ):
         mock_ctx.return_value.graph_store = MagicMock()
 
@@ -60,10 +68,16 @@ async def test_accept_returns_error_for_not_found(mock_auth) -> None:
     from context_service.sage.transactions import InvariantViolation
 
     with (
-        patch("context_service.mcp.tools.accept.get_mcp_auth_context", new_callable=AsyncMock, return_value=mock_auth),
+        patch(
+            "context_service.mcp.tools.accept.get_mcp_auth_context",
+            new_callable=AsyncMock,
+            return_value=mock_auth,
+        ),
         patch("context_service.mcp.tools.accept.track_tool_usage", new_callable=AsyncMock),
         patch("context_service.mcp.tools.accept.get_context_service") as mock_ctx,
-        patch("context_service.mcp.tools.accept.accept_proposal", new_callable=AsyncMock) as mock_accept,
+        patch(
+            "context_service.mcp.tools.accept.accept_proposal", new_callable=AsyncMock
+        ) as mock_accept,
     ):
         mock_accept.side_effect = InvariantViolation("PROPOSAL_NOT_FOUND", "Not found")
         mock_ctx.return_value.graph_store = MagicMock()
