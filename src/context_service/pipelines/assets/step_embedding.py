@@ -34,15 +34,14 @@ def _run_async(coro: Any) -> Any:
 REASONING_CHAINS_COLLECTION = "reasoning_chains"
 
 
-async def get_chains_needing_embedding(limit: int = 100) -> list[dict[str, Any]]:
+async def get_chains_needing_embedding(
+    qdrant_client: Any, limit: int = 100
+) -> list[dict[str, Any]]:
     """Find chains in Qdrant with empty step_embeddings.
 
     Returns list of dicts with chain_id, silo_id, and node_id.
     """
-    from context_service.mcp.server import get_context_service
-
-    ctx_svc = get_context_service()
-    client = await ctx_svc._qdrant._get_client()
+    client = qdrant_client
 
     collections = await client.get_collections()
     if REASONING_CHAINS_COLLECTION not in {c.name for c in collections.collections}:
@@ -123,14 +122,12 @@ async def embed_steps(steps: list[dict[str, Any]]) -> list[list[float]]:
 
 
 async def update_chain_step_embeddings(
+    qdrant_client: Any,
     point_id: str | int,
     step_embeddings: list[list[float]],
 ) -> bool:
     """Update the step_embeddings payload in Qdrant."""
-    from context_service.mcp.server import get_context_service
-
-    ctx_svc = get_context_service()
-    client = await ctx_svc._qdrant._get_client()
+    client = qdrant_client
 
     try:
         await client.set_payload(
@@ -149,6 +146,7 @@ async def process_chain(chain: dict[str, Any]) -> str:
 
     Returns: "success", "no_steps", "embed_failed", or "update_failed"
     """
+    qdrant_client = chain.get("_qdrant_client")
     chain_id = chain["chain_id"]
     silo_id = chain["silo_id"]
     point_id = chain["point_id"]
@@ -169,7 +167,7 @@ async def process_chain(chain: dict[str, Any]) -> str:
     if not embeddings:
         return "no_embeddings"
 
-    success = await update_chain_step_embeddings(point_id, embeddings)
+    success = await update_chain_step_embeddings(qdrant_client, point_id, embeddings)
     return "success" if success else "update_failed"
 
 
@@ -177,6 +175,7 @@ async def process_chain(chain: dict[str, Any]) -> str:
     name="step_embedding_backfill",
     description="Computes step embeddings for reasoning chains missing them",
     group_name="chain_feedback",
+    required_resource_keys={"qdrant"},
 )
 def step_embedding_backfill(context) -> dg.Output[dict[str, Any]]:  # type: ignore[no-untyped-def]
     """Process chains with empty step_embeddings and compute their embeddings.
@@ -184,9 +183,13 @@ def step_embedding_backfill(context) -> dg.Output[dict[str, Any]]:  # type: igno
     This enables Layer 2 (DTW trajectory matching) in chain applicability.
     """
     t0 = time.monotonic()
+    qdrant_resource = context.resources.qdrant
 
     async def _run() -> dict[str, int]:
-        chains = await get_chains_needing_embedding(limit=50)
+        qdrant_client = qdrant_resource.client()
+        chains = await get_chains_needing_embedding(qdrant_client, limit=50)
+        for chain in chains:
+            chain["_qdrant_client"] = qdrant_client
 
         results = {
             "processed": 0,
@@ -232,7 +235,9 @@ def step_embedding_backfill(context) -> dg.Output[dict[str, Any]]:  # type: igno
     )
 
 
-async def get_unembedded_hypotheses(limit: int = 100) -> list[dict[str, Any]]:
+async def get_unembedded_hypotheses(
+    memgraph_store: Any, limit: int = 100
+) -> list[dict[str, Any]]:
     """Find WorkingHypotheses that don't have embeddings yet.
 
     Queries Memgraph for recent hypotheses, filters out those already
@@ -243,11 +248,9 @@ async def get_unembedded_hypotheses(limit: int = 100) -> list[dict[str, Any]]:
     from sqlalchemy import select
 
     from context_service.db.postgres import get_session as get_pg_session
-    from context_service.mcp.server import get_context_service
     from context_service.models.postgres.chain_feedback import SessionStepEmbedding
 
-    ctx_svc = get_context_service()
-    store = ctx_svc._memgraph
+    store = memgraph_store
 
     # Get recent WorkingHypotheses from Memgraph (last 1 hour)
     cutoff = datetime.now(UTC) - timedelta(hours=1)
@@ -344,6 +347,7 @@ async def embed_and_store_hypothesis(hypothesis: dict[str, Any]) -> str:
     name="session_step_embedding",
     description="Embeds WorkingHypotheses for warm-start chain matching",
     group_name="chain_feedback",
+    required_resource_keys={"memgraph"},
 )
 def session_step_embedding(context) -> dg.Output[dict[str, Any]]:  # type: ignore[no-untyped-def]
     """Process WorkingHypotheses and compute embeddings for warm-start DTW.
@@ -351,9 +355,11 @@ def session_step_embedding(context) -> dg.Output[dict[str, Any]]:  # type: ignor
     This enables Layer 2 warm-start matching in find_applicable_chain.
     """
     t0 = time.monotonic()
+    memgraph_resource = context.resources.memgraph
 
     async def _run() -> dict[str, int]:
-        hypotheses = await get_unembedded_hypotheses(limit=50)
+        memgraph_store = await memgraph_resource.store()
+        hypotheses = await get_unembedded_hypotheses(memgraph_store, limit=50)
 
         results = {
             "processed": 0,

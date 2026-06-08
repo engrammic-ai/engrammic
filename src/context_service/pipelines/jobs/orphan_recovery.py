@@ -112,16 +112,14 @@ def fetch_orphaned_chains(context) -> Any:
     yield Output(exhausted, output_name="exhausted")
 
 
-@op
+@op(required_resource_keys={"memgraph"})
 def retry_chains_to_memgraph(context, eligible: list[OrphanedChains]) -> dict[str, int]:
     """Attempt to write chain projections to Memgraph."""
     results: dict[str, int] = {"success": 0, "failed": 0}
+    memgraph_resource = context.resources.memgraph
 
     async def _retry() -> dict[str, int]:
-        from context_service.mcp.server import get_context_service
-
-        ctx = get_context_service()
-        store = ctx._memgraph
+        store = await memgraph_resource.store()
 
         for orphan in eligible:
             try:
