@@ -10,12 +10,11 @@ Headers:
 
 from __future__ import annotations
 
-from typing import Any
-
 import structlog
 from fastapi import APIRouter, Header, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from context_service.mcp.server import get_context_service
 from context_service.sage.transactions import store_memory
 from context_service.services.models import ScopeContext, derive_silo_id
 
@@ -31,7 +30,7 @@ router = APIRouter(prefix="/api/v1", tags=["memory"])
 
 class RememberRequest(BaseModel):
     content: str
-    tags: list[str] = []
+    tags: list[str] = Field(default_factory=list)
 
 
 class RememberResponse(BaseModel):
@@ -41,7 +40,7 @@ class RememberResponse(BaseModel):
 
 class RecallRequest(BaseModel):
     query: str
-    top_k: int = 20
+    top_k: int = Field(default=20, ge=1, le=100)
 
 
 class RecallResultItem(BaseModel):
@@ -50,7 +49,7 @@ class RecallResultItem(BaseModel):
     layer: str
     confidence: float
     relevance_score: float
-    tags: list[str] = []
+    tags: list[str] = Field(default_factory=list)
     created_at: str | None = None
     summary: str | None = None
 
@@ -133,6 +132,7 @@ async def remember(
 )
 async def recall(
     request_body: RecallRequest,
+    request: Request,
     x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
 ) -> RecallResponse:
     """Search for relevant observations and knowledge.
@@ -143,7 +143,8 @@ async def recall(
     if not x_silo_id:
         raise HTTPException(status_code=400, detail="X-Silo-ID header is required")
 
-    from context_service.mcp.server import get_context_service
+    if not hasattr(request.app.state, "memgraph"):
+        raise HTTPException(status_code=503, detail="Memgraph not available")
 
     try:
         ctx_svc = get_context_service()
@@ -168,17 +169,17 @@ async def recall(
         )
         raise HTTPException(status_code=500, detail="Failed to execute recall query") from exc
 
-    items: list[dict[str, Any]] = [
-        {
-            "node_id": str(r.node_id),
-            "content": r.content,
-            "layer": r.layer,
-            "confidence": r.confidence,
-            "relevance_score": r.relevance_score,
-            "tags": r.tags or [],
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-            "summary": r.summary,
-        }
+    items = [
+        RecallResultItem(
+            node_id=str(r.node_id),
+            content=r.content,
+            layer=r.layer,
+            confidence=r.confidence,
+            relevance_score=r.relevance_score,
+            tags=r.tags or [],
+            created_at=r.created_at.isoformat() if r.created_at else None,
+            summary=r.summary,
+        )
         for r in results
     ]
 
@@ -188,4 +189,4 @@ async def recall(
         result_count=len(items),
     )
 
-    return RecallResponse(results=[RecallResultItem(**item) for item in items])
+    return RecallResponse(results=items)
