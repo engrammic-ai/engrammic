@@ -177,6 +177,9 @@ async def _context_recall(
     if not query and not node_ids:
         return {"error": "missing_input", "message": "Provide query or node_ids"}
 
+    if fusion_mode and not query:
+        return {"error": "fusion_requires_query", "message": "fusion_mode=True requires a query"}
+
     # Fusion mode: run semantic + graph in parallel, fuse with RRF
     if fusion_mode and query:
         from context_service.config.settings import get_settings
@@ -195,18 +198,25 @@ async def _context_recall(
         graph_depth = depth if depth > 0 else fusion_cfg.default_graph_depth
 
         # Run fusion
+        # Pass top_k * 2 here; FusionRetriever also doubles internally, giving
+        # an effective 4x over-fetch. The extra headroom is intentional: temporal
+        # filtering can discard a significant fraction of candidates before the
+        # final top_k slice, so more candidates reduces the chance of under-filling.
         fused = await retriever.retrieve(
             query=query,
             scope=scope,
-            top_k=top_k * 2,  # over-fetch for post-filtering
+            top_k=top_k * 2,
             graph_depth=graph_depth,
             layers=layers,
         )
 
         # Apply temporal filter if since/until provided
         now = datetime.now(UTC)
-        since_dt = _parse_relative_time(since, now) if since else None
-        until_dt = _parse_relative_time(until, now) if until else None
+        try:
+            since_dt = _parse_relative_time(since, now) if since else None
+            until_dt = _parse_relative_time(until, now) if until else None
+        except ValueError as e:
+            return {"error": "invalid_time_format", "message": str(e)}
 
         if since_dt or until_dt:
             fused = await _filter_temporal(
@@ -217,6 +227,14 @@ async def _context_recall(
                 silo_id=silo_id,
             )
 
+        # Build fusion_meta once so both empty and non-empty paths use the same shape
+        fusion_meta = {
+            "enabled": True,
+            "rrf_k": fusion_cfg.rrf_k,
+            "graph_depth": graph_depth,
+            "temporal_filter": {"since": since, "until": until} if (since or until) else None,
+        }
+
         # Take top_k after filtering
         fused = fused[:top_k]
 
@@ -225,10 +243,7 @@ async def _context_recall(
             return {
                 "results": [],
                 "total_candidates": 0,
-                "fusion_meta": {
-                    "enabled": True,
-                    "temporal_filter": {"since": since, "until": until} if (since or until) else None,
-                },
+                "fusion_meta": fusion_meta,
             }
 
         # Fetch full node data for fused results
@@ -250,12 +265,7 @@ async def _context_recall(
                     node["rrf_score"] = rrf_scores[nid]
                     node["channel_contributions"] = channel_contribs.get(nid, {})
 
-        response["fusion_meta"] = {
-            "enabled": True,
-            "rrf_k": fusion_cfg.rrf_k,
-            "graph_depth": graph_depth,
-            "temporal_filter": {"since": since, "until": until} if (since or until) else None,
-        }
+        response["fusion_meta"] = fusion_meta
 
         response = _apply_tier_content_policy(response, include_content)
         if include_proposals:
