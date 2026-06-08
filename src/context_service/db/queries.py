@@ -532,10 +532,10 @@ ORDER BY depth DESC
 # Walking <- finds newer versions, walking -> finds older versions.
 BELIEF_HISTORY_BIDIRECTIONAL = """
 MATCH (start {id: $node_id, silo_id: $silo_id})
-OPTIONAL MATCH newer_path = (start)<-[:SUPERSEDES*1..20]-(newer)
-WHERE ALL(n IN nodes(newer_path) WHERE n.silo_id = $silo_id)
-OPTIONAL MATCH older_path = (start)-[:SUPERSEDES*1..20]->(older)
-WHERE ALL(n IN nodes(older_path) WHERE n.silo_id = $silo_id)
+OPTIONAL MATCH (start)<-[:SUPERSEDES*1..20]-(newer)
+WHERE newer.silo_id = $silo_id
+OPTIONAL MATCH (start)-[:SUPERSEDES*1..20]->(older)
+WHERE older.silo_id = $silo_id
 WITH start, collect(DISTINCT newer) AS newer_raw, collect(DISTINCT older) AS older_raw
 WITH start,
      [n IN newer_raw WHERE n IS NOT NULL] AS newer_nodes,
@@ -1874,12 +1874,12 @@ RETURN c.id AS id
 
 GET_HYPOTHESIS_FOR_CRYSTALLIZE = """
 MATCH (h:WorkingHypothesis {id: $hypothesis_id, silo_id: $silo_id})
-WHERE h.properties.session_id = $session_id
+WHERE h.session_id = $session_id
 RETURN h.id AS id,
        h.content AS content,
-       h.properties.confidence AS confidence,
-       h.properties.crystallized AS crystallized,
-       h.properties.state AS state
+       h.confidence AS confidence,
+       h.crystallized AS crystallized,
+       h.state AS state
 """
 
 GET_HYPOTHESIS_BY_ID = """
@@ -1887,9 +1887,9 @@ MATCH (h:WorkingHypothesis {id: $hypothesis_id})
 WHERE h.silo_id = $silo_id
 RETURN h.id AS id,
        h.content AS content,
-       h.properties.confidence AS confidence,
-       h.properties.crystallized AS crystallized,
-       h.properties.state AS state
+       h.confidence AS confidence,
+       h.crystallized AS crystallized,
+       h.state AS state
 """
 
 GET_HYPOTHESIS_ABOUT_REFS = """
