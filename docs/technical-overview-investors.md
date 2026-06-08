@@ -7,7 +7,7 @@
 
 Engrammic is a memory infrastructure layer for AI agents that solves a fundamental category error in how agent systems persist information. Instead of treating all data with uniform decay or retrieval semantics, we separate persistence into four epistemically-distinct layers, each with its own lifecycle rules.
 
-The core differentiator: **evidence-gated claim promotion**. Memories do not automatically become facts. Facts do not automatically become beliefs. Each transition requires corroboration from multiple sources and passes through deterministic confidence math that is auditable, replayable, and cheap.
+The core differentiator: **corroboration before promotion**. When an agent stores a claim, we check if other sources have said the same thing. Three independent sources agreeing? That claim becomes a fact. One source from official docs with high confidence? Also a fact. Otherwise it stays a claim - retrievable, but flagged as unverified. When an agent forms a conclusion, it must link to the nodes it's concluding from - we store that chain so you can trace any belief back to what it's based on. The confidence math is a formula (source tier x corroboration x method weight x raw confidence), not an LLM call - deterministic, auditable, and costs nothing after extraction.
 
 ---
 
@@ -32,14 +32,14 @@ The result in production: mem0 users report 97.8% junk accumulation rates [2], c
 
 ### Four-Layer Model
 
-```
-+------------------+     +------------------+     +------------------+
-|    MEMORY        | --> |    KNOWLEDGE     | --> |     WISDOM       |
-|  (observations)  |     |     (facts)      |     |    (beliefs)     |
-+------------------+     +------------------+     +------------------+
-        |                        |                        |
-   Gaussian decay         Supersession only         Evidence-gated
-   No evidence req        N-source corroboration    Synthesis from facts
+```mermaid
+flowchart LR
+    M["MEMORY<br>(observations)"] --> K["KNOWLEDGE<br>(facts)"]
+    K --> W["WISDOM<br>(beliefs)"]
+    
+    M -.- M1["Gaussian decay<br>No evidence required"]
+    K -.- K1["Supersession only<br>N-source corroboration"]
+    W -.- W1["Evidence-gated<br>Must reference facts"]
 ```
 
 **Intelligence Layer** (not shown): Ephemeral reasoning chains generated at query time. Never persisted beyond the session.
@@ -62,9 +62,14 @@ All adjudication logic is pure functions over structured claims. LLM calls happe
 
 ### Confidence Math
 
-```
-combined_confidence = source_tier * corroboration_factor * method_weight * raw_confidence
-```
+$$C = \tau \cdot \kappa \cdot \mu \cdot \rho$$
+
+**Legend:**
+- $C$ = combined confidence (0.0 - 1.0)
+- $\tau$ = source tier weight
+- $\kappa$ = corroboration factor = $1 - e^{-0.5n}$ where $n$ = distinct sources
+- $\mu$ = method weight (extraction quality)
+- $\rho$ = raw confidence (LLM self-reported)
 
 | Factor | Values |
 |--------|--------|
@@ -100,9 +105,9 @@ Violations are rejected, not logged.
 
 Instead of fixed top-k truncation, we use a query-dependent threshold:
 
-```
-tau = alpha * max(scores)
-```
+$$\tau = \alpha \cdot \max(S)$$
+
+Where $\alpha \in [0.5, 0.8]$ and $S$ is the set of relevance scores.
 
 High-confidence queries (max score ~0.9) return more results. Low-confidence queries (max score ~0.5) return fewer, reducing noise and hallucination risk. Based on SmartSearch [6].
 

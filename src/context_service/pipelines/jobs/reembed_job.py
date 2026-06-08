@@ -23,8 +23,8 @@ WHERE n.silo_id IS NOT NULL
   AND n.state <> 'DELETED'
 RETURN n.id AS id, n.silo_id AS silo_id, n.content AS content, n.type AS node_type
 ORDER BY n.created_at DESC
+SKIP $offset
 LIMIT $limit
-OFFSET $offset
 """
 
 _COUNT_NODES = """
