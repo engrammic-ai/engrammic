@@ -1,6 +1,5 @@
 # src/context_service/config/mcp_tools.yaml
 # MCP Tool Surface Configuration
-# Edit this file to change tool names, descriptions, and profiles without code changes.
 
 mcp_instructions: |
   Engrammic: Epistemic memory for AI agents.
@@ -8,7 +7,7 @@ mcp_instructions: |
   Quick start:
   - remember: store observations
   - learn: record claims WITH evidence
-  - believe: declare conclusions
+  - decide: declare decisions/commitments
   - recall: search your knowledge
   - trace: understand why you believe something (provenance)
   - history: see how a belief evolved over time (versioning)
@@ -32,14 +31,19 @@ mcp_instructions: |
   Guidelines:
   - Always provide evidence when using learn
   - Hint source_tier on learn when you know the source quality (authoritative for .gov/.edu, validated for curated data)
-  - Reference existing nodes when forming beliefs
+  - Reference existing nodes when forming decisions
   - Recall before storing to check for supersession opportunities
 
   Reasoning flow (hypothesize/commit):
   - hypothesize creates session-scoped tentative beliefs
-  - commit promotes them to permanent wisdom WITHIN THE SAME SESSION
+  - commit promotes them to permanent commitments WITHIN THE SAME SESSION
   - If session ends without commit, hypotheses are garbage collected
-  - For cross-session conclusions, use believe directly instead
+  - For direct decisions, use decide instead
+
+  Belief acceptance flow:
+  - SAGE synthesizes beliefs from corroborated facts
+  - ProposedBeliefs appear in recall results with status="pending"
+  - Use accept to promote to full Belief, or dismiss to reject
 
   Onboarding:
   - At session start, call patterns(action='get', name='onboarding') for your workflow guide
@@ -63,9 +67,20 @@ tools:
       Optionally hint source_tier.
     maps_to: knowledge
 
-  believe:
-    description: "Declare a commitment. Requires 'about' nodes. Recall first - pass supersedes:<node_id> if updating a prior belief."
-    maps_to: wisdom
+  decide:
+    description: |
+      Declare a decision or commitment. Use when you have decided something.
+      Requires 'about' nodes to reference. For tentative beliefs during
+      reasoning, use hypothesize + commit instead. Recall first - pass
+      supersedes:<node_id> if updating a prior decision.
+    maps_to: commitment
+
+  accept:
+    description: |
+      Accept a ProposedBelief, promoting it to a full Belief. ProposedBeliefs
+      are created by SAGE synthesis from corroborated facts. They appear in
+      recall results with status="pending". Use dismiss to reject instead.
+    maps_to: belief
 
   recall:
     description: |
@@ -75,6 +90,7 @@ tools:
       Low-confidence and unresolved-contradiction memories are withheld by
       default and reported as a withheld count; pass include_withheld=true
       to see them. min_threshold overrides the relevance cutoff (0.0-1.0).
+      ProposedBeliefs appear with status="pending" for your review.
     maps_to: retrieve
 
   trace:
@@ -101,7 +117,7 @@ tools:
     maps_to: meta
 
   hypothesize:
-    description: "Form a tentative belief during reasoning. SESSION-SCOPED: must call commit within the same session to persist. For cross-session conclusions, use believe instead."
+    description: "Form a tentative belief during reasoning. SESSION-SCOPED: must call commit within the same session to persist. For direct decisions, use decide instead."
     maps_to: belief
 
   revise:
@@ -117,7 +133,7 @@ tools:
     maps_to: forget
 
   dismiss:
-    description: "Dismiss a Contradiction or StaleCommitment marker without resolving it. Use for false positives or acknowledged issues."
+    description: "Dismiss a marker or reject a ProposedBelief. Use for false positives, acknowledged issues, or beliefs you disagree with."
     maps_to: marker
 
   patterns:
