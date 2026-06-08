@@ -178,15 +178,20 @@ def auto_tagging(
     result: dict[str, Any] = run_async(_run())
     duration_s = time.monotonic() - t0
     result["duration_s"] = duration_s
+    skipped_no_work = result["processed"] == 0 and result["errors"] == 0
 
-    context.log.info(
-        f"silo={silo_id} "
-        f"processed={result['processed']} "
-        f"skipped={result['skipped']} "
-        f"errors={result['errors']} "
-        f"duration={duration_s:.2f}s"
-    )
+    if skipped_no_work:
+        context.log.info(f"silo={silo_id} skipped_no_work duration={duration_s:.2f}s")
+    else:
+        context.log.info(
+            f"silo={silo_id} "
+            f"processed={result['processed']} "
+            f"skipped={result['skipped']} "
+            f"errors={result['errors']} "
+            f"duration={duration_s:.2f}s"
+        )
 
+    result["skipped_no_work"] = skipped_no_work
     return dg.Output(
         value=result,
         metadata={
@@ -195,5 +200,6 @@ def auto_tagging(
             "skipped": dg.MetadataValue.int(result["skipped"]),
             "errors": dg.MetadataValue.int(result["errors"]),
             "duration_s": dg.MetadataValue.float(duration_s),
+            "skipped_no_work": dg.MetadataValue.bool(skipped_no_work),
         },
     )

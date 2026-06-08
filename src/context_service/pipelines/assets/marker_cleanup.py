@@ -87,12 +87,16 @@ def marker_cleanup_asset(
 
     deleted_contradictions, deleted_stale_commitments = _run_async(_run())
     total_deleted = deleted_contradictions + deleted_stale_commitments
+    skipped = total_deleted == 0
 
-    context.log.info(
-        f"marker_cleanup: silo={silo_id} "
-        f"contradictions={deleted_contradictions} "
-        f"stale_commitments={deleted_stale_commitments}"
-    )
+    if skipped:
+        context.log.info(f"marker_cleanup: silo={silo_id} skipped_no_work")
+    else:
+        context.log.info(
+            f"marker_cleanup: silo={silo_id} "
+            f"contradictions={deleted_contradictions} "
+            f"stale_commitments={deleted_stale_commitments}"
+        )
 
     return dg.Output(
         value={
@@ -100,6 +104,7 @@ def marker_cleanup_asset(
             "deleted_contradictions": deleted_contradictions,
             "deleted_stale_commitments": deleted_stale_commitments,
             "total_deleted": total_deleted,
+            "skipped_no_work": skipped,
         },
         metadata={
             "deleted_contradictions": deleted_contradictions,
@@ -107,5 +112,6 @@ def marker_cleanup_asset(
             "total_deleted": total_deleted,
             "markers_expired_contradictions": deleted_contradictions,
             "markers_expired_stale_commitments": deleted_stale_commitments,
+            "skipped_no_work": dg.MetadataValue.bool(skipped),
         },
     )

@@ -81,12 +81,18 @@ def retention_sweep(
         return await service.run_sweep(silo_id)
 
     result: dict[str, Any] = _run_async(_run())
+    total_affected = result["tombstoned"] + result["meta_tombstoned"] + result["deleted"]
+    skipped = total_affected == 0
 
-    context.log.info(
-        f"silo={silo_id} tombstoned={result['tombstoned']} "
-        f"meta_tombstoned={result['meta_tombstoned']} deleted={result['deleted']}"
-    )
+    if skipped:
+        context.log.info(f"silo={silo_id} skipped_no_work")
+    else:
+        context.log.info(
+            f"silo={silo_id} tombstoned={result['tombstoned']} "
+            f"meta_tombstoned={result['meta_tombstoned']} deleted={result['deleted']}"
+        )
 
+    result["skipped_no_work"] = skipped
     return dg.Output(
         value=result,
         metadata={
@@ -95,6 +101,7 @@ def retention_sweep(
             "meta_tombstoned": dg.MetadataValue.int(result["meta_tombstoned"]),
             "deleted": dg.MetadataValue.int(result["deleted"]),
             "run_id": dg.MetadataValue.text(result["run_id"]),
+            "skipped_no_work": dg.MetadataValue.bool(skipped),
         },
     )
 
