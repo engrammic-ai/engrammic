@@ -307,7 +307,10 @@ def _parse_relative_time(s: str, now: datetime) -> datetime:
 
     # Try ISO format
     try:
-        return datetime.fromisoformat(s)
+        parsed = datetime.fromisoformat(s)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        return parsed
     except ValueError as exc:
         raise ValueError(f"Cannot parse time string: {s!r}") from exc
 
