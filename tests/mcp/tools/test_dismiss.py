@@ -12,6 +12,8 @@ def mock_context_service():
     """Mock context service with graph store."""
     ctx = MagicMock()
     ctx.graph_store = AsyncMock()
+    # Default: no ProposedBelief found, so regular marker path is followed
+    ctx.graph_store.execute_query = AsyncMock(return_value=[])
     return ctx
 
 
@@ -192,8 +194,15 @@ class TestDismissMarkerInternal:
         assert "dismissed" in result["message"]
 
     @pytest.mark.asyncio
-    async def test_error_on_proposed_belief_marker(self, mock_context_service, mock_redis_client):
-        """Return error when trying to dismiss a ProposedBelief (should use reject)."""
+    async def test_dismiss_rejects_proposed_belief(self, mock_context_service, mock_redis_client):
+        """dismiss rejects a pending ProposedBelief and returns proposal_id + status."""
+        mock_context_service.graph_store.execute_query = AsyncMock(
+            return_value=[{"status": "pending"}]
+        )
+        mock_context_service.graph_store.execute_write = AsyncMock(
+            return_value=[{"proposed_belief_id": "pb-1", "status": "rejected"}]
+        )
+
         with (
             patch(
                 "context_service.mcp.server.get_context_service",
@@ -203,31 +212,48 @@ class TestDismissMarkerInternal:
                 "context_service.mcp.server.get_redis",
                 return_value=mock_redis_client,
             ),
-            patch(
-                "context_service.engine.markers.get_marker_details",
-                new=AsyncMock(
-                    return_value=[
-                        {
-                            "id": "pb-1",
-                            "marker_type": "ProposedBelief",
-                            "status": "pending",
-                            "about_ids": ["node-a"],
-                        }
-                    ]
-                ),
-            ),
         ):
             from context_service.mcp.tools.dismiss import _dismiss_marker
 
             result = await _dismiss_marker(
                 marker_id="pb-1",
-                reason="don't want it",
+                reason="Factually incorrect",
                 silo_id="silo-1",
             )
 
-        assert result["error"] == "invalid_marker_type"
-        assert "reject" in result["message"]
-        assert "ProposedBelief" in result["message"]
+        assert result.get("status") == "rejected"
+        assert result.get("proposal_id") == "pb-1"
+        assert result.get("reason") == "Factually incorrect"
+        assert "rejected_at" in result
+
+    @pytest.mark.asyncio
+    async def test_dismiss_rejects_only_pending_proposals(
+        self, mock_context_service, mock_redis_client
+    ):
+        """dismiss fails for an already-rejected ProposedBelief."""
+        mock_context_service.graph_store.execute_query = AsyncMock(
+            return_value=[{"status": "rejected"}]
+        )
+
+        with (
+            patch(
+                "context_service.mcp.server.get_context_service",
+                return_value=mock_context_service,
+            ),
+            patch(
+                "context_service.mcp.server.get_redis",
+                return_value=mock_redis_client,
+            ),
+        ):
+            from context_service.mcp.tools.dismiss import _dismiss_marker
+
+            result = await _dismiss_marker(
+                marker_id="pb-already-rejected",
+                reason="Try again",
+                silo_id="silo-1",
+            )
+
+        assert result.get("error") == "invalid_status"
 
     @pytest.mark.asyncio
     async def test_error_on_resolved_marker(self, mock_context_service, mock_redis_client):
