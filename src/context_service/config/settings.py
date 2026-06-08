@@ -188,7 +188,7 @@ class RerankingSettings(BaseModel):
 
     # Score-adaptive truncation (SmartSearch-style)
     adaptive_threshold_enabled: bool = Field(
-        default=False,
+        default=True,
         description="Use score-adaptive truncation (tau = alpha * max_score)",
     )
     adaptive_alpha: float = Field(
