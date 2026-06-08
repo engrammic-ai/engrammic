@@ -77,3 +77,4 @@ class LiteLLMReranker:
                     continue
                 logger.warning("reranking_failed", error=str(e), model=self._model)
                 raise
+        raise RuntimeError("rerank: unreachable")

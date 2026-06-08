@@ -25,7 +25,6 @@ from context_service.api.routes import admin, health
 from context_service.api.routes.gdpr import router as gdpr_router
 from context_service.api.routes.license import router as license_router
 from context_service.api.routes.oauth import router as oauth_router
-from context_service.api.routes.skills import router as skills_router
 from context_service.api.routes.source_rules import router as source_rules_router
 from context_service.config.logging import configure_logging, get_logger
 from context_service.config.settings import get_settings
@@ -366,7 +365,7 @@ def create_app() -> ASGIApp:
     app.include_router(admin.router)
     app.include_router(gdpr_router)
     app.include_router(oauth_router)
-    app.include_router(skills_router)
+    # skills REST API not yet implemented (all endpoints return 501)
     app.include_router(source_rules_router)
     app.include_router(license_router)
     app.add_route("/metrics", metrics_endpoint, include_in_schema=False)

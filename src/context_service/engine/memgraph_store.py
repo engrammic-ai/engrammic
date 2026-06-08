@@ -468,9 +468,9 @@ class MemgraphStore(EAGKnowledgeStore):
                 predecessor_id=predecessor_id,
                 exc_info=True,
             )
-            # Fail open: allow the write rather than blocking all supersessions
-            # when Redis is unavailable.
-            return True
+            # Fail closed: reject the write rather than allowing concurrent
+            # supersessions when Redis is unavailable.
+            return False
 
     async def _release_supersession_lock(self, predecessor_id: str) -> None:
         """Release the supersession lock for the given predecessor node."""

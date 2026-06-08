@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import random
 import time
 from typing import TYPE_CHECKING
 
@@ -39,11 +41,17 @@ class TEIEmbeddingService:
         dimensions: int = 768,
         timeout: float = 30.0,
         _embedding_cache: EmbeddingCache | None = None,
+        max_retries: int = 3,
+        retry_base_delay_seconds: float = 1.0,
+        retry_max_delay_seconds: float = 30.0,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._dimensions = dimensions
         self._embedding_cache = _embedding_cache
         self._client = httpx.AsyncClient(base_url=self._base_url, timeout=timeout)
+        self._max_retries = max_retries
+        self._retry_base_delay_seconds = retry_base_delay_seconds
+        self._retry_max_delay_seconds = retry_max_delay_seconds
 
     @property
     def dimensions(self) -> int:
@@ -105,8 +113,27 @@ class TEIEmbeddingService:
 
         return await self._embed_batch(texts)
 
+    def _is_retryable_error(self, error: Exception) -> bool:
+        """Check if an error is retryable (transient HTTP or connection failure)."""
+        if isinstance(error, httpx.HTTPStatusError):
+            retryable_status_codes = {429, 500, 502, 503, 504}
+            return error.response.status_code in retryable_status_codes
+        if isinstance(error, (httpx.ConnectError, httpx.TimeoutException, httpx.RemoteProtocolError)):
+            return True
+        error_str = str(error).lower()
+        retryable_patterns = [
+            "timeout",
+            "timed out",
+            "connection",
+            "temporarily unavailable",
+            "503",
+            "502",
+            "504",
+        ]
+        return any(pattern in error_str for pattern in retryable_patterns)
+
     async def _embed_batch(self, texts: list[str]) -> list[list[float]]:
-        """Embed a batch of texts via TEI.
+        """Embed a batch of texts via TEI with retry on transient errors.
 
         Args:
             texts: List of texts to embed.
@@ -115,31 +142,58 @@ class TEIEmbeddingService:
             List of embedding vectors.
 
         Raises:
-            TEIEmbeddingError: If embedding generation fails.
+            TEIEmbeddingError: If embedding generation fails after retries.
         """
-        with tracer.start_as_current_span(
-            "embedding.tei",
-            attributes={"batch_size": len(texts)},
-        ) as span:
-            try:
-                start = time.perf_counter()
-                response = await self._client.post("/embed", json={"inputs": texts})
-                response.raise_for_status()
-                duration_ms = (time.perf_counter() - start) * 1000
-                span.set_attribute("duration_ms", duration_ms)
-                record_embedding("tei", duration_ms)
-                result: list[list[float]] = response.json()
-                return result
-            except httpx.HTTPStatusError as e:
-                span.set_attribute("error", True)
-                span.set_attribute("error.message", str(e))
-                logger.error("TEI embedding failed", error=str(e), status=e.response.status_code)
-                raise TEIEmbeddingError(f"TEI embedding failed: {e}") from e
-            except Exception as e:
-                span.set_attribute("error", True)
-                span.set_attribute("error.message", str(e))
-                logger.error("TEI embedding failed", error=str(e))
-                raise TEIEmbeddingError(f"TEI embedding failed: {e}") from e
+        last_error: Exception | None = None
+
+        for attempt in range(self._max_retries + 1):
+            with tracer.start_as_current_span(
+                "embedding.tei",
+                attributes={"batch_size": len(texts), "attempt": attempt},
+            ) as span:
+                try:
+                    start = time.perf_counter()
+                    response = await self._client.post("/embed", json={"inputs": texts})
+                    response.raise_for_status()
+                    duration_ms = (time.perf_counter() - start) * 1000
+                    span.set_attribute("duration_ms", duration_ms)
+                    record_embedding("tei", duration_ms)
+                    result: list[list[float]] = response.json()
+                    return result
+                except Exception as e:
+                    last_error = e
+                    span.set_attribute("error", True)
+                    span.set_attribute("error.message", str(e))
+
+                    is_retryable = self._is_retryable_error(e)
+                    if not is_retryable or attempt >= self._max_retries:
+                        status = (
+                            e.response.status_code
+                            if isinstance(e, httpx.HTTPStatusError)
+                            else None
+                        )
+                        logger.error(
+                            "tei_embedding_failed",
+                            error=str(e),
+                            attempt=attempt,
+                            retryable=is_retryable,
+                            status=status,
+                        )
+                        raise TEIEmbeddingError(f"TEI embedding failed: {e}") from e
+
+                    delay = min(
+                        self._retry_base_delay_seconds * (2**attempt) + random.uniform(0, 1),
+                        self._retry_max_delay_seconds,
+                    )
+                    logger.warning(
+                        "tei_embedding_retry",
+                        error=str(e),
+                        attempt=attempt,
+                        delay_seconds=delay,
+                    )
+                    await asyncio.sleep(delay)
+
+        raise TEIEmbeddingError(f"TEI embedding failed after retries: {last_error}")
 
     async def embed_single(self, text: str) -> list[float]:
         """Generate embedding for a single text.
