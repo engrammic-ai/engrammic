@@ -220,29 +220,6 @@ class IdentitiesConfig(BaseModel):
     validator: ValidatorIdentityConfig = Field(default_factory=ValidatorIdentityConfig)
 
 
-class RetrievalTuning(BaseModel):
-    """Retrieval-ranking tuning knobs."""
-
-    model_config = ConfigDict(frozen=True, extra="ignore")
-
-    walker_alpha: float = Field(default=0.4)
-    walker_beta: float = Field(default=0.3)
-    walker_gamma: float = Field(default=0.15)
-    walker_delta: float = Field(default=0.15)
-    walker_base_cost: float = Field(default=1.0)
-
-    walker_tier_weight_hot: float = Field(default=1.0)
-    walker_tier_weight_warm: float = Field(default=0.5)
-    walker_tier_weight_cold: float = Field(default=0.25)
-    walker_tier_weight_null: float = Field(default=0.1)
-    walker_no_cluster_floor: float = Field(default=0.1)
-
-    rrf_k: int = Field(default=60)
-    # Per-channel RRF weights. Empty dict = classical unweighted RRF.
-    # Opinionated defaults removed after 2026-04-26 post-mortem.
-    rrf_channel_weights: dict[str, float] = Field(default_factory=dict)
-
-
 class MemgraphConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -967,7 +944,6 @@ class Settings(BaseSettings):
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     stripe: StripeConfig = Field(default_factory=StripeConfig)
     custodian: CustodianSettings = Field(default_factory=CustodianSettings)
-    retrieval_tuning: RetrievalTuning = Field(default_factory=RetrievalTuning)
     auto_reflect: AutoReflectConfig = Field(default_factory=AutoReflectConfig)
     consolidation: ConsolidationConfig = Field(default_factory=ConsolidationConfig)
     causal: CausalConfig = Field(default_factory=CausalConfig)
@@ -1279,16 +1255,6 @@ class Settings(BaseSettings):
     clustering_auto_trigger_enabled: bool = Field(default=False)
     clustering_post_ingest_threshold: int = Field(default=50, gt=0)
     extraction_batch_concurrency: int = Field(default=8, ge=1, le=32)
-
-    # =========================================================================
-    # BEAR Compression Settings
-    # TODO: BEAR compression subsystem - implement in future
-    # =========================================================================
-
-    bear_api_key: SecretStr | None = Field(default=None)
-    bear_api_url: str = Field(default="https://api.thetokencompany.com/v1/compress")
-    bear_timeout_ms: int = Field(default=200)
-    bear_enabled: bool = Field(default=False)
 
     # =========================================================================
     # Production Settings

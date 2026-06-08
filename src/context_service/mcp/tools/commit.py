@@ -94,7 +94,7 @@ def register(mcp: FastMCP) -> None:
             reason: Why committing now.
 
         Returns:
-            {committed: [...], superseded: [...]}
+            {committed: [...], confidences: [...]} and optionally {errors: [...]}
         """
         start = time.perf_counter()
         success = True

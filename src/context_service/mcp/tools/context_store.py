@@ -240,7 +240,7 @@ async def _context_remember(
     metadata: dict[str, Any] | None = None,
     tags: list[str] | None = None,
     decay_class: str = "standard",
-    observed_from: str | None = None,  # noqa: ARG001  FIXME: accepted but never persisted
+    observed_from: str | None = None,
     supersedes: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
@@ -270,6 +270,10 @@ async def _context_remember(
     agent_id = auth.agent_id or auth.org_id
     _start = time.perf_counter()
 
+    effective_metadata: dict[str, Any] = dict(metadata or {})
+    if observed_from is not None:
+        effective_metadata["observed_from"] = observed_from
+
     result_tx, events = await store_memory(
         store=ctx_svc.graph_store,
         content=content,
@@ -279,7 +283,7 @@ async def _context_remember(
         tags=tags,
         content_type=content_type,
         decay_class=decay_class,
-        metadata=metadata,
+        metadata=effective_metadata,
     )
 
     for event in events:
@@ -529,9 +533,9 @@ async def _context_commit(
     belief: str,
     about: list[str],
     confidence: float = 0.8,
-    reasoning: str | None = None,  # noqa: ARG001  FIXME: accepted but never persisted
+    reasoning: str | None = None,
     metadata: dict[str, Any] | None = None,
-    tags: list[str] | None = None,  # noqa: ARG001  FIXME: accepted but never persisted
+    tags: list[str] | None = None,
     chain_id: str | None = None,
     supersedes: str | None = None,
 ) -> dict[str, Any]:
@@ -556,6 +560,12 @@ async def _context_commit(
 
     agent_id = auth.agent_id or auth.org_id
 
+    effective_metadata: dict[str, Any] = dict(metadata or {})
+    if reasoning is not None:
+        effective_metadata["reasoning"] = reasoning
+    if tags:
+        effective_metadata["tags"] = tags
+
     _start = time.perf_counter()
     commit_result, events = await brain_commit(
         store=ctx_svc.graph_store,
@@ -564,7 +574,7 @@ async def _context_commit(
         silo_id=str(expected_silo_id),
         agent_id=agent_id,
         confidence=confidence,
-        metadata=metadata,
+        metadata=effective_metadata or None,
     )
     for event in events:
         await emit_reaction(event)
@@ -643,7 +653,7 @@ async def _context_reflect(
     observation: str,
     observation_type: str,
     about: list[str],
-    confidence: float = 0.8,  # noqa: ARG001  FIXME: accepted but never persisted
+    confidence: float = 0.8,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Internal implementation."""
@@ -665,7 +675,7 @@ async def _context_reflect(
         silo_id=str(expected_silo_id),
         agent_id=agent_id,
         layer="meta",
-        metadata=metadata,
+        metadata={**(metadata or {}), "confidence": confidence},
     )
 
     for event in events:

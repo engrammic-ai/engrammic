@@ -45,6 +45,10 @@ test *args:
 dev:
     RELOAD=true uv run python -m context_service
 
+# Generate a license key (usage: just license softlandia 20)
+license customer days="90":
+    cd ../cli && ENGRAMMIC_KEYS_DIR=keys uv run python -c "from typer.testing import CliRunner; from engrammic_cli.license import license_app; print(CliRunner().invoke(license_app, ['create', '-c', '{{customer}}', '-d', '{{days}}']).output)"
+
 # Remove cache artifacts
 clean:
     find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true

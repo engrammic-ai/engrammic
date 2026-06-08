@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from context_service.llm.google_genai_provider import GoogleGenAIProvider
 
 import litellm
 from tenacity import (
@@ -190,7 +193,7 @@ class LiteLLMProvider(LLMProvider):
 def build_litellm_provider(
     provider: str,
     model: str | None = None,
-) -> LiteLLMProvider:
+) -> LiteLLMProvider | GoogleGenAIProvider:
     """Factory for LiteLLM provider by provider name.
 
     Args:

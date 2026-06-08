@@ -456,15 +456,25 @@ async def recall(
                         timeout=synthesis_timeout_s,
                     )
                     if belief_result and belief_result.belief_id:
+                        belief_node_rows = await store.execute_query(
+                            q.GET_NODE_FOR_RECALL,
+                            {
+                                "node_id": str(belief_result.belief_id),
+                                "silo_id": silo_id,
+                            },
+                        )
+                        belief_node = belief_node_rows[0] if belief_node_rows else {}
+                        belief_content = belief_node.get("content", "")
+                        belief_score = float(belief_result.confidence or 0.0)
                         results.append(
                             RecallResultItem(
                                 node_id=str(belief_result.belief_id),
-                                content="",
+                                content=belief_content,
                                 layer=Layer.WISDOM,
-                                score=1.0,
+                                score=belief_score,
                                 confidence=belief_result.confidence or 0.0,
                                 created_at=datetime.now(UTC),
-                                properties={},
+                                properties=belief_node.get("properties", {}),
                                 related=[],
                                 synthesized=True,
                             )

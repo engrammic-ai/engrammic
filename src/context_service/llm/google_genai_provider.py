@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from context_service.config.logging import get_logger
 from context_service.llm.base import LLMProvider, Usage, robust_json_loads
@@ -18,8 +19,55 @@ class GoogleGenAIError(Exception):
     """Raised when Google GenAI operations fail."""
 
 
+# HTTP status codes that indicate a transient failure and are safe to retry.
+# Source: google.genai._api_client._RETRY_HTTP_STATUS_CODES
+_TRANSIENT_STATUS_CODES = frozenset({408, 429, 500, 502, 503, 504})
+
+
+def _is_transient_genai_error(exc: BaseException) -> bool:
+    """Return True only for errors that are safe to retry.
+
+    Retries on:
+    - google.genai.errors.ServerError (5xx responses)
+    - google.genai.errors.ClientError with a transient status code (408, 429)
+    - httpx / requests network-level errors (connection reset, timeout)
+
+    Does NOT retry on permanent client errors (400 bad request, 401 auth,
+    403 forbidden, 404 not found, 422 invalid argument, etc.).
+    """
+    try:
+        from google.genai.errors import ClientError, ServerError
+    except ImportError:
+        return False
+
+    if isinstance(exc, ServerError):
+        return True
+    if isinstance(exc, ClientError):
+        return exc.code in _TRANSIENT_STATUS_CODES
+
+    try:
+        import httpx
+
+        if isinstance(exc, (httpx.TimeoutException, httpx.NetworkError)):
+            return True
+    except ImportError:
+        pass
+
+    try:
+        import requests
+
+        if isinstance(exc, requests.exceptions.ConnectionError):
+            return True
+        if isinstance(exc, requests.exceptions.Timeout):
+            return True
+    except ImportError:
+        pass
+
+    return False
+
+
 _genai_retry = retry(
-    retry=retry_if_exception_type(Exception),
+    retry=retry_if_exception(_is_transient_genai_error),
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=1, max=10),
     reraise=True,
@@ -117,7 +165,7 @@ class GoogleGenAIProvider(LLMProvider):
 
         _start = time.perf_counter()
         try:
-            response = _call()
+            response = await asyncio.to_thread(_call)
             record_llm_call(self._model, (time.perf_counter() - _start) * 1000, success=True)
         except Exception as e:
             record_llm_call(self._model, (time.perf_counter() - _start) * 1000, success=False)
@@ -170,7 +218,7 @@ class GoogleGenAIProvider(LLMProvider):
 
         _start = time.perf_counter()
         try:
-            response = _call()
+            response = await asyncio.to_thread(_call)
             record_llm_call(self._model, (time.perf_counter() - _start) * 1000, success=True)
         except Exception as e:
             record_llm_call(self._model, (time.perf_counter() - _start) * 1000, success=False)

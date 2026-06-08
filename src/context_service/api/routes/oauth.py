@@ -307,6 +307,11 @@ async def callback(
         )
 
     # Direct signup flow (no MCP client) - state is None
+    # Note: No CSRF protection here. Accepted risk because:
+    # 1. WorkOS controls the authorization code issuance
+    # 2. Attacker would need victim to complete WorkOS auth flow
+    # 3. Result is account creation, not privilege escalation
+    # TODO: Add explicit signup=true param for defense-in-depth
     if state is None:
         try:
             user_info = await exchange_code_for_user(code)
@@ -418,6 +423,7 @@ async def token(
     grant_type: str = Form(..., description="'authorization_code' or 'refresh_token'"),
     code: str = Form(default=None, description="Authorization code (authorization_code grant)"),
     code_verifier: str = Form(default=None, description="PKCE verifier (authorization_code grant)"),
+    client_id: str = Form(..., description="OAuth client identifier"),
     refresh_token: str = Form(default=None, description="Refresh token (refresh_token grant)"),
 ) -> dict[str, str | int]:
     """Exchange an authorization code or refresh token for access tokens.
@@ -430,7 +436,7 @@ async def token(
         if grant_type == "authorization_code":
             if not code or not code_verifier:
                 raise HTTPException(status_code=400, detail="code and code_verifier are required")
-            result = await oauth_svc.exchange_code_for_tokens(code, code_verifier)
+            result = await oauth_svc.exchange_code_for_tokens(code, code_verifier, client_id)
             if result is None:
                 raise HTTPException(status_code=400, detail="Invalid or expired authorization code")
             return result

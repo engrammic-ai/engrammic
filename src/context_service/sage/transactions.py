@@ -1531,7 +1531,7 @@ async def revise_belief(
                     {
                         "cluster_id": cluster_id,
                         "silo_id": silo_id,
-                        "state": ClusterState.SPARSE.value,
+                        "state": ClusterState.READY.value,
                     },
                 )
                 return ReviseBeliefResult(

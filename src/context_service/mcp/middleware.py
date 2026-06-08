@@ -69,11 +69,11 @@ class ErrorHandlingMiddleware(Middleware):
             if self.mask_errors:
                 raise RuntimeError(
                     f"Internal error (ref: {error_id}). Check server logs for details."
-                ) from None
+                ) from e
 
             if self.include_traceback:
                 tb = traceback.format_exc()
-                raise RuntimeError(f"{type(e).__name__}: {e}\n\n{tb}") from None
+                raise RuntimeError(f"{type(e).__name__}: {e}\n\n{tb}") from e
 
             raise
 

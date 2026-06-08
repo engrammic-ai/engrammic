@@ -243,6 +243,7 @@ def _run_request_with_partition(
     ),
     description="SAGE Groundskeeper (every 15 minutes): heat and maintenance.",
     execution_timezone="UTC",
+    default_status=dg.DefaultScheduleStatus.RUNNING,
 )
 def sage_groundskeeper_schedule(
     context: ScheduleEvaluationContext,
@@ -401,6 +402,7 @@ def groundskeeper_gc_schedule(context: ScheduleEvaluationContext) -> dg.RunReque
     ),
     description="SAGE Validator (every 5m): contradiction confirmation, stale commitment detection, and marker cleanup.",
     execution_timezone="UTC",
+    default_status=dg.DefaultScheduleStatus.RUNNING,
 )
 def sage_validator_schedule(
     context: ScheduleEvaluationContext,
