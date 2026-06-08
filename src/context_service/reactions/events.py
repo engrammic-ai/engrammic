@@ -19,13 +19,14 @@ _EMIT_TIMEOUT_SECONDS: float = 0.5
 class ReactionEventType(StrEnum):
     """Typed event identifiers for async reaction processing.
 
-    Most event types have corresponding task handlers in tasks.py. Three are
+    Most event types have corresponding task handlers in tasks.py. Four are
     notification-only signals with no handler - they are emitted for logging
     and observability but do not trigger task execution:
 
     - CASCADE_STALENESS_COMPLETE: Signals cascade finished (no action needed)
     - CONFLICT_DETECTED: Signals conflict found (handled inline, not async)
     - CHECK_EXTRACTION_TRIGGER: Reserved for future extraction pipeline
+    - PROPOSAL_READY: ProposedBelief created, awaiting agent accept/dismiss
     """
 
     COMPUTE_EMBEDDING = "compute_embedding"
@@ -40,6 +41,7 @@ class ReactionEventType(StrEnum):
     CHECK_EXTRACTION_TRIGGER = "check_extraction_trigger"  # notification-only
     PROPAGATE_CONFIDENCE = "propagate_confidence"
     CONSOLIDATE = "consolidate"
+    PROPOSAL_READY = "proposal_ready"  # notification-only: ProposedBelief ready for agent review
 
 
 @dataclass
