@@ -114,3 +114,20 @@ class TestMCPErrorBoundary:
             await tool_with_wrapped_error()
         assert exc_info.value.backend == "redis"
         assert exc_info.value.retriable is False
+
+    async def test_surfaces_brain_error_message(self):
+        from context_service.sage.transactions import InvariantViolation
+
+        @mcp_error_boundary
+        async def tool_with_invariant_violation():
+            raise InvariantViolation(
+                "NO_MEMORY_EVIDENCE",
+                "At least one evidence ref must be from Memory layer (INV2)",
+            )
+
+        with pytest.raises(MCPBackendError) as exc_info:
+            await tool_with_invariant_violation()
+        assert exc_info.value.backend == "validation"
+        assert exc_info.value.retriable is False
+        assert "NO_MEMORY_EVIDENCE" in exc_info.value.message
+        assert "At least one evidence ref must be from Memory layer" in exc_info.value.message

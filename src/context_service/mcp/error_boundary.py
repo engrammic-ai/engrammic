@@ -10,6 +10,7 @@ from mcp.shared.exceptions import McpError
 from mcp.types import ErrorData
 
 from context_service.api.rate_limit import RateLimitExceeded
+from context_service.sage.transactions import BrainError
 
 # JSON-RPC server error code (-32000 to -32099 are reserved for implementation-defined server errors)
 _SERVER_ERROR_CODE = -32000
@@ -85,6 +86,20 @@ def mcp_error_boundary[**P, R](func: Callable[P, Awaitable[R]]) -> Callable[P, A
                 "retry_after": exc.retry_after,
                 "limit": exc.limit,
             }
+        except BrainError as e:
+            # User-facing validation error (invariant violations, conflicts, etc.)
+            # Surface the message directly - these are actionable for agents
+            logger.info(
+                "mcp_validation_error",
+                tool=func.__name__,
+                code=e.code,
+                message=e.message,
+            )
+            raise MCPBackendError(
+                backend="validation",
+                message=f"{e.code}: {e.message}",
+                retriable=False,
+            ) from e
         except Exception as e:
             backend = _classify_backend(e)
             retriable = _is_retriable(e)
