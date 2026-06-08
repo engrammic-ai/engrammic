@@ -1495,6 +1495,21 @@ ORDER BY pb.created_at DESC
 LIMIT $limit
 """
 
+GET_PROPOSED_BELIEF = """
+MATCH (pb:ProposedBelief {id: $proposed_belief_id, silo_id: $silo_id})
+OPTIONAL MATCH (pb)-[:SYNTHESIZED_FROM]->(f:Fact)
+WITH pb, collect(f.id) AS source_fact_ids
+RETURN pb.id AS proposed_belief_id,
+       pb.content AS content,
+       pb.confidence AS confidence,
+       pb.status AS status,
+       pb.created_at AS created_at,
+       pb.accepted_at AS accepted_at,
+       pb.rejected_at AS rejected_at,
+       pb.rejection_reason AS rejection_reason,
+       source_fact_ids
+"""
+
 ACCEPT_PROPOSED_BELIEF = """
 MATCH (pb:ProposedBelief {id: $proposed_belief_id, silo_id: $silo_id})
 WHERE pb.status = 'pending'
@@ -1513,8 +1528,9 @@ CREATE (b:Belief {
 })
 CREATE (b)-[:PROMOTED_FROM]->(pb)
 WITH pb, b
-MATCH (pb)-[:SYNTHESIZED_FROM]->(f)
-CREATE (b)-[:SYNTHESIZED_FROM]->(f)
+OPTIONAL MATCH (pb)-[:SYNTHESIZED_FROM]->(f)
+WITH b, collect(f) AS facts
+FOREACH (fact IN facts | CREATE (b)-[:SYNTHESIZED_FROM]->(fact))
 RETURN b.id AS belief_id, b.confidence AS confidence
 """
 

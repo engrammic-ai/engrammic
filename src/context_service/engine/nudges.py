@@ -30,7 +30,7 @@ NUDGE_TEMPLATES = {
     NudgeType.PENDING_MARKERS: "You have {count} marker(s) to address.",
     NudgeType.STALE_HYPOTHESIS: "Hypothesis '{hypothesis_id}' open for {turns} turns. Commit or revise?",
     NudgeType.STORAGE_GAP: "Nothing stored in {turns} turns. Consider checkpointing.",
-    NudgeType.FORM_BELIEF: "{count} related observations about {topic}. Consider believe().",
+    NudgeType.FORM_BELIEF: "{count} related observations about {topic}. Consider decide().",
     NudgeType.RELEVANT_CONTEXT: "Relevant to your work: {summaries}",
     NudgeType.OPEN_REASONING: "Reasoning chain open. Conclude with reason()?",
 }
@@ -39,7 +39,7 @@ NUDGE_SUGGESTED_TOOLS = {
     NudgeType.PENDING_MARKERS: None,
     NudgeType.STALE_HYPOTHESIS: "commit",
     NudgeType.STORAGE_GAP: "remember",
-    NudgeType.FORM_BELIEF: "believe",
+    NudgeType.FORM_BELIEF: "decide",
     NudgeType.RELEVANT_CONTEXT: None,
     NudgeType.OPEN_REASONING: "reason",
 }

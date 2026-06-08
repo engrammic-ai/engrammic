@@ -1,8 +1,9 @@
-"""MCP tool: dismiss - Dismiss a Contradiction/StaleCommitment marker without resolving it."""
+"""MCP tool: dismiss - Dismiss a Contradiction/StaleCommitment marker or reject a ProposedBelief."""
 
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from context_service.mcp.error_boundary import mcp_error_boundary
@@ -21,11 +22,52 @@ async def _dismiss_marker(
     silo_id: str,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
+    from context_service.db import queries as q
     from context_service.engine.markers import dismiss_marker, get_marker_details
     from context_service.mcp.server import get_context_service, get_redis
 
     ctx = get_context_service()
     store = ctx.graph_store
+
+    # Check if this is a ProposedBelief first (no Redis required for rejection)
+    proposal_check = await store.execute_query(
+        "MATCH (pb:ProposedBelief {id: $id, silo_id: $silo_id}) RETURN pb.status AS status",
+        {"id": marker_id, "silo_id": silo_id},
+    )
+
+    if proposal_check:
+        pb_status = proposal_check[0].get("status")
+        if pb_status != "pending":
+            return {
+                "error": "invalid_status",
+                "message": f"ProposedBelief has status {pb_status!r}, expected 'pending'",
+            }
+
+        now = datetime.now(UTC)
+        reject_result = await store.execute_write(
+            q.REJECT_PROPOSED_BELIEF,
+            {
+                "proposed_belief_id": marker_id,
+                "silo_id": silo_id,
+                "rejected_at": now.isoformat(),
+                "reason": reason,
+            },
+        )
+
+        if not reject_result:
+            return {
+                "error": "reject_failed",
+                "message": "Failed to reject ProposedBelief",
+            }
+
+        return {
+            "proposal_id": marker_id,
+            "status": "rejected",
+            "reason": reason,
+            "rejected_at": now.isoformat(),
+        }
+
+    # Not a ProposedBelief - handle as regular marker
     redis_client = get_redis()
     if redis_client is None:
         return {
@@ -43,15 +85,7 @@ async def _dismiss_marker(
         }
 
     marker = details[0]
-    marker_type = marker.get("marker_type")
     status = marker.get("status")
-
-    # ProposedBelief should use reject, not dismiss
-    if marker_type == "ProposedBelief":
-        return {
-            "error": "invalid_marker_type",
-            "message": "Use 'reject' verb for ProposedBelief markers, not 'dismiss'",
-        }
 
     # Only pending markers can be dismissed
     if status != "pending":
@@ -98,19 +132,21 @@ def register(mcp: FastMCP) -> None:
         reason: str,
         silo_id: str | None = None,
     ) -> dict[str, Any]:
-        """Dismiss a Contradiction or StaleCommitment marker without resolving it.
+        """Dismiss a Contradiction or StaleCommitment marker, or reject a ProposedBelief.
 
         Use this to acknowledge a marker that does not require action (e.g., false
         positive, already handled externally, or intentionally accepted contradiction).
+        When given a ProposedBelief ID, rejects the proposal instead of dismissing.
 
         Args:
-            marker_id: ID of the marker to dismiss.
-            reason: Reason for dismissal (stored for audit trail).
+            marker_id: ID of the marker or ProposedBelief to dismiss/reject.
+            reason: Reason for dismissal or rejection (stored for audit trail).
             silo_id: UUID of the silo. Optional; defaults to the org's primary silo
                 derived from auth.
 
         Returns:
-            {marker_id, status, reason, resolved_at}
+            For markers: {marker_id, status, reason, resolved_at}
+            For ProposedBeliefs: {proposal_id, status, reason, rejected_at}
         """
         from context_service.mcp.server import get_silo_service
         from context_service.services.silo import validate_silo_ownership

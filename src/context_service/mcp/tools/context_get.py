@@ -144,6 +144,7 @@ async def _context_get(
                 "tags": props.get("tags"),
                 "created_at": (node.created_at.isoformat() if node.created_at else None),
                 "tier": props.get("tier"),
+                **({"status": props["status"]} if props.get("status") is not None else {}),
             }
             nodes_out.append(node_dict)
 

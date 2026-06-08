@@ -218,8 +218,23 @@ class CrystallizeResult:
 
 
 @dataclass
+class AcceptProposalResult:
+    """Result of accept_proposal transaction."""
+
+    belief_id: uuid.UUID
+    proposal_id: uuid.UUID
+    accepted: bool
+    accepted_at: datetime
+    confidence: float
+
+
+@dataclass
 class SynthesizeResult:
-    """Result of TX4 SYNTHESIZE."""
+    """Result of TX4 SYNTHESIZE.
+
+    Note: belief_id is a ProposedBelief ID. Agent must call accept_proposal
+    to promote it to a full Belief.
+    """
 
     belief_id: uuid.UUID | None
     cluster_id: str
@@ -483,28 +498,22 @@ async def synthesize(
                 timed_out=synthesis_result.timed_out,
             ), []
 
-        # Create belief
+        # Create ProposedBelief (not Belief directly - requires agent accept)
         belief_id = uuid.uuid4()
         created_at = datetime.now(UTC)
-        props: dict[str, Any] = {
-            "layer": "wisdom",
-            "type": "belief",
-            "state": NodeState.ACTIVE.value,
-            "synthesis_state": SynthesisState.FRESH.value,
-            "confidence": aggregate_confidence,
-            "source_cluster_id": cluster_id,
-        }
+        expires_at = created_at + timedelta(days=7)  # 7-day expiry for unreviewed proposals
         fact_ids = [f["id"] for f in facts]
 
         await store.execute_write(
-            q.CREATE_BELIEF_WITH_SYNTHESIZED_FROM,
+            q.CREATE_PROPOSED_BELIEF,
             {
                 "id": str(belief_id),
                 "silo_id": silo_id,
                 "content": synthesis_result.content,
+                "confidence": aggregate_confidence,
                 "created_at": created_at.isoformat(),
-                "props": props,
-                "fact_ids": fact_ids,
+                "expires_at": expires_at.isoformat(),
+                "synthesized_from_ids": fact_ids,
             },
         )
 
@@ -531,6 +540,12 @@ async def synthesize(
                 node_id=str(belief_id),
                 silo_id=silo_id,
                 payload={"access_type": "SYNTHESIS"},
+            ),
+            # Notify agents that a proposal is ready for review
+            ReactionEvent(
+                event_type=ReactionEventType.PROPOSAL_READY,
+                node_id=str(belief_id),
+                silo_id=silo_id,
             ),
         ]
 
@@ -1412,6 +1427,157 @@ async def crystallize(
         commitment_id=str(commitment_id),
         hypothesis_id=hypothesis_id,
         silo_id=silo_id,
+    )
+
+    return result, events
+
+
+async def accept_proposal(
+    store: HyperGraphStore,
+    proposal_id: str,
+    silo_id: str,
+    agent_id: str,
+    *,
+    reason: str | None = None,
+    override_confidence: float | None = None,
+    emit: bool = True,
+) -> tuple[AcceptProposalResult, list[ReactionEvent]]:
+    """Accept a ProposedBelief, creating a full Belief.
+
+    Uses existing ACCEPT_PROPOSED_BELIEF query which creates a NEW Belief node
+    linked to ProposedBelief via PROMOTED_FROM edge.
+
+    Args:
+        store: Graph store instance.
+        proposal_id: ProposedBelief node ID.
+        silo_id: Tenant isolation ID.
+        agent_id: Agent accepting the proposal.
+        reason: Optional rationale for acceptance.
+        override_confidence: Override the synthesized confidence.
+
+    Returns:
+        Tuple of (result, reaction_events).
+
+    Raises:
+        InvariantViolation: If proposal not found, already rejected, or invalid.
+    """
+    from context_service.db import queries as q
+
+    # Check proposal exists and get status
+    proposal_result = await store.execute_query(
+        q.GET_PROPOSED_BELIEF,
+        {"proposed_belief_id": proposal_id, "silo_id": silo_id},
+    )
+
+    if not proposal_result:
+        raise InvariantViolation("PROPOSAL_NOT_FOUND", "ProposedBelief not found")
+
+    row = proposal_result[0]
+    status = row.get("status")
+
+    # Already accepted - idempotent, find existing belief
+    if status == "accepted":
+        existing_belief = await store.execute_query(
+            """
+            MATCH (b:Belief)-[:PROMOTED_FROM]->(pb:ProposedBelief {id: $proposal_id, silo_id: $silo_id})
+            RETURN b.id AS belief_id, b.confidence AS confidence
+            """,
+            {"proposal_id": proposal_id, "silo_id": silo_id},
+        )
+        if existing_belief:
+            return AcceptProposalResult(
+                belief_id=uuid.UUID(existing_belief[0]["belief_id"]),
+                proposal_id=uuid.UUID(proposal_id),
+                accepted=True,
+                accepted_at=datetime.now(UTC),
+                confidence=float(existing_belief[0].get("confidence", 0.8)),
+            ), []
+        raise InvariantViolation("INCONSISTENT_STATE", "Accepted proposal has no Belief")
+
+    if status == "rejected":
+        raise InvariantViolation(
+            "PROPOSAL_REJECTED",
+            "ProposedBelief was already rejected",
+        )
+
+    if status != "pending":
+        raise InvariantViolation(
+            "INVALID_STATUS",
+            f"ProposedBelief has status {status!r}, expected 'pending'",
+        )
+
+    now = datetime.now(UTC)
+    belief_id = uuid.uuid4()
+
+    # Use existing ACCEPT_PROPOSED_BELIEF query
+    accept_result = await store.execute_write(
+        q.ACCEPT_PROPOSED_BELIEF,
+        {
+            "proposed_belief_id": proposal_id,
+            "silo_id": silo_id,
+            "accepted_at": now.isoformat(),
+            "belief_id": str(belief_id),
+            "override_confidence": override_confidence,
+        },
+    )
+
+    if not accept_result:
+        raise InvariantViolation("ACCEPT_FAILED", "Failed to accept proposal")
+
+    final_confidence = float(accept_result[0].get("confidence", row.get("confidence", 0.8)))
+
+    # Store acceptance metadata
+    if reason:
+        await store.execute_write(
+            """
+            MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})
+            SET b.acceptance_reason = $reason, b.accepted_by = $agent_id
+            """,
+            {
+                "belief_id": str(belief_id),
+                "silo_id": silo_id,
+                "reason": reason,
+                "agent_id": agent_id,
+            },
+        )
+
+    result = AcceptProposalResult(
+        belief_id=belief_id,
+        proposal_id=uuid.UUID(proposal_id),
+        accepted=True,
+        accepted_at=now,
+        confidence=final_confidence,
+    )
+
+    events: list[ReactionEvent] = [
+        ReactionEvent(
+            event_type=ReactionEventType.COMPUTE_EMBEDDING,
+            node_id=str(belief_id),
+            silo_id=silo_id,
+        ),
+        ReactionEvent(
+            event_type=ReactionEventType.UPDATE_HEAT,
+            node_id=str(belief_id),
+            silo_id=silo_id,
+            payload={"access_type": "ACCEPT"},
+        ),
+        ReactionEvent(
+            event_type=ReactionEventType.PROPAGATE_CONFIDENCE,
+            node_id=str(belief_id),
+            silo_id=silo_id,
+        ),
+    ]
+
+    if emit:
+        for event in events:
+            await emit_reaction(event)
+
+    logger.debug(
+        "accept_proposal_complete",
+        belief_id=str(belief_id),
+        proposal_id=proposal_id,
+        silo_id=silo_id,
+        agent_id=agent_id,
     )
 
     return result, events

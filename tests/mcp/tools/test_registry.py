@@ -15,9 +15,11 @@ def test_config_has_all_expected_tools():
     expected = {
         "remember",
         "learn",
-        "believe",
+        "decide",
+        "accept",
         "recall",
         "trace",
+        "history",
         "link",
         "reason",
         "reflect",

@@ -69,6 +69,10 @@ def _project_node_without_content(
         "tier": node.get("tier", "COLD"),
         "relevance_score": node.get("relevance_score"),
     }
+    if node.get("status") is not None:
+        projected["status"] = node["status"]
+    if node.get("type") == "ProposedBelief" and "status" not in projected:
+        projected["status"] = "pending"
     if include_expandable:
         projected["expandable"] = True
     if "steps" in node:

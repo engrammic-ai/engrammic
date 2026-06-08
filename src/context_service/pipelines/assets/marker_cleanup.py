@@ -2,6 +2,7 @@
 
 import asyncio
 import concurrent.futures
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -44,6 +45,7 @@ def marker_cleanup_asset(
     then delete from graph, then remove stale entries from the Redis marker index.
     """
     silo_id: str = context.partition_key
+    t0 = time.monotonic()
 
     async def _run() -> tuple[int, int]:
         from context_service.db.queries import DELETE_EXPIRED_MARKERS_ATOMIC
@@ -86,13 +88,19 @@ def marker_cleanup_asset(
         return deleted_contradictions, deleted_stale_commitments
 
     deleted_contradictions, deleted_stale_commitments = _run_async(_run())
+    duration_s = time.monotonic() - t0
     total_deleted = deleted_contradictions + deleted_stale_commitments
+    skipped_no_work = total_deleted == 0
 
-    context.log.info(
-        f"marker_cleanup: silo={silo_id} "
-        f"contradictions={deleted_contradictions} "
-        f"stale_commitments={deleted_stale_commitments}"
-    )
+    if skipped_no_work:
+        context.log.info(f"silo={silo_id} skipped_no_work duration={duration_s:.2f}s")
+    else:
+        context.log.info(
+            f"silo={silo_id} "
+            f"contradictions={deleted_contradictions} "
+            f"stale_commitments={deleted_stale_commitments} "
+            f"duration={duration_s:.2f}s"
+        )
 
     return dg.Output(
         value={
@@ -100,12 +108,15 @@ def marker_cleanup_asset(
             "deleted_contradictions": deleted_contradictions,
             "deleted_stale_commitments": deleted_stale_commitments,
             "total_deleted": total_deleted,
+            "duration_s": duration_s,
+            "skipped_no_work": skipped_no_work,
         },
         metadata={
-            "deleted_contradictions": deleted_contradictions,
-            "deleted_stale_commitments": deleted_stale_commitments,
-            "total_deleted": total_deleted,
-            "markers_expired_contradictions": deleted_contradictions,
-            "markers_expired_stale_commitments": deleted_stale_commitments,
+            "silo_id": dg.MetadataValue.text(silo_id),
+            "deleted_contradictions": dg.MetadataValue.int(deleted_contradictions),
+            "deleted_stale_commitments": dg.MetadataValue.int(deleted_stale_commitments),
+            "total_deleted": dg.MetadataValue.int(total_deleted),
+            "duration_s": dg.MetadataValue.float(duration_s),
+            "skipped_no_work": dg.MetadataValue.bool(skipped_no_work),
         },
     )

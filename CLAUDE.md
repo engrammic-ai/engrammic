@@ -63,13 +63,14 @@ just dagster-web   # Dagster UI (SAGE jobs: custodian / synthesizer / groundskee
 
 ## MCP tool surface
 
-Source of truth: `src/context_service/config/mcp_tools.yaml`. Names and descriptions are config, not code. The surface is intent/verb-based. The old `context_*` names are not the agent surface; do not reference them.
+Source of truth: `src/context_service/config/mcp_tools.yaml`. Names and descriptions are config, not code. The surface is intent/verb-based.
 
 | Tool | Maps to |
 |------|---------|
 | `remember` | memory (observation, no evidence) |
 | `learn` | knowledge (claim, evidence required) |
-| `believe` | wisdom (commitment, requires `about` nodes) |
+| `decide` | commitment (agent decision, requires about nodes) |
+| `accept` | promote ProposedBelief to Belief |
 | `recall` | retrieval (query or node_id) |
 | `trace` | provenance (where did this come from?) |
 | `history` | versioning (how did this evolve?) |
@@ -81,24 +82,39 @@ Source of truth: `src/context_service/config/mcp_tools.yaml`. Names and descript
 | `commit` | crystallize hypotheses |
 | `forget` | request node deletion |
 | `patterns` | skills / workflow templates |
-| `dismiss` | dismiss engagement marker |
+| `dismiss` | dismiss marker or reject ProposedBelief |
 | `tick` | acknowledge engagement without action |
 
 ## Belief architecture
 
-Two separate flows:
+Two Wisdom subtypes with different trust models:
 
-**Agent reasoning (Intelligence layer):**
+**Commitments (agent decisions):**
+- Created via `decide` (direct) or `commit` (from hypotheses)
+- Agent-scoped trust: "this agent decided"
+- No synthesis chain required
+
+**Beliefs (system-synthesized):**
+- Created by SAGE synthesizer as ProposedBelief
+- Require agent `accept` to promote to full Belief
+- System-scoped trust: "corroborated from facts"
+- Full provenance chain (SYNTHESIZED_FROM edges to Facts)
+- Use `dismiss` to reject
+
+**Formation flows:**
 ```
-WorkingHypothesis -> crystallize -> Commitment (Wisdom)
+Agent observes    -> remember()     -> Memory (decays)
+Agent claims      -> learn()        -> Claim (Knowledge)
+System verifies   -> [custodian]    -> Fact (Knowledge, promoted)
+System clusters   -> [custodian]    -> Cluster reaches threshold
+System synthesizes-> [synthesizer]  -> ProposedBelief (pending)
+Agent reviews     -> accept/dismiss -> Belief (Wisdom) or rejected
+Agent decides     -> decide()       -> Commitment (Wisdom)
+Agent reasons     -> hypothesize()  -> WorkingHypothesis (Intelligence)
+Agent crystallizes-> commit()       -> Commitment (from hypothesis)
 ```
 
-**System synthesis (Wisdom layer):**
-```
-sage.synthesizer weak synthesis -> ProposedBelief -> accept/reject -> Belief
-```
-
-Agent-facing verbs: `hypothesize` then `commit`. ProposedBelief acceptance/rejection is handled internally by SAGE, not via agent-facing MCP tools.
+Agent-facing verbs: `decide` for direct decisions, `hypothesize` then `commit` for reasoning, `accept` to approve SAGE synthesis.
 
 ## Memory (Engrammic MCP)
 
@@ -108,7 +124,7 @@ Agent-facing verbs: `hypothesize` then `commit`. ProposedBelief acceptance/rejec
 - User preferences or corrections → `remember`
 - Codebase discoveries with file evidence → `learn`
 - Bug fixes (what was wrong, why, how fixed) → `learn`
-- Decisions or conclusions from multiple facts → `believe`
+- Decisions or conclusions from multiple facts → `decide`
 - Changed understanding or mistakes → `reflect`
 
 **Always `recall` before storing** — supersede existing nodes, don't duplicate.
@@ -121,7 +137,7 @@ Agent-facing verbs: `hypothesize` then `commit`. ProposedBelief acceptance/rejec
 |-------|------|-----------|
 | Memory (`remember`) | Raw observation, preference | No |
 | Knowledge (`learn`) | Verifiable claim, discovery | Yes (file://, https://) |
-| Wisdom (`believe`) | Conclusion from facts | Links to supporting nodes |
+| Wisdom (`decide`) | Conclusion from facts | Links to supporting nodes |
 | Meta (`reflect`) | Understanding changed | Links to affected nodes |
 
 ### Quick heuristics

@@ -196,12 +196,16 @@ def edge_heat_asset(
 
     edges_updated, events_consumed, final_cursor = _run_async(_run())
     duration_s = time.monotonic() - t0
+    skipped = edges_updated == 0 and events_consumed == 0
 
-    context.log.info(
-        f"silo={silo_id} edges_updated={edges_updated} "
-        f"events_consumed={events_consumed} cursor={final_cursor} "
-        f"duration={duration_s:.2f}s"
-    )
+    if skipped:
+        context.log.info(f"silo={silo_id} skipped_no_work duration={duration_s:.2f}s")
+    else:
+        context.log.info(
+            f"silo={silo_id} edges_updated={edges_updated} "
+            f"events_consumed={events_consumed} cursor={final_cursor} "
+            f"duration={duration_s:.2f}s"
+        )
 
     return dg.Output(
         value={
@@ -210,6 +214,7 @@ def edge_heat_asset(
             "events_consumed": events_consumed,
             "final_cursor": final_cursor,
             "duration_s": duration_s,
+            "skipped_no_work": skipped,
         },
         metadata={
             "silo_id": dg.MetadataValue.text(silo_id),
@@ -217,6 +222,7 @@ def edge_heat_asset(
             "events_consumed": dg.MetadataValue.int(events_consumed),
             "final_cursor": dg.MetadataValue.text(final_cursor),
             "duration_s": dg.MetadataValue.float(duration_s),
+            "skipped_no_work": dg.MetadataValue.bool(skipped),
         },
     )
 
