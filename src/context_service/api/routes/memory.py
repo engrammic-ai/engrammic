@@ -45,10 +45,10 @@ class RecallRequest(BaseModel):
 
 class RecallResultItem(BaseModel):
     node_id: str
-    content: str
-    layer: str
-    confidence: float
-    relevance_score: float
+    content: str | None = None
+    layer: str | None = None
+    confidence: float | None = None
+    relevance_score: float | None = None
     tags: list[str] = Field(default_factory=list)
     created_at: str | None = None
     summary: str | None = None
