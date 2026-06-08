@@ -96,7 +96,9 @@ class QueryExpander:
                     data = json.loads(content)
                     return str(data.get("expanded", query))
                 except (json.JSONDecodeError, TypeError) as e:
-                    logger.warning("query_expansion_json_parse_failed", error=str(e), content=content[:100])
+                    logger.warning(
+                        "query_expansion_json_parse_failed", error=str(e), content=content[:100]
+                    )
                     raise
             except Exception as e:
                 last_error = e

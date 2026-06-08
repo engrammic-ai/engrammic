@@ -213,7 +213,9 @@ def build_google_genai_provider(model: str) -> GoogleGenAIProvider:
             timeout=settings.llm.default_timeout_seconds,
         )
 
-    project = settings.models.vertex_project or settings.vertex_project or settings.vertex_project_id
+    project = (
+        settings.models.vertex_project or settings.vertex_project or settings.vertex_project_id
+    )
     location = settings.models.vertex_location or "us-central1"
 
     if project:
