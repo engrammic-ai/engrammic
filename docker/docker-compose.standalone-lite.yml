@@ -131,6 +131,8 @@ services:
     container_name: engrammic-tei
     ports:
       - "8081:8080"
+    volumes:
+      - tei-models:/data
     command: ["--model-id", "nomic-ai/nomic-embed-text-v1.5"]
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8080' 2>/dev/null"]
@@ -220,6 +222,7 @@ services:
 
 volumes:
   ollama-models:
+  tei-models:
   memgraph-data:
   qdrant-data:
   redis-data:
