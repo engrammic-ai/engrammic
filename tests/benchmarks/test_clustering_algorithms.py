@@ -62,8 +62,12 @@ def compute_stability(runs: list[dict[str, int]]) -> float:
 
 @pytest.fixture(scope="module")
 async def memgraph() -> MemgraphClient:
-    driver = await create_memgraph_driver()
-    client = MemgraphClient(driver)
+    try:
+        driver = await create_memgraph_driver()
+        client = MemgraphClient(driver)
+        await client.execute_query("RETURN 1", {})
+    except Exception as e:
+        pytest.skip(f"Memgraph not available: {e}")
     yield client
     await driver.close()
 

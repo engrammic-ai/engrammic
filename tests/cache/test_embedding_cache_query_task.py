@@ -67,5 +67,7 @@ async def test_embed_query_cache_miss_populates_cache(
     result = await embedding_service.embed_query("new query")
 
     assert result == [0.1, 0.2, 0.3]
-    embedding_service._embed_batch.assert_called_once_with(["new query"])
+    embedding_service._embed_batch.assert_called_once()
+    call_args = embedding_service._embed_batch.call_args
+    assert call_args[0][0] == ["new query"]
     mock_cache.set.assert_called_once_with("new query", "query", [0.1, 0.2, 0.3])

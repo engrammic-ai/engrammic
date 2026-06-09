@@ -90,7 +90,7 @@ class TestSemanticRerankCache:
         mock_client.get_collections = AsyncMock(
             return_value=MagicMock(collections=[MagicMock(name=RERANK_CACHE_COLLECTION)])
         )
-        mock_client.search = AsyncMock(return_value=[])
+        mock_client.query_points = AsyncMock(return_value=MagicMock(points=[]))
         cache._qdrant._get_client = AsyncMock(return_value=mock_client)
 
         # Different query should miss L1
@@ -119,7 +119,7 @@ class TestSemanticRerankCache:
         mock_client.get_collections = AsyncMock(
             return_value=MagicMock(collections=[MagicMock(name=RERANK_CACHE_COLLECTION)])
         )
-        mock_client.search = AsyncMock(return_value=[mock_result])
+        mock_client.query_points = AsyncMock(return_value=MagicMock(points=[mock_result]))
         mock_qdrant._get_client = AsyncMock(return_value=mock_client)
 
         with patch("context_service.cache.rerank_cache.record_cache_hit") as mock_hit:
@@ -148,7 +148,7 @@ class TestSemanticRerankCache:
         mock_client.get_collections = AsyncMock(
             return_value=MagicMock(collections=[MagicMock(name=RERANK_CACHE_COLLECTION)])
         )
-        mock_client.search = AsyncMock(return_value=[mock_result])
+        mock_client.query_points = AsyncMock(return_value=MagicMock(points=[mock_result]))
         mock_qdrant._get_client = AsyncMock(return_value=mock_client)
 
         with patch("context_service.cache.rerank_cache.record_cache_miss") as mock_miss:
@@ -199,7 +199,7 @@ class TestSemanticRerankCache:
         mock_client.get_collections = AsyncMock(
             return_value=MagicMock(collections=[MagicMock(name=RERANK_CACHE_COLLECTION)])
         )
-        mock_client.search = AsyncMock(return_value=[])
+        mock_client.query_points = AsyncMock(return_value=MagicMock(points=[]))
         cache._qdrant._get_client = AsyncMock(return_value=mock_client)
 
         result = await cache.get(query, embedding, ["doc1", "doc3"], "silo1")
@@ -216,7 +216,7 @@ class TestSemanticRerankCache:
         )
         mock_client.create_collection = AsyncMock()
         mock_client.create_payload_index = AsyncMock()
-        mock_client.search = AsyncMock(return_value=[])
+        mock_client.query_points = AsyncMock(return_value=MagicMock(points=[]))
         mock_qdrant._get_client = AsyncMock(return_value=mock_client)
 
         await cache.get("query", [0.1] * 768, ["doc1"], "silo1")

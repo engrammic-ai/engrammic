@@ -6,6 +6,9 @@ import sys
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+
+pytest.importorskip("workos")
+
 from pydantic import SecretStr
 
 from context_service.auth.org_provisioning import (
