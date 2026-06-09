@@ -21,10 +21,10 @@ services:
       - LICENSE_VALIDATION_ENABLED=true
       - EMBEDDING_PROVIDER=tei
       - TEI_URL=http://tei:8080
-      - EMBEDDING_DIMENSIONS=384
+      - EMBEDDING_DIMENSIONS=768
       - LLM_PROVIDER=ollama
       - OLLAMA_BASE_URL=http://ollama:11434
-      - DEFAULT_LLM_MODEL=phi4-mini
+      - DEFAULT_LLM_MODEL=gemma4:e4b
       - MODELS__TIER=standalone_lite
     depends_on:
       memgraph:
@@ -68,10 +68,10 @@ services:
       - POSTGRES_DATABASE=engrammic
       - EMBEDDING_PROVIDER=tei
       - TEI_URL=http://tei:8080
-      - EMBEDDING_DIMENSIONS=384
+      - EMBEDDING_DIMENSIONS=768
       - LLM_PROVIDER=ollama
       - OLLAMA_BASE_URL=http://ollama:11434
-      - DEFAULT_LLM_MODEL=phi4-mini
+      - DEFAULT_LLM_MODEL=gemma4:e4b
       - MODELS__TIER=standalone_lite
     depends_on:
       memgraph:
@@ -106,8 +106,8 @@ services:
     volumes:
       - ollama-models:/root/.ollama
     environment:
-      - OLLAMA_MODEL=phi4-mini
-    entrypoint: ["/bin/sh", "-c", "ollama serve & until bash -c 'echo > /dev/tcp/localhost/11434' 2>/dev/null; do sleep 1; done && ollama pull phi4-mini && wait"]
+      - OLLAMA_MODEL=gemma4:e4b
+    entrypoint: ["/bin/sh", "-c", "ollama serve & until bash -c 'echo > /dev/tcp/localhost/11434' 2>/dev/null; do sleep 1; done && ollama pull gemma4:e4b && wait"]
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/11434' 2>/dev/null"]
       interval: 30s
@@ -131,7 +131,7 @@ services:
     container_name: engrammic-tei
     ports:
       - "8081:8080"
-    command: ["--model-id", "sentence-transformers/all-MiniLM-L6-v2"]
+    command: ["--model-id", "nomic-ai/nomic-embed-text-v1.5"]
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8080' 2>/dev/null"]
       interval: 30s
