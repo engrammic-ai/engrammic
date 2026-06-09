@@ -207,18 +207,22 @@ docker compose -f docker/docker-compose.standalone-pro.yml config
 
 ## Task Breakdown (context-service only)
 
-| # | Task | File(s) | Est |
-|---|------|---------|-----|
-| 1 | Fix lite LLM model | docker-compose.standalone-lite.yml | 15m |
-| 2 | Standardize env file refs | standalone-standard.yml, standalone-pro.yml | 15m |
-| 3 | Create missing env examples | standalone-{standard,pro}.env.example | 10m |
-| 4 | Sync models.yaml lite tier | config/models.yaml | 10m |
-| 5 | Update RAM comments | all 3 compose files | 5m |
-| 6 | Add bundle workflow job | .github/workflows/publish-selfhosted.yml | 45m |
-| 7 | Validate compose files | - | 10m |
-| 8 | Test lite tier | - | 30m |
+| # | Task | File(s) | Status |
+|---|------|---------|--------|
+| 1 | Fix lite LLM model | docker-compose.standalone-lite.yml | Done |
+| 2 | Standardize env file refs | standalone-standard.yml, standalone-pro.yml | Done |
+| 3 | Create missing env examples | standalone-{standard,pro}.env.example | Done |
+| 4 | Sync models.yaml lite tier | config/models.yaml | Done |
+| 5 | Update RAM comments | all 3 compose files | Done |
+| 6 | Add bundle workflow job | .github/workflows/publish-selfhosted.yml | Done |
+| 7 | Validate compose files | - | Done |
+| 8 | Test lite tier | - | Deferred (needs hardware) |
 
-**Total (context-service):** ~2.5 hours
+## Completed 2026-06-09
+
+- context-service: commit 69829554
+- mcp-client: commit 9d2ad38
+- web: commit 7bdf80d
 
 ---
 
