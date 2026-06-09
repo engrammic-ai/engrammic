@@ -132,3 +132,77 @@ jobs:
           VERSION=${{ needs.build-selfhosted-api.outputs.version }}
           docker pull ${{ env.REGISTRY }}/engrammic-api:v${VERSION}
           docker pull ${{ env.REGISTRY }}/engrammic-dagster:v${VERSION}
+
+  create-standalone-bundles:
+    needs: [build-selfhosted-api, build-selfhosted-dagster]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create bundles
+        run: |
+          VERSION=${{ needs.build-selfhosted-api.outputs.version }}
+
+          for tier in lite standard pro; do
+            mkdir -p standalone-${tier}
+
+            # Copy compose file as docker-compose.yml
+            cp docker/docker-compose.standalone-${tier}.yml standalone-${tier}/docker-compose.yml
+
+            # Copy env example
+            cp docker/standalone-${tier}.env.example standalone-${tier}/.env.example
+
+            # Generate README
+            cat > standalone-${tier}/README.md << EOF
+          # Engrammic Standalone (${tier})
+
+          Version: ${VERSION}
+
+          ## Quick Start
+
+          1. Copy .env.example to .env and add your license key:
+             \`\`\`bash
+             cp .env.example .env
+             # Edit .env with your ENGRAMMIC_LICENSE_KEY
+             \`\`\`
+
+          2. Start the services:
+             \`\`\`bash
+             docker compose up -d
+             \`\`\`
+
+          3. Wait for models to download (first run only, check logs):
+             \`\`\`bash
+             docker compose logs -f ollama
+             \`\`\`
+
+          4. Verify health:
+             \`\`\`bash
+             curl http://localhost:8000/health
+             \`\`\`
+
+          ## Documentation
+
+          See https://docs.engrammic.ai/selfhosted for full documentation.
+          EOF
+
+            tar -czf standalone-${tier}-v${VERSION}.tar.gz standalone-${tier}
+          done
+
+      - name: Upload bundles to release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            standalone-lite-v*.tar.gz
+            standalone-standard-v*.tar.gz
+            standalone-pro-v*.tar.gz
+
+      - name: Upload bundles as artifacts (for workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: standalone-bundles
+          path: standalone-*-v*.tar.gz

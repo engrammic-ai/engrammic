@@ -126,12 +126,12 @@ tiers:
       model: Qwen/Qwen3-7B  # HumanEval leader in 7B class
 
   # Standalone lite - minimal footprint for laptops
-  # Requires: Ollama (phi4-mini), TEI (MiniLM), 8GB+ RAM
+  # Requires: Ollama (phi4-mini), TEI (nomic-embed), 8GB+ RAM
   standalone_lite:
     embeddings:
       provider: tei
-      model: sentence-transformers/all-MiniLM-L6-v2
-      dimensions: 384
+      model: nomic-ai/nomic-embed-text-v1.5
+      dimensions: 768
     reasoning:
       provider: ollama
       model: phi4-mini
@@ -140,7 +140,7 @@ tiers:
       model: phi4-mini
 
   # Standalone standard - balanced offline deployment
-  # Requires: Ollama (gemma4:12b), TEI (nomic-embed + bge-reranker), 32GB+ RAM
+  # Requires: Ollama (gemma4:12b), TEI (nomic-embed + bge-reranker), 24-32GB RAM
   standalone_standard:
     embeddings:
       provider: tei
@@ -158,7 +158,7 @@ tiers:
       url: http://tei-reranker:8080
 
   # Standalone pro - high-quality offline deployment
-  # Requires: Ollama (gemma4:26b + gemma4:12b), TEI (nomic-embed + jina-reranker), 64GB+ RAM
+  # Requires: Ollama (gemma4:26b), TEI (nomic-embed + jina-reranker), 48-64GB RAM
   standalone_pro:
     embeddings:
       provider: tei

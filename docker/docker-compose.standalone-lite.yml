@@ -24,7 +24,7 @@ services:
       - EMBEDDING_DIMENSIONS=768
       - LLM_PROVIDER=ollama
       - OLLAMA_BASE_URL=http://ollama:11434
-      - DEFAULT_LLM_MODEL=gemma4:e4b
+      - DEFAULT_LLM_MODEL=phi4-mini
       - MODELS__TIER=standalone_lite
     depends_on:
       memgraph:
@@ -71,7 +71,7 @@ services:
       - EMBEDDING_DIMENSIONS=768
       - LLM_PROVIDER=ollama
       - OLLAMA_BASE_URL=http://ollama:11434
-      - DEFAULT_LLM_MODEL=gemma4:e4b
+      - DEFAULT_LLM_MODEL=phi4-mini
       - MODELS__TIER=standalone_lite
     depends_on:
       memgraph:
@@ -106,8 +106,8 @@ services:
     volumes:
       - ollama-models:/root/.ollama
     environment:
-      - OLLAMA_MODEL=gemma4:e4b
-    entrypoint: ["/bin/sh", "-c", "ollama serve & until bash -c 'echo > /dev/tcp/localhost/11434' 2>/dev/null; do sleep 1; done && ollama pull gemma4:e4b && wait"]
+      - OLLAMA_MODEL=phi4-mini
+    entrypoint: ["/bin/sh", "-c", "ollama serve & until bash -c 'echo > /dev/tcp/localhost/11434' 2>/dev/null; do sleep 1; done && ollama pull phi4-mini && wait"]
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/11434' 2>/dev/null"]
       interval: 30s

@@ -1,5 +1,5 @@
 # docker/docker-compose.standalone-standard.yml
-# Engrammic Standalone Standard - 32GB RAM recommended
+# Engrammic Standalone Standard - 24GB RAM minimum, 32GB recommended
 # Includes: Ollama (gemma4:12b), TEI embeddings, TEI reranker
 
 services:
@@ -9,7 +9,7 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - standalone.env
+      - standalone-standard.env
     environment:
       - ENVIRONMENT=standalone
       - MEMGRAPH_HOST=memgraph
@@ -60,7 +60,7 @@ services:
     ports:
       - "3000:3000"
     env_file:
-      - standalone.env
+      - standalone-standard.env
     environment:
       - ENVIRONMENT=standalone
       - MEMGRAPH_HOST=memgraph
@@ -89,6 +89,8 @@ services:
       ollama:
         condition: service_healthy
       tei:
+        condition: service_healthy
+      tei-reranker:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3000/server_info')"]

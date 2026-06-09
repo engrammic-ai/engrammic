@@ -1,5 +1,5 @@
 # docker/docker-compose.standalone-pro.yml
-# Engrammic Standalone Pro - 64GB RAM recommended
+# Engrammic Standalone Pro - 48GB RAM minimum, 64GB recommended
 # Includes: Ollama (gemma4:26b), TEI embeddings, Jina reranker
 
 services:
@@ -9,7 +9,7 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - standalone.env
+      - standalone-pro.env
     environment:
       - ENVIRONMENT=standalone
       - MEMGRAPH_HOST=memgraph
@@ -60,7 +60,7 @@ services:
     ports:
       - "3000:3000"
     env_file:
-      - standalone.env
+      - standalone-pro.env
     environment:
       - ENVIRONMENT=standalone
       - MEMGRAPH_HOST=memgraph

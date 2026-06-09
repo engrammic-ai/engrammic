@@ -82,8 +82,8 @@ impl Tier {
     pub fn ram_requirement(&self) -> &'static str {
         match self {
             Tier::Lite => "8GB",
-            Tier::Standard => "16GB", 
-            Tier::Pro => "32GB+",
+            Tier::Standard => "24-32GB", 
+            Tier::Pro => "48-64GB",
         }
     }
     

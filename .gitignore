@@ -57,6 +57,8 @@ Thumbs.db
 .env.*.local
 *.local
 .env.beta
+docker/*.env
+!docker/*.env.example
 
 
 # UV
