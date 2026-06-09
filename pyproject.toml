@@ -77,6 +77,8 @@ dev = [
     "mypy>=1.10",
     "types-pyyaml>=6.0.12.20260408",
     "types-cachetools>=7.0.0.20260518",
+    "cython>=3.2.5",
+    "setuptools>=81.0.0",
 ]
 # Cloud provider SDKs (optional)
 embeddings = ["google-cloud-aiplatform>=1.50"]
