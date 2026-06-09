@@ -66,6 +66,29 @@ class HealthResponse(BaseModel):
     sage_mode: Literal["active", "passive"] = "passive"
     memory: dict[str, MemoryUsage] | None = None
     recent_restarts: list[str] = Field(default_factory=list)
+    reranker: Literal["disabled", "configured", "unavailable"] | None = None
+
+
+async def _get_reranker_status() -> Literal["disabled", "configured", "unavailable"]:
+    """Get reranker availability status.
+
+    Returns:
+        "disabled" - No reranker configured (lite tier)
+        "configured" - Reranker is configured (doesn't probe, just reports config)
+        "unavailable" - Reranker configured but config invalid
+    """
+    from context_service.config.models import load_models_config
+    from context_service.reranking import get_reranker
+
+    try:
+        config = load_models_config()
+        reranker = get_reranker(config)
+
+        if reranker is None:
+            return "disabled"
+        return "configured"
+    except Exception:
+        return "unavailable"
 
 
 async def _timed_check(coro: Awaitable[bool]) -> tuple[bool, float]:
@@ -109,6 +132,7 @@ async def health_check(
                 qdrant="disconnected",
                 postgres="disconnected",
             ),
+            reranker=await _get_reranker_status(),
         )
 
     if detail:
@@ -162,6 +186,7 @@ async def health_check(
         ),
         license=license_status,
         sage_mode=sage_mode,
+        reranker=await _get_reranker_status(),
     )
 
     if detail:
