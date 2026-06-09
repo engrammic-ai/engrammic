@@ -88,7 +88,19 @@ class PostgresResource(dg.ConfigurableResource):  # type: ignore[type-arg]
             return await _asyncpg.create_pool(self.database_url)
 
         if self._pool is None:
-            self._pool = asyncio.run(_create())
+            # Handle both sync and async contexts
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+            if loop is None:
+                self._pool = asyncio.run(_create())
+            else:
+                # Already in async context - run in thread to avoid nested run()
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    f = pool.submit(lambda: asyncio.run(_create()))
+                    self._pool = f.result(timeout=30)
 
         try:
             yield self._pool
