@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from context_service.config.models import ModelSpec, ModelsConfig, TierConfig
+from context_service.config.models import ModelsConfig, ModelSpec, TierConfig
 
 
 def _make_tier(**kwargs: object) -> TierConfig:
