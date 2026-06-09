@@ -557,46 +557,32 @@ name = "context-service"
 version = "0.1.0.dev0"
 source = { editable = "." }
 dependencies = [
-    { name = "alembic" },
-    { name = "asyncpg" },
-    { name = "batched" },
     { name = "cachetools" },
-    { name = "dagster" },
-    { name = "dagster-postgres" },
-    { name = "dagster-webserver" },
-    { name = "dtaidistance" },
     { name = "engrammic-primitives" },
-    { name = "fastapi" },
-    { name = "fastmcp" },
-    { name = "google-genai" },
     { name = "httpx" },
-    { name = "json-repair" },
-    { name = "litellm" },
-    { name = "neo4j" },
-    { name = "numpy" },
     { name = "orjson" },
-    { name = "prometheus-client" },
     { name = "pydantic" },
-    { name = "pydantic-ai", version = "1.94.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.15'" },
-    { name = "pydantic-ai", version = "1.106.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.15'" },
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
-    { name = "qdrant-client" },
-    { name = "redis" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "structlog" },
-    { name = "taskiq" },
-    { name = "taskiq-redis" },
     { name = "tenacity" },
-    { name = "uvicorn", extra = ["standard"] },
-    { name = "watchfiles" },
 ]
 
 [package.dev-dependencies]
+api = [
+    { name = "fastapi" },
+    { name = "prometheus-client" },
+    { name = "uvicorn", extra = ["standard"] },
+    { name = "watchfiles" },
+]
 auth = [
     { name = "google-cloud-secret-manager" },
     { name = "workos" },
+]
+custodian = [
+    { name = "pydantic-ai", version = "1.94.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.15'" },
+    { name = "pydantic-ai", version = "1.106.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.15'" },
 ]
 dev = [
     { name = "mypy" },
@@ -610,11 +596,43 @@ dev = [
 embeddings = [
     { name = "google-cloud-aiplatform" },
 ]
+graph = [
+    { name = "neo4j" },
+    { name = "qdrant-client" },
+]
 llm = [
     { name = "anthropic" },
     { name = "google-cloud-aiplatform" },
     { name = "google-generativeai" },
     { name = "openai" },
+]
+llm-core = [
+    { name = "batched" },
+    { name = "google-genai" },
+    { name = "json-repair" },
+    { name = "litellm" },
+]
+mcp = [
+    { name = "fastmcp" },
+]
+numeric = [
+    { name = "dtaidistance" },
+    { name = "numpy" },
+]
+pipelines = [
+    { name = "dagster" },
+    { name = "dagster-postgres" },
+    { name = "dagster-webserver" },
+]
+postgres = [
+    { name = "alembic" },
+    { name = "asyncpg" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+]
+redis = [
+    { name = "redis" },
+    { name = "taskiq" },
+    { name = "taskiq-redis" },
 ]
 splade = [
     { name = "torch" },
@@ -623,46 +641,30 @@ splade = [
 
 [package.metadata]
 requires-dist = [
-    { name = "alembic", specifier = ">=1.13" },
-    { name = "asyncpg", specifier = ">=0.29" },
-    { name = "batched", specifier = ">=0.1.5" },
     { name = "cachetools", specifier = ">=5.3" },
-    { name = "dagster", specifier = ">=1.7" },
-    { name = "dagster-postgres", specifier = ">=0.23" },
-    { name = "dagster-webserver", specifier = ">=1.7" },
-    { name = "dtaidistance", specifier = ">=2.3.0" },
     { name = "engrammic-primitives" },
-    { name = "fastapi", specifier = ">=0.111" },
-    { name = "fastmcp", specifier = ">=2.0" },
-    { name = "google-genai", specifier = ">=1.75.0" },
     { name = "httpx", specifier = ">=0.27" },
-    { name = "json-repair", specifier = ">=0.28" },
-    { name = "litellm", specifier = ">=1.40" },
-    { name = "neo4j", specifier = ">=5.19" },
-    { name = "numpy", specifier = ">=1.26" },
     { name = "orjson", specifier = ">=3.9" },
-    { name = "prometheus-client", specifier = ">=0.20" },
     { name = "pydantic", specifier = ">=2.7" },
-    { name = "pydantic-ai", specifier = ">=0.0.14" },
     { name = "pydantic-settings", specifier = ">=2.2" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "qdrant-client", specifier = ">=1.9" },
-    { name = "redis", specifier = ">=5.0" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
     { name = "structlog", specifier = ">=24.1" },
-    { name = "taskiq", specifier = ">=0.11" },
-    { name = "taskiq-redis", specifier = ">=1.0" },
     { name = "tenacity", specifier = ">=9.1.4" },
-    { name = "uvicorn", extras = ["standard"], specifier = ">=0.29" },
-    { name = "watchfiles", specifier = ">=1.0" },
 ]
 
 [package.metadata.requires-dev]
+api = [
+    { name = "fastapi", specifier = ">=0.111" },
+    { name = "prometheus-client", specifier = ">=0.20" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.29" },
+    { name = "watchfiles", specifier = ">=1.0" },
+]
 auth = [
     { name = "google-cloud-secret-manager", specifier = ">=2.20" },
     { name = "workos", specifier = "==6.0.8" },
 ]
+custodian = [{ name = "pydantic-ai", specifier = ">=0.0.14" }]
 dev = [
     { name = "mypy", specifier = ">=1.10" },
     { name = "pytest", specifier = ">=8.0" },
@@ -673,11 +675,41 @@ dev = [
     { name = "types-pyyaml", specifier = ">=6.0.12.20260408" },
 ]
 embeddings = [{ name = "google-cloud-aiplatform", specifier = ">=1.50" }]
+graph = [
+    { name = "neo4j", specifier = ">=5.19" },
+    { name = "qdrant-client", specifier = ">=1.9" },
+]
 llm = [
     { name = "anthropic", specifier = ">=0.25" },
     { name = "google-cloud-aiplatform", specifier = ">=1.50" },
     { name = "google-generativeai", specifier = ">=0.5" },
     { name = "openai", specifier = ">=1.30" },
+]
+llm-core = [
+    { name = "batched", specifier = ">=0.1.5" },
+    { name = "google-genai", specifier = ">=1.75.0" },
+    { name = "json-repair", specifier = ">=0.28" },
+    { name = "litellm", specifier = ">=1.40" },
+]
+mcp = [{ name = "fastmcp", specifier = ">=2.0" }]
+numeric = [
+    { name = "dtaidistance", specifier = ">=2.3.0" },
+    { name = "numpy", specifier = ">=1.26" },
+]
+pipelines = [
+    { name = "dagster", specifier = ">=1.7" },
+    { name = "dagster-postgres", specifier = ">=0.23" },
+    { name = "dagster-webserver", specifier = ">=1.7" },
+]
+postgres = [
+    { name = "alembic", specifier = ">=1.13" },
+    { name = "asyncpg", specifier = ">=0.29" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+]
+redis = [
+    { name = "redis", specifier = ">=5.0" },
+    { name = "taskiq", specifier = ">=0.11" },
+    { name = "taskiq-redis", specifier = ">=1.0" },
 ]
 splade = [
     { name = "torch", specifier = ">=2.0" },

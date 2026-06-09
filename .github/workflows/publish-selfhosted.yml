@@ -36,7 +36,6 @@ jobs:
           if [ -n "${{ inputs.version }}" ]; then
             VERSION="${{ inputs.version }}"
           else
-            # Extract from tag: refs/tags/v0.2.0 -> 0.2.0
             VERSION="${GITHUB_REF#refs/tags/v}"
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
@@ -54,22 +53,21 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and push API image
-        run: |
-          IMAGE_BASE=${{ env.REGISTRY }}/engrammic-api
-          VERSION=${{ steps.version.outputs.version }}
-          SHORT_SHA=${{ env.SHORT_SHA }}
-
-          docker build \
-            -f docker/Dockerfile.selfhosted.api \
-            -t "${IMAGE_BASE}:v${VERSION}" \
-            -t "${IMAGE_BASE}:v${VERSION}-${SHORT_SHA}" \
-            -t "${IMAGE_BASE}:latest" \
-            .
-
-          docker push "${IMAGE_BASE}:v${VERSION}"
-          docker push "${IMAGE_BASE}:v${VERSION}-${SHORT_SHA}"
-          docker push "${IMAGE_BASE}:latest"
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.selfhosted.api
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/engrammic-api:v${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/engrammic-api:v${{ steps.version.outputs.version }}-${{ env.SHORT_SHA }}
+            ${{ env.REGISTRY }}/engrammic-api:latest
+          cache-from: type=gha,scope=selfhosted-api
+          cache-to: type=gha,mode=max,scope=selfhosted-api
 
   build-selfhosted-dagster:
     runs-on: ubuntu-latest
@@ -107,22 +105,21 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build and push Dagster image
-        run: |
-          IMAGE_BASE=${{ env.REGISTRY }}/engrammic-dagster
-          VERSION=${{ steps.version.outputs.version }}
-          SHORT_SHA=${{ env.SHORT_SHA }}
-
-          docker build \
-            -f docker/Dockerfile.selfhosted.dagster \
-            -t "${IMAGE_BASE}:v${VERSION}" \
-            -t "${IMAGE_BASE}:v${VERSION}-${SHORT_SHA}" \
-            -t "${IMAGE_BASE}:latest" \
-            .
-
-          docker push "${IMAGE_BASE}:v${VERSION}"
-          docker push "${IMAGE_BASE}:v${VERSION}-${SHORT_SHA}"
-          docker push "${IMAGE_BASE}:latest"
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.selfhosted.dagster
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/engrammic-dagster:v${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/engrammic-dagster:v${{ steps.version.outputs.version }}-${{ env.SHORT_SHA }}
+            ${{ env.REGISTRY }}/engrammic-dagster:latest
+          cache-from: type=gha,scope=selfhosted-dagster
+          cache-to: type=gha,mode=max,scope=selfhosted-dagster
 
   verify:
     needs: [build-selfhosted-api, build-selfhosted-dagster]

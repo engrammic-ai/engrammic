@@ -9,13 +9,22 @@ COPY --from=ghcr.io/astral-sh/uv:0.6.14 /uv /usr/local/bin/uv
 # Copy dependency files
 COPY pyproject.toml uv.lock README.md ./
 
-# Install production dependencies
+# UV cache optimization
+ENV UV_LINK_MODE=copy
+ENV UV_COMPILE_BYTECODE=1
+
+# Install production dependencies for API (no dagster/pydantic-ai)
 # INCLUDE_SPLADE=true adds torch (~2GB) for hybrid search
 ARG INCLUDE_SPLADE=false
-RUN if [ "$INCLUDE_SPLADE" = "true" ]; then \
-      uv sync --frozen --no-dev --no-install-project --group auth --group splade; \
+RUN --mount=type=cache,target=/root/.cache/uv \
+    if [ "$INCLUDE_SPLADE" = "true" ]; then \
+      uv sync --frozen --no-dev --no-install-project \
+        --group api --group mcp --group graph --group postgres \
+        --group redis --group llm-core --group numeric --group auth --group splade; \
     else \
-      uv sync --frozen --no-dev --no-install-project --group auth; \
+      uv sync --frozen --no-dev --no-install-project \
+        --group api --group mcp --group graph --group postgres \
+        --group redis --group llm-core --group numeric --group auth; \
     fi
 
 # Stage 2: Runtime

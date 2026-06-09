@@ -9,8 +9,15 @@ COPY --from=ghcr.io/astral-sh/uv:0.6.14 /uv /usr/local/bin/uv
 # Copy dependency files
 COPY pyproject.toml uv.lock README.md ./
 
-# Install production dependencies (includes SPLADE for SAGE pipelines)
-RUN uv sync --frozen --no-dev --no-install-project --group splade
+# UV cache optimization
+ENV UV_LINK_MODE=copy
+ENV UV_COMPILE_BYTECODE=1
+
+# Install production dependencies for Dagster (includes pipelines + custodian)
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --no-install-project \
+      --group graph --group postgres --group redis --group llm-core \
+      --group numeric --group pipelines --group custodian --group splade
 
 # Copy application code
 COPY src/ /app/src/
@@ -18,7 +25,10 @@ COPY config/ /app/config/
 COPY dagster.yaml workspace.yaml ./
 
 # Install the project
-RUN uv sync --frozen --no-dev --group splade
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev \
+      --group graph --group postgres --group redis --group llm-core \
+      --group numeric --group pipelines --group custodian --group splade
 
 # Stage 2: Runtime
 FROM python:3.13-slim

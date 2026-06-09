@@ -1,9 +1,16 @@
 steps:
+  # Set up buildx for registry caching
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['buildx', 'create', '--use', '--name', 'cloudbuild']
+
+  # Build with registry caching (mode=max caches all layers including builder stage)
   - name: 'gcr.io/cloud-builders/docker'
     args:
+      - 'buildx'
       - 'build'
-      - '--cache-from=${_IMAGE}:latest'
-      - '--build-arg=BUILDKIT_INLINE_CACHE=1'
+      - '--cache-from=type=registry,ref=${_IMAGE}:buildcache'
+      - '--cache-to=type=registry,ref=${_IMAGE}:buildcache,mode=max'
+      - '--push'
       - '-f'
       - 'docker/Dockerfile.api'
       - '-t'
@@ -13,10 +20,6 @@ steps:
       - '.'
     env:
       - 'DOCKER_BUILDKIT=1'
-
-images:
-  - '${_IMAGE}:latest'
-  - '${_IMAGE}:${SHORT_SHA}'
 
 substitutions:
   _IMAGE: 'europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-api'
