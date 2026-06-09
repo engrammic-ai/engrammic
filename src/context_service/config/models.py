@@ -28,6 +28,7 @@ class ModelSpec(BaseModel):
     provider: str
     model: str
     dimensions: int | None = None
+    url: str | None = None
 
 
 class TierConfig(BaseModel):
@@ -48,7 +49,15 @@ class ModelsConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     tier: Literal[
-        "economy", "balanced", "premium", "hybrid", "self_hosted", "self_hosted_budget"
+        "economy",
+        "balanced",
+        "premium",
+        "hybrid",
+        "self_hosted",
+        "self_hosted_budget",
+        "standalone_lite",
+        "standalone_standard",
+        "standalone_pro",
     ] = "balanced"
     vertex_location: str = "us-central1"
     vertex_project: str = ""
@@ -144,6 +153,9 @@ def load_models_config() -> ModelsConfig:
         "hybrid",
         "self_hosted",
         "self_hosted_budget",
+        "standalone_lite",
+        "standalone_standard",
+        "standalone_pro",
     ):
         data["tier"] = env_tier
 
