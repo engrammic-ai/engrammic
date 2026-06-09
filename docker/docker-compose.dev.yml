@@ -82,6 +82,8 @@ services:
         condition: service_healthy
       app:
         condition: service_healthy
+    extra_hosts:
+      - "metadata.google.internal:169.254.169.254"
     restart: unless-stopped
 
   memgraph:
@@ -195,6 +197,7 @@ services:
       - POSTGRES_HOST=postgres
       - HOME=/home/dagster
       - DAGSTER_POSTGRES_DB=engrammic_dagster
+      - GOOGLE_APPLICATION_CREDENTIALS=/mnt/gcloud/application_default_credentials.json
     volumes:
       - ../src:/app/src
       - ./dagster.dev.yaml:/app/dagster.yaml:ro
@@ -205,6 +208,8 @@ services:
       - memgraph
       - qdrant
       - redis
+    extra_hosts:
+      - "metadata.google.internal:169.254.169.254"
     healthcheck:
       test: ["CMD", "dagster", "api", "grpc-health-check", "-p", "4000"]
       interval: 30s
@@ -247,6 +252,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    extra_hosts:
+      - "metadata.google.internal:169.254.169.254"
     restart: unless-stopped
 
   dagster-daemon:
@@ -285,6 +292,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    extra_hosts:
+      - "metadata.google.internal:169.254.169.254"
     restart: unless-stopped
 
   # otel-collector disabled - use docker-compose.signoz.yml for observability

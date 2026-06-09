@@ -196,8 +196,10 @@ async def _context_recall(
 
         # Create retriever with config
         retriever = FusionRetriever(ctx_svc, k=fusion_cfg.rrf_k)
-        effective_graph_depth = graph_depth if graph_depth is not None else (
-            depth if depth > 0 else fusion_cfg.default_graph_depth
+        effective_graph_depth = (
+            graph_depth
+            if graph_depth is not None
+            else (depth if depth > 0 else fusion_cfg.default_graph_depth)
         )
 
         # Run fusion

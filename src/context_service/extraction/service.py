@@ -7,7 +7,6 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from context_service.config.logging import get_logger
-from context_service.llm.pricing import compute_cost_usd
 from context_service.db import queries
 from context_service.db.queries import build_batch_entity_rel_query
 from context_service.extraction.identity import (
@@ -34,6 +33,7 @@ from context_service.extraction.prompts import (
     get_extraction_user_template,
 )
 from context_service.llm.base import truncate
+from context_service.llm.pricing import compute_cost_usd
 from context_service.llm.sanitize import escape_for_prompt
 
 if TYPE_CHECKING:

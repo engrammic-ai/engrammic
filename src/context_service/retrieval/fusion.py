@@ -132,9 +132,7 @@ class FusionRetriever:
 
         graph_result: ChannelResult
         try:
-            graph_result = await self._graph_channel(
-                seed_ids, scope, fetch_k, graph_depth, layers
-            )
+            graph_result = await self._graph_channel(seed_ids, scope, fetch_k, graph_depth, layers)
         except Exception as exc:  # pragma: no cover
             graph_result = ChannelResult(
                 channel_name="graph",
@@ -307,7 +305,7 @@ class FusionRetriever:
         return fused[:top_k]
 
 
-_RELATIVE_TIME_PATTERN = re.compile(r'^(\d+)([dwm])$')
+_RELATIVE_TIME_PATTERN = re.compile(r"^(\d+)([dwm])$")
 
 
 def _parse_relative_time(s: str, now: datetime) -> datetime:
@@ -327,11 +325,11 @@ def _parse_relative_time(s: str, now: datetime) -> datetime:
     if match:
         value = int(match.group(1))
         unit = match.group(2)
-        if unit == 'd':
+        if unit == "d":
             return now - timedelta(days=value)
-        elif unit == 'w':
+        elif unit == "w":
             return now - timedelta(weeks=value)
-        elif unit == 'm':
+        elif unit == "m":
             return now - timedelta(days=value * 30)  # approximate month
 
     # Try ISO format
