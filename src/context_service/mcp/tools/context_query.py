@@ -24,11 +24,11 @@ from context_service.mcp.server import (
 from context_service.models.mcp import Layer, QueryFilters
 from context_service.reranking import (
     RERANK_SCORE_FLOOR,
-    LiteLLMReranker,
     QueryExpander,
     apply_threshold_filter,
     compute_adaptive_threshold,
     compute_retrieval_quality,
+    get_reranker,
     is_hard_query,
 )
 from context_service.services.models import ScopeContext, derive_silo_id
@@ -147,8 +147,11 @@ async def _apply_reranking(
         return results, False, False
 
     models_config = load_models_config()
-    reranker_model = models_config.litellm_reranker_model
-    if reranker_model is None:
+    reranker = get_reranker(
+        config=models_config,
+        timeout_seconds=settings.reranking.reranker_timeout_seconds,
+    )
+    if reranker is None:
         return results, False, False
 
     node_ids = [str(r.node_id) for r in results]
@@ -178,11 +181,6 @@ async def _apply_reranking(
                 )
                 return reranked_results, False, True
 
-    reranker = LiteLLMReranker(
-        model=reranker_model,
-        timeout_seconds=settings.reranking.reranker_timeout_seconds,
-        vertex_project=settings.vertex_project,
-    )
     documents = [r.content or "" for r in results]
 
     with tracer.start_as_current_span("recall.rerank") as span:
