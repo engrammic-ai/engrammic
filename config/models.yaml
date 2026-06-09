@@ -140,18 +140,40 @@ tiers:
       model: phi4-mini
 
   # Standalone standard - balanced offline deployment
-  # Requires: Ollama (deepseek-r1:7b), TEI (nomic-embed), 32GB+ RAM
+  # Requires: Ollama (gemma4:12b), TEI (nomic-embed + bge-reranker), 32GB+ RAM
   standalone_standard:
     embeddings:
       provider: tei
-      model: nomic-ai/nomic-embed-text-v1.5
+      model: nomic-ai/nomic-embed-text-v2-moe
       dimensions: 768
     reasoning:
       provider: ollama
-      model: deepseek-r1:7b
+      model: gemma4:12b
     fast:
       provider: ollama
-      model: deepseek-r1:7b
+      model: gemma4:12b
+    reranker:
+      provider: tei
+      model: BAAI/bge-reranker-v2-m3
+      url: http://tei-reranker:8080
+
+  # Standalone pro - high-quality offline deployment
+  # Requires: Ollama (gemma4:26b + gemma4:12b), TEI (nomic-embed + jina-reranker), 64GB+ RAM
+  standalone_pro:
+    embeddings:
+      provider: tei
+      model: nomic-ai/nomic-embed-text-v2-moe
+      dimensions: 768
+    reasoning:
+      provider: ollama
+      model: gemma4:26b
+    fast:
+      provider: ollama
+      model: gemma4:12b
+    reranker:
+      provider: tei
+      model: jinaai/jina-reranker-v2-base-multilingual
+      url: http://tei-reranker:8080
 
 # Task-to-tier mapping (which tier each task uses)
 # Override individual tasks without changing the whole tier
