@@ -10,6 +10,22 @@ env:
   PROJECT_ID: engrammic
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      beacon: ${{ steps.filter.outputs.beacon }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            beacon:
+              - 'src/beacon_service/**'
+              - 'docker/Dockerfile.beacon'
+              - 'docker/Dockerfile.selfhosted.beacon'
+              - 'deploy/cloudbuild/beacon.yaml'
+
   build-api:
     runs-on: ubuntu-latest
     permissions:
@@ -37,6 +53,8 @@ jobs:
             --substitutions SHORT_SHA=${{ env.SHORT_SHA }}
 
   build-beacon:
+    needs: changes
+    if: needs.changes.outputs.beacon == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -90,6 +108,7 @@ jobs:
 
   deploy:
     needs: [build-api, build-beacon, build-dagster]
+    if: always() && needs.build-api.result == 'success' && needs.build-dagster.result == 'success' && (needs.build-beacon.result == 'success' || needs.build-beacon.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
