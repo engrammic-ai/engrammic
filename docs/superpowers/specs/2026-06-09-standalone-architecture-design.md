@@ -296,6 +296,91 @@ No migration needed. New tiers are additive. Existing selfhosted users unaffecte
 
 None — all questions resolved during design.
 
+## Review Fixes (Post Opus Review)
+
+The following issues were identified during spec review and must be addressed during implementation:
+
+### 1. Add `url` field to `ModelSpec`
+
+**File:** `src/context_service/config/models.py`
+
+```python
+class ModelSpec(BaseModel):
+    provider: str
+    model: str
+    dimensions: int | None = None
+    url: str | None = None  # NEW: TEI reranker endpoint URL
+```
+
+### 2. Add standalone tiers to `ModelsConfig.tier` Literal
+
+**File:** `src/context_service/config/models.py`
+
+```python
+tier: Literal[
+    "economy", "balanced", "premium", "hybrid", 
+    "self_hosted", "self_hosted_budget",
+    "standalone_lite", "standalone_standard", "standalone_pro",  # NEW
+] = "balanced"
+```
+
+### 3. Update compose files to 768d embeddings
+
+**Files:** `docker/docker-compose.standalone-lite.yml`, etc.
+
+Change `EMBEDDING_DIMENSIONS=384` to `EMBEDDING_DIMENSIONS=768` and update TEI model to `nomic-ai/nomic-embed-text-v1.5`.
+
+### 4. Health endpoint reranker integration
+
+**Approach:** Lazy probe on health check.
+
+```python
+# In health endpoint
+async def get_reranker_status() -> str:
+    config = load_models_config()
+    spec = config.get_reranker_model()
+    if spec is None:
+        return "disabled"
+    try:
+        # Probe TEI /health or attempt minimal rerank
+        reranker = get_reranker(config)
+        await reranker.rerank("test", ["test"], ["test-id"], top_k=1)
+        return "ready"
+    except Exception:
+        return "unavailable"
+```
+
+### 5. Factory needs settings access for vertex_project
+
+**Fix:** Factory takes `Settings` or extracts from `ModelsConfig`:
+
+```python
+def get_reranker(config: ModelsConfig, settings: Settings) -> LiteLLMReranker | TEIReranker | None:
+    spec = config.get_reranker_model()
+    if spec is None:
+        return None
+    
+    if spec.provider == "tei":
+        return TEIReranker(base_url=spec.url, model=spec.model)
+    else:
+        return LiteLLMReranker(
+            model=f"{spec.provider}/{spec.model}",
+            vertex_project=settings.vertex_project,
+        )
+```
+
+### 6. Env file contents
+
+**File:** `standalone-{lite,standard,pro}.env`
+
+```env
+# Engrammic Standalone Configuration
+ENGRAMMIC_LICENSE_KEY=ENGR_xxx
+POSTGRES_PASSWORD=engrammic
+TELEMETRY__ENABLED=false
+MODELS__TIER=standalone_standard  # or lite/pro
+```
+
 ## References
 
 - [TEI Rerank Documentation](https://huggingface.co/docs/text-embeddings-inference/en/quick_tour)
