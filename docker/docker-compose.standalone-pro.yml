@@ -1,0 +1,250 @@
+# docker/docker-compose.standalone-pro.yml
+# Engrammic Standalone Pro - 64GB RAM recommended
+# Includes: Ollama (gemma4:26b), TEI embeddings, Jina reranker
+
+services:
+  app:
+    image: europe-north1-docker.pkg.dev/engrammic/releases/engrammic-api:latest
+    container_name: engrammic-app
+    ports:
+      - "8000:8000"
+    env_file:
+      - standalone.env
+    environment:
+      - ENVIRONMENT=standalone
+      - MEMGRAPH_HOST=memgraph
+      - QDRANT_HOST=qdrant
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=engrammic
+      - POSTGRES_DATABASE=engrammic
+      - LICENSE_VALIDATION_ENABLED=true
+      - EMBEDDING_PROVIDER=tei
+      - TEI_URL=http://tei:8080
+      - EMBEDDING_DIMENSIONS=768
+      - LLM_PROVIDER=ollama
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - DEFAULT_LLM_MODEL=gemma4:26b
+      - MODELS__TIER=standalone_pro
+      - TEI_RERANKER_URL=http://tei-reranker:8080
+    depends_on:
+      memgraph:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      tei:
+        condition: service_healthy
+      tei-reranker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    restart: unless-stopped
+
+  dagster:
+    image: europe-north1-docker.pkg.dev/engrammic/releases/engrammic-dagster:latest
+    container_name: engrammic-dagster
+    ports:
+      - "3000:3000"
+    env_file:
+      - standalone.env
+    environment:
+      - ENVIRONMENT=standalone
+      - MEMGRAPH_HOST=memgraph
+      - QDRANT_HOST=qdrant
+      - REDIS_HOST=redis
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=engrammic
+      - POSTGRES_DATABASE=engrammic
+      - EMBEDDING_PROVIDER=tei
+      - TEI_URL=http://tei:8080
+      - EMBEDDING_DIMENSIONS=768
+      - LLM_PROVIDER=ollama
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - DEFAULT_LLM_MODEL=gemma4:26b
+      - MODELS__TIER=standalone_pro
+      - TEI_RERANKER_URL=http://tei-reranker:8080
+    depends_on:
+      memgraph:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      tei:
+        condition: service_healthy
+      tei-reranker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:3000/server_info')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: engrammic-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      - OLLAMA_MODEL=gemma4:26b
+    entrypoint: ["/bin/sh", "-c", "ollama serve & until bash -c 'echo > /dev/tcp/localhost/11434' 2>/dev/null; do sleep 1; done && ollama pull gemma4:26b && wait"]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/11434' 2>/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    deploy:
+      resources:
+        limits:
+          memory: 20G
+    # For GPU acceleration, uncomment:
+    #   reservations:
+    #     devices:
+    #       - driver: nvidia
+    #         count: all
+    #         capabilities: [gpu]
+    restart: unless-stopped
+
+  tei:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+    container_name: engrammic-tei
+    ports:
+      - "8081:8080"
+    command: ["--model-id", "nomic-ai/nomic-embed-text-v2-moe"]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8080' 2>/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    restart: unless-stopped
+
+  tei-reranker:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+    container_name: engrammic-tei-reranker
+    ports:
+      - "8082:8080"
+    command: ["--model-id", "jinaai/jina-reranker-v2-base-multilingual"]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8080' 2>/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    restart: unless-stopped
+
+  memgraph:
+    image: memgraph/memgraph-mage:3.10.1
+    container_name: engrammic-memgraph
+    ports:
+      - "7687:7687"
+    volumes:
+      - memgraph-data:/var/lib/memgraph
+    command: ["--log-level=WARNING", "--storage-properties-on-edges=true"]
+    healthcheck:
+      test: ["CMD-SHELL", "echo 'RETURN 1;' | mgconsole || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    restart: unless-stopped
+
+  qdrant:
+    image: qdrant/qdrant:v1.18.0
+    container_name: engrammic-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: engrammic-redis
+    volumes:
+      - redis-data:/data
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "200mb"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: engrammic-postgres
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=engrammic
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-engrammic}
+      - POSTGRES_DB=engrammic
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U engrammic -d engrammic"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    restart: unless-stopped
+
+volumes:
+  ollama-models:
+  memgraph-data:
+  qdrant-data:
+  redis-data:
+  postgres-data:
