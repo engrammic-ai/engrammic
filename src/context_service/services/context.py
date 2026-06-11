@@ -1554,6 +1554,9 @@ class ContextService:
                     credibility=float(props.get("credibility") or 0.0),
                     credibility_factors=credibility_factors,
                     tier=props.get("tier"),
+                    superseded_by=(
+                        str(props["superseded_by"]) if props.get("superseded_by") else None
+                    ),
                 )
             )
 

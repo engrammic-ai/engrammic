@@ -82,6 +82,7 @@ class QueryResult:
     credibility: float = 0.0
     credibility_factors: dict[str, Any] | None = None
     tier: str | None = None
+    superseded_by: str | None = None
 
 
 @dataclass
