@@ -242,6 +242,37 @@ class QdrantClient:
                 error=str(exc),
             )
 
+    async def ensure_reasoning_chains_collection(self) -> None:
+        """Ensure the reasoning_chains collection exists for TX6 CONSENSUS.
+
+        This collection stores conclusion embeddings for reasoning chains,
+        enabling consensus detection via ANN similarity search.
+        """
+        collection_name = "reasoning_chains"
+        start = time.perf_counter()
+        try:
+            client = await self._get_client()
+            collections = await client.get_collections()
+            exists = any(c.name == collection_name for c in collections.collections)
+            if not exists:
+                quant_config = get_quantization_config()
+                await client.create_collection(
+                    collection_name=collection_name,
+                    vectors_config=models.VectorParams(
+                        size=self._vector_size,
+                        distance=models.Distance.COSINE,
+                    ),
+                    quantization_config=quant_config,
+                )
+                logger.info("qdrant_reasoning_chains_collection_created")
+            else:
+                logger.debug("qdrant_reasoning_chains_collection_exists")
+        except Exception as e:
+            logger.error("qdrant_ensure_reasoning_chains_failed", error=str(e))
+            raise QdrantOperationError(f"Failed to ensure reasoning_chains collection: {e}") from e
+        finally:
+            record_db_query("qdrant.ensure_reasoning_chains", (time.perf_counter() - start) * 1000)
+
     async def health_check(self) -> bool:
         """Check if Qdrant is reachable.
 
