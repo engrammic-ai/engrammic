@@ -31,6 +31,10 @@ from context_service.reranking import (
     get_reranker,
     is_hard_query,
 )
+from context_service.reranking.epistemic_fusion import (
+    EpistemicAdjustment,
+    apply_epistemic_fusion,
+)
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 from context_service.signals import emit_access_event
@@ -439,6 +443,20 @@ async def _context_query(
         rerank_cache=rerank_cache,
     )
 
+    # Epistemic fusion: scale post-rerank scores by confidence/conflict state
+    # so evidence is load-bearing in final ranking (sprint step 1). The
+    # pre-fusion score is kept per node: the abstention floor in
+    # apply_threshold_filter compares against it when reranking ran.
+    epistemic_adjustments: dict[str, EpistemicAdjustment] = {}
+    prefusion_scores: dict[str, float | None] = {}
+    if settings.epistemic_fusion.enabled:
+        prefusion_scores = {str(r.node_id): r.relevance_score for r in results}
+        epistemic_adjustments = apply_epistemic_fusion(
+            results,
+            confidence_weight=settings.epistemic_fusion.confidence_weight,
+            conflict_penalty=settings.epistemic_fusion.conflict_penalty,
+        )
+
     await _emit_access_events(redis, silo_id, results)
 
     metadata: dict[str, Any] = {
@@ -465,6 +483,15 @@ async def _context_query(
             "credibility": r.credibility,
             "credibility_factors": r.credibility_factors,
             "tier": r.tier,
+            "superseded_by": r.superseded_by,
+            "rerank_score": (
+                prefusion_scores.get(str(r.node_id)) if reranked_applied else None
+            ),
+            "epistemic": (
+                epistemic_adjustments[str(r.node_id)].to_dict()
+                if str(r.node_id) in epistemic_adjustments
+                else None
+            ),
         }
         for r in results
     ]
@@ -479,18 +506,27 @@ async def _context_query(
     if silo_for_thresholds is not None:
         threshold_overrides = silo_for_thresholds.metadata.get("retrieval_thresholds") or None
 
+    # When fusion ran on top of reranking, threshold comparisons should use
+    # the pre-fusion rerank score (relevance_score was mutated by fusion).
+    score_basis_key = (
+        "rerank_score"
+        if settings.epistemic_fusion.enabled and reranked_applied
+        else "relevance_score"
+    )
+
     # Score-adaptive truncation (SmartSearch-style): tau = alpha * max_score
     effective_min_threshold = min_threshold
     if settings.reranking.adaptive_threshold_enabled and reranked_applied:
         adaptive_tau, max_score = compute_adaptive_threshold(
             raw_result_dicts,
             alpha=settings.reranking.adaptive_alpha,
+            score_key=score_basis_key,
         )
         if effective_min_threshold is None or adaptive_tau > effective_min_threshold:
             effective_min_threshold = adaptive_tau
 
         def _score_above_tau(r: dict[str, Any]) -> bool:
-            s = r.get("relevance_score")
+            s = r.get(score_basis_key)
             return isinstance(s, (int, float)) and float(s) >= adaptive_tau
 
         kept_count = len(list(filter(_score_above_tau, raw_result_dicts)))
@@ -510,7 +546,8 @@ async def _context_query(
         rerank_floor=RERANK_SCORE_FLOOR if reranked_applied else None,
     )
     retrieval_quality, suggestion = compute_retrieval_quality(
-        result_dicts, below_threshold, fallback_used=rerank_fallback
+        result_dicts, below_threshold, fallback_used=rerank_fallback,
+        score_key=score_basis_key,
     )
 
     # Store results in cache (intelligence layer is silently skipped by ResultCacheStore)

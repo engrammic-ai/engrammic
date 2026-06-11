@@ -43,6 +43,7 @@ class TestContextQueryReranking:
         mock_settings.reranking.enabled = True
         mock_settings.causal = MagicMock()
         mock_settings.causal.query_enabled = False
+        mock_settings.epistemic_fusion.enabled = False
 
         mock_silo = MagicMock()
         mock_silo.freshness_decay_lambda = 0.01
@@ -104,6 +105,7 @@ class TestContextQueryReranking:
         mock_settings.reranking.enabled = False
         mock_settings.causal = MagicMock()
         mock_settings.causal.query_enabled = False
+        mock_settings.epistemic_fusion.enabled = False
 
         mock_silo = MagicMock()
         mock_silo.freshness_decay_lambda = 0.01
@@ -436,6 +438,7 @@ class TestContextQueryReranking:
         mock_settings.vertex_project = None
         mock_settings.causal = MagicMock()
         mock_settings.causal.query_enabled = False
+        mock_settings.epistemic_fusion.enabled = False
 
         mock_silo = MagicMock()
         mock_silo.freshness_decay_lambda = 0.01

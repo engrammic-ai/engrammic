@@ -29,6 +29,7 @@ def _make_mock_settings(reranking_enabled: bool = False) -> MagicMock:
     s.reranking.enabled = reranking_enabled
     s.reranking.expand_hard_queries = False
     s.causal.query_enabled = False
+    s.epistemic_fusion.enabled = False
     cfg = MagicMock()
     cfg.enabled = True
     cfg.memory_ttl = 300
