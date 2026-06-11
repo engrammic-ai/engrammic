@@ -54,12 +54,19 @@ async def test_fusion_reorders_and_surfaces_breakdown() -> None:
     mock_auth.org_id = "test-org"
 
     low_evidence = _FakeQueryResult(
-        node_id="low", layer="knowledge", content="unsourced claim",
-        confidence=0.1, relevance_score=0.80,
+        node_id="low",
+        layer="knowledge",
+        content="unsourced claim",
+        confidence=0.1,
+        relevance_score=0.80,
     )
     high_evidence = _FakeQueryResult(
-        node_id="high", layer="knowledge", content="corroborated fact",
-        confidence=1.0, relevance_score=0.70, superseded_by=None,
+        node_id="high",
+        layer="knowledge",
+        content="corroborated fact",
+        confidence=1.0,
+        relevance_score=0.70,
+        superseded_by=None,
     )
 
     with (
@@ -82,9 +89,7 @@ async def test_fusion_reorders_and_surfaces_breakdown() -> None:
         ),
         patch("context_service.mcp.tools.context_query.get_redis", return_value=None),
     ):
-        mock_svc.return_value.query = AsyncMock(
-            return_value=[low_evidence, high_evidence]
-        )
+        mock_svc.return_value.query = AsyncMock(return_value=[low_evidence, high_evidence])
         mock_svc.return_value.vector_store = None
         mock_svc.return_value.embedding_client = None
 
@@ -112,12 +117,18 @@ async def test_fusion_disabled_preserves_order() -> None:
     mock_auth.org_id = "test-org"
 
     low_evidence = _FakeQueryResult(
-        node_id="low", layer="knowledge", content="unsourced claim",
-        confidence=0.1, relevance_score=0.80,
+        node_id="low",
+        layer="knowledge",
+        content="unsourced claim",
+        confidence=0.1,
+        relevance_score=0.80,
     )
     high_evidence = _FakeQueryResult(
-        node_id="high", layer="knowledge", content="corroborated fact",
-        confidence=1.0, relevance_score=0.70,
+        node_id="high",
+        layer="knowledge",
+        content="corroborated fact",
+        confidence=1.0,
+        relevance_score=0.70,
     )
 
     with (
@@ -140,9 +151,7 @@ async def test_fusion_disabled_preserves_order() -> None:
         ),
         patch("context_service.mcp.tools.context_query.get_redis", return_value=None),
     ):
-        mock_svc.return_value.query = AsyncMock(
-            return_value=[low_evidence, high_evidence]
-        )
+        mock_svc.return_value.query = AsyncMock(return_value=[low_evidence, high_evidence])
         mock_svc.return_value.vector_store = None
         mock_svc.return_value.embedding_client = None
 

@@ -484,9 +484,7 @@ async def _context_query(
             "credibility_factors": r.credibility_factors,
             "tier": r.tier,
             "superseded_by": r.superseded_by,
-            "rerank_score": (
-                prefusion_scores.get(str(r.node_id)) if reranked_applied else None
-            ),
+            "rerank_score": (prefusion_scores.get(str(r.node_id)) if reranked_applied else None),
             "epistemic": (
                 epistemic_adjustments[str(r.node_id)].to_dict()
                 if str(r.node_id) in epistemic_adjustments
@@ -546,7 +544,9 @@ async def _context_query(
         rerank_floor=RERANK_SCORE_FLOOR if reranked_applied else None,
     )
     retrieval_quality, suggestion = compute_retrieval_quality(
-        result_dicts, below_threshold, fallback_used=rerank_fallback,
+        result_dicts,
+        below_threshold,
+        fallback_used=rerank_fallback,
         score_key=score_basis_key,
     )
 
