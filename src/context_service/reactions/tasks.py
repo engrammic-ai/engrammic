@@ -38,6 +38,14 @@ _TIMEOUT_CASCADE = 60
 # Confidence propagation threshold - only write back if delta exceeds this
 _CONFIDENCE_DELTA_THRESHOLD = 0.1
 
+# TX1 EXTRACT constants
+_EXTRACTION_THRESHOLD = 200  # Minimum content length to trigger extraction
+_MAX_CLAIMS_PER_MEMORY = 10  # Cap on claims extracted per memory
+_SOURCE_TIER_DERIVED = 0.6  # Community/derived tier for extracted claims
+_METHOD_WEIGHT_EXTRACTOR = 0.75  # Standard extractor method weight
+_EXTRACTION_VERSION = "v1"  # Prompt/model version for re-extraction tracking
+_EXTRACTION_SIMILARITY_THRESHOLD = 0.95  # Dedup threshold for similar claims
+
 
 def register_tasks(broker: ListQueueBroker) -> None:
     """Register all reaction task handlers onto ``broker``.
@@ -688,4 +696,197 @@ RETURN
             "propagate_confidence_task_done",
             affected_nodes=len(updated_scores),
             updated_nodes=updated_count,
+        )
+
+    @broker.task(task_name=ReactionEventType.CHECK_EXTRACTION_TRIGGER, timeout=_TIMEOUT_LLM)
+    async def extract_claims_task(node_id: str, silo_id: str, **_payload: Any) -> None:
+        """Extract structured claims from Memory content (TX1 EXTRACT).
+
+        Transforms unstructured Memory content into Knowledge (Claims) by:
+        1. Checking content length exceeds threshold
+        2. Using LLM to extract verifiable propositions
+        3. Deduplicating against existing claims via CORROBORATES edges
+        4. Creating new Claims with CITE v2 credibility scaling
+        5. Linking via EXTRACTED_FROM edges
+
+        Args:
+            node_id: String UUID of the Memory node to extract from.
+            silo_id: Tenant isolation identifier.
+            **_payload: Additional event payload (unused).
+        """
+        import json
+        import time
+
+        from primitives.schema.edges import CITEEdgeType
+        from primitives.schema.labels import PersistenceLayer, layer_for_label
+
+        log = logger.bind(
+            node_id=node_id, silo_id=silo_id, task=ReactionEventType.CHECK_EXTRACTION_TRIGGER
+        )
+        log.info("extract_claims_task_start")
+        start_time = time.perf_counter()
+
+        from context_service.embeddings import build_embedding_service
+        from context_service.engine.models import BinaryEdge
+        from context_service.llm import build_llm_provider
+        from context_service.mcp.server import get_context_service
+
+        try:
+            ctx_svc = get_context_service()
+        except RuntimeError:
+            log.error("extract_claims_services_not_configured")
+            return
+
+        store = ctx_svc.graph_store
+        qdrant = ctx_svc.vector_store
+        node_uuid = uuid.UUID(node_id)
+
+        # 1. Fetch source node
+        node = await store.get_node(node_uuid, silo_id)
+        if node is None:
+            log.warning("extract_claims_node_not_found")
+            return
+
+        # Check if Memory layer
+        try:
+            node_layer = layer_for_label(node.type)
+        except ValueError:
+            log.debug("extract_claims_unknown_label_skip", label=node.type)
+            return
+
+        if node_layer != PersistenceLayer.MEMORY:
+            log.debug("extract_claims_not_memory_skip", layer=str(node_layer))
+            return
+
+        content = node.content or ""
+        if len(content) < _EXTRACTION_THRESHOLD:
+            log.debug("extract_claims_content_too_short", length=len(content))
+            return
+
+        # 2. Check idempotency
+        props = node.properties or {}
+        if props.get("extracted_at") and props.get("extraction_version") == _EXTRACTION_VERSION:
+            log.debug("extract_claims_already_extracted")
+            return
+
+        # 3. LLM extraction
+        llm = build_llm_provider()
+        extraction_prompt = f"""Extract verifiable claims from this observation. Each claim should be:
+- A single factual proposition
+- Independently verifiable
+- Not an opinion or speculation
+
+Observation:
+{content}
+
+Return a JSON array of claims:
+[
+  {{"content": "claim text", "raw_confidence": 0.0-1.0}},
+  ...
+]
+
+Return only valid JSON, no other text."""
+
+        try:
+            response = await llm.complete(extraction_prompt)
+            claims_data = json.loads(response.strip())
+            if not isinstance(claims_data, list):
+                claims_data = []
+        except (json.JSONDecodeError, Exception) as e:
+            log.warning("extract_claims_llm_error", error=str(e))
+            return
+
+        claims_data = claims_data[:_MAX_CLAIMS_PER_MEMORY]
+        log.debug("extract_claims_llm_returned", count=len(claims_data))
+
+        # 4. Process each claim
+        embedder = build_embedding_service()
+        claims_created = 0
+        corroborates_created = 0
+
+        for claim_item in claims_data:
+            claim_content = claim_item.get("content", "")
+            raw_confidence = float(claim_item.get("raw_confidence", 0.5))
+
+            if not claim_content:
+                continue
+
+            # Check for existing similar claim (dedup)
+            claim_embedding = await embedder.embed_single(claim_content)
+            similar_results = await qdrant.search(
+                vector=claim_embedding,
+                limit=1,
+                score_threshold=_EXTRACTION_SIMILARITY_THRESHOLD,
+                silo_id=silo_id,
+            )
+
+            if similar_results:
+                # Create CORROBORATES edge instead of duplicate
+                existing_id = similar_results[0].get("id") or similar_results[0].get("node_id")
+                if existing_id:
+                    await store.upsert_binary_edge(
+                        BinaryEdge(
+                            source_id=uuid.UUID(node_id),
+                            target_id=uuid.UUID(existing_id),
+                            edge_type=CITEEdgeType.CORROBORATES,
+                            silo_id=silo_id,
+                            properties={"source": "extraction", "independence": 0.3},
+                        )
+                    )
+                    corroborates_created += 1
+                continue
+
+            # Create new claim with credibility scaling
+            # credibility = source_tier * method_weight * raw_confidence
+            credibility = _SOURCE_TIER_DERIVED * _METHOD_WEIGHT_EXTRACTOR * raw_confidence
+
+            from context_service.sage.transactions import store_claim
+
+            claim_result = await store_claim(
+                store=store,
+                content=claim_content,
+                evidence=[f"engrammic://node/{node_id}"],
+                silo_id=silo_id,
+                agent_id="system:extractor",
+                source_tier="community",
+                confidence=raw_confidence,
+            )
+
+            if claim_result.claim_id:
+                # Create EXTRACTED_FROM edge
+                await store.upsert_binary_edge(
+                    BinaryEdge(
+                        source_id=claim_result.claim_id,
+                        target_id=node_uuid,
+                        edge_type=CITEEdgeType.EXTRACTED_FROM,
+                        silo_id=silo_id,
+                    )
+                )
+                claims_created += 1
+
+        # 5. Mark as extracted
+        from datetime import datetime, timezone
+
+        mark_query = """
+MATCH (n {id: $node_id, silo_id: $silo_id})
+SET n.extracted_at = $extracted_at, n.extraction_version = $version
+RETURN n.id
+"""
+        await store.execute_write(
+            mark_query,
+            {
+                "node_id": node_id,
+                "silo_id": silo_id,
+                "extracted_at": datetime.now(timezone.utc).isoformat(),
+                "version": _EXTRACTION_VERSION,
+            },
+        )
+
+        elapsed_ms = (time.perf_counter() - start_time) * 1000
+        log.info(
+            "extract_claims_task_done",
+            claims_created=claims_created,
+            corroborates_created=corroborates_created,
+            content_length=len(content),
+            latency_ms=round(elapsed_ms, 2),
         )
