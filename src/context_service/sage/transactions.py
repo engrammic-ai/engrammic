@@ -2463,6 +2463,18 @@ async def forget(
     cascade_count = 0
     events: list[ReactionEvent] = []
 
+    # TX11: Emit CHAIN_TOMBSTONED for intelligence layer nodes (ReasoningChain)
+    # to trigger consensus Fact staleness cascade
+    if node.get("layer") == "intelligence":
+        events.append(
+            ReactionEvent(
+                event_type=ReactionEventType.CHAIN_TOMBSTONED,
+                node_id=node_id,
+                silo_id=silo_id,
+                payload={"reason": reason},
+            )
+        )
+
     if cascade:
         # Trigger staleness cascade
         cascade_count = await cascade_staleness(store, node_id, silo_id, depth=1)

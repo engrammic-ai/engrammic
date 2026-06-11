@@ -43,6 +43,7 @@ class ReactionEventType(StrEnum):
     PROPOSAL_READY = "proposal_ready"  # notification-only: ProposedBelief ready for agent review
     TRACE_REASONING = "trace_reasoning"  # TX7: Session ended, persist hypotheses
     CHECK_CONSENSUS = "check_consensus"  # TX6: Check for multi-agent agreement
+    CHAIN_TOMBSTONED = "chain_tombstoned"  # TX11: ReasoningChain tombstoned, cascade to consensus Facts
 
 
 @dataclass

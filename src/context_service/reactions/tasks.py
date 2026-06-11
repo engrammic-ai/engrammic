@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 import structlog
 from taskiq_redis import ListQueueBroker
 
+from context_service.config.settings import settings
 from context_service.reactions.events import ReactionEventType
 
 if TYPE_CHECKING:
@@ -899,9 +900,6 @@ RETURN
             return
 
         # 3. LLM extraction
-        from context_service.config.settings import get_settings
-
-        settings = get_settings()
         llm = build_llm_provider(settings.llm_provider, settings.default_llm_model)
         extraction_prompt = f"""Extract verifiable claims from this observation. Each claim should be:
 - A single factual proposition
@@ -1181,17 +1179,18 @@ RETURN n.id
                 },
             )
 
-            # Emit CHECK_CONSENSUS for each traced chain.
-            from context_service.reactions.events import ReactionEvent, emit_reaction
+            # Emit CHECK_CONSENSUS for each traced chain (gated by trace_on_commit).
+            if settings.consensus.trace_on_commit:
+                from context_service.reactions.events import ReactionEvent, emit_reaction
 
-            for chain_id_str in chains_traced:
-                consensus_event = ReactionEvent(
-                    event_type=ReactionEventType.CHECK_CONSENSUS,
-                    node_id=chain_id_str,
-                    silo_id=silo_id,
-                    payload={"session_id": effective_session_id},
-                )
-                await emit_reaction(consensus_event)
+                for chain_id_str in chains_traced:
+                    consensus_event = ReactionEvent(
+                        event_type=ReactionEventType.CHECK_CONSENSUS,
+                        node_id=chain_id_str,
+                        silo_id=silo_id,
+                        payload={"session_id": effective_session_id},
+                    )
+                    await emit_reaction(consensus_event)
 
         elapsed_ms = (_time.perf_counter() - start_time) * 1000
         log.info(
@@ -1204,10 +1203,10 @@ RETURN n.id
     # ---------------------------------------------------------------------------
     # TX6 CONSENSUS constants
     # ---------------------------------------------------------------------------
-    _CONSENSUS_THRESHOLD_K = 3  # Minimum chains for consensus
-    _CONSENSUS_THRESHOLD_J = 2  # Minimum distinct agents for consensus
-    _CONSENSUS_CONCLUSION_THRESHOLD = 0.85  # ANN similarity threshold
-    _CONSENSUS_REASONING_THRESHOLD = 0.5  # DTW compatibility threshold
+    _CONSENSUS_THRESHOLD_K = settings.consensus.min_chains
+    _CONSENSUS_THRESHOLD_J = settings.consensus.min_agents
+    _CONSENSUS_CONCLUSION_THRESHOLD = settings.consensus.conclusion_threshold
+    _CONSENSUS_REASONING_THRESHOLD = settings.consensus.reasoning_threshold
     _CONSENSUS_SEARCH_LIMIT = 20  # Max candidates from ANN search
 
     @broker.task(task_name=ReactionEventType.CHECK_CONSENSUS, timeout=15)
@@ -1346,7 +1345,9 @@ RETURN n.id
 
         compatible: list[ReasoningChainSteps] = []
         for candidate in candidates:
-            if _chains_reasoning_compatible(chain, candidate, dtw_similarity):
+            if _chains_reasoning_compatible(
+                chain, candidate, dtw_similarity, threshold=_CONSENSUS_REASONING_THRESHOLD
+            ):
                 compatible.append(candidate)
 
         # 5. Check thresholds: K chains from J agents.
@@ -1500,5 +1501,173 @@ RETURN n.id AS id
             chain_count=len(all_chains),
             agent_count=agent_count,
             edge_errors=edge_errors,
+            latency_ms=round(elapsed_ms, 2),
+        )
+
+    # ---------------------------------------------------------------------------
+    # TX11 CHAIN_TOMBSTONED constants
+    # ---------------------------------------------------------------------------
+    _CONSENSUS_MIN_CHAINS = settings.consensus.min_chains  # Minimum supporting chains for a consensus Fact to remain valid
+
+    @broker.task(task_name=ReactionEventType.CHAIN_TOMBSTONED, timeout=_TIMEOUT_CASCADE)
+    async def chain_tombstoned_task(
+        node_id: str, silo_id: str, **_payload: Any
+    ) -> None:
+        """Cascade staleness to consensus Facts when a ReasoningChain is tombstoned (TX11).
+
+        When a ReasoningChain is tombstoned:
+        1. Finds all Facts with a CONSENSUS_FROM edge pointing to the chain.
+        2. For each Fact, counts the remaining active (non-tombstoned) chains via
+           CONSENSUS_FROM edges.
+        3. Emits CASCADE_STALENESS for every such Fact.
+        4. If remaining active chains fall below CONSENSUS_MIN_CHAINS, tombstones
+           the Fact directly (soft-delete, same cancel-window pattern as TX15).
+
+        Args:
+            node_id: String UUID of the tombstoned ReasoningChain.
+            silo_id: Tenant isolation identifier.
+            **_payload: Additional event payload (unused).
+        """
+        import time as _time
+
+        start_time = _time.perf_counter()
+        chain_id = node_id
+
+        log = logger.bind(
+            node_id=chain_id,
+            silo_id=silo_id,
+            task=ReactionEventType.CHAIN_TOMBSTONED,
+        )
+        log.info("chain_tombstoned_task_start")
+
+        from context_service.mcp.server import get_context_service
+        from context_service.reactions.events import ReactionEvent, emit_reaction
+
+        try:
+            ctx_svc = get_context_service()
+        except RuntimeError:
+            log.error("chain_tombstoned_services_not_configured")
+            return
+
+        store = ctx_svc.graph_store
+
+        # 1. Find all Facts that reference this chain via CONSENSUS_FROM.
+        #    Direction: Fact -[:CONSENSUS_FROM]-> ReasoningChain
+        facts_query = (
+            "MATCH (f:Fact)-[:CONSENSUS_FROM]->(c {id: $chain_id, silo_id: $silo_id}) "
+            "RETURN f.id AS fact_id, f.properties.state AS fact_state"
+        )
+        fact_rows = await store.execute_query(
+            facts_query,
+            {"chain_id": chain_id, "silo_id": silo_id},
+        )
+
+        if not fact_rows:
+            log.info("chain_tombstoned_no_consensus_facts", chain_id=chain_id)
+            return
+
+        log.info("chain_tombstoned_facts_found", count=len(fact_rows), chain_id=chain_id)
+
+        facts_staled = 0
+        facts_tombstoned = 0
+
+        for row in fact_rows:
+            fact_id: str | None = row.get("fact_id")
+            fact_state: str | None = row.get("fact_state")
+
+            if not fact_id:
+                continue
+
+            # Skip Facts already tombstoned or deleted.
+            if fact_state in ("TOMBSTONED", "DELETED"):
+                log.debug(
+                    "chain_tombstoned_fact_skip_inactive",
+                    fact_id=fact_id,
+                    fact_state=fact_state,
+                )
+                continue
+
+            # 2. Count remaining active chains for this Fact.
+            remaining_query = (
+                "MATCH (f {id: $fact_id, silo_id: $silo_id})-[:CONSENSUS_FROM]->(c) "
+                "WHERE NOT c.id = $chain_id "
+                "AND (c.properties.state IS NULL OR c.properties.state = 'ACTIVE') "
+                "RETURN count(c) AS remaining_count"
+            )
+            remaining_rows = await store.execute_query(
+                remaining_query,
+                {"fact_id": fact_id, "silo_id": silo_id, "chain_id": chain_id},
+            )
+            remaining_count: int = (
+                remaining_rows[0].get("remaining_count", 0) if remaining_rows else 0
+            )
+
+            log.debug(
+                "chain_tombstoned_remaining_chains",
+                fact_id=fact_id,
+                remaining_count=remaining_count,
+                min_required=_CONSENSUS_MIN_CHAINS,
+            )
+
+            # 3. Always emit CASCADE_STALENESS for the Fact.
+            stale_event = ReactionEvent(
+                event_type=ReactionEventType.CASCADE_STALENESS,
+                node_id=fact_id,
+                silo_id=silo_id,
+                payload={"reason": "chain_tombstoned", "chain_id": chain_id},
+            )
+            await emit_reaction(stale_event)
+            facts_staled += 1
+
+            # 4. If remaining chains drop below threshold, tombstone the Fact.
+            if remaining_count < _CONSENSUS_MIN_CHAINS:
+                from datetime import timedelta
+
+                from context_service.sage.transactions import CANCEL_WINDOW_DURATION_SECONDS
+
+                from datetime import datetime as _datetime
+
+                now = _datetime.now(UTC)
+                cancel_window_expires = now + timedelta(seconds=CANCEL_WINDOW_DURATION_SECONDS)
+
+                tombstone_query = (
+                    "MATCH (f {id: $fact_id, silo_id: $silo_id}) "
+                    "WHERE NOT f.properties.state IN ['TOMBSTONED', 'DELETED'] "
+                    "SET f.properties.state = 'TOMBSTONED', "
+                    "    f.properties.tombstoned_at = $tombstoned_at, "
+                    "    f.properties.tombstone_reason = 'consensus_chain_count_below_threshold', "
+                    "    f.properties.cancel_window_expires = $cancel_window_expires "
+                    "RETURN f.id AS id"
+                )
+                try:
+                    result = await store.execute_write(
+                        tombstone_query,
+                        {
+                            "fact_id": fact_id,
+                            "silo_id": silo_id,
+                            "tombstoned_at": now.isoformat(),
+                            "cancel_window_expires": cancel_window_expires.isoformat(),
+                        },
+                    )
+                    if result:
+                        facts_tombstoned += 1
+                        log.info(
+                            "chain_tombstoned_fact_tombstoned",
+                            fact_id=fact_id,
+                            remaining_chains=remaining_count,
+                        )
+                except Exception:
+                    log.exception(
+                        "chain_tombstoned_fact_tombstone_error",
+                        fact_id=fact_id,
+                    )
+
+        elapsed_ms = (_time.perf_counter() - start_time) * 1000
+        log.info(
+            "chain_tombstoned_task_done",
+            chain_id=chain_id,
+            facts_evaluated=len(fact_rows),
+            facts_staled=facts_staled,
+            facts_tombstoned=facts_tombstoned,
             latency_ms=round(elapsed_ms, 2),
         )

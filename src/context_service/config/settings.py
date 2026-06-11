@@ -698,6 +698,39 @@ class ClusteringConfig(BaseModel):
     post_ingest_threshold: int = 50
 
 
+class ConsensusConfig(BaseModel):
+    """Configuration for TX6 CONSENSUS and TX7 TRACE handlers."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    min_chains: int = Field(
+        default=3,
+        ge=1,
+        description="Minimum number of chains (K) required for consensus promotion.",
+    )
+    min_agents: int = Field(
+        default=2,
+        ge=1,
+        description="Minimum number of distinct agents (J) required for consensus.",
+    )
+    conclusion_threshold: float = Field(
+        default=0.85,
+        ge=0.0,
+        le=1.0,
+        description="ANN cosine similarity threshold for matching conclusions (Layer 1).",
+    )
+    reasoning_threshold: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="DTW similarity threshold for compatible reasoning paths (Layer 2).",
+    )
+    trace_on_commit: bool = Field(
+        default=True,
+        description="When true, TX7 TRACE emits CHECK_CONSENSUS for each traced chain.",
+    )
+
+
 class ExtractionConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -985,6 +1018,7 @@ class Settings(BaseSettings):
     causal: CausalConfig = Field(default_factory=CausalConfig)
     pattern: PatternConfig = Field(default_factory=PatternConfig)
     weak_links: WeakLinksSettings = Field(default_factory=WeakLinksSettings)
+    consensus: ConsensusConfig = Field(default_factory=ConsensusConfig)
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
     identities: IdentitiesConfig = Field(default_factory=_load_identities_config)
     models: ModelsConfig = Field(default_factory=_load_models_config)
