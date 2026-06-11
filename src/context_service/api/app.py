@@ -23,6 +23,7 @@ from context_service.api.metrics import REGISTRY, metrics_endpoint
 from context_service.api.middleware import PrometheusTimingMiddleware, RateLimitMiddleware
 from context_service.api.routes import admin, health
 from context_service.api.routes.gdpr import router as gdpr_router
+from context_service.api.routes.graph import router as graph_router
 from context_service.api.routes.license import router as license_router
 from context_service.api.routes.memory import router as memory_router
 from context_service.api.routes.oauth import router as oauth_router
@@ -365,6 +366,7 @@ def create_app() -> ASGIApp:
     app.include_router(health.router)
     app.include_router(admin.router)
     app.include_router(gdpr_router)
+    app.include_router(graph_router)
     app.include_router(memory_router)
     app.include_router(oauth_router)
     # skills REST API not yet implemented (all endpoints return 501)
