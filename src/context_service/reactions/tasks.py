@@ -17,6 +17,7 @@ Handler design:
 from __future__ import annotations
 
 import uuid
+from datetime import UTC
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -865,7 +866,7 @@ Return only valid JSON, no other text."""
                 claims_created += 1
 
         # 5. Mark as extracted
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         mark_query = """
 MATCH (n {id: $node_id, silo_id: $silo_id})
@@ -877,7 +878,7 @@ RETURN n.id
             {
                 "node_id": node_id,
                 "silo_id": silo_id,
-                "extracted_at": datetime.now(timezone.utc).isoformat(),
+                "extracted_at": datetime.now(UTC).isoformat(),
                 "version": _EXTRACTION_VERSION,
             },
         )
@@ -888,5 +889,180 @@ RETURN n.id
             claims_created=claims_created,
             corroborates_created=corroborates_created,
             content_length=len(content),
+            latency_ms=round(elapsed_ms, 2),
+        )
+
+    @broker.task(task_name=ReactionEventType.TRACE_REASONING, timeout=_TIMEOUT_SIMPLE)
+    async def trace_reasoning_task(
+        node_id: str, silo_id: str, session_id: str | None = None, **_payload: Any
+    ) -> None:
+        """Persist uncommitted WorkingHypotheses as ReasoningChains (TX7 TRACE).
+
+        At session end, collects all uncommitted hypotheses for the session,
+        persists each as a ReasoningChainSteps row in Postgres, creates a
+        TRACED_FROM edge in the graph, and emits CHECK_CONSENSUS for each chain
+        so TX6 can check for multi-agent agreement.
+
+        Args:
+            node_id: Session node id (ReasoningSession graph node) or any node
+                     that triggered the session-end event. Used as the graph
+                     anchor; typically the session's representative node.
+            silo_id: Tenant isolation identifier.
+            session_id: Optional override. If omitted, falls back to node_id as
+                        the session_id so callers that emit the session node id
+                        directly still work.
+            **_payload: Additional event payload (unused).
+        """
+        import time as _time
+        from datetime import datetime
+
+        start_time = _time.perf_counter()
+
+        effective_session_id = session_id or node_id
+
+        log = logger.bind(
+            node_id=node_id,
+            silo_id=silo_id,
+            session_id=effective_session_id,
+            task=ReactionEventType.TRACE_REASONING,
+        )
+        log.info("trace_reasoning_task_start")
+
+        from primitives.schema.edges import CITEEdgeType
+
+        from context_service.db.postgres import get_session as get_pg_session
+        from context_service.db.queries import GET_WORKING_HYPOTHESES_FOR_SESSION
+        from context_service.engine.models import BinaryEdge
+        from context_service.mcp.server import get_context_service
+        from context_service.models.postgres.reasoning import ReasoningChainSteps
+
+        try:
+            ctx_svc = get_context_service()
+        except RuntimeError:
+            log.error("trace_reasoning_services_not_configured")
+            return
+
+        store = ctx_svc.graph_store
+
+        # Fetch all uncommitted WorkingHypotheses for this session.
+        rows = await store.execute_query(
+            GET_WORKING_HYPOTHESES_FOR_SESSION,
+            {"session_id": effective_session_id, "silo_id": silo_id},
+        )
+
+        if not rows:
+            log.info("trace_reasoning_no_hypotheses_found")
+            return
+
+        # Filter to uncommitted hypotheses only (no crystallized_into set).
+        uncommitted = [
+            r for r in rows
+            if not (r.get("properties") or {}).get("crystallized")
+        ]
+
+        if not uncommitted:
+            log.info("trace_reasoning_all_hypotheses_committed")
+            return
+
+        log.info("trace_reasoning_uncommitted_count", count=len(uncommitted))
+
+        silo_uuid = uuid.UUID(silo_id)
+        now = datetime.now(UTC)
+        chains_traced: list[str] = []
+
+        for row in uncommitted:
+            hypothesis_id_str: str = row.get("belief_id", "")
+            content: str = row.get("content", "") or ""
+            confidence: float = float(row.get("confidence") or 0.5)
+
+            if not hypothesis_id_str:
+                log.warning("trace_reasoning_missing_belief_id_skip")
+                continue
+
+            hypothesis_uuid = uuid.UUID(hypothesis_id_str)
+            chain_id = uuid.uuid4()
+
+            # Persist ReasoningChainSteps row in Postgres.
+            try:
+                async with get_pg_session() as pg_session:
+                    from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+                    stmt = pg_insert(ReasoningChainSteps).values(
+                        chain_id=chain_id,
+                        silo_id=silo_uuid,
+                        steps=[{"content": content, "confidence": confidence}],
+                        conclusion=content,
+                        agent_id=None,
+                        source_hypothesis_id=hypothesis_uuid,
+                        traced_at=now,
+                    )
+                    stmt = stmt.on_conflict_do_nothing(index_elements=["chain_id"])
+                    await pg_session.execute(stmt)
+            except Exception:
+                log.exception(
+                    "trace_reasoning_postgres_write_error",
+                    hypothesis_id=hypothesis_id_str,
+                    chain_id=str(chain_id),
+                )
+                continue
+
+            # Create TRACED_FROM edge: ReasoningChain -> WorkingHypothesis.
+            try:
+                edge = BinaryEdge(
+                    source_id=chain_id,
+                    target_id=hypothesis_uuid,
+                    type=CITEEdgeType.TRACED_FROM,
+                    silo_id=silo_uuid,
+                    properties={"traced_at": now.isoformat()},
+                )
+                await store.upsert_binary_edge(edge, silo_id)
+            except Exception:
+                log.exception(
+                    "trace_reasoning_edge_write_error",
+                    hypothesis_id=hypothesis_id_str,
+                    chain_id=str(chain_id),
+                )
+                # Non-fatal: chain row already persisted; continue.
+
+            chains_traced.append(str(chain_id))
+            log.debug(
+                "trace_reasoning_chain_persisted",
+                hypothesis_id=hypothesis_id_str,
+                chain_id=str(chain_id),
+            )
+
+        # Mark hypotheses as traced in the graph.
+        if chains_traced:
+            mark_cypher = (
+                "MATCH (wb:WorkingHypothesis {session_id: $session_id, silo_id: $silo_id}) "
+                "SET wb.traced_at = $traced_at "
+                "RETURN count(wb) AS marked"
+            )
+            await store.execute_write(
+                mark_cypher,
+                {
+                    "session_id": effective_session_id,
+                    "silo_id": silo_id,
+                    "traced_at": now.isoformat(),
+                },
+            )
+
+            # Emit CHECK_CONSENSUS for each traced chain.
+            from context_service.reactions.events import ReactionEvent, emit_reaction
+
+            for chain_id_str in chains_traced:
+                consensus_event = ReactionEvent(
+                    event_type=ReactionEventType.CHECK_CONSENSUS,
+                    node_id=chain_id_str,
+                    silo_id=silo_id,
+                    payload={"session_id": effective_session_id},
+                )
+                await emit_reaction(consensus_event)
+
+        elapsed_ms = (_time.perf_counter() - start_time) * 1000
+        log.info(
+            "trace_reasoning_task_done",
+            chains_traced=len(chains_traced),
+            hypotheses_found=len(uncommitted),
             latency_ms=round(elapsed_ms, 2),
         )
