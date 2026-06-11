@@ -9,6 +9,7 @@ from context_service.reranking.quality import (
     RERANK_SCORE_FLOOR,
     apply_threshold_filter,
     classify_quality,
+    compute_adaptive_threshold,
     compute_retrieval_quality,
 )
 
@@ -221,3 +222,58 @@ class TestComputeRetrievalQuality:
         quality, suggestion = compute_retrieval_quality(kept, below_threshold=0)
         assert quality == "high"
         assert suggestion is None
+
+
+class TestThresholdFilterRerankScoreBasis:
+    def test_floor_uses_rerank_score_when_present(self) -> None:
+        # Fused relevance dropped below floor, but raw rerank score is above:
+        # the result must be KEPT (floor judges reranker calibration, not fusion).
+        results = [
+            {"layer": "knowledge", "relevance_score": 0.03, "rerank_score": 0.40},
+        ]
+        kept, below = apply_threshold_filter(results, rerank_floor=0.05)
+        assert len(kept) == 1
+        assert below == 0
+
+    def test_floor_drops_when_rerank_score_below(self) -> None:
+        results = [
+            {"layer": "knowledge", "relevance_score": 0.04, "rerank_score": 0.04},
+        ]
+        kept, below = apply_threshold_filter(results, rerank_floor=0.05)
+        assert kept == []
+        assert below == 1
+
+    def test_floor_falls_back_to_relevance_score(self) -> None:
+        # No rerank_score key (older callers): behavior unchanged.
+        results = [{"layer": "memory", "relevance_score": 0.04}]
+        kept, below = apply_threshold_filter(results, rerank_floor=0.05)
+        assert kept == []
+        assert below == 1
+
+    def test_min_threshold_also_uses_rerank_basis(self) -> None:
+        results = [
+            {"layer": "knowledge", "relevance_score": 0.10, "rerank_score": 0.90},
+        ]
+        kept, below = apply_threshold_filter(
+            results, rerank_floor=0.05, min_threshold=0.20
+        )
+        assert len(kept) == 1
+        assert below == 0
+
+    def test_adaptive_threshold_score_key(self) -> None:
+        results = [
+            {"layer": "knowledge", "relevance_score": 0.40, "rerank_score": 0.90},
+            {"layer": "knowledge", "relevance_score": 0.30, "rerank_score": 0.50},
+        ]
+        tau, max_score = compute_adaptive_threshold(
+            results, alpha=0.7, score_key="rerank_score"
+        )
+        assert max_score == 0.90
+        assert tau == pytest.approx(0.63)
+
+    def test_quality_uses_rerank_basis(self) -> None:
+        kept = [
+            {"layer": "knowledge", "relevance_score": 0.45, "rerank_score": 0.80},
+        ]
+        quality, _ = compute_retrieval_quality(kept, 0, score_key="rerank_score")
+        assert quality == "high"
