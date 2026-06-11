@@ -4,7 +4,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.api
       args:
-        INCLUDE_SPLADE: "true"
+        INCLUDE_SPLADE: "false"
     container_name: engrammic-app
     ports:
       - "8000:8000"
