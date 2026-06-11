@@ -6,8 +6,8 @@
 # =============================================================================
 
 project := "engrammic"
-region := "europe-north1"
-zone := "europe-north1-a"
+region := "us-central1"
+zone := "us-central1-a"
 registry := "europe-north1-docker.pkg.dev/engrammic/engrammic"
 dc := "docker compose --env-file .env -p engrammic -f docker/docker-compose.dev.yml"
 
