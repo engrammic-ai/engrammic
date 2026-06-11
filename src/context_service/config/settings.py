@@ -704,6 +704,14 @@ class ExtractionConfig(BaseModel):
     mode: str = "eager"
     batch_concurrency: int = 8
 
+    # TX1 EXTRACT settings
+    enabled: bool = True
+    threshold: int = 200  # Minimum content length to trigger extraction
+    max_claims: int = 10  # Cap on claims extracted per memory
+    model: str = "gemini-1.5-flash"  # LLM model for extraction
+    timeout_ms: int = 25000  # Extraction timeout
+    reextract_before_version: str | None = None  # Re-extract nodes with version < this
+
 
 class EndpointLimits(BaseModel):
     """Rate limits for a single endpoint category."""
