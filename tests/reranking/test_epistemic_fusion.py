@@ -85,9 +85,7 @@ class TestApplyEpistemicFusion:
         low = _FakeResult("low", "knowledge", 0.1, 0.80)
         high = _FakeResult("high", "knowledge", 1.0, 0.70)
         results = [low, high]
-        adjustments = apply_epistemic_fusion(
-            results, confidence_weight=0.5, conflict_penalty=0.5
-        )
+        adjustments = apply_epistemic_fusion(results, confidence_weight=0.5, conflict_penalty=0.5)
         # low: 0.80 * (0.5 + 0.5*0.1) = 0.44; high: 0.70 * 1.0 = 0.70
         assert [r.node_id for r in results] == ["high", "low"]
         assert abs(results[1].relevance_score - 0.44) < 1e-9

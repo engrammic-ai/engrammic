@@ -57,9 +57,7 @@ def compute_epistemic_adjustment(
         conf = max(0.0, min(1.0, float(confidence)))
         confidence_factor = (1.0 - confidence_weight) + confidence_weight * conf
 
-    conflict_factor = (
-        conflict_penalty if (conflict_status or "none") == "unresolved" else 1.0
-    )
+    conflict_factor = conflict_penalty if (conflict_status or "none") == "unresolved" else 1.0
     return EpistemicAdjustment(
         multiplier=confidence_factor * conflict_factor,
         confidence_factor=confidence_factor,

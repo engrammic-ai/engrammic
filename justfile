@@ -27,6 +27,10 @@ import 'standalone.just'
 install:
     uv sync --all-extras
 
+# Install only test dependencies (avoids torch download)
+test-deps:
+    uv sync --group dev --group api --group mcp --group graph --group postgres --group redis --group llm-core --group numeric --group custodian
+
 # Run all checks (lint + typecheck)
 check:
     uv run ruff check src tests

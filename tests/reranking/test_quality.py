@@ -254,9 +254,7 @@ class TestThresholdFilterRerankScoreBasis:
         results = [
             {"layer": "knowledge", "relevance_score": 0.10, "rerank_score": 0.90},
         ]
-        kept, below = apply_threshold_filter(
-            results, rerank_floor=0.05, min_threshold=0.20
-        )
+        kept, below = apply_threshold_filter(results, rerank_floor=0.05, min_threshold=0.20)
         assert len(kept) == 1
         assert below == 0
 
@@ -265,9 +263,7 @@ class TestThresholdFilterRerankScoreBasis:
             {"layer": "knowledge", "relevance_score": 0.40, "rerank_score": 0.90},
             {"layer": "knowledge", "relevance_score": 0.30, "rerank_score": 0.50},
         ]
-        tau, max_score = compute_adaptive_threshold(
-            results, alpha=0.7, score_key="rerank_score"
-        )
+        tau, max_score = compute_adaptive_threshold(results, alpha=0.7, score_key="rerank_score")
         assert max_score == 0.90
         assert tau == pytest.approx(0.63)
 

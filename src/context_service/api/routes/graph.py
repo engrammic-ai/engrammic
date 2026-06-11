@@ -86,7 +86,9 @@ class SearchFilters(BaseModel):
 class SearchRequest(BaseModel):
     query: str
     top_k: int = Field(default=20, ge=1, le=100)
-    layers: list[str] | None = Field(default=None, description="Filter by layers: memory, knowledge, wisdom")
+    layers: list[str] | None = Field(
+        default=None, description="Filter by layers: memory, knowledge, wisdom"
+    )
     tags: list[str] | None = Field(default=None, description="Filter by tags")
 
 
@@ -104,7 +106,11 @@ def _node_to_response(node) -> GraphNodeResponse:
         content=node.content or "",
         tags=tags,
         created_at=node.created_at.isoformat() if node.created_at else "",
-        updated_at=node.updated_at.isoformat() if hasattr(node, "updated_at") and node.updated_at else node.created_at.isoformat() if node.created_at else "",
+        updated_at=node.updated_at.isoformat()
+        if hasattr(node, "updated_at") and node.updated_at
+        else node.created_at.isoformat()
+        if node.created_at
+        else "",
         metadata=node.properties if hasattr(node, "properties") else None,
     )
 
@@ -130,7 +136,9 @@ async def list_nodes(
     layers: str | None = Query(default=None, description="Comma-separated layer filter"),
     tags: str | None = Query(default=None, description="Comma-separated tag filter"),
     limit: int = Query(default=50, ge=1, le=500),
-    sort: str | None = Query(default=None, description="Sort field:direction, e.g. created_at:desc"),
+    sort: str | None = Query(
+        default=None, description="Sort field:direction, e.g. created_at:desc"
+    ),
     x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
 ) -> list[GraphNodeResponse]:
     if not x_silo_id:
@@ -157,6 +165,11 @@ async def list_nodes(
     if tags:
         tag_set = set(tags.split(","))
         results = [r for r in results if any(t in tag_set for t in r.tags)]
+
+    if sort:
+        field, _, direction = sort.partition(":")
+        reverse = direction.lower() == "desc"
+        results = sorted(results, key=lambda r: getattr(r, field, None) or "", reverse=reverse)
 
     logger.info("graph_list_nodes_ok", silo_id=str(silo_uuid), count=len(results))
     return results
@@ -204,7 +217,9 @@ async def list_edges(
                 unique_edges.append(e)
 
         id_set = set(ids)
-        filtered = [e for e in unique_edges if str(e.source_id) in id_set and str(e.target_id) in id_set]
+        filtered = [
+            e for e in unique_edges if str(e.source_id) in id_set and str(e.target_id) in id_set
+        ]
 
     except Exception as exc:
         logger.error("graph_list_edges_failed", silo_id=str(silo_uuid), error=str(exc))
@@ -240,7 +255,7 @@ async def get_neighborhood(
     try:
         node_uuid = uuid.UUID(node_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid node ID format")
+        raise HTTPException(status_code=400, detail="Invalid node ID format") from None
 
     try:
         subgraph = await store.neighborhood(
@@ -250,13 +265,21 @@ async def get_neighborhood(
             max_nodes=max_nodes,
         )
     except Exception as exc:
-        logger.error("graph_neighborhood_failed", silo_id=str(silo_uuid), node_id=node_id, error=str(exc))
+        logger.error(
+            "graph_neighborhood_failed", silo_id=str(silo_uuid), node_id=node_id, error=str(exc)
+        )
         raise HTTPException(status_code=500, detail="Failed to get neighborhood") from exc
 
     nodes = [_node_to_response(n) for n in subgraph.nodes.values()]
     edges = [_edge_to_response(e) for e in subgraph.binary_edges]
 
-    logger.info("graph_neighborhood_ok", silo_id=str(silo_uuid), node_id=node_id, nodes=len(nodes), edges=len(edges))
+    logger.info(
+        "graph_neighborhood_ok",
+        silo_id=str(silo_uuid),
+        node_id=node_id,
+        nodes=len(nodes),
+        edges=len(edges),
+    )
     return NeighborhoodResponse(nodes=nodes, edges=edges)
 
 
@@ -364,11 +387,13 @@ async def search_nodes(
             updated_at=r.created_at.isoformat() if r.created_at else "",
             metadata=None,
         )
-        items.append(SearchResultItem(
-            node=node,
-            score=r.relevance_score or 0.0,
-            highlights=[r.summary] if r.summary else [],
-        ))
+        items.append(
+            SearchResultItem(
+                node=node,
+                score=r.relevance_score or 0.0,
+                highlights=[r.summary] if r.summary else [],
+            )
+        )
 
     logger.info("graph_search_ok", silo_id=str(silo_uuid), count=len(items))
     return SearchResponse(results=items)
