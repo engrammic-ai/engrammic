@@ -14,7 +14,11 @@ import structlog
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from context_service.config.models import load_models_config
+from context_service.config.settings import get_settings
 from context_service.mcp.server import get_context_service
+from context_service.reranking.query_classifier import is_hard_query
+from context_service.reranking.query_expander import QueryExpander
 from context_service.sage.transactions import store_memory
 from context_service.services.models import ScopeContext, derive_silo_id
 
@@ -154,10 +158,36 @@ async def recall(
     silo_uuid = derive_silo_id(x_silo_id)
     scope = ScopeContext(org_id=x_silo_id, silo_id=silo_uuid)
 
+    # Query expansion for hard queries (same logic as MCP recall)
+    effective_query = request_body.query
+    settings = get_settings()
+    if settings.reranking.expand_hard_queries and is_hard_query(request_body.query):
+        models_config = load_models_config()
+        expander_model = models_config.litellm_expander_model
+        redis = getattr(request.app.state, "redis", None)
+        if expander_model and redis:
+            try:
+                expander = QueryExpander(
+                    llm_model=expander_model,
+                    redis=redis,
+                    cache_ttl_seconds=settings.reranking.expansion_cache_ttl_days * 86400,
+                    timeout_seconds=settings.reranking.expander_timeout_seconds,
+                    vertex_project=models_config.vertex_project or None,
+                )
+                effective_query = await expander.expand(request_body.query, str(silo_uuid))
+                if effective_query != request_body.query:
+                    logger.info(
+                        "rest_query_expanded",
+                        original_len=len(request_body.query),
+                        expanded_len=len(effective_query),
+                    )
+            except Exception as exc:
+                logger.warning("rest_query_expansion_failed", error=str(exc))
+
     try:
         results = await ctx_svc.query(
             scope=scope,
-            query=request_body.query,
+            query=effective_query,
             layers=None,
             top_k=request_body.top_k,
         )
