@@ -16,6 +16,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+# Bump when the confidence/credibility formula changes (see primitives
+# combined_confidence and compute_credibility). Stored on every claim
+# write so recalibration can distinguish formula generations.
+CONFIDENCE_FORMULA_VERSION = 1
+
 
 def read_confidence(props: Mapping[str, Any]) -> float | None:
     """Return the node's confidence clamped to [0, 1], or None when never assessed.

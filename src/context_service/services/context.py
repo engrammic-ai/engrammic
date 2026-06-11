@@ -12,7 +12,7 @@ import structlog
 from primitives.schema.labels import ALL_CITE_LABELS
 
 from context_service.config.settings import get_settings
-from context_service.engine.epistemics import effective_confidence
+from context_service.engine.epistemics import CONFIDENCE_FORMULA_VERSION, effective_confidence
 from context_service.services.models import (
     GraphResult,
     LookupResult,
@@ -1021,6 +1021,7 @@ class ContextService:
         props["source_type"] = source_type.value if hasattr(source_type, "value") else source_type
         props["confidence"] = discounted_confidence
         props["raw_confidence"] = confidence
+        props["confidence_formula_version"] = CONFIDENCE_FORMULA_VERSION
         props["evidence"] = evidence
         props["credibility"] = credibility_breakdown.credibility
         props["credibility_factors"] = credibility_breakdown.to_dict()

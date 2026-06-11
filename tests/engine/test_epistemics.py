@@ -60,3 +60,9 @@ class TestQueryPathRegression:
     def test_unassessed_is_full_trust(self) -> None:
         props = {"layer": "knowledge"}
         assert effective_confidence(props) == 1.0
+
+
+def test_formula_version_is_stamped_constant() -> None:
+    from context_service.engine.epistemics import CONFIDENCE_FORMULA_VERSION
+
+    assert CONFIDENCE_FORMULA_VERSION == 1
