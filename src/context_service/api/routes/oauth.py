@@ -306,13 +306,14 @@ async def callback(
             detail=f"WorkOS authorization error: {error}",
         )
 
-    # Direct signup flow (no MCP client) - state is None
+    # Direct signup flow (no MCP client) - state is None or Iron-sealed from WorkOS hosted UI
+    # Iron-sealed state starts with "Fe26." - this is from WorkOS AuthKit hosted UI, not MCP
     # Note: No CSRF protection here. Accepted risk because:
     # 1. WorkOS controls the authorization code issuance
     # 2. Attacker would need victim to complete WorkOS auth flow
     # 3. Result is account creation, not privilege escalation
-    # TODO: Add explicit signup=true param for defense-in-depth
-    if state is None:
+    is_direct_signup = state is None or (state and state.startswith("Fe26."))
+    if is_direct_signup:
         try:
             user_info = await exchange_code_for_user(code)
         except ValueError as exc:
