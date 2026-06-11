@@ -12,6 +12,7 @@ import structlog
 from primitives.schema.labels import ALL_CITE_LABELS
 
 from context_service.config.settings import get_settings
+from context_service.engine.epistemics import effective_confidence
 from context_service.services.models import (
     GraphResult,
     LookupResult,
@@ -652,7 +653,7 @@ class ContextService:
                 props = {
                     "layer": row.get("layer", "memory"),
                     "tags": row.get("tags") or [],
-                    "confidence": row.get("confidence", 1.0),
+                    "confidence": effective_confidence(row),
                     "summary": row.get("summary"),
                     "heat_score": row.get("heat_score"),
                     "effective_heat": row.get("effective_heat"),
@@ -803,7 +804,7 @@ class ContextService:
                 node_id=r["node_id"],
                 layer=r.get("layer") or "unknown",
                 relationship=r.get("relationship") or "",
-                confidence=float(r.get("confidence") or 1.0),
+                confidence=effective_confidence(r),
                 stub=bool(r.get("stub") or False),
             )
             for r in chain_rows
@@ -813,7 +814,7 @@ class ContextService:
                 "node_id": r["node_id"],
                 "layer": r.get("layer") or "unknown",
                 "content": r.get("content") or "",
-                "confidence": float(r.get("confidence") or 1.0),
+                "confidence": effective_confidence(r),
             }
             for r in root_rows
         ]
@@ -851,7 +852,7 @@ class ContextService:
                 content=r.get("content") or "",
                 valid_from=r.get("valid_from"),
                 valid_to=r.get("valid_to"),
-                confidence=float(r.get("confidence") or 1.0),
+                confidence=effective_confidence(r),
                 supersession_reason=r.get("supersession_reason"),
             )
             for r in rows
@@ -1488,7 +1489,7 @@ class ContextService:
             if layer_values and node_layer not in layer_values:
                 continue
 
-            node_confidence = float(props.get("confidence") or 1.0)
+            node_confidence = effective_confidence(props)
             if min_confidence is not None and node_confidence < min_confidence:
                 continue
 

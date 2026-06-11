@@ -46,3 +46,17 @@ class TestEffectiveConfidence:
 
     def test_present_value_ignores_when_missing(self) -> None:
         assert effective_confidence({"confidence": 0.3}, when_missing=0.9) == 0.3
+
+
+class TestQueryPathRegression:
+    """The falsy bug as it manifested: services/context.py query() promoted
+    stored 0.0 confidence to 1.0 via `or 1.0`. These pin the helper's
+    behavior at the exact values that path consumes."""
+
+    def test_assessed_zero_stays_zero(self) -> None:
+        props = {"layer": "knowledge", "confidence": 0.0}
+        assert effective_confidence(props) == 0.0
+
+    def test_unassessed_is_full_trust(self) -> None:
+        props = {"layer": "knowledge"}
+        assert effective_confidence(props) == 1.0
