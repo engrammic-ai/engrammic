@@ -1365,6 +1365,9 @@ RETURN wb.id AS belief_id,
        wb.confidence AS confidence,
        wb.created_at AS created_at,
        wb.updated_at AS updated_at,
+       wb.agent_id AS agent_id,
+       wb.traced_at AS traced_at,
+       wb.crystallized_into AS crystallized_into,
        about_ids
 ORDER BY wb.created_at DESC
 """
@@ -2022,6 +2025,7 @@ MATCH (n {id: $node_id, silo_id: $silo_id})
 RETURN n.id AS id,
        n.properties.state AS state,
        n.properties.layer AS layer,
+       n.type AS node_type,
        n.properties.cancel_window_expires AS cancel_window_expires
 """
 

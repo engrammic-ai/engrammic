@@ -942,18 +942,31 @@ Return only valid JSON, no other text."""
             if not claim_content:
                 continue
 
-            # Check for existing similar claim (dedup)
+            # Check for existing similar claim (dedup) - filter to Claims only
+            from qdrant_client import models as qdrant_models
+
             claim_embedding = await embedder.embed_single(claim_content)
             similar_results = await qdrant.search(
                 vector=claim_embedding,
                 limit=1,
                 score_threshold=_EXTRACTION_SIMILARITY_THRESHOLD,
                 silo_id=silo_id,
+                filter_conditions=[
+                    qdrant_models.FieldCondition(
+                        key="type",
+                        match=qdrant_models.MatchValue(value="Claim"),
+                    ),
+                ],
             )
 
             if similar_results:
                 # Create CORROBORATES edge instead of duplicate
-                existing_id = similar_results[0].id if hasattr(similar_results[0], "id") else None
+                # Use node_id from payload, not Qdrant point id
+                result = similar_results[0]
+                existing_id = (
+                    result.payload.get("node_id") if hasattr(result, "payload") and result.payload
+                    else getattr(result, "id", None)
+                )
                 if existing_id:
                     await store.upsert_binary_edge(
                         BinaryEdge(
@@ -968,9 +981,10 @@ Return only valid JSON, no other text."""
                     corroborates_created += 1
                 continue
 
-            # Create new claim with credibility scaling
+            # Create new claim with credibility scaling per CITE v2
             # credibility = source_tier * method_weight * raw_confidence
-            credibility = _SOURCE_TIER_DERIVED * _METHOD_WEIGHT_EXTRACTOR * raw_confidence  # noqa: F841
+            # Caps extracted claims at ~0.45 (below agent claims at 0.8 * 1.0 = 0.8)
+            scaled_confidence = _SOURCE_TIER_DERIVED * _METHOD_WEIGHT_EXTRACTOR * raw_confidence
 
             from context_service.sage.transactions import store_claim
 
@@ -981,14 +995,14 @@ Return only valid JSON, no other text."""
                 silo_id=silo_id,
                 agent_id="system:extractor",
                 source_tier="community",
-                confidence=raw_confidence,
+                confidence=scaled_confidence,
             )
 
-            if claim_result.claim_id:
+            if claim_result.node_id:
                 # Create EXTRACTED_FROM edge
                 await store.upsert_binary_edge(
                     BinaryEdge(
-                        source_id=claim_result.claim_id,
+                        source_id=claim_result.node_id,
                         target_id=node_uuid,
                         type=CITEEdgeType.EXTRACTED_FROM.value,
                         silo_id=uuid.UUID(silo_id),
@@ -1086,10 +1100,10 @@ RETURN n.id
             log.info("trace_reasoning_no_hypotheses_found")
             return
 
-        # Filter to uncommitted hypotheses only (no crystallized_into set).
+        # Filter to uncommitted and untraced hypotheses only.
         uncommitted = [
             r for r in rows
-            if not (r.get("properties") or {}).get("crystallized")
+            if not r.get("crystallized_into") and not r.get("traced_at")
         ]
 
         if not uncommitted:
@@ -1102,10 +1116,16 @@ RETURN n.id
         now = datetime.now(UTC)
         chains_traced: list[str] = []
 
+        from context_service.embeddings import build_embedding_service
+        from primitives.schema.labels import IntelligenceLabel
+
+        embedder = build_embedding_service()
+
         for row in uncommitted:
             hypothesis_id_str: str = row.get("belief_id", "")
             content: str = row.get("content", "") or ""
             confidence: float = float(row.get("confidence") or 0.5)
+            agent_id: str | None = row.get("agent_id")
 
             if not hypothesis_id_str:
                 log.warning("trace_reasoning_missing_belief_id_skip")
@@ -1114,7 +1134,17 @@ RETURN n.id
             hypothesis_uuid = uuid.UUID(hypothesis_id_str)
             chain_id = uuid.uuid4()
 
-            # Persist ReasoningChainSteps row in Postgres.
+            # 1. Embed conclusion for Qdrant and Postgres.
+            conclusion_embedding: list[float] | None = None
+            try:
+                conclusion_embedding = await embedder.embed_single(content)
+            except Exception:
+                log.exception(
+                    "trace_reasoning_embed_error",
+                    hypothesis_id=hypothesis_id_str,
+                )
+
+            # 2. Persist ReasoningChainSteps row in Postgres.
             try:
                 async with get_pg_session() as pg_session:
                     from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -1124,7 +1154,8 @@ RETURN n.id
                         silo_id=silo_uuid,
                         steps=[{"content": content, "confidence": confidence}],
                         conclusion=content,
-                        agent_id=None,
+                        conclusion_embedding=conclusion_embedding,
+                        agent_id=agent_id,
                         source_hypothesis_id=hypothesis_uuid,
                         traced_at=now,
                     )
@@ -1138,12 +1169,76 @@ RETURN n.id
                 )
                 continue
 
-            # Create TRACED_FROM edge: ReasoningChain -> WorkingHypothesis.
+            # 3. Create stub ReasoningChain node in graph (required for edges).
+            create_node_cypher = f"""
+CREATE (n:Node:{IntelligenceLabel.REASONING_CHAIN} {{
+    id: $id,
+    type: $type,
+    silo_id: $silo_id,
+    content: $content,
+    created_at: $created_at,
+    properties: $props
+}})
+RETURN n.id AS id
+"""
+            try:
+                await store.execute_write(
+                    create_node_cypher,
+                    {
+                        "id": str(chain_id),
+                        "type": IntelligenceLabel.REASONING_CHAIN.value,
+                        "silo_id": silo_id,
+                        "content": content,
+                        "created_at": now.isoformat(),
+                        "props": {
+                            "layer": "intelligence",
+                            "state": "ACTIVE",
+                            "agent_id": agent_id,
+                            "source_hypothesis_id": hypothesis_id_str,
+                            "confidence": confidence,
+                        },
+                    },
+                )
+            except Exception:
+                log.exception(
+                    "trace_reasoning_graph_node_error",
+                    hypothesis_id=hypothesis_id_str,
+                    chain_id=str(chain_id),
+                )
+
+            # 4. Upsert conclusion embedding to Qdrant for TX6 search.
+            if conclusion_embedding:
+                try:
+                    from qdrant_client.http import models as qdrant_models
+
+                    qdrant_client = await ctx_svc._qdrant._get_client()
+                    await qdrant_client.upsert(
+                        collection_name="reasoning_chains",
+                        points=[
+                            qdrant_models.PointStruct(
+                                id=str(chain_id),
+                                vector=conclusion_embedding,
+                                payload={
+                                    "silo_id": silo_id,
+                                    "type": IntelligenceLabel.REASONING_CHAIN.value,
+                                    "agent_id": agent_id,
+                                    "node_id": str(chain_id),
+                                },
+                            )
+                        ],
+                    )
+                except Exception:
+                    log.exception(
+                        "trace_reasoning_qdrant_error",
+                        chain_id=str(chain_id),
+                    )
+
+            # 5. Create TRACED_FROM edge: ReasoningChain -> WorkingHypothesis.
             try:
                 edge = BinaryEdge(
                     source_id=chain_id,
                     target_id=hypothesis_uuid,
-                    type=CITEEdgeType.TRACED_FROM,
+                    type="TRACED_FROM",
                     silo_id=silo_uuid,
                     properties={"traced_at": now.isoformat()},
                 )
@@ -1154,7 +1249,6 @@ RETURN n.id
                     hypothesis_id=hypothesis_id_str,
                     chain_id=str(chain_id),
                 )
-                # Non-fatal: chain row already persisted; continue.
 
             chains_traced.append(str(chain_id))
             log.debug(
@@ -1386,7 +1480,7 @@ RETURN n.id
         if existing_fact_id is not None:
             # Extend existing consensus: add edges from existing Fact to this chain.
             try:
-                for edge_type in (CITEEdgeType.PROMOTED_FROM, CITEEdgeType.CONSENSUS_FROM):
+                for edge_type in ("PROMOTED_FROM", "CONSENSUS_FROM"):
                     edge = BinaryEdge(
                         source_id=uuid.UUID(existing_fact_id),
                         target_id=chain_uuid,
@@ -1463,7 +1557,7 @@ RETURN n.id AS id
         edge_errors = 0
         for supporting_chain in all_chains:
             supporting_chain_uuid = supporting_chain.chain_id
-            for edge_type in (CITEEdgeType.PROMOTED_FROM, CITEEdgeType.CONSENSUS_FROM):
+            for edge_type in ("PROMOTED_FROM", "CONSENSUS_FROM"):
                 try:
                     edge = BinaryEdge(
                         source_id=fact_id,
@@ -1552,9 +1646,10 @@ RETURN n.id AS id
         store = ctx_svc.graph_store
 
         # 1. Find all Facts that reference this chain via CONSENSUS_FROM.
-        #    Direction: Fact -[:CONSENSUS_FROM]-> ReasoningChain
+        #    Direction: Fact -[:EDGE {type: 'CONSENSUS_FROM'}]-> ReasoningChain
         facts_query = (
-            "MATCH (f:Fact)-[:CONSENSUS_FROM]->(c {id: $chain_id, silo_id: $silo_id}) "
+            "MATCH (f:Fact)-[e:EDGE]->(c {id: $chain_id, silo_id: $silo_id}) "
+            "WHERE e.type = 'CONSENSUS_FROM' "
             "RETURN f.id AS fact_id, f.properties.state AS fact_state"
         )
         fact_rows = await store.execute_query(
@@ -1589,8 +1684,8 @@ RETURN n.id AS id
 
             # 2. Count remaining active chains for this Fact.
             remaining_query = (
-                "MATCH (f {id: $fact_id, silo_id: $silo_id})-[:CONSENSUS_FROM]->(c) "
-                "WHERE NOT c.id = $chain_id "
+                "MATCH (f {id: $fact_id, silo_id: $silo_id})-[e:EDGE]->(c) "
+                "WHERE e.type = 'CONSENSUS_FROM' AND c.id <> $chain_id "
                 "AND (c.properties.state IS NULL OR c.properties.state = 'ACTIVE') "
                 "RETURN count(c) AS remaining_count"
             )

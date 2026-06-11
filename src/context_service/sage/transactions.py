@@ -2463,9 +2463,9 @@ async def forget(
     cascade_count = 0
     events: list[ReactionEvent] = []
 
-    # TX11: Emit CHAIN_TOMBSTONED for intelligence layer nodes (ReasoningChain)
+    # TX11: Emit CHAIN_TOMBSTONED only for ReasoningChain nodes
     # to trigger consensus Fact staleness cascade
-    if node.get("layer") == "intelligence":
+    if node.get("node_type") == "ReasoningChain":
         events.append(
             ReactionEvent(
                 event_type=ReactionEventType.CHAIN_TOMBSTONED,
