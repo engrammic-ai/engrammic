@@ -148,6 +148,35 @@ class TrustGateConfig(BaseModel):
     )
 
 
+class EpistemicFusionConfig(BaseModel):
+    """Settings for post-rerank epistemic score fusion.
+
+    Reranker scores previously overwrote confidence/conflict signal in
+    recall ranking; fusion multiplies the final relevance score by an
+    epistemic adjustment so evidence state is load-bearing at read time.
+    Withholding (trust gate) is separate and unaffected.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    enabled: bool = Field(default=True, description="Enable epistemic score fusion")
+    confidence_weight: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Weight of node confidence in the fused score for knowledge/wisdom "
+            "layers: factor = (1 - w) + w * confidence"
+        ),
+    )
+    conflict_penalty: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Score multiplier applied to unresolved-contradiction nodes",
+    )
+
+
 class RerankingSettings(BaseModel):
     """Settings for semantic reranking and query expansion."""
 
@@ -989,6 +1018,7 @@ class Settings(BaseSettings):
         default_factory=EvidenceEnforcementConfig
     )
     trust_gate: TrustGateConfig = Field(default_factory=TrustGateConfig)
+    epistemic_fusion: EpistemicFusionConfig = Field(default_factory=EpistemicFusionConfig)
     usage: UsageRetentionConfig = Field(default_factory=UsageRetentionConfig)
 
     # =========================================================================
