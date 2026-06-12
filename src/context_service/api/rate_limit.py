@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import structlog
 
 from context_service.config.settings import get_settings
+from context_service.exceptions import RateLimitExceeded
 from context_service.services.models import derive_silo_id
 
 if TYPE_CHECKING:
@@ -62,15 +63,7 @@ class RateLimitHeaders:
     policy: str
 
 
-class RateLimitExceeded(Exception):
-    """Raised when rate limit is exceeded."""
-
-    def __init__(self, retry_after: int, limit: int, current: int, category: str) -> None:
-        self.retry_after = retry_after
-        self.limit = limit
-        self.current = current
-        self.category = category
-        super().__init__(f"Rate limit exceeded for {category}: {current}/{limit}")
+__all__ = ["RateLimitExceeded", "RateLimiter", "RateLimitCategory", "RateLimitHeaders"]
 
 
 def _build_key(category: RateLimitCategory, window_start: int, org_id: str) -> str:
