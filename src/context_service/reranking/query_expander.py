@@ -173,20 +173,27 @@ class QueryExpander:
 
         Returns (content, input_tokens, output_tokens).
         """
+        import time
+        start = time.monotonic()
         client = self._get_genai_client()
+        logger.debug("genai_expand_start", model=self._model, prompt_len=len(prompt))
         loop = asyncio.get_running_loop()
 
         def _generate(c: object = client) -> object:
-            return c.models.generate_content(  # type: ignore[attr-defined]
+            gen_start = time.monotonic()
+            result = c.models.generate_content(  # type: ignore[attr-defined]
                 model=self._model,
                 contents=prompt,
                 config={"response_mime_type": "application/json"},
             )
+            logger.info("genai_generate_content_done", elapsed_ms=int((time.monotonic() - gen_start) * 1000))
+            return result
 
         response = await asyncio.wait_for(
             loop.run_in_executor(None, _generate),
             timeout=self._timeout,
         )
+        logger.info("genai_expand_complete", elapsed_ms=int((time.monotonic() - start) * 1000))
         usage = getattr(response, "usage_metadata", None)
         input_tokens = getattr(usage, "prompt_token_count", 0) or 0 if usage else 0
         output_tokens = getattr(usage, "candidates_token_count", 0) or 0 if usage else 0
