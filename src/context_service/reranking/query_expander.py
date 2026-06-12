@@ -64,9 +64,9 @@ class QueryExpander:
         self._vertex_project = vertex_project
         self._provider = provider
         self._use_genai = _use_genai_sdk(provider, self._model)
-        # Force global for Gemini 3.x models (required by API)
+        # Force global for Gemini 3.x models (required by API), us-central1 for others
         self._vertex_location = (
-            "global" if "gemini-3" in self._model else (vertex_location or "global")
+            "global" if "gemini-3" in self._model else (vertex_location or "us-central1")
         )
         self._client: object | None = None
 
