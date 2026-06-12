@@ -15,6 +15,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
+| [2026-06-12-tempr-parity-sprint.md](./2026-06-12-tempr-parity-sprint.md) | 4-channel TEMPR retrieval (BM25, temporal, PPR, reranker) + mem0 benchmark | Active |
 | [2026-06-09-longmemeval-v2-harness.md](./2026-06-09-longmemeval-v2-harness.md) | Official LongMemEval-V2 harness with Engrammic adapter | Ready |
 | [2026-06-07-fix-recall-read-path.md](./2026-06-07-fix-recall-read-path.md) | Fix rerank score write-back + threshold, full content by default | Active |
 | [recall-quality-improvement.md](./recall-quality-improvement.md) | Question-answer asymmetry research, query expansion | Draft |
