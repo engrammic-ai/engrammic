@@ -19,9 +19,10 @@ from context_service.config.settings import get_settings
 from context_service.mcp.server import get_context_service
 from context_service.reranking.query_classifier import is_hard_query
 from context_service.reranking.query_expander import QueryExpander
+from context_service.api.routes._auth import get_silo_context
 from context_service.sage.transactions import LinkType, store_claim, store_memory
 from context_service.sage.transactions import link as brain_link
-from context_service.services.models import ScopeContext, derive_silo_id
+from context_service.services.models import ScopeContext
 
 logger = structlog.get_logger(__name__)
 
@@ -108,23 +109,19 @@ async def remember(
     derived deterministically from it, matching how the MCP surface works.
     ``X-Session-ID`` is used as the ``agent_id`` on the written node.
     """
-    if not x_silo_id:
-        raise HTTPException(status_code=400, detail="X-Silo-ID header is required")
-    if not x_session_id:
-        raise HTTPException(status_code=400, detail="X-Session-ID header is required")
+    silo_id, session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
 
     if not hasattr(request.app.state, "memgraph"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
 
     store = request.app.state.memgraph
-    silo_uuid = derive_silo_id(x_silo_id)
 
     try:
         result_tx, _events = await store_memory(
             store=store,
             content=request_body.content,
-            silo_id=str(silo_uuid),
-            agent_id=x_session_id,
+            silo_id=silo_id,
+            agent_id=session_id,
             layer="memory",
             tags=request_body.tags or None,
             content_type="text",
@@ -134,7 +131,7 @@ async def remember(
     except Exception as exc:
         logger.error(
             "rest_remember_failed",
-            silo_id=str(silo_uuid),
+            silo_id=silo_id,
             error=str(exc),
         )
         raise HTTPException(status_code=500, detail="Failed to store memory") from exc
@@ -142,7 +139,7 @@ async def remember(
     logger.info(
         "rest_remember_ok",
         node_id=str(result_tx.node_id),
-        silo_id=str(silo_uuid),
+        silo_id=silo_id,
     )
 
     return RememberResponse(
@@ -167,8 +164,7 @@ async def recall(
     ``X-Session-ID`` is optional for recall; it is accepted but not used in the
     query path.
     """
-    if not x_silo_id:
-        raise HTTPException(status_code=400, detail="X-Silo-ID header is required")
+    silo_id, _ = await get_silo_context(x_silo_id, require_session=False)
 
     if not hasattr(request.app.state, "memgraph"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
@@ -178,8 +174,7 @@ async def recall(
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail="Context service not available") from exc
 
-    silo_uuid = derive_silo_id(x_silo_id)
-    scope = ScopeContext(org_id=x_silo_id, silo_id=silo_uuid)
+    scope = ScopeContext(org_id=x_silo_id or silo_id, silo_id=silo_id)
 
     # Query expansion for hard queries (same logic as MCP recall)
     effective_query = request_body.query
@@ -198,7 +193,7 @@ async def recall(
                     vertex_project=models_config.vertex_project or None,
                     vertex_location=models_config.vertex_location or None,
                 )
-                effective_query = await expander.expand(request_body.query, str(silo_uuid))
+                effective_query = await expander.expand(request_body.query, silo_id)
                 if effective_query != request_body.query:
                     logger.info(
                         "rest_query_expanded",
@@ -218,7 +213,7 @@ async def recall(
     except Exception as exc:
         logger.error(
             "rest_recall_failed",
-            silo_id=str(silo_uuid),
+            silo_id=silo_id,
             error=str(exc),
         )
         raise HTTPException(status_code=500, detail="Failed to execute recall query") from exc
@@ -239,7 +234,7 @@ async def recall(
 
     logger.info(
         "rest_recall_ok",
-        silo_id=str(silo_uuid),
+        silo_id=silo_id,
         result_count=len(items),
     )
 
@@ -262,31 +257,27 @@ async def learn(
 
     Creates a Knowledge layer node (Claim) that can be verified by SAGE.
     """
-    if not x_silo_id:
-        raise HTTPException(status_code=400, detail="X-Silo-ID header is required")
-    if not x_session_id:
-        raise HTTPException(status_code=400, detail="X-Session-ID header is required")
+    silo_id, session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
 
     if not hasattr(request.app.state, "memgraph"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
 
     store = request.app.state.memgraph
-    silo_uuid = derive_silo_id(x_silo_id)
 
     try:
         result_tx, _events = await store_claim(
             store=store,
             content=request_body.claim,
             evidence_refs=request_body.evidence,
-            silo_id=str(silo_uuid),
-            agent_id=x_session_id,
+            silo_id=silo_id,
+            agent_id=session_id,
             confidence=0.8,
             tags=request_body.tags or None,
         )
     except Exception as exc:
         logger.error(
             "rest_learn_failed",
-            silo_id=str(silo_uuid),
+            silo_id=silo_id,
             error=str(exc),
         )
         raise HTTPException(status_code=500, detail=f"Failed to store claim: {exc}") from exc
@@ -294,7 +285,7 @@ async def learn(
     logger.info(
         "rest_learn_ok",
         node_id=str(result_tx.node_id),
-        silo_id=str(silo_uuid),
+        silo_id=silo_id,
     )
 
     return LearnResponse(
@@ -316,15 +307,13 @@ async def link(
     x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
 ) -> LinkResponse:
     """Create a typed relationship between two nodes."""
-    if not x_silo_id:
-        raise HTTPException(status_code=400, detail="X-Silo-ID header is required")
+    silo_id, session_id = await get_silo_context(x_silo_id, x_session_id, require_session=False)
 
     if not hasattr(request.app.state, "memgraph"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
 
     store = request.app.state.memgraph
-    silo_uuid = derive_silo_id(x_silo_id)
-    agent_id = x_session_id or x_silo_id
+    agent_id = session_id or silo_id
 
     # Map relation string to LinkType
     relation_map = {
@@ -347,14 +336,14 @@ async def link(
             source_id=request_body.from_node,
             target_id=request_body.to_node,
             edge_type=link_type,
-            silo_id=str(silo_uuid),
+            silo_id=silo_id,
             agent_id=agent_id,
             weight=1.0,
         )
     except Exception as exc:
         logger.error(
             "rest_link_failed",
-            silo_id=str(silo_uuid),
+            silo_id=silo_id,
             error=str(exc),
         )
         raise HTTPException(status_code=500, detail=f"Failed to create link: {exc}") from exc
@@ -362,7 +351,7 @@ async def link(
     logger.info(
         "rest_link_ok",
         edge_id=str(result_tx.edge_id),
-        silo_id=str(silo_uuid),
+        silo_id=silo_id,
     )
 
     return LinkResponse(
