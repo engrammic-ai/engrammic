@@ -22,7 +22,6 @@ from context_service.api.routes._auth import get_silo_context
 from context_service.mcp.server import get_context_service, get_postgres_store
 from context_service.reactions.events import emit_reaction
 from context_service.sage.transactions import store_memory
-from context_service.services.models import derive_silo_id
 
 logger = structlog.get_logger(__name__)
 
@@ -115,8 +114,7 @@ async def reason(
         raise HTTPException(status_code=503, detail="Context service not available") from exc
 
     store = ctx_svc.graph_store
-    silo_uuid = derive_silo_id(x_silo_id or silo_id)
-    agent_id = session_id or x_silo_id or silo_id
+    agent_id = session_id or silo_id
     resolved_session_id = session_id or str(uuid.uuid4())
 
     # Validate parent_chain_id exists before creating chain.
@@ -155,7 +153,7 @@ async def reason(
         await create_or_join_session(store, resolved_session_id, silo_id)
         await saga.write_chain(
             chain_id=chain_id,
-            silo_id=silo_uuid,
+            silo_id=silo_id,
             steps=chain_steps,
             produced_by_model="unknown",
             produced_by_agent_id=produced_by_agent_id,
@@ -163,7 +161,7 @@ async def reason(
             source="agent_explicit",
             conclusion=request_body.conclusion,
             evidence_used=request_body.evidence_used or None,
-            org_id=derive_org_uuid(x_silo_id or silo_id),
+            org_id=derive_org_uuid(x_silo_id) if x_silo_id else None,
         )
         elapsed = time.perf_counter() - _start
     except Exception as exc:
