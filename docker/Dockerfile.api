@@ -26,7 +26,7 @@ RUN mkdir -p /app/.cache/huggingface /app/.cache/fastembed && \
     chown -R engrammic:engrammic /app/.cache
 
 # Install additional deps not in base image
-RUN pip install --no-cache-dir google-cloud-aiplatform>=1.50
+RUN /app/.venv/bin/pip install --no-cache-dir google-cloud-aiplatform>=1.50
 
 # Validate critical imports at build time
 RUN SKIP_MODEL_CHECK=1 python /app/scripts/validate_imports.py
