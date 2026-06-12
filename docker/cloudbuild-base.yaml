@@ -7,6 +7,8 @@ steps:
       - '-f'
       - 'docker/Dockerfile.${_IMAGE}'
       - '.'
+    env:
+      - 'DOCKER_BUILDKIT=1'
 images:
   - '${_REGISTRY}/${_IMAGE}:latest'
 options:
