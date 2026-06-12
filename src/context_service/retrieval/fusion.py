@@ -111,8 +111,8 @@ class FusionRetriever:
         *,
         graph_depth: int = 2,  # noqa: ARG002
         layers: list[str] | None = None,
-        include_superseded: bool = False,
-        filters: Any | None = None,
+        include_superseded: bool = False,  # noqa: ARG002 - prep for channel passthrough
+        filters: Any | None = None,  # noqa: ARG002 - prep for channel passthrough
         fetch_content: bool = False,
     ) -> list[FusedResult]:
         """Run 4-channel retrieval with RRF fusion and optional reranking.

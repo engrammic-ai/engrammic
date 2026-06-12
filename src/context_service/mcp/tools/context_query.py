@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-import uuid
 import time
+import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
 
 import structlog
 from opentelemetry import trace
 
-from context_service.cache.rerank_cache import SemanticRerankCache
 from context_service.cache.result_cache import ResultCacheStore, get_knowledge_version
 from context_service.config.models import load_models_config
 from context_service.config.settings import get_settings
@@ -29,7 +28,6 @@ from context_service.reranking import (
     apply_threshold_filter,
     compute_adaptive_threshold,
     compute_retrieval_quality,
-    get_reranker,
     is_hard_query,
 )
 from context_service.reranking.epistemic_fusion import (
@@ -45,7 +43,6 @@ from context_service.telemetry.metrics import (
     record_hard_query_detection,
     record_mcp_tool,
     record_query_expansion,
-    record_reranking,
 )
 
 logger = structlog.get_logger(__name__)
@@ -67,7 +64,6 @@ def _search_mode_to_channels(mode: str) -> dict[str, bool]:
     return {"semantic": True, "bm25": True, "temporal": True, "ppr": True}
 
 _result_cache: ResultCacheStore | None = None
-_rerank_cache: SemanticRerankCache | None = None
 
 
 def _get_result_cache() -> ResultCacheStore:
@@ -75,22 +71,6 @@ def _get_result_cache() -> ResultCacheStore:
     if _result_cache is None:
         _result_cache = ResultCacheStore()
     return _result_cache
-
-
-def _get_rerank_cache(qdrant: Any, settings: Any) -> SemanticRerankCache | None:
-    """Get or create the rerank cache singleton."""
-    global _rerank_cache
-    if not settings.reranking.cache_enabled:
-        return None
-    if _rerank_cache is None:
-        _rerank_cache = SemanticRerankCache(
-            qdrant=qdrant,
-            similarity_threshold=settings.reranking.cache_similarity_threshold,
-            l1_ttl_seconds=settings.reranking.cache_l1_ttl_seconds,
-            l1_maxsize=settings.reranking.cache_l1_maxsize,
-            embedding_dimensions=settings.embedding_dimensions,
-        )
-    return _rerank_cache
 
 
 def _layer_ttls_for(layers: list[str] | None) -> dict[str, int]:
@@ -129,116 +109,6 @@ async def _emit_access_events(redis: Any, silo_id: str, results: list[Any]) -> N
         logger.warning("access_event_emit_timeout", silo_id=silo_id, result_count=len(results))
     except Exception as exc:
         logger.warning("access_event_emit_failed", silo_id=silo_id, error=str(exc))
-
-
-async def _apply_reranking(
-    query: str,
-    results: list[Any],
-    settings: Any,
-    query_embedding: list[float] | None = None,
-    silo_id: str | None = None,
-    rerank_cache: SemanticRerankCache | None = None,
-) -> tuple[list[Any], bool, bool]:
-    """Apply reranking to search results if enabled.
-
-    Returns:
-        (reranked_results, fallback_used, reranked_applied)
-
-        ``fallback_used`` is True when the reranker service failed and cosine
-        scores were preserved (i.e. reranking did NOT apply).
-
-        ``reranked_applied`` is True only when reranking ran successfully
-        (fresh or cache-hit) and the reranker scores have been written back
-        into each result's ``relevance_score``.  It is False for all
-        early-return paths and for the fallback path.
-    """
-    if not settings.reranking.enabled or len(results) <= 1:
-        return results, False, False
-
-    # Skip reranking if top result has high confidence (saves a round-trip)
-    top_score = max((r.relevance_score or 0.0) for r in results)
-    if top_score >= settings.reranking.skip_rerank_threshold:
-        logger.debug(
-            "rerank_skipped_high_confidence",
-            top_score=top_score,
-            threshold=settings.reranking.skip_rerank_threshold,
-        )
-        return results, False, False
-
-    models_config = load_models_config()
-    reranker = get_reranker(
-        config=models_config,
-        timeout_seconds=settings.reranking.reranker_timeout_seconds,
-    )
-    if reranker is None:
-        return results, False, False
-
-    node_ids = [str(r.node_id) for r in results]
-    id_to_result = {str(r.node_id): r for r in results}
-
-    # Check rerank cache first
-    if rerank_cache is not None and query_embedding is not None and silo_id is not None:
-        cached_scores = await rerank_cache.get(query, query_embedding, node_ids, silo_id)
-        if cached_scores is not None:
-            # Write cached reranker scores back into each result object.
-            wrote_any = False
-            for node_id, score in cached_scores:
-                if node_id in id_to_result:
-                    id_to_result[node_id].relevance_score = score
-                    wrote_any = True
-            # Only treat this as a cache hit if at least one cached id matched
-            # the current result set. A stale cache (no overlap) falls through
-            # to a fresh rerank rather than reporting reranked_applied=True with
-            # no scores actually written (which would threshold cosine scores
-            # against the rerank floor).
-            if wrote_any:
-                score_map = dict(cached_scores)
-                reranked_results = sorted(
-                    results,
-                    key=lambda r: score_map.get(str(r.node_id), 0.0),
-                    reverse=True,
-                )
-                return reranked_results, False, True
-
-    documents = [r.content or "" for r in results]
-
-    with tracer.start_as_current_span("recall.rerank") as span:
-        span.set_attribute("query_length", len(query))
-        span.set_attribute("candidates", len(results))
-        rerank_start = time.perf_counter()
-        fallback_used = False
-        try:
-            reranked = await reranker.rerank(
-                query=query,
-                documents=documents,
-                node_ids=node_ids,
-                top_k=len(results),
-            )
-            latency_ms = (time.perf_counter() - rerank_start) * 1000
-            span.set_attribute("latency_ms", latency_ms)
-            record_reranking(latency_ms=latency_ms, success=True)
-        except Exception:
-            latency_ms = (time.perf_counter() - rerank_start) * 1000
-            span.set_attribute("latency_ms", latency_ms)
-            record_reranking(latency_ms=latency_ms, success=False)
-            # Return in original order with fallback flag; do not propagate.
-            # Leave cosine scores intact -- do not write reranker scores back.
-            fallback_used = True
-            return results, fallback_used, False
-
-    # Write reranker scores back into each result object (only on success)
-    for rr in reranked:
-        if rr.node_id in id_to_result:
-            id_to_result[rr.node_id].relevance_score = rr.score
-
-    # Store in cache for future queries
-    if rerank_cache is not None and query_embedding is not None and silo_id is not None:
-        scores = [(rr.node_id, rr.score) for rr in reranked]
-        await rerank_cache.set(query, query_embedding, node_ids, scores, silo_id)
-
-    reranked_results = [id_to_result[rr.node_id] for rr in reranked if rr.node_id in id_to_result]
-    return reranked_results, fallback_used, True
-
 
 async def _maybe_expand_query(
     query: str,
