@@ -35,9 +35,7 @@ class TestBM25Channel:
         self, fusion_retriever: FusionRetriever, scope_context: MagicMock
     ) -> None:
         pool = _mock_pool([])
-        with patch(
-            "context_service.retrieval.fusion.get_db_pool", return_value=pool
-        ):
+        with patch("context_service.retrieval.fusion.get_db_pool", return_value=pool):
             result = await fusion_retriever._bm25_channel(
                 query="test query",
                 scope=scope_context,
@@ -82,9 +80,7 @@ class TestBM25Channel:
         rows = [_make_row(node_a, 0.9), _make_row(node_b, 0.5)]
         pool = _mock_pool(rows)
 
-        with patch(
-            "context_service.retrieval.fusion.get_db_pool", return_value=pool
-        ):
+        with patch("context_service.retrieval.fusion.get_db_pool", return_value=pool):
             result = await fusion_retriever._bm25_channel(
                 query="exact phrase test",
                 scope=scope_context,
@@ -119,9 +115,7 @@ class TestBM25Channel:
     async def test_bm25_no_pool_returns_error(
         self, fusion_retriever: FusionRetriever, scope_context: MagicMock
     ) -> None:
-        with patch(
-            "context_service.retrieval.fusion.get_db_pool", return_value=None
-        ):
+        with patch("context_service.retrieval.fusion.get_db_pool", return_value=None):
             result = await fusion_retriever._bm25_channel(
                 query="test query",
                 scope=scope_context,
@@ -142,9 +136,7 @@ class TestBM25Channel:
         pool.acquire.return_value.__aenter__ = AsyncMock(return_value=conn)
         pool.acquire.return_value.__aexit__ = AsyncMock(return_value=False)
 
-        with patch(
-            "context_service.retrieval.fusion.get_db_pool", return_value=pool
-        ):
+        with patch("context_service.retrieval.fusion.get_db_pool", return_value=pool):
             result = await fusion_retriever._bm25_channel(
                 query="test",
                 scope=scope_context,

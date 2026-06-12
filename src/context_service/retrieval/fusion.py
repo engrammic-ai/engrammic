@@ -429,6 +429,11 @@ class FusionRetriever:
                 node_layer = row.get("layer") or "knowledge"
                 half_life = temporal_cfg.half_life_for_layer(node_layer)
 
+                # Non-Memory layers have no time decay (half_life=None)
+                if half_life is None:
+                    scored.append((str(node_id), 1.0))
+                    continue
+
                 if raw_ts is None:
                     scored.append((str(node_id), 0.0))
                     continue

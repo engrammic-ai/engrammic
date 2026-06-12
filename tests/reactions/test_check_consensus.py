@@ -65,6 +65,7 @@ def _capture_broker_tasks(broker: MagicMock) -> dict[str, Any]:
         def decorator(fn: Any) -> Any:
             registered[task_name] = fn
             return fn
+
         return decorator
 
     broker.task = capture_task
@@ -87,14 +88,20 @@ class TestCheckConsensusThresholds:
         mock_pg_session.__aenter__.return_value.execute = AsyncMock(return_value=mock_result)
 
         with (
-            patch("context_service.reactions.tasks.get_context_service", return_value=mock_context_service),
+            patch(
+                "context_service.reactions.tasks.get_context_service",
+                return_value=mock_context_service,
+            ),
             patch("context_service.db.postgres.get_session", return_value=mock_pg_session),
-            patch("context_service.reactions.tasks.search_chains", new_callable=AsyncMock) as mock_search,
+            patch(
+                "context_service.reactions.tasks.search_chains", new_callable=AsyncMock
+            ) as mock_search,
         ):
             # Only one similar chain found (below K=3 threshold)
             mock_search.return_value = []
 
             from context_service.reactions.tasks import register_tasks
+
             broker = MagicMock()
             tasks = _capture_broker_tasks(broker)
             register_tasks(broker)
@@ -127,14 +134,22 @@ class TestCheckConsensusThresholds:
         mock_pg_session.__aenter__.return_value.execute = AsyncMock(return_value=mock_result)
 
         with (
-            patch("context_service.reactions.tasks.get_context_service", return_value=mock_context_service),
+            patch(
+                "context_service.reactions.tasks.get_context_service",
+                return_value=mock_context_service,
+            ),
             patch("context_service.db.postgres.get_session", return_value=mock_pg_session),
-            patch("context_service.reactions.tasks.search_chains", new_callable=AsyncMock) as mock_search,
-            patch("context_service.reactions.tasks._chains_reasoning_compatible", return_value=True),
+            patch(
+                "context_service.reactions.tasks.search_chains", new_callable=AsyncMock
+            ) as mock_search,
+            patch(
+                "context_service.reactions.tasks._chains_reasoning_compatible", return_value=True
+            ),
         ):
             mock_search.return_value = [{"id": str(mock_similar_chain.chain_id)}]
 
             from context_service.reactions.tasks import register_tasks
+
             broker = MagicMock()
             tasks = _capture_broker_tasks(broker)
             register_tasks(broker)
@@ -184,11 +199,21 @@ class TestCheckConsensusCreatesFact:
         mock_pg_session.__aenter__.return_value.execute = mock_execute
 
         with (
-            patch("context_service.reactions.tasks.get_context_service", return_value=mock_context_service),
+            patch(
+                "context_service.reactions.tasks.get_context_service",
+                return_value=mock_context_service,
+            ),
             patch("context_service.db.postgres.get_session", return_value=mock_pg_session),
-            patch("context_service.reactions.tasks.search_chains", new_callable=AsyncMock) as mock_search,
-            patch("context_service.reactions.tasks._chains_reasoning_compatible", return_value=True),
-            patch("context_service.reactions.tasks._find_existing_consensus_fact", new_callable=AsyncMock) as mock_find,
+            patch(
+                "context_service.reactions.tasks.search_chains", new_callable=AsyncMock
+            ) as mock_search,
+            patch(
+                "context_service.reactions.tasks._chains_reasoning_compatible", return_value=True
+            ),
+            patch(
+                "context_service.reactions.tasks._find_existing_consensus_fact",
+                new_callable=AsyncMock,
+            ) as mock_find,
             patch("context_service.reactions.tasks.emit_reaction", new_callable=AsyncMock),
         ):
             mock_search.return_value = [
@@ -198,6 +223,7 @@ class TestCheckConsensusCreatesFact:
             mock_find.return_value = None  # No existing fact
 
             from context_service.reactions.tasks import register_tasks
+
             broker = MagicMock()
             tasks = _capture_broker_tasks(broker)
             register_tasks(broker)
@@ -247,11 +273,21 @@ class TestCheckConsensusExtends:
         mock_pg_session.__aenter__.return_value.execute = mock_execute
 
         with (
-            patch("context_service.reactions.tasks.get_context_service", return_value=mock_context_service),
+            patch(
+                "context_service.reactions.tasks.get_context_service",
+                return_value=mock_context_service,
+            ),
             patch("context_service.db.postgres.get_session", return_value=mock_pg_session),
-            patch("context_service.reactions.tasks.search_chains", new_callable=AsyncMock) as mock_search,
-            patch("context_service.reactions.tasks._chains_reasoning_compatible", return_value=True),
-            patch("context_service.reactions.tasks._find_existing_consensus_fact", new_callable=AsyncMock) as mock_find,
+            patch(
+                "context_service.reactions.tasks.search_chains", new_callable=AsyncMock
+            ) as mock_search,
+            patch(
+                "context_service.reactions.tasks._chains_reasoning_compatible", return_value=True
+            ),
+            patch(
+                "context_service.reactions.tasks._find_existing_consensus_fact",
+                new_callable=AsyncMock,
+            ) as mock_find,
         ):
             mock_search.return_value = [
                 {"id": str(mock_similar_chain.chain_id)},
@@ -260,6 +296,7 @@ class TestCheckConsensusExtends:
             mock_find.return_value = existing_fact_id  # Existing fact
 
             from context_service.reactions.tasks import register_tasks
+
             broker = MagicMock()
             tasks = _capture_broker_tasks(broker)
             register_tasks(broker)
@@ -303,14 +340,22 @@ class TestCheckConsensusDTW:
         mock_pg_session.__aenter__.return_value.execute = mock_execute
 
         with (
-            patch("context_service.reactions.tasks.get_context_service", return_value=mock_context_service),
+            patch(
+                "context_service.reactions.tasks.get_context_service",
+                return_value=mock_context_service,
+            ),
             patch("context_service.db.postgres.get_session", return_value=mock_pg_session),
-            patch("context_service.reactions.tasks.search_chains", new_callable=AsyncMock) as mock_search,
-            patch("context_service.reactions.tasks._chains_reasoning_compatible", return_value=False),
+            patch(
+                "context_service.reactions.tasks.search_chains", new_callable=AsyncMock
+            ) as mock_search,
+            patch(
+                "context_service.reactions.tasks._chains_reasoning_compatible", return_value=False
+            ),
         ):
             mock_search.return_value = [{"id": str(mock_similar_chain.chain_id)}]
 
             from context_service.reactions.tasks import register_tasks
+
             broker = MagicMock()
             tasks = _capture_broker_tasks(broker)
             register_tasks(broker)

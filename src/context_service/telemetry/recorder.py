@@ -342,9 +342,7 @@ def record_extraction_corroborates(count: int, silo_id: str | None = None) -> No
     """Record CORROBORATES edges created during extraction."""
     if _buffer is None:
         return
-    _buffer.record(
-        metric_name="extraction.corroborates", silo_id=silo_id or "unknown", count=count
-    )
+    _buffer.record(metric_name="extraction.corroborates", silo_id=silo_id or "unknown", count=count)
 
 
 def record_extraction_latency(duration_ms: float, silo_id: str | None = None) -> None:

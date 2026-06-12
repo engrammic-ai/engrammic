@@ -186,9 +186,7 @@ def parse_temporal_query(query: str, now: datetime | None = None) -> TemporalQue
 
     # --- this year ---
     if re.search(r"\bthis\s+year\b", q_lower):
-        result.since = now.replace(
-            month=1, day=1, hour=0, minute=0, second=0, microsecond=0
-        )
+        result.since = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
         result.until = now
         result.raw_markers.append("this year")
         return result
@@ -211,9 +209,7 @@ def parse_temporal_query(query: str, now: datetime | None = None) -> TemporalQue
         return result
 
     # --- since <day_name> / since last <day_name> ---
-    m = re.search(
-        r"\bsince\s+(?:last\s+)?(" + "|".join(_WEEKDAY_NAMES) + r")\b", q_lower
-    )
+    m = re.search(r"\bsince\s+(?:last\s+)?(" + "|".join(_WEEKDAY_NAMES) + r")\b", q_lower)
     if m:
         day_name = m.group(1)
         day_index = _WEEKDAY_NAMES[day_name]

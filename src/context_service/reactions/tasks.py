@@ -73,9 +73,13 @@ def _chains_reasoning_compatible(
     # The steps field is a list of dicts; step_embeddings may be stored
     # as a separate column (conclusion_embedding) or within each step dict.
     if chain_a.steps:
-        steps_a = [s.get("embedding") for s in chain_a.steps if isinstance(s, dict) and s.get("embedding")]  # type: ignore[misc]
+        steps_a = [
+            s.get("embedding") for s in chain_a.steps if isinstance(s, dict) and s.get("embedding")
+        ]  # type: ignore[misc]
     if chain_b.steps:
-        steps_b = [s.get("embedding") for s in chain_b.steps if isinstance(s, dict) and s.get("embedding")]  # type: ignore[misc]
+        steps_b = [
+            s.get("embedding") for s in chain_b.steps if isinstance(s, dict) and s.get("embedding")
+        ]  # type: ignore[misc]
 
     if not steps_a or not steps_b:
         # No step data; assume compatible (spec: "assume compatible")
@@ -964,7 +968,8 @@ Return only valid JSON, no other text."""
                 # Use node_id from payload, not Qdrant point id
                 result = similar_results[0]
                 existing_id = (
-                    result.payload.get("node_id") if hasattr(result, "payload") and result.payload
+                    result.payload.get("node_id")
+                    if hasattr(result, "payload") and result.payload
                     else getattr(result, "id", None)
                 )
                 if existing_id:
@@ -1074,7 +1079,6 @@ RETURN n.id
         )
         log.info("trace_reasoning_task_start")
 
-
         from context_service.db.postgres import get_session as get_pg_session
         from context_service.db.queries import GET_WORKING_HYPOTHESES_FOR_SESSION
         from context_service.engine.models import BinaryEdge
@@ -1100,10 +1104,7 @@ RETURN n.id
             return
 
         # Filter to uncommitted and untraced hypotheses only.
-        uncommitted = [
-            r for r in rows
-            if not r.get("crystallized_into") and not r.get("traced_at")
-        ]
+        uncommitted = [r for r in rows if not r.get("crystallized_into") and not r.get("traced_at")]
 
         if not uncommitted:
             log.info("trace_reasoning_all_hypotheses_committed")
@@ -1307,9 +1308,7 @@ RETURN n.id AS id
     _CONSENSUS_SEARCH_LIMIT = 20  # Max candidates from ANN search
 
     @broker.task(task_name=ReactionEventType.CHECK_CONSENSUS, timeout=15)
-    async def check_consensus_task(
-        node_id: str, silo_id: str, **_payload: Any
-    ) -> None:
+    async def check_consensus_task(node_id: str, silo_id: str, **_payload: Any) -> None:
         """Check if a reasoning chain participates in consensus, promote to Fact if so (TX6).
 
         Implements three-layer consensus detection:
@@ -1507,9 +1506,7 @@ RETURN n.id AS id
 
         # 7. Create new Fact from consensus.
         agent_count = len(unique_agents)
-        base_confidence = min(
-            0.95, 0.6 + (len(all_chains) * 0.05) + (agent_count * 0.1)
-        )
+        base_confidence = min(0.95, 0.6 + (len(all_chains) * 0.05) + (agent_count * 0.1))
         now = datetime.now(UTC)
 
         fact_cypher = f"""
@@ -1603,12 +1600,12 @@ RETURN n.id AS id
     # ---------------------------------------------------------------------------
     # TX11 CHAIN_TOMBSTONED constants
     # ---------------------------------------------------------------------------
-    _CONSENSUS_MIN_CHAINS = settings.consensus.min_chains  # Minimum supporting chains for a consensus Fact to remain valid
+    _CONSENSUS_MIN_CHAINS = (
+        settings.consensus.min_chains
+    )  # Minimum supporting chains for a consensus Fact to remain valid
 
     @broker.task(task_name=ReactionEventType.CHAIN_TOMBSTONED, timeout=_TIMEOUT_CASCADE)
-    async def chain_tombstoned_task(
-        node_id: str, silo_id: str, **_payload: Any
-    ) -> None:
+    async def chain_tombstoned_task(node_id: str, silo_id: str, **_payload: Any) -> None:
         """Cascade staleness to consensus Facts when a ReasoningChain is tombstoned (TX11).
 
         When a ReasoningChain is tombstoned:

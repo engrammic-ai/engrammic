@@ -22,6 +22,7 @@ from context_service.reactions.events import ReactionEventType
 # sys.modules stubs
 # ---------------------------------------------------------------------------
 
+
 def _ensure_stub(name: str) -> types.ModuleType:
     """Return the existing module or create and register an empty stub."""
     if name not in sys.modules:
@@ -94,6 +95,7 @@ def _inject_all_stubs(mock_ctx_svc: MagicMock, mock_pg_session: AsyncMock | None
 # ---------------------------------------------------------------------------
 # Broker capture helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_broker() -> tuple[MagicMock, dict[str, Any]]:
     from taskiq_redis import ListQueueBroker

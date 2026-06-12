@@ -291,7 +291,9 @@ async def crystallize_endpoint(
         )
     except Exception as exc:
         logger.error("rest_crystallize_failed", silo_id=silo_id, error=str(exc))
-        raise HTTPException(status_code=500, detail=f"Failed to crystallize hypothesis: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"Failed to crystallize hypothesis: {exc}"
+        ) from exc
 
     logger.info(
         "rest_crystallize_ok",

@@ -18,8 +18,11 @@ class TestChannelConfigs:
     def test_temporal_defaults(self) -> None:
         cfg = TemporalChannelConfig()
         assert cfg.enabled is True
-        assert cfg.memory_half_life_days == 14
-        assert cfg.knowledge_half_life_days == 90
+        assert cfg.memory_half_life_days == 7.0
+        # Only Memory has decay; others return None
+        assert cfg.half_life_for_layer("memory") == 7.0
+        assert cfg.half_life_for_layer("knowledge") is None
+        assert cfg.half_life_for_layer("wisdom") is None
 
     def test_graph_defaults(self) -> None:
         cfg = GraphChannelConfig()

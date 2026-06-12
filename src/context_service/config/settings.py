@@ -187,24 +187,25 @@ class BM25ChannelConfig(BaseModel):
 
 
 class TemporalChannelConfig(BaseModel):
-    """Temporal date-aware retrieval channel configuration."""
+    """Temporal date-aware retrieval channel configuration.
+
+    Only Memory layer uses time-based recency decay. Knowledge/Wisdom persist
+    until superseded (evidence-gated). Intelligence is session-scoped.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     enabled: bool = True
     memory_half_life_days: float = 7.0
-    knowledge_half_life_days: float = 90.0
-    wisdom_half_life_days: float = 540.0
-    intelligence_half_life_days: float = 1825.0
 
-    def half_life_for_layer(self, layer: str) -> float:
-        """Return the half-life in days for a given cognitive layer."""
-        return {
-            "memory": self.memory_half_life_days,
-            "knowledge": self.knowledge_half_life_days,
-            "wisdom": self.wisdom_half_life_days,
-            "intelligence": self.intelligence_half_life_days,
-        }.get(layer.lower(), self.knowledge_half_life_days)
+    def half_life_for_layer(self, layer: str) -> float | None:
+        """Return the half-life in days for a given cognitive layer.
+
+        Returns None for non-Memory layers (no time-based decay).
+        """
+        if layer.lower() == "memory":
+            return self.memory_half_life_days
+        return None
 
 
 class GraphChannelConfig(BaseModel):

@@ -188,9 +188,7 @@ async def history(
     Does not require a session; read-only history traversal.
     """
     if not request_body.node_id and not request_body.subject:
-        raise HTTPException(
-            status_code=400, detail="Either node_id or subject is required"
-        )
+        raise HTTPException(status_code=400, detail="Either node_id or subject is required")
 
     silo_id, _ = await get_silo_context(x_silo_id, require_session=False)
 
@@ -261,9 +259,7 @@ async def patterns(
     try:
         skill_svc = get_skill_service()
     except RuntimeError as exc:
-        raise HTTPException(
-            status_code=503, detail="Patterns service not available"
-        ) from exc
+        raise HTTPException(status_code=503, detail="Patterns service not available") from exc
 
     try:
         if request_body.action == "list":
@@ -290,9 +286,7 @@ async def patterns(
 
         else:  # search
             if not request_body.query:
-                raise HTTPException(
-                    status_code=400, detail="query is required for search action"
-                )
+                raise HTTPException(status_code=400, detail="query is required for search action")
             skills = await skill_svc.search(
                 silo_id,
                 request_body.query,
@@ -333,9 +327,7 @@ async def forget(
     Places the node in TOMBSTONED state with a cancel window. Requires both
     X-Silo-ID and X-Session-ID headers.
     """
-    silo_id, session_id = await get_silo_context(
-        x_silo_id, x_session_id, require_session=True
-    )
+    silo_id, session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
 
     if not hasattr(request.app.state, "memgraph"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
@@ -373,7 +365,9 @@ async def forget(
 
     return ForgetResponse(
         node_id=str(result_tx.node_id),
-        state=str(result_tx.state.value) if hasattr(result_tx.state, "value") else str(result_tx.state),
+        state=str(result_tx.state.value)
+        if hasattr(result_tx.state, "value")
+        else str(result_tx.state),
         tombstoned_at=result_tx.tombstoned_at.isoformat(),
         cancel_window_expires=result_tx.cancel_window_expires.isoformat(),
         cascade_count=result_tx.cascade_count,
@@ -397,9 +391,7 @@ async def tick(
     near-zero side effects (session state update only). Requires both X-Silo-ID
     and X-Session-ID headers.
     """
-    silo_id, session_id = await get_silo_context(
-        x_silo_id, x_session_id, require_session=True
-    )
+    silo_id, session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
 
     from context_service.mcp.tools.tick import _tick
 
