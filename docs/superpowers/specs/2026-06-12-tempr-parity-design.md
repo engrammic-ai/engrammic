@@ -196,7 +196,31 @@ mem0 head-to-head on epistemic slices only. Harness exists at `../longmemeval-ha
 ### Adapters
 
 - `engrammic.py` - calls our MCP recall
+- `engrammic_baseline.py` - semantic-only (channels disabled) for ablation
 - `mem0.py` - calls mem0 API
+
+### Comparison Arms
+
+1. **Engrammic (full)** - all channels + reranker + epistemic fusion
+2. **Engrammic (baseline)** - semantic-only, no epistemic fusion
+3. **mem0** - their API
+
+This shows both channel lift and mem0 comparison.
+
+## Pre-Sprint Setup (Day 0 / evening before)
+
+Before Day 1 starts, complete these to prevent integration issues:
+
+1. **Pipeline skeleton in `fusion.py`** — define `retrieve()` signature with stub channel methods (`_bm25_channel`, `_temporal_channel`, `_ppr_channel`, `_rerank` returning empty results). This prevents merge conflicts when worktrees fill in implementations.
+
+2. **Verify Memgraph MAGE** — confirm beta host runs `memgraph-mage` image for PPR. If not, plan Python-side PPR using adjacency fetch + iteration as fallback.
+
+3. **Pre-download reranker model** — add to Dockerfile:
+   ```dockerfile
+   RUN python -c "from sentence_transformers import CrossEncoder; CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')"
+   ```
+
+4. **Verify mem0 adapter** — confirm `../longmemeval-harness/adapters/mem0.py` exists and works.
 
 ## Schedule
 
@@ -262,6 +286,11 @@ mem0 head-to-head on epistemic slices only. Harness exists at `../longmemeval-ha
 | E2E | E2E | Real stores, sample queries |
 
 TDD approach: failing test first, then implementation.
+
+**Additional tests (from Opus review):**
+- Latency regression: assert full pipeline < 250ms p95
+- RRF empty handling: test 1-channel, 2-channel, all-empty scenarios
+- Temporal parser boundaries: "last week" triggers, "the last project" does not
 
 ## Dependencies
 
