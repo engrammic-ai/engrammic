@@ -177,6 +177,52 @@ class EpistemicFusionConfig(BaseModel):
     )
 
 
+class BM25ChannelConfig(BaseModel):
+    """BM25 keyword search channel configuration."""
+
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = True
+    top_k: int = 100
+
+
+class TemporalChannelConfig(BaseModel):
+    """Temporal date-aware retrieval channel configuration."""
+
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = True
+    memory_half_life_days: int = 14
+    knowledge_half_life_days: int = 90
+
+
+class GraphChannelConfig(BaseModel):
+    """PPR graph traversal channel configuration."""
+
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = True
+    damping: float = 0.85
+    max_iterations: int = 50
+    edge_weights: dict[str, float] = Field(
+        default_factory=lambda: {
+            "SYNTHESIZED_FROM": 1.5,
+            "SUPERSEDES": 1.5,
+            "LINK": 1.0,
+        }
+    )
+
+
+class CrossEncoderConfig(BaseModel):
+    """Local cross-encoder reranker configuration."""
+
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = True
+    model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    top_k: int = 50
+
+
 class RerankingSettings(BaseModel):
     """Settings for semantic reranking and query expansion."""
 
@@ -1061,6 +1107,10 @@ class Settings(BaseSettings):
     )
     trust_gate: TrustGateConfig = Field(default_factory=TrustGateConfig)
     epistemic_fusion: EpistemicFusionConfig = Field(default_factory=EpistemicFusionConfig)
+    bm25_channel: BM25ChannelConfig = Field(default_factory=BM25ChannelConfig)
+    temporal_channel: TemporalChannelConfig = Field(default_factory=TemporalChannelConfig)
+    graph_channel: GraphChannelConfig = Field(default_factory=GraphChannelConfig)
+    cross_encoder: CrossEncoderConfig = Field(default_factory=CrossEncoderConfig)
     usage: UsageRetentionConfig = Field(default_factory=UsageRetentionConfig)
 
     # =========================================================================
