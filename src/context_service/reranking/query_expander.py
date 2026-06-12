@@ -123,7 +123,9 @@ class QueryExpander:
                 location=self._vertex_location,
             )
             _GENAI_CLIENT_KEY = key
-            logger.info("genai_client_created", project=self._vertex_project, location=self._vertex_location)
+            logger.info(
+                "genai_client_created", project=self._vertex_project, location=self._vertex_location
+            )
         return _GENAI_CLIENT
 
     async def _llm_expand(self, query: str) -> str:
@@ -184,6 +186,7 @@ class QueryExpander:
         Returns (content, input_tokens, output_tokens).
         """
         import time
+
         start = time.monotonic()
         client = self._get_genai_client()
         logger.debug("genai_expand_start", model=self._model, prompt_len=len(prompt))
@@ -196,7 +199,9 @@ class QueryExpander:
                 contents=prompt,
                 config={"response_mime_type": "application/json"},
             )
-            logger.info("genai_generate_content_done", elapsed_ms=int((time.monotonic() - gen_start) * 1000))
+            logger.info(
+                "genai_generate_content_done", elapsed_ms=int((time.monotonic() - gen_start) * 1000)
+            )
             return result
 
         response = await asyncio.wait_for(

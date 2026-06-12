@@ -497,7 +497,9 @@ class QdrantClient:
                     response = await client.query_points(
                         collection_name=self._collection_name,
                         query=models.SparseVector(
-                            indices=sparse_indices,                            values=sparse_values,                        ),
+                            indices=sparse_indices,
+                            values=sparse_values,
+                        ),
                         using=SPARSE_VECTOR_NAME,
                         limit=limit,
                         score_threshold=score_threshold,
@@ -515,7 +517,9 @@ class QdrantClient:
                             ),
                             models.Prefetch(
                                 query=models.SparseVector(
-                                    indices=sparse_indices,                                    values=sparse_values,                                ),
+                                    indices=sparse_indices,
+                                    values=sparse_values,
+                                ),
                                 using=SPARSE_VECTOR_NAME,
                                 filter=query_filter,
                                 limit=limit * 2,

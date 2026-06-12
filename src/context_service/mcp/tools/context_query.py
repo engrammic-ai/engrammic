@@ -63,6 +63,7 @@ def _search_mode_to_channels(mode: str) -> dict[str, bool]:
         return {"semantic": False, "bm25": True, "temporal": False, "ppr": False}
     return {"semantic": True, "bm25": True, "temporal": True, "ppr": True}
 
+
 _result_cache: ResultCacheStore | None = None
 
 
@@ -109,6 +110,7 @@ async def _emit_access_events(redis: Any, silo_id: str, results: list[Any]) -> N
         logger.warning("access_event_emit_timeout", silo_id=silo_id, result_count=len(results))
     except Exception as exc:
         logger.warning("access_event_emit_failed", silo_id=silo_id, error=str(exc))
+
 
 async def _maybe_expand_query(
     query: str,

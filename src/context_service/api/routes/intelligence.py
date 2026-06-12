@@ -4,8 +4,7 @@ Exposes reason and reflect over HTTP for benchmark harnesses and headless
 integrations that cannot use the MCP transport.
 
 Headers:
-- X-Silo-ID: required for both endpoints
-- X-Session-ID: required for both endpoints
+- X-Session-ID: optional session tracking
 """
 
 from __future__ import annotations
@@ -15,10 +14,10 @@ import uuid
 from datetime import UTC, datetime
 
 import structlog
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from context_service.api.routes._auth import get_silo_context
+from context_service.api.routes._auth import get_authenticated_silo
 from context_service.mcp.server import get_context_service, get_postgres_store
 from context_service.reactions.events import emit_reaction
 from context_service.sage.transactions import store_memory
@@ -84,8 +83,7 @@ class ReflectResponse(BaseModel):
 async def reason(
     request_body: ReasonRequest,
     request: Request,
-    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
-    x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
+    auth_context: tuple[str, str | None] = Depends(get_authenticated_silo),
 ) -> ReasonResponse:
     """Record explicit reasoning steps to the intelligence layer.
 
@@ -94,7 +92,7 @@ async def reason(
     score. The ``conclusion`` field is embedded and used for applicability
     matching at recall time.
     """
-    silo_id, session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
+    silo_id, session_id = auth_context
 
     if not request_body.steps:
         raise HTTPException(status_code=400, detail="steps must be a non-empty list")
@@ -161,7 +159,7 @@ async def reason(
             source="agent_explicit",
             conclusion=request_body.conclusion,
             evidence_used=request_body.evidence_used or None,
-            org_id=derive_org_uuid(x_silo_id) if x_silo_id else None,
+            org_id=derive_org_uuid(silo_id),
         )
         elapsed = time.perf_counter() - _start
     except Exception as exc:
@@ -249,8 +247,7 @@ async def reason(
 async def reflect(
     request_body: ReflectRequest,
     request: Request,
-    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
-    x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
+    auth_context: tuple[str, str | None] = Depends(get_authenticated_silo),
 ) -> ReflectResponse:
     """Record a meta-observation about existing knowledge nodes.
 
@@ -258,7 +255,7 @@ async def reflect(
     contain node IDs that this observation concerns. Valid observation types
     include ``pattern``, ``contradiction``, ``uncertainty``, and ``drift``.
     """
-    silo_id, session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
+    silo_id, session_id = auth_context
 
     if not hasattr(request.app.state, "memgraph"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
@@ -269,7 +266,7 @@ async def reflect(
         raise HTTPException(status_code=503, detail="Context service not available") from exc
 
     store = ctx_svc.graph_store
-    agent_id = session_id or x_silo_id or silo_id
+    agent_id = session_id or silo_id
 
     try:
         _start = time.perf_counter()

@@ -57,9 +57,7 @@ def validate_config() -> None:
     if active.reasoning.provider == "vertex_ai":
         has_project = settings.vertex_project or settings.vertex_project_id
         if not (has_project or _has_adc()):
-            errors.append(
-                "Tier uses Vertex AI but no VERTEX_PROJECT or ADC credentials found"
-            )
+            errors.append("Tier uses Vertex AI but no VERTEX_PROJECT or ADC credentials found")
 
     if active.embeddings.provider == "vertex_ai":
         has_project = settings.vertex_project or settings.vertex_project_id

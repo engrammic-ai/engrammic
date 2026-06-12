@@ -157,7 +157,9 @@ class FusionRetriever:
             channel_coros.append(self._grep_channel(query, scope, fetch_k, layers))
             channel_names.append("grep")
 
-        raw_results = await asyncio.gather(*channel_coros, return_exceptions=True) if channel_coros else []
+        raw_results = (
+            await asyncio.gather(*channel_coros, return_exceptions=True) if channel_coros else []
+        )
 
         # Process parallel channel results
         channel_results: list[ChannelResult] = []
@@ -180,7 +182,11 @@ class FusionRetriever:
 
         # 2. PPR graph channel seeded from semantic hits (if enabled).
         if self._channel_config.get("ppr", True):
-            seed_ids = semantic_result.ranked_ids[:20] if semantic_result and not semantic_result.error else []
+            seed_ids = (
+                semantic_result.ranked_ids[:20]
+                if semantic_result and not semantic_result.error
+                else []
+            )
             ppr_result: ChannelResult
             try:
                 ppr_result = await self._ppr_channel(seed_ids, scope, fetch_k, layers)
@@ -227,9 +233,7 @@ class FusionRetriever:
 
         # Log per-channel hit counts for diagnostics
         channel_counts = {
-            c.channel_name: len(c.ranked_ids)
-            for c in channel_results
-            if c.error is None
+            c.channel_name: len(c.ranked_ids) for c in channel_results if c.error is None
         }
         logger.info(
             "fusion_complete",
@@ -659,7 +663,11 @@ class FusionRetriever:
                 """
                 layer_rows = await self._ctx.graph_store.execute_query(
                     layer_cypher,
-                    {"node_ids": list(scores.keys()), "silo_id": str(scope.silo_id), "layers": layers},
+                    {
+                        "node_ids": list(scores.keys()),
+                        "silo_id": str(scope.silo_id),
+                        "layers": layers,
+                    },
                 )
                 valid_ids = {r["node_id"] for r in layer_rows}
                 scores = {k: v for k, v in scores.items() if k in valid_ids}

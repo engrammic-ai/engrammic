@@ -5,17 +5,17 @@ HTTP for benchmark harnesses and headless integrations that cannot use the
 MCP transport.
 
 Headers:
-- X-Silo-ID: required for all endpoints
-- X-Session-ID: required for all endpoints
+- X-Session-ID: optional session identifier
+- Authorization: Bearer token (required when AUTH_ENABLED=true)
 """
 
 from __future__ import annotations
 
 import structlog
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from context_service.api.routes._auth import get_silo_context
+from context_service.api.routes._auth import get_authenticated_silo
 from context_service.mcp.tools.context_store import _context_store_belief
 from context_service.mcp.tools.context_update_belief import _context_update_belief
 from context_service.mcp.tools.dismiss import _dismiss_marker
@@ -122,15 +122,14 @@ class ReviseResponse(BaseModel):
 async def decide(
     request_body: DecideRequest,
     request: Request,
-    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
-    x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
+    auth_context: tuple[str, str | None] = Depends(get_authenticated_silo),
 ) -> DecideResponse:
     """Declare a direct agent commitment to the wisdom layer.
 
     Creates a Commitment node with ABOUT edges to the referenced nodes.
     Equivalent to the MCP ``decide`` verb.
     """
-    silo_id, session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
+    silo_id, session_id = auth_context
 
     if not hasattr(request.app.state, "memgraph"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
@@ -168,14 +167,13 @@ async def decide(
 async def accept(
     request_body: AcceptRequest,
     request: Request,
-    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
-    x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
+    auth_context: tuple[str, str | None] = Depends(get_authenticated_silo),
 ) -> AcceptResponse:
     """Accept a SAGE-synthesized ProposedBelief, promoting it to a full Belief.
 
     Equivalent to the MCP ``accept`` verb.
     """
-    silo_id, session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
+    silo_id, session_id = auth_context
 
     if not hasattr(request.app.state, "memgraph"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
@@ -215,15 +213,14 @@ async def accept(
 async def hypothesize(
     request_body: HypothesizeRequest,
     request: Request,
-    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
-    x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
+    auth_context: tuple[str, str | None] = Depends(get_authenticated_silo),
 ) -> HypothesizeResponse:
     """Create a WorkingHypothesis scoped to the current session.
 
     Finalize with ``/crystallize`` to promote to a permanent Commitment.
     Equivalent to the MCP ``hypothesize`` verb.
     """
-    silo_id, session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
+    silo_id, session_id = auth_context
 
     if not hasattr(request.app.state, "memgraph"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
@@ -262,8 +259,7 @@ async def hypothesize(
 async def crystallize_endpoint(
     request_body: CrystallizeRequest,
     request: Request,
-    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
-    x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
+    auth_context: tuple[str, str | None] = Depends(get_authenticated_silo),
 ) -> CrystallizeResponse:
     """Promote a WorkingHypothesis to a Commitment.
 
@@ -274,7 +270,7 @@ async def crystallize_endpoint(
 
     Equivalent to the MCP ``commit`` verb.
     """
-    silo_id, session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
+    silo_id, session_id = auth_context
 
     if not hasattr(request.app.state, "memgraph"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
@@ -319,14 +315,13 @@ async def crystallize_endpoint(
 async def dismiss(
     request_body: DismissRequest,
     request: Request,
-    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
-    x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
+    auth_context: tuple[str, str | None] = Depends(get_authenticated_silo),
 ) -> DismissResponse:
     """Dismiss a Contradiction/StaleCommitment marker or reject a ProposedBelief.
 
     Equivalent to the MCP ``dismiss`` verb.
     """
-    silo_id, _session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
+    silo_id, _session_id = auth_context
 
     if not hasattr(request.app.state, "memgraph"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
@@ -363,14 +358,13 @@ async def dismiss(
 async def revise(
     request_body: ReviseRequest,
     request: Request,
-    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
-    x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
+    auth_context: tuple[str, str | None] = Depends(get_authenticated_silo),
 ) -> ReviseResponse:
     """Mutate an existing WorkingHypothesis (confidence and/or content).
 
     Equivalent to the MCP ``revise`` verb.
     """
-    silo_id, _session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
+    silo_id, _session_id = auth_context
 
     if not hasattr(request.app.state, "memgraph"):
         raise HTTPException(status_code=503, detail="Memgraph not available")

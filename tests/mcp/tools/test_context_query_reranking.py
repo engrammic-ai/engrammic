@@ -80,9 +80,7 @@ class TestContextQueryReranking:
                 "context_service.mcp.tools.context_query.get_settings", return_value=mock_settings
             ),
             patch("context_service.mcp.tools.context_query.get_redis", return_value=None),
-            patch(
-                "context_service.mcp.tools.context_query.FusionRetriever"
-            ) as mock_fr_cls,
+            patch("context_service.mcp.tools.context_query.FusionRetriever") as mock_fr_cls,
         ):
             mock_fr_cls.return_value.retrieve = mock_fr
 
@@ -144,9 +142,7 @@ class TestContextQueryReranking:
                 "context_service.mcp.tools.context_query.get_settings", return_value=mock_settings
             ),
             patch("context_service.mcp.tools.context_query.get_redis", return_value=None),
-            patch(
-                "context_service.mcp.tools.context_query.FusionRetriever"
-            ) as mock_fr_cls,
+            patch("context_service.mcp.tools.context_query.FusionRetriever") as mock_fr_cls,
         ):
             mock_fr_cls.return_value.retrieve = AsyncMock(return_value=fused_results)
 
@@ -232,9 +228,7 @@ class TestContextQueryReranking:
                 "context_service.mcp.tools.context_query.get_settings", return_value=mock_settings
             ),
             patch("context_service.mcp.tools.context_query.get_redis", return_value=None),
-            patch(
-                "context_service.mcp.tools.context_query.FusionRetriever"
-            ) as mock_fr_cls,
+            patch("context_service.mcp.tools.context_query.FusionRetriever") as mock_fr_cls,
         ):
             mock_fr_cls.return_value.retrieve = AsyncMock(return_value=fused_results)
 

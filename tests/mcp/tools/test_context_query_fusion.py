@@ -86,13 +86,9 @@ async def test_fusion_reorders_and_surfaces_breakdown() -> None:
             return_value=_settings(),
         ),
         patch("context_service.mcp.tools.context_query.get_redis", return_value=None),
-        patch(
-            "context_service.mcp.tools.context_query.FusionRetriever"
-        ) as mock_fr_cls,
+        patch("context_service.mcp.tools.context_query.FusionRetriever") as mock_fr_cls,
     ):
-        mock_fr_cls.return_value.retrieve = AsyncMock(
-            return_value=[low_evidence, high_evidence]
-        )
+        mock_fr_cls.return_value.retrieve = AsyncMock(return_value=[low_evidence, high_evidence])
         mock_svc.return_value.query = AsyncMock(return_value=[])
 
         from context_service.mcp.tools.context_query import _context_query
@@ -155,13 +151,9 @@ async def test_fusion_disabled_preserves_order() -> None:
             return_value=_settings(fusion_enabled=False),
         ),
         patch("context_service.mcp.tools.context_query.get_redis", return_value=None),
-        patch(
-            "context_service.mcp.tools.context_query.FusionRetriever"
-        ) as mock_fr_cls,
+        patch("context_service.mcp.tools.context_query.FusionRetriever") as mock_fr_cls,
     ):
-        mock_fr_cls.return_value.retrieve = AsyncMock(
-            return_value=[low_evidence, high_evidence]
-        )
+        mock_fr_cls.return_value.retrieve = AsyncMock(return_value=[low_evidence, high_evidence])
         mock_svc.return_value.query = AsyncMock(return_value=[])
 
         from context_service.mcp.tools.context_query import _context_query

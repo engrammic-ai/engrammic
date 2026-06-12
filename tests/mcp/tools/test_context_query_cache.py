@@ -141,9 +141,7 @@ async def test_context_query_result_cache_hit() -> None:
             "context_service.mcp.tools.context_query.get_knowledge_version",
             new=AsyncMock(return_value=None),
         ),
-        patch(
-            "context_service.mcp.tools.context_query.FusionRetriever"
-        ) as mock_fr_cls,
+        patch("context_service.mcp.tools.context_query.FusionRetriever") as mock_fr_cls,
     ):
         mock_fr_cls.return_value.retrieve = mock_fr
 
@@ -174,7 +172,9 @@ async def test_context_query_result_cache_miss_then_populate() -> None:
     mock_auth.org_id = "test-org"
 
     mock_ctx_svc = MagicMock()
-    mock_fr = AsyncMock(return_value=[_make_fake_fused(node_id="00000000-0000-0000-0000-000000000099")])
+    mock_fr = AsyncMock(
+        return_value=[_make_fake_fused(node_id="00000000-0000-0000-0000-000000000099")]
+    )
 
     mock_settings = _make_mock_settings()
     mock_silo_svc = _make_mock_silo_service()
@@ -217,9 +217,7 @@ async def test_context_query_result_cache_miss_then_populate() -> None:
             "context_service.mcp.tools.context_query.get_knowledge_version",
             new=AsyncMock(return_value=None),
         ),
-        patch(
-            "context_service.mcp.tools.context_query.FusionRetriever"
-        ) as mock_fr_cls,
+        patch("context_service.mcp.tools.context_query.FusionRetriever") as mock_fr_cls,
     ):
         mock_fr_cls.return_value.retrieve = mock_fr
 
@@ -253,7 +251,9 @@ async def test_context_query_bypass_cache() -> None:
     mock_auth.org_id = "test-org"
 
     mock_ctx_svc = MagicMock()
-    mock_fr = AsyncMock(return_value=[_make_fake_fused(node_id="00000000-0000-0000-0000-000000000098")])
+    mock_fr = AsyncMock(
+        return_value=[_make_fake_fused(node_id="00000000-0000-0000-0000-000000000098")]
+    )
 
     mock_settings = _make_mock_settings()
     mock_silo_svc = _make_mock_silo_service()
@@ -278,7 +278,9 @@ async def test_context_query_bypass_cache() -> None:
             "created_at": None,
         }
     ]
-    fresh_cache.set("bypass query", None, "test-silo", 0, 10, None, False, "v2:hybrid", stale_results)
+    fresh_cache.set(
+        "bypass query", None, "test-silo", 0, 10, None, False, "v2:hybrid", stale_results
+    )
 
     with (
         patch(
@@ -310,9 +312,7 @@ async def test_context_query_bypass_cache() -> None:
             "context_service.mcp.tools.context_query.get_knowledge_version",
             new=AsyncMock(return_value=None),
         ),
-        patch(
-            "context_service.mcp.tools.context_query.FusionRetriever"
-        ) as mock_fr_cls,
+        patch("context_service.mcp.tools.context_query.FusionRetriever") as mock_fr_cls,
     ):
         mock_fr_cls.return_value.retrieve = mock_fr
 
@@ -414,7 +414,9 @@ async def test_context_query_intelligence_layer_not_cached() -> None:
 
     mock_ctx_svc = MagicMock()
     mock_fr = AsyncMock(
-        return_value=[_make_fake_fused(node_id="00000000-0000-0000-0000-000000000097", layer="intelligence")]
+        return_value=[
+            _make_fake_fused(node_id="00000000-0000-0000-0000-000000000097", layer="intelligence")
+        ]
     )
 
     mock_settings = _make_mock_settings()
@@ -458,9 +460,7 @@ async def test_context_query_intelligence_layer_not_cached() -> None:
             "context_service.mcp.tools.context_query.get_knowledge_version",
             new=AsyncMock(return_value=None),
         ),
-        patch(
-            "context_service.mcp.tools.context_query.FusionRetriever"
-        ) as mock_fr_cls,
+        patch("context_service.mcp.tools.context_query.FusionRetriever") as mock_fr_cls,
     ):
         mock_fr_cls.return_value.retrieve = mock_fr
 
@@ -502,7 +502,9 @@ async def test_context_query_max_age_seconds_evicts_stale() -> None:
     mock_auth.org_id = "test-org"
 
     mock_ctx_svc = MagicMock()
-    mock_fr = AsyncMock(return_value=[_make_fake_fused(node_id="00000000-0000-0000-0000-000000000096")])
+    mock_fr = AsyncMock(
+        return_value=[_make_fake_fused(node_id="00000000-0000-0000-0000-000000000096")]
+    )
 
     mock_settings = _make_mock_settings()
     mock_silo_svc = _make_mock_silo_service()
@@ -573,9 +575,7 @@ async def test_context_query_max_age_seconds_evicts_stale() -> None:
             "context_service.mcp.tools.context_query.get_knowledge_version",
             new=AsyncMock(return_value=0),
         ),
-        patch(
-            "context_service.mcp.tools.context_query.FusionRetriever"
-        ) as mock_fr_cls,
+        patch("context_service.mcp.tools.context_query.FusionRetriever") as mock_fr_cls,
     ):
         mock_fr_cls.return_value.retrieve = mock_fr
 
@@ -607,7 +607,9 @@ async def test_context_query_max_age_seconds_within_limit() -> None:
     mock_auth.org_id = "test-org"
 
     mock_ctx_svc = MagicMock()
-    mock_fr = AsyncMock(return_value=[_make_fake_fused(node_id="00000000-0000-0000-0000-000000000095")])
+    mock_fr = AsyncMock(
+        return_value=[_make_fake_fused(node_id="00000000-0000-0000-0000-000000000095")]
+    )
 
     mock_settings = _make_mock_settings()
     mock_silo_svc = _make_mock_silo_service()
@@ -678,9 +680,7 @@ async def test_context_query_max_age_seconds_within_limit() -> None:
             "context_service.mcp.tools.context_query.get_knowledge_version",
             new=AsyncMock(return_value=0),
         ),
-        patch(
-            "context_service.mcp.tools.context_query.FusionRetriever"
-        ) as mock_fr_cls,
+        patch("context_service.mcp.tools.context_query.FusionRetriever") as mock_fr_cls,
     ):
         mock_fr_cls.return_value.retrieve = mock_fr
 

@@ -4,8 +4,8 @@ Exposes trace, history, patterns, forget, and tick over HTTP for benchmark
 harnesses and headless integrations that cannot use the MCP transport.
 
 Headers:
-- X-Silo-ID: required for all endpoints; treated as org_id, silo UUID is derived
-- X-Session-ID: required for forget and tick (write operations)
+- X-Session-ID: required for forget and tick (write operations); silo_id is
+  derived from the verified auth context, not a caller-supplied header
 """
 
 from __future__ import annotations
@@ -13,10 +13,10 @@ from __future__ import annotations
 from typing import Any, Literal
 
 import structlog
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from context_service.api.routes._auth import get_silo_context
+from context_service.api.routes._auth import get_authenticated_silo
 from context_service.mcp.server import get_context_service, get_skill_service
 
 logger = structlog.get_logger(__name__)
@@ -122,13 +122,13 @@ class TickResponse(BaseModel):
 )
 async def trace(
     request_body: TraceRequest,
-    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
+    auth_context: tuple[str, str | None] = Depends(get_authenticated_silo),
 ) -> TraceResponse:
     """Trace the citation chain from a node back to Memory-layer sources.
 
     Does not require a session; read-only provenance traversal.
     """
-    silo_id, _ = await get_silo_context(x_silo_id, require_session=False)
+    silo_id, _ = auth_context
 
     try:
         ctx_svc = get_context_service()
@@ -180,7 +180,7 @@ async def trace(
 )
 async def history(
     request_body: HistoryRequest,
-    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
+    auth_context: tuple[str, str | None] = Depends(get_authenticated_silo),
 ) -> HistoryResponse:
     """Return the SUPERSEDES chain showing how a belief evolved over time.
 
@@ -190,7 +190,7 @@ async def history(
     if not request_body.node_id and not request_body.subject:
         raise HTTPException(status_code=400, detail="Either node_id or subject is required")
 
-    silo_id, _ = await get_silo_context(x_silo_id, require_session=False)
+    silo_id, _ = auth_context
 
     try:
         ctx_svc = get_context_service()
@@ -248,13 +248,13 @@ async def history(
 )
 async def patterns(
     request_body: PatternsRequest,
-    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
+    auth_context: tuple[str, str | None] = Depends(get_authenticated_silo),
 ) -> PatternsResponse:
     """List, get, or search agent workflow patterns (skills).
 
     Does not require a session; read-only skill registry access.
     """
-    silo_id, _ = await get_silo_context(x_silo_id, require_session=False)
+    silo_id, _ = auth_context
 
     try:
         skill_svc = get_skill_service()
@@ -319,15 +319,14 @@ async def patterns(
 async def forget(
     request_body: ForgetRequest,
     request: Request,
-    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
-    x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
+    auth_context: tuple[str, str | None] = Depends(get_authenticated_silo),
 ) -> ForgetResponse:
     """Request soft-deletion of a node (TX15).
 
     Places the node in TOMBSTONED state with a cancel window. Requires both
-    X-Silo-ID and X-Session-ID headers.
+    authentication and X-Session-ID header.
     """
-    silo_id, session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
+    silo_id, session_id = auth_context
 
     if not hasattr(request.app.state, "memgraph"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
@@ -382,16 +381,15 @@ async def forget(
 )
 async def tick(
     request_body: TickRequest,
-    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
-    x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
+    auth_context: tuple[str, str | None] = Depends(get_authenticated_silo),
 ) -> TickResponse:
     """Check for pending engagement markers without a full recall operation.
 
     Safe to call frequently; reads the precomputed marker index only and has
-    near-zero side effects (session state update only). Requires both X-Silo-ID
-    and X-Session-ID headers.
+    near-zero side effects (session state update only). Requires authentication
+    and X-Session-ID header.
     """
-    silo_id, session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
+    silo_id, session_id = auth_context
 
     from context_service.mcp.tools.tick import _tick
 
