@@ -1,42 +1,12 @@
-# Stage 1: Build dependencies
-FROM python:3.13-slim AS builder
-
-WORKDIR /app
-
-# Install uv for fast dependency resolution
-COPY --from=ghcr.io/astral-sh/uv:0.6.14 /uv /usr/local/bin/uv
-
-# Copy dependency files
-COPY pyproject.toml uv.lock README.md ./
-
-# UV cache optimization
-ENV UV_LINK_MODE=copy
-ENV UV_COMPILE_BYTECODE=1
-
-# Install production dependencies for API (no dagster/pydantic-ai)
-# sparse group = FastEmbed BM25 (ONNX, ~100MB, no CUDA)
-# splade group = torch SPLADE (~2GB, optional CUDA) - use for higher quality sparse
-# reranking group = sentence-transformers cross-encoder (~500MB)
-ARG INCLUDE_SPLADE=false
-ARG INCLUDE_RERANKING=false
-RUN --mount=type=cache,target=/root/.cache/uv \
-    GROUPS="--group api --group mcp --group graph --group postgres --group redis --group llm-core --group numeric --group auth --group sparse"; \
-    if [ "$INCLUDE_SPLADE" = "true" ]; then GROUPS="$GROUPS --group splade"; fi; \
-    if [ "$INCLUDE_RERANKING" = "true" ]; then GROUPS="$GROUPS --group reranking"; fi; \
-    uv sync --frozen --no-dev --no-install-project $GROUPS
-
-# Stage 2: Runtime
-FROM python:3.13-slim
+ARG BASE_TAG=latest
+FROM europe-north1-docker.pkg.dev/engrammic/engrammic/base-api:${BASE_TAG}
 
 WORKDIR /app
 
 # Create non-root user
 RUN groupadd -g 1000 engrammic && useradd -u 1000 -g engrammic -m engrammic
 
-# Copy virtual environment from builder (primitives installed from PyPI)
-COPY --from=builder /app/.venv /app/.venv
-
-# Copy application code
+# Copy application code (deps already in base image)
 COPY pyproject.toml uv.lock README.md ./
 COPY config/ /app/config/
 COPY src/ /app/src/
@@ -51,18 +21,15 @@ ENV PYTHONPATH="/app/src"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
-# Create cache directories with proper ownership before switching to non-root
+# Create cache directories with proper ownership
 RUN mkdir -p /app/.cache/huggingface /app/.cache/fastembed && \
     chown -R engrammic:engrammic /app/.cache
 
-# Validate critical imports at build time (skip model verification)
+# Validate critical imports at build time
 RUN SKIP_MODEL_CHECK=1 python /app/scripts/validate_imports.py
 
 USER engrammic
 
 EXPOSE 8000
 
-# Default command runs the FastAPI/MCP server.
-# Override CMD to run the Taskiq reaction worker instead:
-#   CMD ["taskiq", "worker", "context_service.reactions.worker_entrypoint:broker", "--workers", "4"]
 CMD ["python", "-m", "context_service.entrypoint"]
