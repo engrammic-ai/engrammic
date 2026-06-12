@@ -502,7 +502,7 @@ async def synthesize(
         belief_id = uuid.uuid4()
         created_at = datetime.now(UTC)
         expires_at = created_at + timedelta(days=7)  # 7-day expiry for unreviewed proposals
-        fact_ids = [f["id"] for f in facts]
+        fact_ids = [f["fact_id"] for f in facts]
 
         await store.execute_write(
             q.CREATE_PROPOSED_BELIEF,
@@ -1769,7 +1769,7 @@ async def revise_belief(
                 "confidence": aggregate_confidence,
                 "source_cluster_id": cluster_id,
             }
-            fact_ids = [f["id"] for f in facts]
+            fact_ids = [f["fact_id"] for f in facts]
 
             await store.execute_write(
                 q.CREATE_BELIEF_WITH_SYNTHESIZED_FROM,

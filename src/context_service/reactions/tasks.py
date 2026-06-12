@@ -1115,6 +1115,7 @@ RETURN n.id
         silo_uuid = uuid.UUID(silo_id)
         now = datetime.now(UTC)
         chains_traced: list[str] = []
+        traced_hypothesis_ids: list[str] = []
 
         from context_service.embeddings import build_embedding_service
         from primitives.schema.labels import IntelligenceLabel
@@ -1251,23 +1252,25 @@ RETURN n.id AS id
                 )
 
             chains_traced.append(str(chain_id))
+            traced_hypothesis_ids.append(hypothesis_id_str)
             log.debug(
                 "trace_reasoning_chain_persisted",
                 hypothesis_id=hypothesis_id_str,
                 chain_id=str(chain_id),
             )
 
-        # Mark hypotheses as traced in the graph.
-        if chains_traced:
+        # Mark only successfully traced hypotheses (not all in session).
+        if chains_traced and traced_hypothesis_ids:
             mark_cypher = (
-                "MATCH (wb:WorkingHypothesis {session_id: $session_id, silo_id: $silo_id}) "
+                "MATCH (wb:WorkingHypothesis {silo_id: $silo_id}) "
+                "WHERE wb.id IN $hypothesis_ids "
                 "SET wb.traced_at = $traced_at "
                 "RETURN count(wb) AS marked"
             )
             await store.execute_write(
                 mark_cypher,
                 {
-                    "session_id": effective_session_id,
+                    "hypothesis_ids": traced_hypothesis_ids,
                     "silo_id": silo_id,
                     "traced_at": now.isoformat(),
                 },
@@ -1682,9 +1685,9 @@ RETURN n.id AS id
                 )
                 continue
 
-            # 2. Count remaining active chains for this Fact.
+            # 2. Count remaining active chains for this Fact (silo-isolated).
             remaining_query = (
-                "MATCH (f {id: $fact_id, silo_id: $silo_id})-[e:EDGE]->(c) "
+                "MATCH (f {id: $fact_id, silo_id: $silo_id})-[e:EDGE]->(c {silo_id: $silo_id}) "
                 "WHERE e.type = 'CONSENSUS_FROM' AND c.id <> $chain_id "
                 "AND (c.properties.state IS NULL OR c.properties.state = 'ACTIVE') "
                 "RETURN count(c) AS remaining_count"
