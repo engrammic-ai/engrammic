@@ -34,10 +34,15 @@ Examples:
 """
 
 
+def _is_gemini_model(model: str) -> bool:
+    """Check if model is a Gemini model (use google-genai SDK)."""
+    return "gemini" in model.lower()
+
+
 class QueryExpander:
     """LLM-based query expansion with Redis caching.
 
-    Uses google-genai SDK with Vertex AI for low-latency expansion.
+    Uses google-genai SDK for Gemini models, litellm for others.
     """
 
     CACHE_PREFIX = "qexp:"
@@ -56,6 +61,7 @@ class QueryExpander:
         self._cache_ttl = cache_ttl_seconds
         self._timeout = timeout_seconds
         self._vertex_project = vertex_project
+        self._use_genai = _is_gemini_model(self._model)
         # Force global for Gemini 3.x models (required by API)
         self._vertex_location = (
             "global" if "gemini-3" in self._model else (vertex_location or "global")
@@ -88,8 +94,8 @@ class QueryExpander:
             logger.warning("query_expansion_failed", query=query, error=str(e))
             return query  # fallback to original
 
-    def _get_client(self) -> object:
-        """Lazy-init google-genai client."""
+    def _get_genai_client(self) -> object:
+        """Lazy-init google-genai client for Gemini models."""
         if self._client is None:
             from google import genai
 
@@ -107,21 +113,11 @@ class QueryExpander:
 
         for attempt in range(MAX_RETRIES + 1):
             try:
-                client = self._get_client()
-                loop = asyncio.get_running_loop()
+                if self._use_genai:
+                    content = await self._expand_with_genai(prompt)
+                else:
+                    content = await self._expand_with_litellm(prompt)
 
-                def _generate(c: object = client) -> object:
-                    return c.models.generate_content(  # type: ignore[union-attr]
-                        model=self._model,
-                        contents=prompt,
-                        config={"response_mime_type": "application/json"},
-                    )
-
-                response = await asyncio.wait_for(
-                    loop.run_in_executor(None, _generate),
-                    timeout=self._timeout,
-                )
-                content = response.text or ""
                 try:
                     data = json.loads(content)
                     return str(data.get("expanded", query))
@@ -145,6 +141,38 @@ class QueryExpander:
                     continue
                 raise
         raise last_error  # type: ignore[misc]
+
+    async def _expand_with_genai(self, prompt: str) -> str:
+        """Expand using google-genai SDK (for Gemini models)."""
+        client = self._get_genai_client()
+        loop = asyncio.get_running_loop()
+
+        def _generate(c: object = client) -> object:
+            return c.models.generate_content(  # type: ignore[attr-defined]
+                model=self._model,
+                contents=prompt,
+                config={"response_mime_type": "application/json"},
+            )
+
+        response = await asyncio.wait_for(
+            loop.run_in_executor(None, _generate),
+            timeout=self._timeout,
+        )
+        return response.text or ""  # type: ignore[attr-defined]
+
+    async def _expand_with_litellm(self, prompt: str) -> str:
+        """Expand using litellm (for non-Gemini models)."""
+        import litellm
+
+        response = await asyncio.wait_for(
+            litellm.acompletion(
+                model=self._model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+            ),
+            timeout=self._timeout,
+        )
+        return response.choices[0].message.content or ""
 
     def _normalize(self, query: str) -> str:
         """Normalize query for cache key."""

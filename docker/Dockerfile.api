@@ -54,6 +54,10 @@ ENV PYTHONPATH="/app/src"
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
 
+# Create cache directories with proper ownership before switching to non-root
+RUN mkdir -p /app/.cache/huggingface /app/.cache/fastembed && \
+    chown -R engrammic:engrammic /app/.cache
+
 # Validate critical imports at build time (skip model verification)
 RUN SKIP_MODEL_CHECK=1 python /app/scripts/validate_imports.py
 
