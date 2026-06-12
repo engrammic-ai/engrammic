@@ -46,8 +46,8 @@ tiers:
   balanced:
     embeddings:
       provider: vertex_ai
-      model: text-embedding-005
-      dimensions: 768
+      model: gemini-embedding-001
+      dimensions: 2048
     reasoning:
       provider: vertex_ai
       model: gemini-2.5-pro
