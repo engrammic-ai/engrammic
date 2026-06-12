@@ -15,9 +15,10 @@ from __future__ import annotations
 import asyncio
 import re
 import time
+import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -56,11 +57,23 @@ class FusedResult:
         node_id: UUID string of the context node.
         rrf_score: Combined RRF score (sum of 1/(k+rank) contributions).
         channel_contributions: Per-channel RRF score contribution for diagnostics.
+        content: Node content text (populated when fetch_content=True).
+        layer: Cognitive layer the node belongs to (populated when fetch_content=True).
+        confidence: Confidence score of the node (populated when fetch_content=True).
+        conflict_status: Conflict status of the node (populated when fetch_content=True).
+        created_at: Node creation timestamp (populated when fetch_content=True).
+        tags: List of tags associated with the node (populated when fetch_content=True).
     """
 
     node_id: str
     rrf_score: float
     channel_contributions: dict[str, float] = field(default_factory=dict)
+    content: str | None = None
+    layer: str | None = None
+    confidence: float | None = None
+    conflict_status: str | None = None
+    created_at: datetime | None = None
+    tags: list[str] | None = None
 
 
 class FusionRetriever:
@@ -69,11 +82,26 @@ class FusionRetriever:
     Args:
         ctx_svc: ContextService instance providing query() and graph_traversal().
         k: RRF smoothing constant. Default 60 (standard literature value).
+        channel_config: Optional dict mapping channel names to enabled state.
+            Channels: semantic, bm25, temporal, ppr. All default to True.
     """
 
-    def __init__(self, ctx_svc: ContextService, k: int = 60) -> None:
+    def __init__(
+        self,
+        ctx_svc: ContextService,
+        k: int = 60,
+        channel_config: dict[str, bool] | None = None,
+    ) -> None:
         self._ctx = ctx_svc
         self._k = k
+        self._channel_config: dict[str, bool] = {
+            "semantic": True,
+            "bm25": True,
+            "temporal": True,
+            "ppr": True,
+        }
+        if channel_config is not None:
+            self._channel_config.update(channel_config)
 
     async def retrieve(
         self,
@@ -83,6 +111,9 @@ class FusionRetriever:
         *,
         graph_depth: int = 2,  # noqa: ARG002
         layers: list[str] | None = None,
+        include_superseded: bool = False,
+        filters: Any | None = None,
+        fetch_content: bool = False,
     ) -> list[FusedResult]:
         """Run 4-channel retrieval with RRF fusion and optional reranking.
 
@@ -100,68 +131,68 @@ class FusionRetriever:
             top_k: Number of results to return after fusion.
             graph_depth: Maximum BFS depth (unused for PPR, kept for compat).
             layers: Optional layer filter applied to all channels.
+            include_superseded: If True, include superseded nodes in results.
+            filters: Optional additional query filters.
+            fetch_content: If True, batch fetch node content and metadata.
 
         Returns:
             List of FusedResult ordered by descending rrf_score.
         """
         fetch_k = top_k * 2
 
-        # 1. Run semantic, BM25, temporal in parallel.
-        raw_results = await asyncio.gather(
-            self._semantic_channel(query, scope, fetch_k, layers),
-            self._bm25_channel(query, scope, fetch_k, layers),
-            self._temporal_channel(query, scope, fetch_k, layers),
-            return_exceptions=True,
-        )
+        # 1. Run enabled channels in parallel.
+        channel_coros = []
+        channel_names = []
+        if self._channel_config.get("semantic", True):
+            channel_coros.append(self._semantic_channel(query, scope, fetch_k, layers))
+            channel_names.append("semantic")
+        if self._channel_config.get("bm25", True):
+            channel_coros.append(self._bm25_channel(query, scope, fetch_k, layers))
+            channel_names.append("bm25")
+        if self._channel_config.get("temporal", True):
+            channel_coros.append(self._temporal_channel(query, scope, fetch_k, layers))
+            channel_names.append("temporal")
 
-        semantic_result: ChannelResult
-        bm25_result: ChannelResult
-        temporal_result: ChannelResult
+        raw_results = await asyncio.gather(*channel_coros, return_exceptions=True) if channel_coros else []
 
-        if isinstance(raw_results[0], Exception):
-            logger.warning("semantic_channel_error", error=str(raw_results[0]))
-            semantic_result = ChannelResult("semantic", [], 0.0, str(raw_results[0]))
-        else:
-            semantic_result = raw_results[0]  # type: ignore[assignment]
-
-        if isinstance(raw_results[1], Exception):
-            logger.warning("bm25_channel_error", error=str(raw_results[1]))
-            bm25_result = ChannelResult("bm25", [], 0.0, str(raw_results[1]))
-        else:
-            bm25_result = raw_results[1]  # type: ignore[assignment]
-
-        if isinstance(raw_results[2], Exception):
-            logger.warning("temporal_channel_error", error=str(raw_results[2]))
-            temporal_result = ChannelResult("temporal", [], 0.0, str(raw_results[2]))
-        else:
-            temporal_result = raw_results[2]  # type: ignore[assignment]
-
-        for ch in [semantic_result, bm25_result, temporal_result]:
+        # Process parallel channel results
+        channel_results: list[ChannelResult] = []
+        semantic_result: ChannelResult | None = None
+        for i, name in enumerate(channel_names):
+            if isinstance(raw_results[i], Exception):
+                logger.warning(f"{name}_channel_error", error=str(raw_results[i]))
+                result = ChannelResult(name, [], 0.0, str(raw_results[i]))
+            else:
+                result = raw_results[i]  # type: ignore[assignment]
+            channel_results.append(result)
+            if name == "semantic":
+                semantic_result = result
             logger.debug(
                 "fusion_channel_complete",
-                channel=ch.channel_name,
-                count=len(ch.ranked_ids),
-                latency_ms=ch.latency_ms,
+                channel=result.channel_name,
+                count=len(result.ranked_ids),
+                latency_ms=result.latency_ms,
             )
 
-        # 2. PPR graph channel seeded from semantic hits.
-        seed_ids = semantic_result.ranked_ids[:20] if not semantic_result.error else []
-        ppr_result: ChannelResult
-        try:
-            ppr_result = await self._ppr_channel(seed_ids, scope, fetch_k, layers)
-        except Exception as exc:
-            logger.warning("ppr_channel_error", error=str(exc))
-            ppr_result = ChannelResult("ppr", [], 0.0, str(exc))
+        # 2. PPR graph channel seeded from semantic hits (if enabled).
+        if self._channel_config.get("ppr", True):
+            seed_ids = semantic_result.ranked_ids[:20] if semantic_result and not semantic_result.error else []
+            ppr_result: ChannelResult
+            try:
+                ppr_result = await self._ppr_channel(seed_ids, scope, fetch_k, layers)
+            except Exception as exc:
+                logger.warning("ppr_channel_error", error=str(exc))
+                ppr_result = ChannelResult("ppr", [], 0.0, str(exc))
 
-        logger.debug(
-            "fusion_channel_complete",
-            channel="ppr",
-            count=len(ppr_result.ranked_ids),
-            latency_ms=ppr_result.latency_ms,
-        )
+            logger.debug(
+                "fusion_channel_complete",
+                channel="ppr",
+                count=len(ppr_result.ranked_ids),
+                latency_ms=ppr_result.latency_ms,
+            )
+            channel_results.append(ppr_result)
 
         # 3. RRF fusion across all channels.
-        channel_results = [semantic_result, bm25_result, temporal_result, ppr_result]
         for result in channel_results:
             if result.error is not None:
                 logger.warning(
@@ -175,14 +206,29 @@ class FusionRetriever:
         # 4. Optional reranking.
         reranked = await self._rerank(query, fused[:50])
 
+        # 5. Batch fetch content if requested.
+        final_results = reranked[:top_k]
+        if fetch_content and final_results:
+            node_ids = [uuid.UUID(f.node_id) for f in final_results]
+            nodes_map = await self._ctx.graph_store.batch_get_nodes(node_ids, str(scope.silo_id))
+            for f in final_results:
+                node = nodes_map.get(uuid.UUID(f.node_id))
+                if node:
+                    f.content = node.content
+                    f.layer = node.properties.get("layer", node.type)
+                    f.confidence = node.properties.get("confidence", 0.0)
+                    f.conflict_status = node.properties.get("conflict_status", "none")
+                    f.created_at = node.created_at
+                    f.tags = list(node.properties.get("tags", []))
+
         logger.info(
             "fusion_complete",
             query_len=len(query),
             top_k=top_k,
-            fused_count=len(reranked),
+            fused_count=len(final_results),
             channels=[c.channel_name for c in channel_results if c.error is None],
         )
-        return reranked[:top_k]
+        return final_results
 
     async def _semantic_channel(
         self,
