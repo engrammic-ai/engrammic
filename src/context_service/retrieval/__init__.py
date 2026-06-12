@@ -5,5 +5,17 @@ from context_service.retrieval.fusion import (
     FusedResult,
     FusionRetriever,
 )
+from context_service.retrieval.temporal import (
+    TemporalQuery,
+    compute_recency_score,
+    parse_temporal_query,
+)
 
-__all__ = ["ChannelResult", "FusedResult", "FusionRetriever"]
+__all__ = [
+    "ChannelResult",
+    "FusedResult",
+    "FusionRetriever",
+    "TemporalQuery",
+    "compute_recency_score",
+    "parse_temporal_query",
+]

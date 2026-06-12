@@ -17,7 +17,7 @@ import re
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import structlog
 
@@ -355,13 +355,112 @@ class FusionRetriever:
 
     async def _temporal_channel(
         self,
-        query: str,  # noqa: ARG002
-        scope: ScopeContext,  # noqa: ARG002
-        top_k: int,  # noqa: ARG002
-        layers: list[str] | None,  # noqa: ARG002
+        query: str,
+        scope: ScopeContext,
+        top_k: int,
+        layers: list[str] | None,
     ) -> ChannelResult:
-        """Temporal date-aware retrieval. (Stub - implement in Task 1.4)"""
-        return ChannelResult(channel_name="temporal", ranked_ids=[], latency_ms=0.0)
+        """Temporal date-aware retrieval with recency scoring.
+
+        Parses NL temporal markers from query, fetches nodes in that window,
+        and ranks by recency using layer-specific half-lives.
+        """
+        from context_service.config.settings import get_settings
+        from context_service.retrieval.temporal import (
+            compute_recency_score,
+            parse_temporal_query,
+        )
+
+        t0 = time.perf_counter()
+        settings = get_settings()
+        temporal_cfg = settings.retrieval.temporal_channel
+
+        if not temporal_cfg.enabled:
+            return ChannelResult(
+                channel_name="temporal",
+                ranked_ids=[],
+                latency_ms=0.0,
+            )
+
+        now = datetime.now(UTC)
+        tq = parse_temporal_query(query, now=now)
+
+        if not tq.has_constraint:
+            return ChannelResult(
+                channel_name="temporal",
+                ranked_ids=[],
+                latency_ms=(time.perf_counter() - t0) * 1000.0,
+            )
+
+        try:
+            since_us = int(tq.since.timestamp() * 1_000_000) if tq.since else None
+            until_us = int(tq.until.timestamp() * 1_000_000) if tq.until else None
+
+            where_parts = ["n.silo_id = $silo_id"]
+            params: dict[str, object] = {"silo_id": str(scope.silo_id)}
+
+            if since_us is not None:
+                where_parts.append("n.created_at >= $since_us")
+                params["since_us"] = since_us
+            if until_us is not None:
+                where_parts.append("n.created_at <= $until_us")
+                params["until_us"] = until_us
+            if layers:
+                where_parts.append("n.layer IN $layers")
+                params["layers"] = layers
+
+            cypher = f"""
+            MATCH (n:Node)
+            WHERE {" AND ".join(where_parts)}
+            RETURN n.id AS node_id, n.created_at AS created_at, n.layer AS layer
+            ORDER BY n.created_at DESC
+            LIMIT {top_k * 2}
+            """
+
+            rows = await self._ctx.graph_store.execute_query(cypher, params)
+
+            scored: list[tuple[str, float]] = []
+            for row in rows:
+                node_id = row.get("node_id")
+                if node_id is None:
+                    continue
+
+                raw_ts = row.get("created_at")
+                node_layer = row.get("layer") or "knowledge"
+                half_life = temporal_cfg.half_life_for_layer(node_layer)
+
+                if raw_ts is None:
+                    scored.append((str(node_id), 0.0))
+                    continue
+
+                if isinstance(raw_ts, (int, float)):
+                    created_at = datetime.fromtimestamp(raw_ts / 1_000_000, tz=UTC)
+                elif isinstance(raw_ts, datetime):
+                    created_at = raw_ts if raw_ts.tzinfo else raw_ts.replace(tzinfo=UTC)
+                else:
+                    scored.append((str(node_id), 0.0))
+                    continue
+
+                score = compute_recency_score(created_at, now, half_life)
+                scored.append((str(node_id), score))
+
+            scored.sort(key=lambda x: x[1], reverse=True)
+            ranked_ids = [node_id for node_id, _ in scored[:top_k]]
+
+            latency_ms = (time.perf_counter() - t0) * 1000.0
+            return ChannelResult(
+                channel_name="temporal",
+                ranked_ids=ranked_ids,
+                latency_ms=latency_ms,
+            )
+        except Exception as exc:
+            latency_ms = (time.perf_counter() - t0) * 1000.0
+            return ChannelResult(
+                channel_name="temporal",
+                ranked_ids=[],
+                latency_ms=latency_ms,
+                error=str(exc),
+            )
 
     async def _ppr_channel(
         self,

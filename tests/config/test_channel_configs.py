@@ -2,10 +2,10 @@
 
 from context_service.config.settings import (
     BM25ChannelConfig,
-    TemporalChannelConfig,
-    GraphChannelConfig,
     CrossEncoderConfig,
+    GraphChannelConfig,
     Settings,
+    TemporalChannelConfig,
 )
 
 

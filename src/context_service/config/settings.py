@@ -192,8 +192,19 @@ class TemporalChannelConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     enabled: bool = True
-    memory_half_life_days: int = 14
-    knowledge_half_life_days: int = 90
+    memory_half_life_days: float = 7.0
+    knowledge_half_life_days: float = 90.0
+    wisdom_half_life_days: float = 540.0
+    intelligence_half_life_days: float = 1825.0
+
+    def half_life_for_layer(self, layer: str) -> float:
+        """Return the half-life in days for a given cognitive layer."""
+        return {
+            "memory": self.memory_half_life_days,
+            "knowledge": self.knowledge_half_life_days,
+            "wisdom": self.wisdom_half_life_days,
+            "intelligence": self.intelligence_half_life_days,
+        }.get(layer.lower(), self.knowledge_half_life_days)
 
 
 class GraphChannelConfig(BaseModel):
@@ -460,6 +471,7 @@ class RetrievalConfig(BaseModel):
     cluster: ClusterRetrievalConfig = Field(default_factory=ClusterRetrievalConfig)
     supersession: SupersessionConfig = Field(default_factory=SupersessionConfig)
     fusion: FusionConfig = Field(default_factory=FusionConfig)
+    temporal_channel: TemporalChannelConfig = Field(default_factory=TemporalChannelConfig)
 
 
 class ServerConfig(BaseModel):
