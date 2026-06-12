@@ -34,8 +34,8 @@ jobs:
           gcloud builds submit \
             --project ${{ env.PROJECT_ID }} \
             --region ${{ env.REGION }} \
-            --tag ${{ env.REGISTRY }}/base-api:latest \
-            --dockerfile docker/Dockerfile.base-api \
+            --config docker/cloudbuild-base.yaml \
+            --substitutions _REGISTRY=${{ env.REGISTRY }},_IMAGE=base-api \
             .
 
       - name: Build base-dagster via Cloud Build
@@ -43,6 +43,6 @@ jobs:
           gcloud builds submit \
             --project ${{ env.PROJECT_ID }} \
             --region ${{ env.REGION }} \
-            --tag ${{ env.REGISTRY }}/base-dagster:latest \
-            --dockerfile docker/Dockerfile.base-dagster \
+            --config docker/cloudbuild-base.yaml \
+            --substitutions _REGISTRY=${{ env.REGISTRY }},_IMAGE=base-dagster \
             .
