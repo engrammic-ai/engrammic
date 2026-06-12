@@ -96,16 +96,13 @@ class QdrantClient:
         Returns:
             Configured QdrantClient.
         """
-        from context_service.config.config_loader import load_config
-
-        embed_config = load_config("embeddings")
+        models = settings.models
         api_key = settings.qdrant_api_key.get_secret_value() if settings.qdrant_api_key else None
-        collection_name = str(embed_config.get("qdrant_collection", "context_vectors"))
         return cls(
             url=settings.qdrant_url,
             api_key=api_key,
-            vector_size=embed_config["dimensions"],
-            collection_name=collection_name,
+            vector_size=models.embedding_dimensions,
+            collection_name=models.qdrant_collection,
             scalar_quantization=settings.qdrant_scalar_quantization_enabled,
             always_ram=settings.qdrant_quantization_always_ram,
         )
@@ -242,6 +239,37 @@ class QdrantClient:
                 error=str(exc),
             )
 
+    async def ensure_reasoning_chains_collection(self) -> None:
+        """Ensure the reasoning_chains collection exists for TX6 CONSENSUS.
+
+        This collection stores conclusion embeddings for reasoning chains,
+        enabling consensus detection via ANN similarity search.
+        """
+        collection_name = "reasoning_chains"
+        start = time.perf_counter()
+        try:
+            client = await self._get_client()
+            collections = await client.get_collections()
+            exists = any(c.name == collection_name for c in collections.collections)
+            if not exists:
+                quant_config = self.get_quantization_config()
+                await client.create_collection(
+                    collection_name=collection_name,
+                    vectors_config=models.VectorParams(
+                        size=self._vector_size,
+                        distance=models.Distance.COSINE,
+                    ),
+                    quantization_config=quant_config,
+                )
+                logger.info("qdrant_reasoning_chains_collection_created")
+            else:
+                logger.debug("qdrant_reasoning_chains_collection_exists")
+        except Exception as e:
+            logger.error("qdrant_ensure_reasoning_chains_failed", error=str(e))
+            raise QdrantOperationError(f"Failed to ensure reasoning_chains collection: {e}") from e
+        finally:
+            record_db_query("qdrant.ensure_reasoning_chains", (time.perf_counter() - start) * 1000)
+
     async def health_check(self) -> bool:
         """Check if Qdrant is reachable.
 
@@ -335,8 +363,8 @@ class QdrantClient:
                     point_vector: Any = {DENSE_VECTOR_NAME: vector}
                     if has_sparse:
                         point_vector[SPARSE_VECTOR_NAME] = models.SparseVector(
-                            indices=sparse_indices,  # type: ignore[arg-type]
-                            values=sparse_values,  # type: ignore[arg-type]
+                            indices=sparse_indices,
+                            values=sparse_values,
                         )
                 else:
                     point_vector = vector
@@ -443,7 +471,7 @@ class QdrantClient:
         if filter_conditions:
             must_conditions.extend(filter_conditions)
         query_filter: models.Filter | None = (
-            models.Filter(must=must_conditions) if must_conditions else None  # type: ignore[arg-type]
+            models.Filter(must=must_conditions) if must_conditions else None
         )
 
         has_sparse = sparse_indices is not None and sparse_values is not None
@@ -469,8 +497,8 @@ class QdrantClient:
                     response = await client.query_points(
                         collection_name=self._collection_name,
                         query=models.SparseVector(
-                            indices=sparse_indices,  # type: ignore[arg-type]
-                            values=sparse_values,  # type: ignore[arg-type]
+                            indices=sparse_indices,
+                            values=sparse_values,
                         ),
                         using=SPARSE_VECTOR_NAME,
                         limit=limit,
@@ -489,8 +517,8 @@ class QdrantClient:
                             ),
                             models.Prefetch(
                                 query=models.SparseVector(
-                                    indices=sparse_indices,  # type: ignore[arg-type]
-                                    values=sparse_values,  # type: ignore[arg-type]
+                                    indices=sparse_indices,
+                                    values=sparse_values,
                                 ),
                                 using=SPARSE_VECTOR_NAME,
                                 filter=query_filter,

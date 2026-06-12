@@ -177,7 +177,7 @@ async def process_chain(chain: dict[str, Any]) -> str:
     group_name="chain_feedback",
     required_resource_keys={"qdrant"},
 )
-def step_embedding_backfill(context) -> dg.Output[dict[str, Any]]:  # type: ignore[no-untyped-def]
+def step_embedding_backfill(context) -> dg.Output[dict[str, Any]]:
     """Process chains with empty step_embeddings and compute their embeddings.
 
     This enables Layer 2 (DTW trajectory matching) in chain applicability.
@@ -347,7 +347,7 @@ async def embed_and_store_hypothesis(hypothesis: dict[str, Any]) -> str:
     group_name="chain_feedback",
     required_resource_keys={"memgraph"},
 )
-def session_step_embedding(context) -> dg.Output[dict[str, Any]]:  # type: ignore[no-untyped-def]
+def session_step_embedding(context) -> dg.Output[dict[str, Any]]:
     """Process WorkingHypotheses and compute embeddings for warm-start DTW.
 
     This enables Layer 2 warm-start matching in find_applicable_chain.

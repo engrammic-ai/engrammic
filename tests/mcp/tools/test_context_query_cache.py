@@ -2,26 +2,39 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 
-def _make_mock_result(
-    node_id: str = "node-1",
+@dataclass
+class _FakeFusedResult:
+    node_id: str
+    rrf_score: float
+    channel_contributions: dict = field(default_factory=dict)
+    content: str | None = None
+    layer: str | None = None
+    confidence: float | None = None
+    conflict_status: str | None = None
+    created_at: datetime | None = None
+    tags: list[str] | None = None
+
+
+def _make_fake_fused(
+    node_id: str = "00000000-0000-0000-0000-000000000001",
     layer: str = "knowledge",
     content: str = "test content",
-) -> MagicMock:
-    r = MagicMock()
-    r.node_id = node_id
-    r.layer = layer
-    r.content = content
-    r.summary = None
-    r.confidence = 0.9
-    r.relevance_score = 0.8
-    r.tags = []
-    r.created_at = None
-    return r
+) -> _FakeFusedResult:
+    return _FakeFusedResult(
+        node_id=node_id,
+        rrf_score=0.8,
+        content=content,
+        layer=layer,
+        confidence=0.9,
+        conflict_status="none",
+    )
 
 
 def _make_mock_settings(reranking_enabled: bool = False) -> MagicMock:
@@ -29,6 +42,7 @@ def _make_mock_settings(reranking_enabled: bool = False) -> MagicMock:
     s.reranking.enabled = reranking_enabled
     s.reranking.expand_hard_queries = False
     s.causal.query_enabled = False
+    s.epistemic_fusion.enabled = False
     cfg = MagicMock()
     cfg.enabled = True
     cfg.memory_ttl = 300
@@ -47,16 +61,6 @@ def _make_mock_silo_service() -> MagicMock:
     return svc
 
 
-_BASE_PATCHES = {
-    "context_service.mcp.tools.context_query.get_mcp_auth_context": None,
-    "context_service.mcp.tools.context_query.validate_silo_ownership": None,
-    "context_service.mcp.tools.context_query.get_context_service": None,
-    "context_service.mcp.tools.context_query.get_silo_service": None,
-    "context_service.mcp.tools.context_query.get_settings": None,
-    "context_service.mcp.tools.context_query.get_redis": None,
-}
-
-
 @pytest.mark.asyncio
 async def test_context_query_result_cache_hit() -> None:
     """Pre-populate cache; second call should return cached results without querying."""
@@ -70,7 +74,7 @@ async def test_context_query_result_cache_hit() -> None:
     mock_auth.org_id = "test-org"
 
     mock_ctx_svc = MagicMock()
-    mock_ctx_svc.query = AsyncMock(return_value=[_make_mock_result()])
+    mock_fr = AsyncMock(return_value=[_make_fake_fused()])
 
     mock_settings = _make_mock_settings()
     mock_silo_svc = _make_mock_silo_service()
@@ -82,7 +86,7 @@ async def test_context_query_result_cache_hit() -> None:
         maxsize=100,
         enabled=True,
     )
-    # Pre-populate cache
+    # Pre-populate cache with v2 cache version prefix
     cached_results = [
         {
             "node_id": "node-cached",
@@ -103,7 +107,7 @@ async def test_context_query_result_cache_hit() -> None:
         10,
         None,
         False,
-        "hybrid",
+        "v2:hybrid",
         cached_results,
     )
 
@@ -137,7 +141,10 @@ async def test_context_query_result_cache_hit() -> None:
             "context_service.mcp.tools.context_query.get_knowledge_version",
             new=AsyncMock(return_value=None),
         ),
+        patch("context_service.mcp.tools.context_query.FusionRetriever") as mock_fr_cls,
     ):
+        mock_fr_cls.return_value.retrieve = mock_fr
+
         from context_service.mcp.tools.context_query import _context_query
 
         result = await _context_query(
@@ -149,8 +156,8 @@ async def test_context_query_result_cache_hit() -> None:
     assert result["cache_meta"]["result_cached"] is True
     assert result["cache_meta"]["cached_at"] is not None
     assert result["results"] == cached_results
-    # Underlying store.query should not have been called
-    mock_ctx_svc.query.assert_not_called()
+    # FusionRetriever should not have been called on cache hit
+    mock_fr.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -165,7 +172,9 @@ async def test_context_query_result_cache_miss_then_populate() -> None:
     mock_auth.org_id = "test-org"
 
     mock_ctx_svc = MagicMock()
-    mock_ctx_svc.query = AsyncMock(return_value=[_make_mock_result(node_id="live-node")])
+    mock_fr = AsyncMock(
+        return_value=[_make_fake_fused(node_id="00000000-0000-0000-0000-000000000099")]
+    )
 
     mock_settings = _make_mock_settings()
     mock_silo_svc = _make_mock_silo_service()
@@ -208,7 +217,10 @@ async def test_context_query_result_cache_miss_then_populate() -> None:
             "context_service.mcp.tools.context_query.get_knowledge_version",
             new=AsyncMock(return_value=None),
         ),
+        patch("context_service.mcp.tools.context_query.FusionRetriever") as mock_fr_cls,
     ):
+        mock_fr_cls.return_value.retrieve = mock_fr
+
         from context_service.mcp.tools.context_query import _context_query
 
         # First call: cache miss
@@ -216,15 +228,15 @@ async def test_context_query_result_cache_miss_then_populate() -> None:
         assert first["cache_meta"]["result_cached"] is False
         assert first["cache_meta"]["cached_at"] is None
         assert len(first["results"]) == 1
-        assert first["results"][0]["node_id"] == "live-node"
+        assert first["results"][0]["node_id"] == "00000000-0000-0000-0000-000000000099"
 
         # Second call: cache hit
         second = await _context_query(silo_id="test-silo", query="unique query miss", top_k=10)
         assert second["cache_meta"]["result_cached"] is True
-        assert second["results"][0]["node_id"] == "live-node"
+        assert second["results"][0]["node_id"] == "00000000-0000-0000-0000-000000000099"
 
-    # store.query called exactly once (first call only)
-    mock_ctx_svc.query.assert_called_once()
+    # FusionRetriever.retrieve called exactly once (first call only)
+    mock_fr.assert_called_once()
 
 
 @pytest.mark.asyncio
@@ -239,7 +251,9 @@ async def test_context_query_bypass_cache() -> None:
     mock_auth.org_id = "test-org"
 
     mock_ctx_svc = MagicMock()
-    mock_ctx_svc.query = AsyncMock(return_value=[_make_mock_result(node_id="bypass-node")])
+    mock_fr = AsyncMock(
+        return_value=[_make_fake_fused(node_id="00000000-0000-0000-0000-000000000098")]
+    )
 
     mock_settings = _make_mock_settings()
     mock_silo_svc = _make_mock_silo_service()
@@ -264,7 +278,9 @@ async def test_context_query_bypass_cache() -> None:
             "created_at": None,
         }
     ]
-    fresh_cache.set("bypass query", None, "test-silo", 0, 10, None, False, "hybrid", stale_results)
+    fresh_cache.set(
+        "bypass query", None, "test-silo", 0, 10, None, False, "v2:hybrid", stale_results
+    )
 
     with (
         patch(
@@ -296,7 +312,10 @@ async def test_context_query_bypass_cache() -> None:
             "context_service.mcp.tools.context_query.get_knowledge_version",
             new=AsyncMock(return_value=None),
         ),
+        patch("context_service.mcp.tools.context_query.FusionRetriever") as mock_fr_cls,
     ):
+        mock_fr_cls.return_value.retrieve = mock_fr
+
         from context_service.mcp.tools.context_query import _context_query
 
         result = await _context_query(
@@ -306,9 +325,9 @@ async def test_context_query_bypass_cache() -> None:
             bypass_cache=True,
         )
 
-    # Should have gone to the store despite cache being populated
-    mock_ctx_svc.query.assert_called_once()
-    assert result["results"][0]["node_id"] == "bypass-node"
+    # Should have gone to FusionRetriever despite cache being populated
+    mock_fr.assert_called_once()
+    assert result["results"][0]["node_id"] == "00000000-0000-0000-0000-000000000098"
     assert result["cache_meta"]["result_cached"] is False
 
 
@@ -394,8 +413,10 @@ async def test_context_query_intelligence_layer_not_cached() -> None:
     mock_auth.org_id = "test-org"
 
     mock_ctx_svc = MagicMock()
-    mock_ctx_svc.query = AsyncMock(
-        return_value=[_make_mock_result(node_id="intel-node", layer="intelligence")]
+    mock_fr = AsyncMock(
+        return_value=[
+            _make_fake_fused(node_id="00000000-0000-0000-0000-000000000097", layer="intelligence")
+        ]
     )
 
     mock_settings = _make_mock_settings()
@@ -439,7 +460,10 @@ async def test_context_query_intelligence_layer_not_cached() -> None:
             "context_service.mcp.tools.context_query.get_knowledge_version",
             new=AsyncMock(return_value=None),
         ),
+        patch("context_service.mcp.tools.context_query.FusionRetriever") as mock_fr_cls,
     ):
+        mock_fr_cls.return_value.retrieve = mock_fr
+
         from context_service.mcp.tools.context_query import _context_query
 
         # First call
@@ -460,8 +484,8 @@ async def test_context_query_intelligence_layer_not_cached() -> None:
         )
         assert second["cache_meta"]["result_cached"] is False
 
-    # Both calls should have gone to the store
-    assert mock_ctx_svc.query.call_count == 2
+    # Both calls should have gone to FusionRetriever
+    assert mock_fr.call_count == 2
 
 
 @pytest.mark.asyncio
@@ -478,7 +502,9 @@ async def test_context_query_max_age_seconds_evicts_stale() -> None:
     mock_auth.org_id = "test-org"
 
     mock_ctx_svc = MagicMock()
-    mock_ctx_svc.query = AsyncMock(return_value=[_make_mock_result(node_id="fresh-node")])
+    mock_fr = AsyncMock(
+        return_value=[_make_fake_fused(node_id="00000000-0000-0000-0000-000000000096")]
+    )
 
     mock_settings = _make_mock_settings()
     mock_silo_svc = _make_mock_silo_service()
@@ -511,7 +537,7 @@ async def test_context_query_max_age_seconds_evicts_stale() -> None:
         10,
         None,
         False,
-        "hybrid",
+        "v2:hybrid",
         stale_results,
     )
     # Backdate the cached_at by replacing the value in the underlying TTLCache
@@ -549,7 +575,10 @@ async def test_context_query_max_age_seconds_evicts_stale() -> None:
             "context_service.mcp.tools.context_query.get_knowledge_version",
             new=AsyncMock(return_value=0),
         ),
+        patch("context_service.mcp.tools.context_query.FusionRetriever") as mock_fr_cls,
     ):
+        mock_fr_cls.return_value.retrieve = mock_fr
+
         from context_service.mcp.tools.context_query import _context_query
 
         result = await _context_query(
@@ -559,8 +588,8 @@ async def test_context_query_max_age_seconds_evicts_stale() -> None:
             max_age_seconds=30,
         )
 
-    # 60s > 30s limit: treated as cache miss, store.query must have been called
-    mock_ctx_svc.query.assert_called_once()
+    # 60s > 30s limit: treated as cache miss, FusionRetriever must have been called
+    mock_fr.assert_called_once()
     assert result["cache_meta"]["result_cached"] is False
 
 
@@ -578,7 +607,9 @@ async def test_context_query_max_age_seconds_within_limit() -> None:
     mock_auth.org_id = "test-org"
 
     mock_ctx_svc = MagicMock()
-    mock_ctx_svc.query = AsyncMock(return_value=[_make_mock_result(node_id="live-node")])
+    mock_fr = AsyncMock(
+        return_value=[_make_fake_fused(node_id="00000000-0000-0000-0000-000000000095")]
+    )
 
     mock_settings = _make_mock_settings()
     mock_silo_svc = _make_mock_silo_service()
@@ -611,7 +642,7 @@ async def test_context_query_max_age_seconds_within_limit() -> None:
         10,
         None,
         False,
-        "hybrid",
+        "v2:hybrid",
         recent_results,
     )
     # Backdate the cached_at by 10 seconds (within the 30s limit)
@@ -649,7 +680,10 @@ async def test_context_query_max_age_seconds_within_limit() -> None:
             "context_service.mcp.tools.context_query.get_knowledge_version",
             new=AsyncMock(return_value=0),
         ),
+        patch("context_service.mcp.tools.context_query.FusionRetriever") as mock_fr_cls,
     ):
+        mock_fr_cls.return_value.retrieve = mock_fr
+
         from context_service.mcp.tools.context_query import _context_query
 
         result = await _context_query(
@@ -659,7 +693,7 @@ async def test_context_query_max_age_seconds_within_limit() -> None:
             max_age_seconds=30,
         )
 
-    # 10s < 30s limit: cache hit, store.query must NOT have been called
-    mock_ctx_svc.query.assert_not_called()
+    # 10s < 30s limit: cache hit, FusionRetriever must NOT have been called
+    mock_fr.assert_not_called()
     assert result["cache_meta"]["result_cached"] is True
     assert result["results"] == recent_results

@@ -25,7 +25,7 @@ class RedisOperationError(Exception):
     """Raised when a Redis operation fails."""
 
 
-async def create_redis_pool(settings: Settings | None = None) -> Redis[bytes]:  # type: ignore[type-arg]
+async def create_redis_pool(settings: Settings | None = None) -> Redis[bytes]:
     """Create an async Redis connection pool.
 
     Args:
@@ -49,7 +49,7 @@ async def create_redis_pool(settings: Settings | None = None) -> Redis[bytes]:  
 class RedisClient:
     """High-level Redis client for session and cache operations."""
 
-    def __init__(self, redis: Redis[bytes]) -> None:  # type: ignore[type-arg]
+    def __init__(self, redis: Redis[bytes]) -> None:
         """Initialize the client with a Redis connection.
 
         Args:
@@ -75,7 +75,7 @@ class RedisClient:
         """
         start = time.perf_counter()
         try:
-            result = await self._redis.ping()  # type: ignore[misc]
+            result = await self._redis.ping()
             return bool(result)
         except RedisConnectionError:
             logger.warning("redis_health_check_failed", reason="connection_error")
@@ -210,7 +210,7 @@ class RedisClient:
         key = self._session_nodes_key(silo_id, session_id)
         start = time.perf_counter()
         try:
-            result = await self._redis.sadd(key, node_id.encode())  # type: ignore[misc]
+            result = await self._redis.sadd(key, node_id.encode())
             return bool(result)
         except (RedisConnectionError, RedisError) as e:
             logger.error(
@@ -233,7 +233,7 @@ class RedisClient:
         key = self._session_nodes_key(silo_id, session_id)
         start = time.perf_counter()
         try:
-            members = await self._redis.smembers(key)  # type: ignore[misc]
+            members = await self._redis.smembers(key)
             return [m.decode() for m in members]
         except (RedisConnectionError, RedisError) as e:
             logger.error("redis_get_session_nodes_failed", session_id=session_id, error=str(e))
@@ -251,7 +251,7 @@ class RedisClient:
         key = self._session_nodes_key(silo_id, session_id)
         start = time.perf_counter()
         try:
-            result = await self._redis.srem(key, node_id.encode())  # type: ignore[misc]
+            result = await self._redis.srem(key, node_id.encode())
             return bool(result)
         except (RedisConnectionError, RedisError) as e:
             logger.error(
@@ -263,6 +263,97 @@ class RedisClient:
             raise RedisOperationError(f"Failed to remove session node: {e}") from e
         finally:
             record_db_query("redis.remove_session_node", (time.perf_counter() - start) * 1000)
+
+    # Session activity tracking for TX7 TRACE
+
+    @staticmethod
+    def _session_activity_key(silo_id: str, session_id: str) -> str:
+        """Build a session activity tracking key."""
+        return f"session:{silo_id}:{session_id}:last_activity"
+
+    async def touch_session_activity(
+        self,
+        silo_id: str,
+        session_id: str,
+        ttl_seconds: int | None = None,
+    ) -> bool:
+        """Touch session activity timestamp with TTL.
+
+        When the key expires (TTL passes), the session is considered ended
+        and eligible for TX7 TRACE processing.
+
+        Args:
+            silo_id: Silo identifier.
+            session_id: Session identifier.
+            ttl_seconds: TTL in seconds. Uses settings.session_timeout_minutes * 60 if None.
+
+        Returns:
+            True if successful, False if circuit open.
+        """
+        return await guard_degrade(
+            STORE_REDIS,
+            self._touch_session_activity_impl(silo_id, session_id, ttl_seconds),
+            False,
+        )
+
+    async def _touch_session_activity_impl(
+        self,
+        silo_id: str,
+        session_id: str,
+        ttl_seconds: int | None = None,
+    ) -> bool:
+        if ttl_seconds is None:
+            settings = get_settings()
+            ttl_seconds = settings.session_timeout_minutes * 60
+
+        key = self._session_activity_key(silo_id, session_id)
+        start = time.perf_counter()
+        try:
+            # Store current timestamp with TTL
+            import datetime
+
+            timestamp = datetime.datetime.now(datetime.UTC).isoformat()
+            await self._redis.set(key, timestamp.encode(), ex=ttl_seconds)
+            return True
+        except (RedisConnectionError, RedisError) as e:
+            logger.error(
+                "redis_touch_session_activity_failed",
+                silo_id=silo_id,
+                session_id=session_id,
+                error=str(e),
+            )
+            raise RedisOperationError(f"Failed to touch session activity: {e}") from e
+        finally:
+            record_db_query("redis.touch_session_activity", (time.perf_counter() - start) * 1000)
+
+    async def check_session_active(self, silo_id: str, session_id: str) -> bool:
+        """Check if session activity key exists (session is active).
+
+        Returns:
+            True if active, False if expired or circuit open.
+        """
+        return await guard_degrade(
+            STORE_REDIS,
+            self._check_session_active_impl(silo_id, session_id),
+            False,
+        )
+
+    async def _check_session_active_impl(self, silo_id: str, session_id: str) -> bool:
+        key = self._session_activity_key(silo_id, session_id)
+        start = time.perf_counter()
+        try:
+            exists = await self._redis.exists(key)
+            return bool(exists)
+        except (RedisConnectionError, RedisError) as e:
+            logger.error(
+                "redis_check_session_active_failed",
+                silo_id=silo_id,
+                session_id=session_id,
+                error=str(e),
+            )
+            raise RedisOperationError(f"Failed to check session active: {e}") from e
+        finally:
+            record_db_query("redis.check_session_active", (time.perf_counter() - start) * 1000)
 
     # Generic cache operations
 
@@ -446,7 +537,7 @@ class RedisClient:
     async def _lrange_impl(self, key: str, start: int, end: int) -> list[bytes]:
         t = time.perf_counter()
         try:
-            result: list[bytes] = await self._redis.lrange(key, start, end)  # type: ignore[misc]
+            result: list[bytes] = await self._redis.lrange(key, start, end)
             return result
         except (RedisConnectionError, RedisError) as e:
             logger.error("redis_lrange_failed", key=key, error=str(e))
@@ -507,7 +598,7 @@ return count
         """Implementation for atomic INCR + EXPIRE via Lua."""
         start = time.perf_counter()
         try:
-            result = await self._redis.eval(  # type: ignore[misc]
+            result = await self._redis.eval(
                 self._INCR_EXPIRE_SCRIPT,
                 1,  # number of keys
                 key,

@@ -56,6 +56,7 @@ def compute_adaptive_threshold(
     results: list[dict[str, Any]],
     alpha: float = 0.7,
     floor: float = 0.2,
+    score_key: str = "relevance_score",
 ) -> tuple[float, float]:
     """Compute score-adaptive threshold tau = alpha * max(scores).
 
@@ -68,13 +69,15 @@ def compute_adaptive_threshold(
         results: Result dicts with relevance_score field
         alpha: Proportion of max score to use as threshold (0.5-0.8 recommended)
         floor: Minimum threshold regardless of alpha calculation
+        score_key: Which score field to read (default ``relevance_score``; pass
+            ``rerank_score`` to compute the threshold against pre-fusion scores)
 
     Returns:
         (threshold, max_score) tuple for metrics
     """
     scores: list[float] = []
     for r in results:
-        score = r.get("relevance_score")
+        score = r.get(score_key)
         if isinstance(score, (int, float)):
             scores.append(float(score))
     if not scores:
@@ -116,14 +119,25 @@ def apply_threshold_filter(
             kept.append(r)
             continue
         if rerank_floor is not None:
+            # Floor and adaptive tau judge reranker calibration ("is this about
+            # the query at all"); fusion (epistemic multipliers) shrinks
+            # relevance_score and is for ordering only, so threshold against
+            # the pre-fusion score when the caller provided one.
+            floor_basis = r.get("rerank_score")
+            if not isinstance(floor_basis, (int, float)):
+                floor_basis = score
             threshold: float = rerank_floor
             if min_threshold is not None:
                 threshold = max(rerank_floor, min_threshold)
-        else:
-            layer = r.get("layer", "memory")
-            threshold = _threshold_for_layer(layer, threshold_overrides)
-            if min_threshold is not None:
-                threshold = max(threshold, min_threshold)
+            if float(floor_basis) >= threshold:
+                kept.append(r)
+            else:
+                below += 1
+            continue
+        layer = r.get("layer", "memory")
+        threshold = _threshold_for_layer(layer, threshold_overrides)
+        if min_threshold is not None:
+            threshold = max(threshold, min_threshold)
         if score >= threshold:
             kept.append(r)
         else:
@@ -135,6 +149,7 @@ def compute_retrieval_quality(
     kept: list[dict[str, Any]],
     below_threshold: int,
     fallback_used: bool = False,
+    score_key: str = "relevance_score",
 ) -> tuple[RetrievalQuality, str | None]:
     """Compute the retrieval_quality label and optional suggestion string.
 
@@ -144,6 +159,9 @@ def compute_retrieval_quality(
         fallback_used: True when the reranker itself fell back to passthrough
             scores (error path).  In that case quality is reported as "partial"
             at best so agents are not misled by synthetic 1.0/0.99 scores.
+        score_key: Which score field to read when computing the average quality
+            score (default ``relevance_score``; pass ``rerank_score`` to judge
+            quality against pre-fusion scores).
 
     Returns:
         (quality, suggestion)
@@ -154,7 +172,13 @@ def compute_retrieval_quality(
             "No results met the relevance threshold. Try a broader query or contact support to adjust per-silo thresholds.",
         )
 
-    scores: list[float] = [float(s) for r in kept if (s := r.get("relevance_score")) is not None]
+    scores: list[float] = []
+    for r in kept:
+        s = r.get(score_key)
+        if not isinstance(s, (int, float)):
+            s = r.get("relevance_score")
+        if isinstance(s, (int, float)):
+            scores.append(float(s))
     if not scores:
         # Kept results but no scores (e.g. node fetch path) -- treat as high.
         return "high", None

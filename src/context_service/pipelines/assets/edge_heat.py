@@ -101,7 +101,7 @@ def edge_heat_asset(
         from context_service.stores import MemgraphClient
 
         driver = await memgraph.driver()
-        mg_client: HyperGraphStore = MemgraphClient(driver)  # type: ignore[assignment]
+        mg_client: HyperGraphStore = MemgraphClient(driver)
         redis_conn = await redis.client()
 
         # Fetch cursor

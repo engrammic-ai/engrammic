@@ -45,10 +45,12 @@ COPY pyproject.toml uv.lock README.md ./
 ENV UV_LINK_MODE=copy
 ENV UV_COMPILE_BYTECODE=1
 
+# reranking group = sentence-transformers cross-encoder (~500MB)
+ARG INCLUDE_RERANKING=false
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-install-project \
-      --group api --group mcp --group graph --group postgres \
-      --group redis --group llm-core --group numeric --group auth
+    GROUPS="--group api --group mcp --group graph --group postgres --group redis --group llm-core --group numeric --group auth"; \
+    if [ "$INCLUDE_RERANKING" = "true" ]; then GROUPS="$GROUPS --group reranking"; fi; \
+    uv sync --frozen --no-dev --no-install-project $GROUPS
 
 # Stage 3: Runtime
 FROM python:3.13-slim

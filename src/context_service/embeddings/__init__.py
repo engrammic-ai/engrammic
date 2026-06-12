@@ -2,7 +2,6 @@
 
 from typing import TYPE_CHECKING
 
-from context_service.config.config_loader import load_config
 from context_service.config.settings import get_settings
 from context_service.embeddings.base import EmbeddingService
 from context_service.embeddings.litellm_embeddings import (
@@ -20,8 +19,8 @@ from context_service.embeddings.rate_limit import (
 try:
     from context_service.embeddings.splade import SpladeEncoder, SpladeEncoderError
 except ImportError:
-    SpladeEncoder = None  # type: ignore[misc,assignment]
-    SpladeEncoderError = None  # type: ignore[misc,assignment]
+    SpladeEncoder = None
+    SpladeEncoderError = None
 from context_service.embeddings.tei_embeddings import (
     TEIEmbeddingError,
     TEIEmbeddingService,
@@ -35,7 +34,7 @@ if TYPE_CHECKING:
 def build_embedding_service(
     embedding_cache: "EmbeddingCache | None" = None,
 ) -> EmbeddingService:
-    """Factory for embedding services from config/embeddings.yaml.
+    """Factory for embedding services based on active tier in models.yaml.
 
     Args:
         embedding_cache: Optional Redis-backed embedding cache.
@@ -46,22 +45,22 @@ def build_embedding_service(
     Raises:
         RuntimeError: If provider=tei but TEI_URL is not configured.
     """
-    config = load_config("embeddings")
-    provider = config.get("provider", "litellm")
+    settings = get_settings()
+    models = settings.models
+    embed_spec = models.get_embedding_model()
 
-    if provider == "tei":
-        settings = get_settings()
+    if embed_spec.provider == "tei":
         if not settings.tei_url:
-            raise RuntimeError("embeddings.yaml sets provider=tei but TEI_URL is not configured.")
+            raise RuntimeError("Tier uses TEI embeddings but TEI_URL is not configured.")
         tei_service = TEIEmbeddingService(
             base_url=settings.tei_url,
-            dimensions=config.get("dimensions", 768),
+            dimensions=models.embedding_dimensions,
             _embedding_cache=embedding_cache,
         )
-        fallback_service = LiteLLMEmbeddingService.from_config(_embedding_cache=embedding_cache)
+        fallback_service = LiteLLMEmbeddingService.from_settings(_embedding_cache=embedding_cache)
         return TEIWithFallbackEmbeddingService(primary=tei_service, fallback=fallback_service)
 
-    return LiteLLMEmbeddingService.from_config(_embedding_cache=embedding_cache)
+    return LiteLLMEmbeddingService.from_settings(_embedding_cache=embedding_cache)
 
 
 __all__ = [

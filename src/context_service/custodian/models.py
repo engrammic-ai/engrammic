@@ -15,7 +15,7 @@ from enum import StrEnum
 from typing import Any, Literal
 
 from primitives.eag.agents import (
-    BudgetStatus as BudgetStatus,  # noqa: F401  # type: ignore[import-untyped]
+    BudgetStatus as BudgetStatus,  # noqa: F401
 )
 from pydantic import (
     BaseModel,

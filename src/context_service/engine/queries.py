@@ -56,6 +56,7 @@ from context_service.db.schema import (
     LABEL_DOCUMENT,
     LABEL_ENTITY,
     LABEL_PASSAGE,
+    cite_union_predicate,
     content_union_predicate,
 )
 
@@ -285,11 +286,11 @@ RETURN r.id AS input_id,
        CASE WHEN action = 'version' THEN r.new_id ELSE NULL END AS new_node_id
 """
 
-# Binary edge upsert — endpoints may be Document or Passage; use union match.
+# Binary edge upsert — endpoints may be any CITE node type.
 BATCH_UPSERT_BINARY_EDGES = f"""
 UNWIND $rows AS r
-MATCH (a) WHERE {content_union_predicate("a")} AND a.id = r.source_id AND a.silo_id = r.silo_id
-MATCH (b) WHERE {content_union_predicate("b")} AND b.id = r.target_id AND b.silo_id = r.silo_id
+MATCH (a) WHERE {cite_union_predicate("a")} AND a.id = r.source_id AND a.silo_id = r.silo_id
+MATCH (b) WHERE {cite_union_predicate("b")} AND b.id = r.target_id AND b.silo_id = r.silo_id
 MERGE (a)-[e:EDGE {{id: r.id, silo_id: r.silo_id}}]->(b)
 ON CREATE SET
     e.type = r.type,
@@ -519,8 +520,8 @@ RETURN sum(size(coalesce(n.raw_payload, n.text, n.content, ''))) AS bytes
 # --- Binary Edge Queries ---
 
 CREATE_BINARY_EDGE = f"""
-MATCH (a) WHERE {content_union_predicate("a")} AND a.id = $source_id AND a.silo_id = $silo_id
-MATCH (b) WHERE {content_union_predicate("b")} AND b.id = $target_id AND b.silo_id = $silo_id
+MATCH (a) WHERE {cite_union_predicate("a")} AND a.id = $source_id AND a.silo_id = $silo_id
+MATCH (b) WHERE {cite_union_predicate("b")} AND b.id = $target_id AND b.silo_id = $silo_id
 CREATE (a)-[e:EDGE {{
     id: $id,
     type: $type,
@@ -532,8 +533,8 @@ RETURN e
 """
 
 GET_BINARY_EDGES_OUTGOING = f"""
-MATCH (a) WHERE {content_union_predicate("a")} AND a.id = $node_id AND a.silo_id = $silo_id
-MATCH (a)-[e:EDGE]->(b) WHERE {content_union_predicate("b")}
+MATCH (a) WHERE {cite_union_predicate("a")} AND a.id = $node_id AND a.silo_id = $silo_id
+MATCH (a)-[e:EDGE]->(b) WHERE {cite_union_predicate("b")}
   AND b.silo_id = $silo_id
   AND ($type IS NULL OR e.type = $type)
 RETURN e, b
@@ -543,8 +544,8 @@ LIMIT $limit
 """
 
 GET_BINARY_EDGES_INCOMING = f"""
-MATCH (a) WHERE {content_union_predicate("a")} AND a.id = $node_id AND a.silo_id = $silo_id
-MATCH (a)<-[e:EDGE]-(b) WHERE {content_union_predicate("b")}
+MATCH (a) WHERE {cite_union_predicate("a")} AND a.id = $node_id AND a.silo_id = $silo_id
+MATCH (a)<-[e:EDGE]-(b) WHERE {cite_union_predicate("b")}
   AND b.silo_id = $silo_id
   AND ($type IS NULL OR e.type = $type)
 RETURN e, b
@@ -554,8 +555,8 @@ LIMIT $limit
 """
 
 GET_BINARY_EDGES_BOTH = f"""
-MATCH (a) WHERE {content_union_predicate("a")} AND a.id = $node_id AND a.silo_id = $silo_id
-MATCH (a)-[e:EDGE]-(b) WHERE {content_union_predicate("b")}
+MATCH (a) WHERE {cite_union_predicate("a")} AND a.id = $node_id AND a.silo_id = $silo_id
+MATCH (a)-[e:EDGE]-(b) WHERE {cite_union_predicate("b")}
   AND b.silo_id = $silo_id
   AND ($type IS NULL OR e.type = $type)
 RETURN e, b

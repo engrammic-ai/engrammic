@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func, text
+from sqlalchemy import ARRAY, DateTime, Float, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -28,6 +28,13 @@ class ReasoningChainSteps(Base):
     steps: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'"))
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(server_default=func.now(), onupdate=func.now())
+
+    # TX7 TRACE fields
+    conclusion: Mapped[str | None] = mapped_column(String, nullable=True)
+    conclusion_embedding: Mapped[list[float] | None] = mapped_column(ARRAY(Float), nullable=True)
+    agent_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    source_hypothesis_id: Mapped[UUID | None] = mapped_column(PG_UUID(as_uuid=True), nullable=True)
+    traced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (Index("ix_reasoning_chain_steps_silo_id", "silo_id"),)
 

@@ -38,7 +38,7 @@ async def get_expired_memory_nodes(
     for decay_class, config in decay_config.items():
         if config is None:
             continue
-        hard_delete_days = float(config.get("hard_delete_days", 9999))  # type: ignore[arg-type]
+        hard_delete_days = float(config.get("hard_delete_days", 9999))
         cutoff = now - timedelta(days=hard_delete_days)
 
         rows = await store.execute_query(

@@ -162,15 +162,15 @@ class TestResolutionResponse(BaseModel):
 def _row_to_response(row: object) -> SourceRuleResponse:
     """Convert a SQLAlchemy Row to SourceRuleResponse."""
     return SourceRuleResponse(
-        id=str(row[0]),  # type: ignore[index]
-        silo_id=str(row[1]) if row[1] is not None else None,  # type: ignore[index]
-        pattern=row[2],  # type: ignore[index]
-        tier=row[3],  # type: ignore[index]
-        reason=row[4],  # type: ignore[index]
-        priority=row[5],  # type: ignore[index]
-        created_at=row[6],  # type: ignore[index]
-        created_by=row[7],  # type: ignore[index]
-        source="global" if row[1] is None else "silo",  # type: ignore[index]
+        id=str(row[0]),
+        silo_id=str(row[1]) if row[1] is not None else None,
+        pattern=row[2],
+        tier=row[3],
+        reason=row[4],
+        priority=row[5],
+        created_at=row[6],
+        created_by=row[7],
+        source="global" if row[1] is None else "silo",
     )
 
 

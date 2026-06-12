@@ -6,8 +6,8 @@
 # =============================================================================
 
 project := "engrammic"
-region := "europe-north1"
-zone := "europe-north1-a"
+region := "us-central1"
+zone := "us-central1-a"
 registry := "europe-north1-docker.pkg.dev/engrammic/engrammic"
 dc := "docker compose --env-file .env -p engrammic -f docker/docker-compose.dev.yml"
 
@@ -26,6 +26,10 @@ import 'standalone.just'
 # Install dev dependencies
 install:
     uv sync --all-extras
+
+# Install only test dependencies (avoids torch download)
+test-deps:
+    uv sync --group dev --group api --group mcp --group graph --group postgres --group redis --group llm-core --group numeric --group custodian
 
 # Run all checks (lint + typecheck)
 check:
@@ -85,6 +89,24 @@ nuke:
     docker ps -aq --filter "name=engrammic" | xargs -r docker rm -f
     docker network rm engrammic 2>/dev/null || true
     {{dc}} up -d --build
+
+# =============================================================================
+# Image Builds (Skaffold)
+# =============================================================================
+
+# Build all images via Skaffold
+build-images:
+    skaffold build --default-repo={{registry}}
+
+# Build base images only (run after uv.lock changes)
+build-bases:
+    docker build -f docker/Dockerfile.base-api -t {{registry}}/base-api:latest .
+    docker build -f docker/Dockerfile.base-dagster -t {{registry}}/base-dagster:latest .
+
+# Push base images to registry
+push-bases:
+    docker push {{registry}}/base-api:latest
+    docker push {{registry}}/base-dagster:latest
 
 # =============================================================================
 # Database (Local)

@@ -2,19 +2,20 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-06-09)
+## Current state (2026-06-12)
 
-**Focus:** Credible benchmark numbers via official LongMemEval-V2 harness (Somnus has harness issues)
+**Focus:** TEMPR parity sprint - 4-channel retrieval + mem0 benchmark for Antler
 
 **Recent:**
+- v2.39 Read-path epistemic fusion (step 1) - confidence/conflict weighting in ranking (complete)
 - v2.38 Embedding Batching Phase 1 - Vertex AI batch calls via `batched` library (complete)
 - v2.37 Heat Utilization Phase 1 - Brain path decay floor + tier-driven summaries (complete)
-- v2.36 Self-Serve Org Provisioning - Auto-provision personal org for no-org signups (PR #55)
 
 ## Active plans
 
 | Plan | Description | Status |
 |------|-------------|--------|
+| [2026-06-12-tempr-parity-sprint.md](./2026-06-12-tempr-parity-sprint.md) | 4-channel TEMPR retrieval (BM25, temporal, PPR, reranker) + mem0 benchmark | Active |
 | [2026-06-09-longmemeval-v2-harness.md](./2026-06-09-longmemeval-v2-harness.md) | Official LongMemEval-V2 harness with Engrammic adapter | Ready |
 | [2026-06-07-fix-recall-read-path.md](./2026-06-07-fix-recall-read-path.md) | Fix rerank score write-back + threshold, full content by default | Active |
 | [recall-quality-improvement.md](./recall-quality-improvement.md) | Question-answer asymmetry research, query expansion | Draft |
@@ -44,18 +45,11 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 ## Brain architecture (blocked)
 
-Reactive brain architecture phases. Cutover blocked on invariant fixes.
+Reactive brain architecture phases. Cutover blocked on invariant fixes. Phases 2-9 complete and archived.
 
 | Plan | Description | Status |
 |------|-------------|--------|
 | [2026-06-01-brain-architecture.md](./2026-06-01-brain-architecture.md) | 20 transactions, 8 invariants | Overview |
-| [2026-06-01-phase2-implementation.md](./2026-06-01-phase2-implementation.md) | Core transaction implementations | Complete |
-| [2026-06-01-phase4-lifecycle.md](./2026-06-01-phase4-lifecycle.md) | Node lifecycle transactions | Complete |
-| [2026-06-01-phase5-layer-movement.md](./2026-06-01-phase5-layer-movement.md) | Layer promotion/demotion | Complete |
-| [2026-06-01-phase6-query-recall.md](./2026-06-01-phase6-query-recall.md) | Query and recall transactions | Complete |
-| [2026-06-01-phase7-cite-v2-epistemology.md](./2026-06-01-phase7-cite-v2-epistemology.md) | CITE v2 schema | Complete |
-| [2026-06-02-phase8-reactions.md](./2026-06-02-phase8-reactions.md) | Reaction system | Complete |
-| [2026-06-02-phase9-dagster-migration.md](./2026-06-02-phase9-dagster-migration.md) | Dagster job migration | Complete |
 | [2026-06-03-brain-cutover-and-quality-fixes.md](./2026-06-03-brain-cutover-and-quality-fixes.md) | Wire MCP to brain, coverage reporting | Blocked |
 
 ## Future work
@@ -70,14 +64,14 @@ Specced or checkpointed for later implementation:
 
 ## Archive
 
-Completed plans in `archive/` (120+ files). Recent:
+Completed plans in `archive/` (130+ files). Recent:
+- Read-path epistemic fusion step 1 (2026-06-11)
+- Brain architecture phases 2-9 (2026-06-01/02)
 - Embedding Batching Phase 1 (2026-06-05)
 - Heat Utilization Phase 1 (2026-06-04)
 - Enforcement Spine (2026-06-04)
 - Multi-Format Skill Installation (2026-05-28)
 - Harness-Agnostic Enforcement (2026-05-28)
-- Self-Hosted Distribution Phase 2 (2026-05-26)
-- Engagement Plans A-E (2026-05-25/26)
 
 ## Plan format
 

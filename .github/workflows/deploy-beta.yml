@@ -10,32 +10,13 @@ env:
   PROJECT_ID: engrammic
 
 jobs:
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      beacon: ${{ steps.filter.outputs.beacon }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            beacon:
-              - 'src/beacon_service/**'
-              - 'docker/Dockerfile.beacon'
-              - 'docker/Dockerfile.selfhosted.beacon'
-              - 'deploy/cloudbuild/beacon.yaml'
-
-  build-api:
+  build:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set short SHA
-        run: echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
 
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
@@ -47,68 +28,17 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Build API image with Cloud Build
+      - name: Install Skaffold
         run: |
-          gcloud builds submit --config deploy/cloudbuild/api.yaml --timeout 1200s \
-            --substitutions SHORT_SHA=${{ env.SHORT_SHA }}
+          curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64
+          chmod +x skaffold && sudo mv skaffold /usr/local/bin/
 
-  build-beacon:
-    needs: changes
-    if: needs.changes.outputs.beacon == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set short SHA
-        run: echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
-
-      - name: Authenticate to GCP
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          token_format: access_token
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Build Beacon image with Cloud Build
-        run: |
-          gcloud builds submit --config deploy/cloudbuild/beacon.yaml --timeout 300s \
-            --substitutions SHORT_SHA=${{ env.SHORT_SHA }}
-
-  build-dagster:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set short SHA
-        run: echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
-
-      - name: Authenticate to GCP
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          token_format: access_token
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Build Dagster image with Cloud Build
-        run: |
-          gcloud builds submit --config deploy/cloudbuild/dagster.yaml --timeout 1200s \
-            --substitutions SHORT_SHA=${{ env.SHORT_SHA }}
+      - name: Build & Push via Skaffold
+        run: skaffold build --file-output=tags.json
 
   deploy:
-    needs: [build-api, build-beacon, build-dagster]
-    if: always() && needs.build-api.result == 'success' && needs.build-dagster.result == 'success' && (needs.build-beacon.result == 'success' || needs.build-beacon.result == 'skipped')
+    needs: build
+    if: always() && needs.build.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read

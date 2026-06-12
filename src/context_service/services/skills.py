@@ -195,7 +195,7 @@ class SkillService:
 
         stmt = delete(Skill).where(Skill.silo_id == silo_id, Skill.name == name)
         result = await self._db.execute(stmt)
-        if result.rowcount == 0:  # type: ignore[attr-defined]
+        if result.rowcount == 0:
             raise KeyError(f"Skill '{name}' not found")
 
     async def import_from(

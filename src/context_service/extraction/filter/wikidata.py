@@ -84,7 +84,7 @@ async def default_sparql_ask(endpoint: str, claim: ClaimTriple, timeout_s: float
         # WikidataRule's caller catches and degrades to EXTERNAL_FAILURE, so
         # the filter still loads (rules 1, 3, 4 keep working) — only the
         # Wikidata oracle is unavailable.
-        from SPARQLWrapper import JSON, SPARQLWrapper  # type: ignore[import-not-found]
+        from SPARQLWrapper import JSON, SPARQLWrapper
 
         w = SPARQLWrapper(endpoint)
         w.setReturnFormat(JSON)

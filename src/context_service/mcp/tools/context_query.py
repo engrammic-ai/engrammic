@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import time
+import uuid
 from datetime import UTC, datetime
 from typing import Any, Literal
 
 import structlog
 from opentelemetry import trace
 
-from context_service.cache.rerank_cache import SemanticRerankCache
 from context_service.cache.result_cache import ResultCacheStore, get_knowledge_version
 from context_service.config.models import load_models_config
 from context_service.config.settings import get_settings
@@ -28,10 +28,14 @@ from context_service.reranking import (
     apply_threshold_filter,
     compute_adaptive_threshold,
     compute_retrieval_quality,
-    get_reranker,
     is_hard_query,
 )
-from context_service.services.models import ScopeContext, derive_silo_id
+from context_service.reranking.epistemic_fusion import (
+    EpistemicAdjustment,
+    apply_epistemic_fusion,
+)
+from context_service.retrieval.fusion import FusionRetriever
+from context_service.services.models import QueryResult, ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 from context_service.signals import emit_access_event
 from context_service.telemetry.metrics import (
@@ -39,7 +43,6 @@ from context_service.telemetry.metrics import (
     record_hard_query_detection,
     record_mcp_tool,
     record_query_expansion,
-    record_reranking,
 )
 
 logger = structlog.get_logger(__name__)
@@ -47,8 +50,21 @@ tracer = trace.get_tracer(__name__)
 
 _VALID_SEARCH_MODES = frozenset({"hybrid", "dense", "sparse"})
 
+CACHE_VERSION = "v2"
+
+
+def _search_mode_to_channels(mode: str) -> dict[str, bool]:
+    """Map deprecated search_mode to channel toggles."""
+    if mode == "dense":
+        logger.warning("search_mode='dense' deprecated, use channel config")
+        return {"semantic": True, "bm25": False, "temporal": False, "ppr": False}
+    if mode == "sparse":
+        logger.warning("search_mode='sparse' deprecated, use channel config")
+        return {"semantic": False, "bm25": True, "temporal": False, "ppr": False}
+    return {"semantic": True, "bm25": True, "temporal": True, "ppr": True}
+
+
 _result_cache: ResultCacheStore | None = None
-_rerank_cache: SemanticRerankCache | None = None
 
 
 def _get_result_cache() -> ResultCacheStore:
@@ -56,22 +72,6 @@ def _get_result_cache() -> ResultCacheStore:
     if _result_cache is None:
         _result_cache = ResultCacheStore()
     return _result_cache
-
-
-def _get_rerank_cache(qdrant: Any, settings: Any) -> SemanticRerankCache | None:
-    """Get or create the rerank cache singleton."""
-    global _rerank_cache
-    if not settings.reranking.cache_enabled:
-        return None
-    if _rerank_cache is None:
-        _rerank_cache = SemanticRerankCache(
-            qdrant=qdrant,
-            similarity_threshold=settings.reranking.cache_similarity_threshold,
-            l1_ttl_seconds=settings.reranking.cache_l1_ttl_seconds,
-            l1_maxsize=settings.reranking.cache_l1_maxsize,
-            embedding_dimensions=settings.embedding_dimensions,
-        )
-    return _rerank_cache
 
 
 def _layer_ttls_for(layers: list[str] | None) -> dict[str, int]:
@@ -112,115 +112,6 @@ async def _emit_access_events(redis: Any, silo_id: str, results: list[Any]) -> N
         logger.warning("access_event_emit_failed", silo_id=silo_id, error=str(exc))
 
 
-async def _apply_reranking(
-    query: str,
-    results: list[Any],
-    settings: Any,
-    query_embedding: list[float] | None = None,
-    silo_id: str | None = None,
-    rerank_cache: SemanticRerankCache | None = None,
-) -> tuple[list[Any], bool, bool]:
-    """Apply reranking to search results if enabled.
-
-    Returns:
-        (reranked_results, fallback_used, reranked_applied)
-
-        ``fallback_used`` is True when the reranker service failed and cosine
-        scores were preserved (i.e. reranking did NOT apply).
-
-        ``reranked_applied`` is True only when reranking ran successfully
-        (fresh or cache-hit) and the reranker scores have been written back
-        into each result's ``relevance_score``.  It is False for all
-        early-return paths and for the fallback path.
-    """
-    if not settings.reranking.enabled or len(results) <= 1:
-        return results, False, False
-
-    # Skip reranking if top result has high confidence (saves a round-trip)
-    top_score = max((r.relevance_score or 0.0) for r in results)
-    if top_score >= settings.reranking.skip_rerank_threshold:
-        logger.debug(
-            "rerank_skipped_high_confidence",
-            top_score=top_score,
-            threshold=settings.reranking.skip_rerank_threshold,
-        )
-        return results, False, False
-
-    models_config = load_models_config()
-    reranker = get_reranker(
-        config=models_config,
-        timeout_seconds=settings.reranking.reranker_timeout_seconds,
-    )
-    if reranker is None:
-        return results, False, False
-
-    node_ids = [str(r.node_id) for r in results]
-    id_to_result = {str(r.node_id): r for r in results}
-
-    # Check rerank cache first
-    if rerank_cache is not None and query_embedding is not None and silo_id is not None:
-        cached_scores = await rerank_cache.get(query, query_embedding, node_ids, silo_id)
-        if cached_scores is not None:
-            # Write cached reranker scores back into each result object.
-            wrote_any = False
-            for node_id, score in cached_scores:
-                if node_id in id_to_result:
-                    id_to_result[node_id].relevance_score = score
-                    wrote_any = True
-            # Only treat this as a cache hit if at least one cached id matched
-            # the current result set. A stale cache (no overlap) falls through
-            # to a fresh rerank rather than reporting reranked_applied=True with
-            # no scores actually written (which would threshold cosine scores
-            # against the rerank floor).
-            if wrote_any:
-                score_map = dict(cached_scores)
-                reranked_results = sorted(
-                    results,
-                    key=lambda r: score_map.get(str(r.node_id), 0.0),
-                    reverse=True,
-                )
-                return reranked_results, False, True
-
-    documents = [r.content or "" for r in results]
-
-    with tracer.start_as_current_span("recall.rerank") as span:
-        span.set_attribute("query_length", len(query))
-        span.set_attribute("candidates", len(results))
-        rerank_start = time.perf_counter()
-        fallback_used = False
-        try:
-            reranked = await reranker.rerank(
-                query=query,
-                documents=documents,
-                node_ids=node_ids,
-                top_k=len(results),
-            )
-            latency_ms = (time.perf_counter() - rerank_start) * 1000
-            span.set_attribute("latency_ms", latency_ms)
-            record_reranking(latency_ms=latency_ms, success=True)
-        except Exception:
-            latency_ms = (time.perf_counter() - rerank_start) * 1000
-            span.set_attribute("latency_ms", latency_ms)
-            record_reranking(latency_ms=latency_ms, success=False)
-            # Return in original order with fallback flag; do not propagate.
-            # Leave cosine scores intact -- do not write reranker scores back.
-            fallback_used = True
-            return results, fallback_used, False
-
-    # Write reranker scores back into each result object (only on success)
-    for rr in reranked:
-        if rr.node_id in id_to_result:
-            id_to_result[rr.node_id].relevance_score = rr.score
-
-    # Store in cache for future queries
-    if rerank_cache is not None and query_embedding is not None and silo_id is not None:
-        scores = [(rr.node_id, rr.score) for rr in reranked]
-        await rerank_cache.set(query, query_embedding, node_ids, scores, silo_id)
-
-    reranked_results = [id_to_result[rr.node_id] for rr in reranked if rr.node_id in id_to_result]
-    return reranked_results, fallback_used, True
-
-
 async def _maybe_expand_query(
     query: str,
     settings: Any,
@@ -255,6 +146,8 @@ async def _maybe_expand_query(
         cache_ttl_seconds=settings.reranking.expansion_cache_ttl_days * 86400,
         timeout_seconds=settings.reranking.expander_timeout_seconds,
         vertex_project=models_config.vertex_project or None,
+        vertex_location=models_config.vertex_location or None,
+        provider=models_config.expander_provider,
     )
 
     with tracer.start_as_current_span("recall.expand_query") as span:
@@ -369,6 +262,9 @@ async def _context_query(
 
     layer_ttls = _layer_ttls_for(layers)
 
+    # Embed cache version into search_mode key to invalidate stale entries
+    cache_mode_key = f"{CACHE_VERSION}:{search_mode}"
+
     # Result cache lookup (skipped when bypass_cache is set)
     if not bypass_cache:
         cached = _get_result_cache().get(
@@ -379,7 +275,7 @@ async def _context_query(
             top_k,
             filters,
             include_superseded,
-            search_mode,
+            cache_mode_key,
         )
         if cached is not None:
             cached_results, cached_at_ts = cached
@@ -407,37 +303,53 @@ async def _context_query(
                     "cache_meta": cache_meta,
                 }
 
-    results = await ctx_svc.query(
-        scope=scope,
+    channel_config = _search_mode_to_channels(search_mode)
+    retriever = FusionRetriever(ctx_svc, channel_config=channel_config)
+    layer_strings = [layer.value for layer in valid_layers] if valid_layers else None
+    fused_results = await retriever.retrieve(
         query=effective_query,
-        layers=valid_layers,
-        filters=parsed_filters,
+        scope=scope,
         top_k=top_k,
+        layers=layer_strings,
         include_superseded=include_superseded,
-        as_of=None,
-        search_mode=search_mode,
+        filters=parsed_filters,
+        fetch_content=True,
     )
+
+    results = [
+        QueryResult(
+            node_id=uuid.UUID(f.node_id),
+            layer=f.layer or "unknown",
+            content=f.content or "",
+            confidence=f.confidence or 0.0,
+            relevance_score=f.rrf_score,
+            conflict_status=f.conflict_status or "none",
+            created_at=f.created_at,
+            tags=f.tags,
+        )
+        for f in fused_results
+    ]
+
     elapsed_s = time.perf_counter() - start
     record_mcp_tool("context_query", elapsed_s * 1000)
     elapsed_ms = int(elapsed_s * 1000)
 
-    # Get query embedding for rerank cache (reuses cached embedding from vector search)
-    query_embedding: list[float] | None = None
-    rerank_cache = _get_rerank_cache(ctx_svc.vector_store, settings)
-    if rerank_cache is not None and ctx_svc.embedding_client is not None:
-        try:
-            query_embedding = await ctx_svc.embedding_client.embed_query(effective_query)
-        except Exception as e:
-            logger.warning("rerank_cache_embed_failed", error=str(e))
+    rerank_fallback = False
+    reranked_applied = False
 
-    results, rerank_fallback, reranked_applied = await _apply_reranking(
-        effective_query,
-        results,
-        settings,
-        query_embedding=query_embedding,
-        silo_id=silo_id,
-        rerank_cache=rerank_cache,
-    )
+    # Epistemic fusion: scale post-rerank scores by confidence/conflict state
+    # so evidence is load-bearing in final ranking (sprint step 1). The
+    # pre-fusion score is kept per node: the abstention floor in
+    # apply_threshold_filter compares against it when reranking ran.
+    epistemic_adjustments: dict[str, EpistemicAdjustment] = {}
+    prefusion_scores: dict[str, float | None] = {}
+    if settings.epistemic_fusion.enabled:
+        prefusion_scores = {str(r.node_id): r.relevance_score for r in results}
+        epistemic_adjustments = apply_epistemic_fusion(
+            results,
+            confidence_weight=settings.epistemic_fusion.confidence_weight,
+            conflict_penalty=settings.epistemic_fusion.conflict_penalty,
+        )
 
     await _emit_access_events(redis, silo_id, results)
 
@@ -465,6 +377,13 @@ async def _context_query(
             "credibility": r.credibility,
             "credibility_factors": r.credibility_factors,
             "tier": r.tier,
+            "superseded_by": r.superseded_by,
+            "rerank_score": (prefusion_scores.get(str(r.node_id)) if reranked_applied else None),
+            "epistemic": (
+                epistemic_adjustments[str(r.node_id)].to_dict()
+                if str(r.node_id) in epistemic_adjustments
+                else None
+            ),
         }
         for r in results
     ]
@@ -479,18 +398,27 @@ async def _context_query(
     if silo_for_thresholds is not None:
         threshold_overrides = silo_for_thresholds.metadata.get("retrieval_thresholds") or None
 
+    # When fusion ran on top of reranking, threshold comparisons should use
+    # the pre-fusion rerank score (relevance_score was mutated by fusion).
+    score_basis_key = (
+        "rerank_score"
+        if settings.epistemic_fusion.enabled and reranked_applied
+        else "relevance_score"
+    )
+
     # Score-adaptive truncation (SmartSearch-style): tau = alpha * max_score
     effective_min_threshold = min_threshold
     if settings.reranking.adaptive_threshold_enabled and reranked_applied:
         adaptive_tau, max_score = compute_adaptive_threshold(
             raw_result_dicts,
             alpha=settings.reranking.adaptive_alpha,
+            score_key=score_basis_key,
         )
         if effective_min_threshold is None or adaptive_tau > effective_min_threshold:
             effective_min_threshold = adaptive_tau
 
         def _score_above_tau(r: dict[str, Any]) -> bool:
-            s = r.get("relevance_score")
+            s = r.get(score_basis_key)
             return isinstance(s, (int, float)) and float(s) >= adaptive_tau
 
         kept_count = len(list(filter(_score_above_tau, raw_result_dicts)))
@@ -510,7 +438,10 @@ async def _context_query(
         rerank_floor=RERANK_SCORE_FLOOR if reranked_applied else None,
     )
     retrieval_quality, suggestion = compute_retrieval_quality(
-        result_dicts, below_threshold, fallback_used=rerank_fallback
+        result_dicts,
+        below_threshold,
+        fallback_used=rerank_fallback,
+        score_key=score_basis_key,
     )
 
     # Store results in cache (intelligence layer is silently skipped by ResultCacheStore)
@@ -524,7 +455,7 @@ async def _context_query(
             top_k,
             filters,
             include_superseded,
-            search_mode,
+            cache_mode_key,
             result_dicts,
         )
 

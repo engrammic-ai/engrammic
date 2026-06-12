@@ -7,7 +7,14 @@ the CITE primitives.schema enums. Import from here for all query construction.
 
 from __future__ import annotations
 
-from primitives.schema import CITEEdgeType, KnowledgeLabel, MemoryLabel, RegistryLabel
+from primitives.schema import (
+    CITEEdgeType,
+    IntelligenceLabel,
+    KnowledgeLabel,
+    MemoryLabel,
+    RegistryLabel,
+    WisdomLabel,
+)
 
 # --- Content node labels (RAG-era / Memory layer) ---
 LABEL_DOCUMENT = MemoryLabel.DOCUMENT.value  # "Document"
@@ -16,6 +23,32 @@ LABEL_CLAIM = KnowledgeLabel.CLAIM.value  # "Claim"
 LABEL_ENTITY = RegistryLabel.ENTITY.value  # "Entity" — registry pivot
 
 CORE_CONTENT_LABELS: tuple[str, ...] = (LABEL_DOCUMENT, LABEL_PASSAGE, LABEL_CLAIM)
+
+# --- All CITE node labels (for binary edge creation) ---
+# Includes all layers so edges can connect any CITE node types.
+# Some labels use string literals where primitives version may not have them yet.
+CITE_NODE_LABELS: tuple[str, ...] = (
+    # Memory layer
+    MemoryLabel.DOCUMENT.value,
+    MemoryLabel.PASSAGE.value,
+    MemoryLabel.UTTERANCE.value,
+    MemoryLabel.EVENT.value,
+    "Observation",  # MemoryLabel.OBSERVATION
+    # Knowledge layer
+    KnowledgeLabel.CLAIM.value,
+    KnowledgeLabel.FACT.value,
+    "Commitment",  # KnowledgeLabel.COMMITMENT
+    # Wisdom layer
+    WisdomLabel.BELIEF.value,
+    WisdomLabel.PROPOSED_BELIEF.value,
+    WisdomLabel.PATTERN.value,
+    # Intelligence layer
+    IntelligenceLabel.REASONING_CHAIN.value,
+    IntelligenceLabel.WORKING_HYPOTHESIS.value,
+    IntelligenceLabel.QUERY_CONTEXT.value,
+    # Meta (local label)
+    "Cluster",
+)
 
 # --- Edge type constants (O-30) ---
 EDGE_DERIVED_FROM = CITEEdgeType.DERIVED_FROM.value  # "DERIVED_FROM"
@@ -31,3 +64,12 @@ def content_union_predicate(var: str = "n") -> str:
     the caller is genuinely label-agnostic over content nodes.
     """
     return "(" + " OR ".join(f"{var}:{lbl}" for lbl in CORE_CONTENT_LABELS) + ")"
+
+
+def cite_union_predicate(var: str = "n") -> str:
+    """Return a Cypher predicate matching any CITE node type.
+
+    Use for binary edge creation where endpoints can be any layer:
+    Memory, Knowledge, Wisdom, Intelligence, or Meta nodes.
+    """
+    return "(" + " OR ".join(f"{var}:{lbl}" for lbl in CITE_NODE_LABELS) + ")"

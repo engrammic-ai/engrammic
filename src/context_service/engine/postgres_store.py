@@ -66,7 +66,7 @@ class PostgresStore:
                     index_elements=["chain_id"],
                     set_={"steps": stmt.excluded.steps},
                 )
-                result: CursorResult[Any] = await session.execute(stmt)  # type: ignore[assignment]
+                result: CursorResult[Any] = await session.execute(stmt)
                 if result.rowcount != 1:
                     raise RuntimeError(
                         f"upsert_chain_steps expected rowcount=1, got {result.rowcount} "
@@ -95,7 +95,7 @@ class PostgresStore:
         try:
             async with get_session() as session:
                 stmt = delete(ReasoningChainSteps).where(ReasoningChainSteps.chain_id == chain_id)
-                result: CursorResult[Any] = await session.execute(stmt)  # type: ignore[assignment]
+                result: CursorResult[Any] = await session.execute(stmt)
                 return result.rowcount > 0
         finally:
             record_db_query("postgres.delete_chain_steps", (time.perf_counter() - start) * 1000)
@@ -135,7 +135,7 @@ class PostgresStore:
                         "last_error": error,
                     },
                 )
-                result: CursorResult[Any] = await session.execute(stmt)  # type: ignore[assignment]
+                result: CursorResult[Any] = await session.execute(stmt)
                 if result.rowcount != 1:
                     raise RuntimeError(
                         f"add_orphaned_chain expected rowcount=1, got {result.rowcount} "

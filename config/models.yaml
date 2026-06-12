@@ -21,8 +21,17 @@
 #     - Apache 2.0 license, no restrictions
 
 tier: balanced
-vertex_location: europe-north1
+vertex_location: us-south1
 vertex_project: engrammic
+
+# BM25 sparse encoder for hybrid search (fastembed-based, no torch required)
+sparse:
+  enabled: true
+  provider: fastembed
+  model: Qdrant/bm25
+
+# Qdrant collection name (tests use context_vectors_test)
+qdrant_collection: context_vectors
 
 tiers:
   economy:
@@ -32,22 +41,22 @@ tiers:
       dimensions: 768
     reasoning:
       provider: vertex_ai
-      model: gemini-2.5-flash
+      model: gemini-3.5-flash
     fast:
       provider: vertex_ai
-      model: gemini-2.5-flash
+      model: gemini-3.5-flash
     reranker:
       provider: vertex_ai
       model: semantic-ranker-default@latest
     query_expander:
       provider: vertex_ai
-      model: gemini-2.5-flash
+      model: gemini-3.5-flash
 
   balanced:
     embeddings:
       provider: vertex_ai
-      model: text-embedding-005
-      dimensions: 768
+      model: gemini-embedding-001
+      dimensions: 2048
     reasoning:
       provider: vertex_ai
       model: gemini-2.5-pro
@@ -97,7 +106,7 @@ tiers:
       model: semantic-ranker-default@latest
     query_expander:
       provider: vertex_ai
-      model: gemini-2.5-flash
+      model: gemini-3.5-flash
 
   # Fully self-hosted (vLLM + TEI)
   # Requires: vLLM server, TEI server, GPU infrastructure
@@ -112,6 +121,9 @@ tiers:
     fast:
       provider: vllm
       model: google/gemma-4-26B-A4B  # MoE, 8x less compute
+    query_expander:
+      provider: vllm
+      model: google/gemma-4-26B-A4B
 
   self_hosted_budget:
     embeddings:
@@ -124,6 +136,9 @@ tiers:
     fast:
       provider: vllm
       model: Qwen/Qwen3-7B  # HumanEval leader in 7B class
+    query_expander:
+      provider: vllm
+      model: Qwen/Qwen3-7B
 
   # Standalone lite - minimal footprint for laptops
   # Requires: Ollama (phi4-mini), TEI (nomic-embed), 8GB+ RAM
@@ -136,6 +151,9 @@ tiers:
       provider: ollama
       model: phi4-mini
     fast:
+      provider: ollama
+      model: phi4-mini
+    query_expander:
       provider: ollama
       model: phi4-mini
 
@@ -156,6 +174,9 @@ tiers:
       provider: tei
       model: BAAI/bge-reranker-v2-m3
       url: http://tei-reranker:8080
+    query_expander:
+      provider: ollama
+      model: gemma4:12b
 
   # Standalone pro - high-quality offline deployment
   # Requires: Ollama (gemma4:26b), TEI (nomic-embed + jina-reranker), 48-64GB RAM
@@ -174,6 +195,9 @@ tiers:
       provider: tei
       model: jinaai/jina-reranker-v2-base-multilingual
       url: http://tei-reranker:8080
+    query_expander:
+      provider: ollama
+      model: gemma4:12b
 
 # Task-to-tier mapping (which tier each task uses)
 # Override individual tasks without changing the whole tier

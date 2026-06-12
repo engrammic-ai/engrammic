@@ -4,7 +4,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.api
       args:
-        INCLUDE_SPLADE: "true"
+        INCLUDE_SPLADE: "false"
     container_name: engrammic-app
     ports:
       - "8000:8000"
@@ -20,12 +20,16 @@ services:
       - OTEL_ENABLED=${OTEL_ENABLED:-true}
       - OTEL_SERVICE_NAME=engrammic
       - RELOAD=true
-      # HuggingFace cache for SPLADE
+      # HuggingFace/FastEmbed cache for sparse models
       - HF_HOME=/app/.cache/huggingface
+      - FASTEMBED_CACHE_PATH=/app/.cache/fastembed
       # Fix litellm aiohttp stale session bug
       - DISABLE_AIOHTTP_TRANSPORT=true
+      # Disable query expansion (Gemini latency too high for 5s timeout)
+      - RERANKING__EXPAND_HARD_QUERIES=false
     volumes:
       - hf-cache:/app/.cache/huggingface
+      - fastembed-cache:/app/.cache/fastembed
       - ~/.config/gcloud:/mnt/gcloud:ro
       - ../src:/app/src
       - ../pyproject.toml:/app/pyproject.toml:ro
@@ -316,6 +320,7 @@ volumes:
   redis-data:
   postgres-data:
   hf-cache:
+  fastembed-cache:
 
 networks:
   default:
