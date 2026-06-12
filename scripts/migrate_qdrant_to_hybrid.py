@@ -12,11 +12,9 @@ Usage:
 import argparse
 import asyncio
 import os
-import sys
 
 from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
-
 
 COLLECTION_PREFIX = "ctx_"
 DENSE_VECTOR_NAME = "dense"

@@ -18,7 +18,6 @@ import pytest
 
 from context_service.reactions.events import ReactionEventType
 
-
 # ---------------------------------------------------------------------------
 # sys.modules stubs
 # ---------------------------------------------------------------------------

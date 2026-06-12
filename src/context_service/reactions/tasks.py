@@ -1074,7 +1074,6 @@ RETURN n.id
         )
         log.info("trace_reasoning_task_start")
 
-        from primitives.schema.edges import CITEEdgeType
 
         from context_service.db.postgres import get_session as get_pg_session
         from context_service.db.queries import GET_WORKING_HYPOTHESES_FOR_SESSION
@@ -1117,8 +1116,9 @@ RETURN n.id
         chains_traced: list[str] = []
         traced_hypothesis_ids: list[str] = []
 
-        from context_service.embeddings import build_embedding_service
         from primitives.schema.labels import IntelligenceLabel
+
+        from context_service.embeddings import build_embedding_service
 
         embedder = build_embedding_service()
 
@@ -1343,7 +1343,6 @@ RETURN n.id AS id
         )
         log.info("check_consensus_task_start")
 
-        from primitives.schema.edges import CITEEdgeType
         from primitives.schema.labels import KnowledgeLabel
         from sqlalchemy import select
 
@@ -1531,7 +1530,7 @@ RETURN n.id AS id
         fact_id = uuid.uuid4()
         fact_props: dict[str, Any] = {
             "layer": "knowledge",
-            "state": "active",
+            "state": "ACTIVE",
             "source": "consensus",
             "chain_count": len(all_chains),
             "agent_count": agent_count,
@@ -1719,11 +1718,10 @@ RETURN n.id AS id
 
             # 4. If remaining chains drop below threshold, tombstone the Fact.
             if remaining_count < _CONSENSUS_MIN_CHAINS:
+                from datetime import datetime as _datetime
                 from datetime import timedelta
 
                 from context_service.sage.transactions import CANCEL_WINDOW_DURATION_SECONDS
-
-                from datetime import datetime as _datetime
 
                 now = _datetime.now(UTC)
                 cancel_window_expires = now + timedelta(seconds=CANCEL_WINDOW_DURATION_SECONDS)

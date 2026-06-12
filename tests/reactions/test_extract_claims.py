@@ -81,8 +81,9 @@ class TestExtractClaimsTask:
 
             mock_layer.return_value = PersistenceLayer.MEMORY
 
-            from context_service.reactions.tasks import register_tasks
             from taskiq_redis import ListQueueBroker
+
+            from context_service.reactions.tasks import register_tasks
 
             broker = MagicMock(spec=ListQueueBroker)
             registered_tasks: dict[str, Any] = {}
@@ -149,8 +150,9 @@ class TestExtractClaimsTask:
             claim_result.claim_id = uuid.uuid4()
             mock_store_claim.return_value = claim_result
 
-            from context_service.reactions.tasks import register_tasks
             from taskiq_redis import ListQueueBroker
+
+            from context_service.reactions.tasks import register_tasks
 
             broker = MagicMock(spec=ListQueueBroker)
             registered_tasks: dict[str, Any] = {}
@@ -191,8 +193,9 @@ class TestExtractClaimsTask:
 
             mock_layer.return_value = PersistenceLayer.MEMORY
 
-            from context_service.reactions.tasks import register_tasks
             from taskiq_redis import ListQueueBroker
+
+            from context_service.reactions.tasks import register_tasks
 
             broker = MagicMock(spec=ListQueueBroker)
             registered_tasks: dict[str, Any] = {}
@@ -241,8 +244,9 @@ class TestExtractClaimsTask:
 
             mock_layer.return_value = PersistenceLayer.MEMORY
 
-            from context_service.reactions.tasks import register_tasks
             from taskiq_redis import ListQueueBroker
+
+            from context_service.reactions.tasks import register_tasks
 
             broker = MagicMock(spec=ListQueueBroker)
             registered_tasks: dict[str, Any] = {}
@@ -304,8 +308,9 @@ class TestExtractClaimsTask:
 
             mock_layer.return_value = PersistenceLayer.MEMORY
 
-            from context_service.reactions.tasks import register_tasks
             from taskiq_redis import ListQueueBroker
+
+            from context_service.reactions.tasks import register_tasks
 
             broker = MagicMock(spec=ListQueueBroker)
             registered_tasks: dict[str, Any] = {}
@@ -369,8 +374,9 @@ class TestExtractClaimsTask:
             claim_result.claim_id = uuid.uuid4()
             mock_store_claim.return_value = claim_result
 
-            from context_service.reactions.tasks import register_tasks
             from taskiq_redis import ListQueueBroker
+
+            from context_service.reactions.tasks import register_tasks
 
             broker = MagicMock(spec=ListQueueBroker)
             registered_tasks: dict[str, Any] = {}
@@ -436,8 +442,9 @@ class TestExtractClaimsTask:
             claim_result.claim_id = uuid.uuid4()
             mock_store_claim.return_value = claim_result
 
-            from context_service.reactions.tasks import register_tasks
             from taskiq_redis import ListQueueBroker
+
+            from context_service.reactions.tasks import register_tasks
 
             broker = MagicMock(spec=ListQueueBroker)
             registered_tasks: dict[str, Any] = {}

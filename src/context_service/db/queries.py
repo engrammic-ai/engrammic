@@ -1918,8 +1918,8 @@ RETURN a.id AS id, a.properties.state AS state
 CREATE_CRYSTALLIZED_FROM_EDGE = """
 MATCH (commitment {id: $commitment_id, silo_id: $silo_id})
 MATCH (hypothesis {id: $hypothesis_id, silo_id: $silo_id})
-SET hypothesis.properties.crystallized = true,
-    hypothesis.properties.crystallized_into = $commitment_id
+SET hypothesis.crystallized = true,
+    hypothesis.crystallized_into = $commitment_id
 CREATE (commitment)-[:CRYSTALLIZED_FROM {created_at: $created_at}]->(hypothesis)
 RETURN commitment.id AS id
 """
@@ -2142,7 +2142,7 @@ WHERE n.properties.state = 'ACTIVE'
   AND n.properties.layer IN ['knowledge', 'wisdom']
 WITH collect({
     id: n.id,
-    credibility: coalesce(n.properties.credibility, n.properties.confidence, 0.5),
+    credibility: coalesce(n.credibility, n.confidence, 0.5),
     layer: n.properties.layer
 }) AS nodes
 OPTIONAL MATCH (s {silo_id: $silo_id})-[sup:SUPPORTS]->(t {silo_id: $silo_id})
@@ -2176,8 +2176,8 @@ RETURN source.id AS source_id, target.id AS target_id, e.weight AS weight
 UPDATE_PROPAGATED_CONFIDENCE = """
 UNWIND $updates AS u
 MATCH (n {id: u.node_id, silo_id: $silo_id})
-SET n.properties.confidence = u.confidence,
-    n.properties.confidence_updated_at = $updated_at
+SET n.confidence = u.confidence,
+    n.confidence_updated_at = $updated_at
 RETURN count(*) AS updated_count
 """
 
@@ -2186,7 +2186,7 @@ MATCH path = (center {id: $node_id, silo_id: $silo_id})-[*..2]-(neighbor {silo_i
 WHERE neighbor.properties.state = 'ACTIVE'
 WITH collect(DISTINCT center) + collect(DISTINCT neighbor) AS all_nodes
 UNWIND all_nodes AS n
-WITH collect(DISTINCT {id: n.id, credibility: coalesce(n.properties.credibility, n.properties.confidence, 0.5)}) AS nodes
+WITH collect(DISTINCT {id: n.id, credibility: coalesce(n.credibility, n.confidence, 0.5)}) AS nodes
 OPTIONAL MATCH (s {silo_id: $silo_id})-[sup:SUPPORTS]->(t {silo_id: $silo_id})
 WHERE s.id IN [node IN nodes | node.id] AND t.id IN [node IN nodes | node.id]
 WITH nodes, collect({source: s.id, target: t.id, weight: coalesce(sup.weight, 1.0)}) AS supports

@@ -354,16 +354,18 @@ async def llm_synthesize(
         prompt += f"\n\nPrevious belief (now stale): {previous_belief}"
 
     try:
-        response = await asyncio.wait_for(
+        response_text, _usage = await asyncio.wait_for(
             llm.complete(
-                system_prompt=_SYNTHESIS_SYSTEM_PROMPT,
-                user_prompt=prompt,
+                messages=[
+                    {"role": "system", "content": _SYNTHESIS_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
             ),
             timeout=timeout,
         )
         return LLMSynthesisResult(
             success=True,
-            content=response.strip(),
+            content=response_text.strip(),
             caveats=[],
             timed_out=False,
         )
