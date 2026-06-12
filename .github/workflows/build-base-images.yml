@@ -35,8 +35,7 @@ jobs:
             --project ${{ env.PROJECT_ID }} \
             --region ${{ env.REGION }} \
             --tag ${{ env.REGISTRY }}/base-api:latest \
-            --tag ${{ env.REGISTRY }}/base-api:${{ github.sha }} \
-            -f docker/Dockerfile.base-api \
+            --dockerfile docker/Dockerfile.base-api \
             .
 
       - name: Build base-dagster via Cloud Build
@@ -45,6 +44,5 @@ jobs:
             --project ${{ env.PROJECT_ID }} \
             --region ${{ env.REGION }} \
             --tag ${{ env.REGISTRY }}/base-dagster:latest \
-            --tag ${{ env.REGISTRY }}/base-dagster:${{ github.sha }} \
-            -f docker/Dockerfile.base-dagster \
+            --dockerfile docker/Dockerfile.base-dagster \
             .
