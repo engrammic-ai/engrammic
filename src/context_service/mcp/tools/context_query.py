@@ -303,11 +303,12 @@ async def _context_query(
 
     channel_config = _search_mode_to_channels(search_mode)
     retriever = FusionRetriever(ctx_svc, channel_config=channel_config)
+    layer_strings = [layer.value for layer in valid_layers] if valid_layers else None
     fused_results = await retriever.retrieve(
         query=effective_query,
         scope=scope,
         top_k=top_k,
-        layers=valid_layers,
+        layers=layer_strings,
         include_superseded=include_superseded,
         filters=parsed_filters,
         fetch_content=True,
