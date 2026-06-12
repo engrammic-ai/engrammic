@@ -13,11 +13,12 @@ where k=60 (default smoothing constant) and rank starts at 1.
 
 from __future__ import annotations
 
+import asyncio
 import re
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -82,91 +83,87 @@ class FusionRetriever:
         graph_depth: int = 2,
         layers: list[str] | None = None,
     ) -> list[FusedResult]:
-        """Run semantic channel first, then seed graph channel from its results.
+        """Run 4-channel retrieval with RRF fusion and reranking.
 
-        Runs the semantic channel first to obtain top matches, then uses those
-        node IDs as seeds for the graph channel. This avoids a second embedding
-        call (graph_traversal embeds the query internally when given a query
-        string). Accepts ~50ms extra latency in exchange for halving embedding
-        cost per fusion request.
+        Channels:
+        1. Semantic (vector similarity)
+        2. BM25 (keyword search via Postgres GIN)
+        3. Temporal (date-aware recency scoring)
+        4. PPR (graph traversal from semantic seeds)
 
-        Over-fetches (top_k * 2) from each channel before fusion, then returns
-        the top_k fused results. If the semantic channel errors, the graph
-        channel is skipped and an empty result is returned for it. If the graph
-        channel errors, semantic results are used as-is.
+        Over-fetches (top_k * 2) from each channel, fuses with RRF, then
+        reranks top 50 candidates with a cross-encoder.
 
         Args:
             query: Free-text search query.
             scope: Org and silo scoping context.
             top_k: Number of results to return after fusion.
             graph_depth: Maximum BFS depth for the graph channel.
-            layers: Optional layer filter applied to both channels.
+            layers: Optional layer filter applied to all channels.
 
         Returns:
             List of FusedResult ordered by descending rrf_score.
         """
         fetch_k = top_k * 2
 
-        # Run semantic channel first — its results seed the graph channel.
-        semantic_result: ChannelResult
-        try:
-            semantic_result = await self._semantic_channel(query, scope, fetch_k, layers)
-        except Exception as exc:  # pragma: no cover
-            semantic_result = ChannelResult(
-                channel_name="semantic",
-                ranked_ids=[],
-                latency_ms=0.0,
-                error=str(exc),
+        # 1. Run semantic, BM25, temporal in parallel
+        semantic_result, bm25_result, temporal_result = await asyncio.gather(
+            self._semantic_channel(query, scope, fetch_k, layers),
+            self._bm25_channel(query, scope, fetch_k, layers),
+            self._temporal_channel(query, scope, fetch_k, layers),
+            return_exceptions=True,
+        )
+
+        # Handle exceptions as empty results
+        if isinstance(semantic_result, Exception):
+            logger.warning("semantic_channel_error", error=str(semantic_result))
+            semantic_result = ChannelResult("semantic", [], 0.0, str(semantic_result))
+        if isinstance(bm25_result, Exception):
+            logger.warning("bm25_channel_error", error=str(bm25_result))
+            bm25_result = ChannelResult("bm25", [], 0.0, str(bm25_result))
+        if isinstance(temporal_result, Exception):
+            logger.warning("temporal_channel_error", error=str(temporal_result))
+            temporal_result = ChannelResult("temporal", [], 0.0, str(temporal_result))
+
+        for ch in [semantic_result, bm25_result, temporal_result]:
+            logger.debug(
+                "fusion_channel_complete",
+                channel=ch.channel_name,
+                count=len(ch.ranked_ids),
+                latency_ms=ch.latency_ms,
             )
+
+        # 2. PPR channel seeds from semantic (sequential dependency)
+        seed_ids = semantic_result.ranked_ids[:20] if not semantic_result.error else []
+        try:
+            ppr_result = await self._ppr_channel(seed_ids, scope, fetch_k, layers)
+        except Exception as exc:
+            logger.warning("ppr_channel_error", error=str(exc))
+            ppr_result = ChannelResult("ppr", [], 0.0, str(exc))
 
         logger.debug(
             "fusion_channel_complete",
-            channel="semantic",
-            count=len(semantic_result.ranked_ids),
-            latency_ms=semantic_result.latency_ms,
+            channel="ppr",
+            count=len(ppr_result.ranked_ids),
+            latency_ms=ppr_result.latency_ms,
         )
 
-        # Use top-10 semantic hits as seeds so graph_traversal does not need
-        # to embed the query again.
-        seed_ids = semantic_result.ranked_ids[:10] if semantic_result.error is None else []
+        # 3. RRF fusion across all channels
+        channel_results = [semantic_result, bm25_result, temporal_result, ppr_result]
+        fused = self._fuse_rrf(channel_results, fetch_k)
 
-        graph_result: ChannelResult
-        try:
-            graph_result = await self._graph_channel(seed_ids, scope, fetch_k, graph_depth, layers)
-        except Exception as exc:  # pragma: no cover
-            graph_result = ChannelResult(
-                channel_name="graph",
-                ranked_ids=[],
-                latency_ms=0.0,
-                error=str(exc),
-            )
-
-        logger.debug(
-            "fusion_channel_complete",
-            channel="graph",
-            count=len(graph_result.ranked_ids),
-            latency_ms=graph_result.latency_ms,
-        )
-
-        channel_results = [semantic_result, graph_result]
-        for result in channel_results:
-            if result.error is not None:
-                logger.warning(
-                    "fusion_channel_error",
-                    channel=result.channel_name,
-                    error=result.error,
-                )
-
-        fused = self._fuse_rrf(channel_results, top_k)
+        # 4. Rerank top candidates
+        reranked = await self._rerank(query, fused[:50])
 
         logger.info(
             "fusion_complete",
             query_len=len(query),
             top_k=top_k,
-            fused_count=len(fused),
-            channels=[c.channel_name for c in channel_results if c.error is None],
+            fused_count=len(reranked),
+            channels=[c.channel_name for c in channel_results if not c.error],
         )
-        return fused
+
+        return reranked[:top_k]
 
     async def _semantic_channel(
         self,
@@ -262,6 +259,44 @@ class FusionRetriever:
                 latency_ms=latency_ms,
                 error=str(exc),
             )
+
+    async def _bm25_channel(
+        self,
+        query: str,
+        scope: ScopeContext,
+        top_k: int,
+        layers: list[str] | None,
+    ) -> ChannelResult:
+        """BM25 keyword search via Postgres GIN index. (Stub - Day 1)"""
+        return ChannelResult(channel_name="bm25", ranked_ids=[], latency_ms=0.0)
+
+    async def _temporal_channel(
+        self,
+        query: str,
+        scope: ScopeContext,
+        top_k: int,
+        layers: list[str] | None,
+    ) -> ChannelResult:
+        """Temporal date-aware retrieval. (Stub - Day 1)"""
+        return ChannelResult(channel_name="temporal", ranked_ids=[], latency_ms=0.0)
+
+    async def _ppr_channel(
+        self,
+        seed_ids: list[str],
+        scope: ScopeContext,
+        top_k: int,
+        layers: list[str] | None,
+    ) -> ChannelResult:
+        """PPR graph traversal from semantic seeds. (Stub - Day 2)"""
+        return ChannelResult(channel_name="ppr", ranked_ids=[], latency_ms=0.0)
+
+    async def _rerank(
+        self,
+        query: str,
+        fused: list[FusedResult],
+    ) -> list[FusedResult]:
+        """Cross-encoder reranking. (Stub - Day 2)"""
+        return fused
 
     def _fuse_rrf(
         self,
