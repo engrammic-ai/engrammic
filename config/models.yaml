@@ -59,7 +59,7 @@ tiers:
       model: semantic-ranker-default@latest
     query_expander:
       provider: vertex_ai
-      model: vertex_ai/qwen/qwen3-7b-instruct-maas
+      model: vertex_ai/gemini-2.0-flash
 
   premium:
     embeddings:
