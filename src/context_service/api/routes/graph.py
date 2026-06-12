@@ -136,7 +136,7 @@ async def list_nodes(
     layers: str | None = Query(default=None, description="Comma-separated layer filter"),
     tags: str | None = Query(default=None, description="Comma-separated tag filter"),
     limit: int = Query(default=50, ge=1, le=500),
-    _sort: str | None = Query(default=None, description="Sort field:direction, e.g. created_at:desc"),
+    sort: str | None = Query(default=None, description="Sort field:direction, e.g. created_at:desc"),
     x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
 ) -> list[GraphNodeResponse]:
     if not x_silo_id:
