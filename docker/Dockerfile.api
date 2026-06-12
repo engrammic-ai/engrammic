@@ -25,8 +25,8 @@ ENV PYTHONDONTWRITEBYTECODE=1
 RUN mkdir -p /app/.cache/huggingface /app/.cache/fastembed && \
     chown -R engrammic:engrammic /app/.cache
 
-# Install deps not in base image (use venv's python to ensure correct pip)
-RUN /app/.venv/bin/python -m pip install --no-cache-dir google-cloud-aiplatform>=1.50
+# Install deps not in base image
+RUN uv pip install --python /app/.venv/bin/python google-cloud-aiplatform>=1.50
 
 # Validate critical imports at build time
 RUN SKIP_MODEL_CHECK=1 python /app/scripts/validate_imports.py
