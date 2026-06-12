@@ -255,7 +255,7 @@ class QdrantClient:
             collections = await client.get_collections()
             exists = any(c.name == collection_name for c in collections.collections)
             if not exists:
-                quant_config = get_quantization_config()
+                quant_config = self.get_quantization_config()
                 await client.create_collection(
                     collection_name=collection_name,
                     vectors_config=models.VectorParams(
