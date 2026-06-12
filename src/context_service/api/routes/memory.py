@@ -20,6 +20,7 @@ from context_service.config.settings import get_settings
 from context_service.mcp.server import get_context_service
 from context_service.reranking.query_classifier import is_hard_query
 from context_service.reranking.query_expander import QueryExpander
+from context_service.retrieval.fusion import FusionRetriever
 from context_service.sage.transactions import LinkType, store_claim, store_memory
 from context_service.sage.transactions import link as brain_link
 from context_service.services.models import ScopeContext
@@ -205,12 +206,43 @@ async def recall(
                 logger.warning("rest_query_expansion_failed", error=str(exc))
 
     try:
-        results = await ctx_svc.query(
-            scope=scope,
+        # Use 4-channel FusionRetriever for multi-modal retrieval
+        retriever = FusionRetriever(ctx_svc)
+        fused_results = await retriever.retrieve(
             query=effective_query,
-            layers=None,
+            scope=scope,
             top_k=request_body.top_k,
         )
+
+        # Batch fetch full node data for ranked IDs
+        import uuid as uuid_mod
+
+        node_ids = [uuid_mod.UUID(r.node_id) for r in fused_results]
+        if node_ids:
+            nodes_map = await ctx_svc.graph_store.batch_get_nodes(node_ids, silo_id)
+        else:
+            nodes_map = {}
+
+        # Map to response format, preserving fusion rank order
+        items = []
+        for fused in fused_results:
+            node = nodes_map.get(uuid_mod.UUID(fused.node_id))
+            if node is None:
+                continue
+            props = node.properties or {}
+            layer_val = props.get("layer", node.type)
+            items.append(
+                RecallResultItem(
+                    node_id=fused.node_id,
+                    content=node.content,
+                    layer=layer_val.value if hasattr(layer_val, "value") else str(layer_val),
+                    confidence=props.get("confidence", 0.0),
+                    relevance_score=fused.rrf_score,
+                    tags=list(props.get("tags", [])),
+                    created_at=node.created_at.isoformat() if node.created_at else None,
+                    summary=props.get("summary"),
+                )
+            )
     except Exception as exc:
         logger.error(
             "rest_recall_failed",
@@ -218,20 +250,6 @@ async def recall(
             error=str(exc),
         )
         raise HTTPException(status_code=500, detail="Failed to execute recall query") from exc
-
-    items = [
-        RecallResultItem(
-            node_id=str(r.node_id),
-            content=r.content,
-            layer=r.layer,
-            confidence=r.confidence,
-            relevance_score=r.relevance_score,
-            tags=r.tags or [],
-            created_at=r.created_at.isoformat() if r.created_at else None,
-            summary=r.summary,
-        )
-        for r in results
-    ]
 
     logger.info(
         "rest_recall_ok",
