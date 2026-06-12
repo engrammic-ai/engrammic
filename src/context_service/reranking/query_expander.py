@@ -113,7 +113,7 @@ class QueryExpander:
         global _GENAI_CLIENT, _GENAI_CLIENT_KEY
 
         key = (self._vertex_project, self._vertex_location)
-        if _GENAI_CLIENT is None or _GENAI_CLIENT_KEY != key:
+        if _GENAI_CLIENT is None or key != _GENAI_CLIENT_KEY:
             from google import genai
 
             _GENAI_CLIENT = genai.Client(

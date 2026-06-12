@@ -9,7 +9,7 @@ import structlog
 from mcp.shared.exceptions import McpError
 from mcp.types import ErrorData
 
-from context_service.api.rate_limit import RateLimitExceeded
+from context_service.exceptions import RateLimitExceeded
 from context_service.sage.transactions import BrainError
 
 # JSON-RPC server error code (-32000 to -32099 are reserved for implementation-defined server errors)
