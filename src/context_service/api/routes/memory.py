@@ -17,11 +17,10 @@ from pydantic import BaseModel, Field
 from context_service.config.models import load_models_config
 from context_service.config.settings import get_settings
 from context_service.mcp.server import get_context_service
-from context_service.mcp.tools.context_link import _context_link
-from context_service.mcp.tools.context_store import _context_assert
 from context_service.reranking.query_classifier import is_hard_query
 from context_service.reranking.query_expander import QueryExpander
-from context_service.sage.transactions import store_memory
+from context_service.sage.transactions import LinkType, store_claim, store_memory
+from context_service.sage.transactions import link as brain_link
 from context_service.services.models import ScopeContext, derive_silo_id
 
 logger = structlog.get_logger(__name__)
@@ -255,6 +254,7 @@ async def recall(
 )
 async def learn(
     request_body: LearnRequest,
+    request: Request,
     x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
     x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
 ) -> LearnResponse:
@@ -267,18 +267,21 @@ async def learn(
     if not x_session_id:
         raise HTTPException(status_code=400, detail="X-Session-ID header is required")
 
+    if not hasattr(request.app.state, "memgraph"):
+        raise HTTPException(status_code=503, detail="Memgraph not available")
+
+    store = request.app.state.memgraph
     silo_uuid = derive_silo_id(x_silo_id)
 
     try:
-        result = await _context_assert(
+        result_tx, _events = await store_claim(
+            store=store,
+            content=request_body.claim,
+            evidence_refs=request_body.evidence,
             silo_id=str(silo_uuid),
-            claim=request_body.claim,
-            evidence=request_body.evidence,
-            source_type="external",
+            agent_id=x_session_id,
             confidence=0.8,
             tags=request_body.tags or None,
-            source_tier=None,
-            supersedes=None,
         )
     except Exception as exc:
         logger.error(
@@ -286,20 +289,17 @@ async def learn(
             silo_id=str(silo_uuid),
             error=str(exc),
         )
-        raise HTTPException(status_code=500, detail="Failed to store claim") from exc
-
-    if "error" in result:
-        raise HTTPException(status_code=400, detail=result.get("message", "Invalid claim"))
+        raise HTTPException(status_code=500, detail=f"Failed to store claim: {exc}") from exc
 
     logger.info(
         "rest_learn_ok",
-        node_id=result.get("node_id", "unknown"),
+        node_id=str(result_tx.node_id),
         silo_id=str(silo_uuid),
     )
 
     return LearnResponse(
-        node_id=result.get("node_id", ""),
-        created_at=result.get("created_at", ""),
+        node_id=str(result_tx.node_id),
+        created_at=result_tx.created_at.isoformat(),
     )
 
 
@@ -311,22 +311,45 @@ async def learn(
 )
 async def link(
     request_body: LinkRequest,
+    request: Request,
     x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
+    x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
 ) -> LinkResponse:
     """Create a typed relationship between two nodes."""
     if not x_silo_id:
         raise HTTPException(status_code=400, detail="X-Silo-ID header is required")
 
+    if not hasattr(request.app.state, "memgraph"):
+        raise HTTPException(status_code=503, detail="Memgraph not available")
+
+    store = request.app.state.memgraph
     silo_uuid = derive_silo_id(x_silo_id)
+    agent_id = x_session_id or x_silo_id
+
+    # Map relation string to LinkType
+    relation_map = {
+        "FOLLOWED_BY": LinkType.RELATED_TO,
+        "CONTAINS": LinkType.RELATED_TO,
+        "RELATED_TO": LinkType.RELATED_TO,
+        "SUPPORTS": LinkType.SUPPORTS,
+        "CONTRADICTS": LinkType.CONTRADICTS,
+        "DERIVED_FROM": LinkType.DERIVED_FROM,
+        "REFERENCES": LinkType.REFERENCES,
+        "CAUSES": LinkType.CAUSES,
+        "PREVENTS": LinkType.PREVENTS,
+        "SUPERSEDES": LinkType.SUPERSEDES,
+    }
+    link_type = relation_map.get(request_body.relation.upper(), LinkType.RELATED_TO)
 
     try:
-        result = await _context_link(
+        result_tx, _events = await brain_link(
+            store=store,
+            source_id=request_body.from_node,
+            target_id=request_body.to_node,
+            edge_type=link_type,
             silo_id=str(silo_uuid),
-            from_node=request_body.from_node,
-            to_node=request_body.to_node,
-            relationship=request_body.relation,
+            agent_id=agent_id,
             weight=1.0,
-            note=None,
         )
     except Exception as exc:
         logger.error(
@@ -334,18 +357,15 @@ async def link(
             silo_id=str(silo_uuid),
             error=str(exc),
         )
-        raise HTTPException(status_code=500, detail="Failed to create link") from exc
-
-    if "error" in result:
-        raise HTTPException(status_code=400, detail=result.get("message", "Invalid link"))
+        raise HTTPException(status_code=500, detail=f"Failed to create link: {exc}") from exc
 
     logger.info(
         "rest_link_ok",
-        edge_id=result.get("edge_id"),
+        edge_id=str(result_tx.edge_id),
         silo_id=str(silo_uuid),
     )
 
     return LinkResponse(
         success=True,
-        edge_id=result.get("edge_id"),
+        edge_id=str(result_tx.edge_id),
     )
