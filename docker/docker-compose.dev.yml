@@ -25,6 +25,8 @@ services:
       - FASTEMBED_CACHE_PATH=/app/.cache/fastembed
       # Fix litellm aiohttp stale session bug
       - DISABLE_AIOHTTP_TRANSPORT=true
+      # Disable query expansion (Gemini latency too high for 5s timeout)
+      - RERANKING__EXPAND_HARD_QUERIES=false
     volumes:
       - hf-cache:/app/.cache/huggingface
       - fastembed-cache:/app/.cache/fastembed
