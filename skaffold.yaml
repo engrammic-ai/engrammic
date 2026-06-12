@@ -10,12 +10,14 @@ build:
   artifacts:
     # Base images (rebuild on uv.lock change)
     - image: europe-north1-docker.pkg.dev/engrammic/engrammic/base-api
+      alias: base_api
       docker:
         dockerfile: docker/Dockerfile.base-api
         cacheFrom:
           - europe-north1-docker.pkg.dev/engrammic/engrammic/base-api:latest
 
     - image: europe-north1-docker.pkg.dev/engrammic/engrammic/base-dagster
+      alias: base_dagster
       docker:
         dockerfile: docker/Dockerfile.base-dagster
         cacheFrom:
@@ -26,13 +28,13 @@ build:
       docker:
         dockerfile: docker/Dockerfile.api
       requires:
-        - image: europe-north1-docker.pkg.dev/engrammic/engrammic/base-api
+        - alias: base_api
 
     - image: europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-dagster
       docker:
         dockerfile: docker/Dockerfile.dagster
       requires:
-        - image: europe-north1-docker.pkg.dev/engrammic/engrammic/base-dagster
+        - alias: base_dagster
 
     # Beacon: standalone, no base
     - image: europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-beacon

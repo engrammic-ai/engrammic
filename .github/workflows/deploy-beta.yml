@@ -10,7 +10,32 @@ env:
   PROJECT_ID: engrammic
 
 jobs:
+  wait-for-base-images:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for base image build if running
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Check if build-base-images workflow is running for this commit
+          for i in {1..30}; do
+            RUNNING=$(gh run list --repo ${{ github.repository }} \
+              --workflow "Build Base Images" \
+              --commit ${{ github.sha }} \
+              --status in_progress \
+              --json databaseId --jq 'length')
+            if [ "$RUNNING" = "0" ]; then
+              echo "No base image build in progress, continuing..."
+              exit 0
+            fi
+            echo "Base image build in progress, waiting... (attempt $i/30)"
+            sleep 30
+          done
+          echo "Timeout waiting for base image build"
+          exit 1
+
   build:
+    needs: wait-for-base-images
     runs-on: ubuntu-latest
     permissions:
       contents: read
