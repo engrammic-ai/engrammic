@@ -502,7 +502,7 @@ async def _context_assert(
                 embedding=node_embedding,
                 silo_id=str(expected_silo_id),
                 collection_name=collection_name,
-                embedding_model=settings.litellm_embedding_model,
+                embedding_model=settings.models.litellm_embedding_model,
             )
             if affinity_edges:
                 await store_affinity_edges(

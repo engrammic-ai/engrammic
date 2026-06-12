@@ -5,14 +5,22 @@ services:
     ports:
       - "8000:8000"
     environment:
+      - HOME=/home/engrammic
       - ENVIRONMENT=production
       - MEMGRAPH_HOST=memgraph
       - QDRANT_HOST=qdrant
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
+      - HF_HOME=/app/.cache/huggingface
+      - FASTEMBED_CACHE_PATH=/app/.cache/fastembed
+      - DISABLE_AIOHTTP_TRANSPORT=true
     volumes:
+      - hf-cache:/app/.cache/huggingface
+      - fastembed-cache:/app/.cache/fastembed
       - ~/.config/gcloud:/mnt/gcloud:ro
       - ./skills:/app/skills:ro
+    extra_hosts:
+      - "metadata.google.internal:169.254.169.254"
     depends_on:
       memgraph:
         condition: service_healthy
@@ -39,13 +47,19 @@ services:
     container_name: engrammic-reaction-worker
     command: ["taskiq", "worker", "context_service.reactions.worker_entrypoint:broker", "--workers", "2"]
     environment:
+      - HOME=/home/engrammic
       - ENVIRONMENT=production
       - MEMGRAPH_HOST=memgraph
       - QDRANT_HOST=qdrant
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
+      - HF_HOME=/app/.cache/huggingface
+      - DISABLE_AIOHTTP_TRANSPORT=true
     volumes:
+      - hf-cache:/app/.cache/huggingface
       - ~/.config/gcloud:/mnt/gcloud:ro
+    extra_hosts:
+      - "metadata.google.internal:169.254.169.254"
     depends_on:
       redis:
         condition: service_healthy
@@ -151,11 +165,14 @@ services:
       - QDRANT_HOST=qdrant
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
+      - DISABLE_AIOHTTP_TRANSPORT=true
     depends_on:
       - postgres
       - memgraph
       - qdrant
       - redis
+    extra_hosts:
+      - "metadata.google.internal:169.254.169.254"
     deploy:
       resources:
         limits:
@@ -189,6 +206,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    extra_hosts:
+      - "metadata.google.internal:169.254.169.254"
     deploy:
       resources:
         limits:
@@ -207,6 +226,7 @@ services:
       - QDRANT_HOST=qdrant
       - REDIS_HOST=redis
       - POSTGRES_HOST=postgres
+      - DISABLE_AIOHTTP_TRANSPORT=true
     depends_on:
       dagster-code-server:
         condition: service_healthy
@@ -218,6 +238,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    extra_hosts:
+      - "metadata.google.internal:169.254.169.254"
     deploy:
       resources:
         limits:
@@ -230,3 +252,5 @@ volumes:
   qdrant-data:
   redis-data:
   postgres-data:
+  hf-cache:
+  fastembed-cache:

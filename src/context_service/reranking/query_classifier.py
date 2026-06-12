@@ -28,7 +28,24 @@ ABSTRACT_VERBS = frozenset(
 )
 
 # Question words that indicate value-seeking queries
-QUESTION_WORDS = frozenset({"what", "where", "when", "how", "which", "who", "why"})
+QUESTION_WORDS = frozenset(
+    {
+        "what",
+        "where",
+        "when",
+        "how",
+        "which",
+        "who",
+        "why",
+        "true",
+        "is",
+        "are",
+        "does",
+        "do",
+        "can",
+        "should",
+    }
+)
 
 # Patterns for specific hard query types
 QUESTION_PATTERNS = [
@@ -67,6 +84,14 @@ def is_hard_query(query: str) -> bool:
 
     query_lower = query.lower().strip()
     words = query_lower.split()
+
+    # Any query containing "?" is a question - expand it
+    if "?" in query:
+        return True
+
+    # "True or false" style questions
+    if "true or false" in query_lower:
+        return True
 
     # Short queries with abstract verbs
     if len(words) <= 5 and any(w.rstrip(string.punctuation) in ABSTRACT_VERBS for w in words):

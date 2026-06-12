@@ -45,10 +45,18 @@ async def verify_models(*, timeout: float = 120.0) -> None:
         if not settings.hybrid_search_enabled:
             logger.info("model_check_skip", model="splade", reason="hybrid search disabled")
             return
+
+        sparse_config = settings.models.sparse
+        sparse_provider = sparse_config.provider if sparse_config.enabled else None
+        if sparse_provider != "splade":
+            logger.info("model_check_skip", model="splade", reason=f"using {sparse_provider}")
+            return
+
         try:
             from context_service.embeddings.splade import SpladeEncoder
         except ImportError:
-            logger.info("model_check_skip", model="splade", reason="torch not installed")
+            errors.append("SPLADE configured but torch not installed")
+            logger.error("model_check_failed", model="splade", error="torch not installed")
             return
         try:
             encoder = SpladeEncoder(settings.embedding.splade.model)

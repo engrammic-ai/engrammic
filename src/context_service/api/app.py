@@ -23,10 +23,14 @@ from context_service.api.metrics import REGISTRY, metrics_endpoint
 from context_service.api.middleware import PrometheusTimingMiddleware, RateLimitMiddleware
 from context_service.api.routes import admin, health
 from context_service.api.routes.gdpr import router as gdpr_router
+from context_service.api.routes.graph import router as graph_router
+from context_service.api.routes.intelligence import router as intelligence_router
 from context_service.api.routes.license import router as license_router
 from context_service.api.routes.memory import router as memory_router
+from context_service.api.routes.meta import router as meta_router
 from context_service.api.routes.oauth import router as oauth_router
 from context_service.api.routes.source_rules import router as source_rules_router
+from context_service.api.routes.wisdom import router as wisdom_router
 from context_service.config.logging import configure_logging, get_logger
 from context_service.config.settings import get_settings
 from context_service.core.service_registry import ServiceRegistry
@@ -105,8 +109,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 from context_service.db.custodian_queries import bootstrap_custodian_schema
                 from context_service.db.indexes import apply_all_indexes
 
-                await apply_all_indexes(memgraph_client)  # type: ignore[arg-type]
-                await bootstrap_custodian_schema(memgraph_client)  # type: ignore[arg-type]
+                await apply_all_indexes(memgraph_client)
+                await bootstrap_custodian_schema(memgraph_client)
                 logger.info("memgraph_schema_applied")
             except Exception as exc:
                 logger.error("memgraph_schema_failed", error=str(exc))
@@ -119,6 +123,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         qdrant_client = QdrantClient.from_settings(settings)
         await qdrant_client.ensure_collection(hybrid=settings.hybrid_search_enabled)
+        await qdrant_client.ensure_reasoning_chains_collection()
         logger.info("qdrant_connected")
 
         from context_service.db.postgres import init_postgres
@@ -156,6 +161,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         async def rebuild_qdrant() -> QdrantClient:
             client = QdrantClient.from_settings(settings)
             await client.ensure_collection()
+            await client.ensure_reasoning_chains_collection()
             return client
 
         registry.register("memgraph", memgraph_client, factory=rebuild_memgraph)
@@ -175,43 +181,40 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         embedding_cache = EmbeddingCache(redis_client)
         embedding_service: EmbeddingService | None = None
         try:
-            from context_service.config.config_loader import CONFIG_DIR, load_config
             from context_service.embeddings import build_embedding_service
 
-            logger.info("embedding_config_loading", config_dir=str(CONFIG_DIR))
-            embed_config = load_config("embeddings")
-            # Filter sensitive keys before logging
-            safe_config = {
-                k: v
-                for k, v in embed_config.items()
-                if k.lower() not in ("api_key", "secret", "password", "token", "credential")
-            }
-            logger.info("embedding_config_loaded", config=safe_config)
+            models = settings.models
+            logger.info(
+                "embedding_config_loading",
+                tier=models.tier,
+                model=models.litellm_embedding_model,
+            )
             embedding_service = build_embedding_service(embedding_cache)
             logger.info(
                 "embedding_service_configured",
-                provider="LiteLLMEmbeddingService",
-                model=embed_config["model"],
+                provider=models.get_embedding_model().provider,
+                model=models.litellm_embedding_model,
             )
         except Exception as exc:
             logger.warning(
                 "embedding_service_unconfigured",
                 error_type=type(exc).__name__,
                 error_message=str(exc),
-                hint="create config/embeddings.yaml to enable semantic search",
+                hint="check MODELS__TIER and tier config in models.yaml",
             )
 
-        splade_encoder = None
-        if settings.hybrid_search_enabled:
+        sparse_encoder = None
+        if settings.hybrid_search_enabled and models.sparse.enabled:
             try:
-                from context_service.embeddings.splade import SpladeEncoder
+                from context_service.embeddings.sparse import get_sparse_encoder
 
-                splade_encoder = SpladeEncoder(model_name=settings.embedding.splade.model)
-                logger.info("splade_encoder_configured")
-            except ImportError:
-                logger.warning(
-                    "splade_unavailable", reason="torch not installed, hybrid search disabled"
+                sparse_encoder = get_sparse_encoder(
+                    provider=models.sparse.provider,
+                    model=models.sparse.model,
                 )
+                logger.info("sparse_encoder_configured", provider=models.sparse.provider)
+            except ImportError as exc:
+                logger.warning("sparse_unavailable", reason=str(exc), hint="hybrid search disabled")
 
         from context_service.engine.memgraph_store import MemgraphStore
         from context_service.services.auto_tagging import AutoTaggingService
@@ -246,7 +249,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             qdrant=qdrant_client,
             redis=redis_client,
             embedding=embedding_service,
-            splade=splade_encoder,
+            sparse=sparse_encoder,
             auto_tagging=auto_tagging,
             db_session=skills_session,
             skills_dir=Path("skills"),
@@ -365,7 +368,11 @@ def create_app() -> ASGIApp:
     app.include_router(health.router)
     app.include_router(admin.router)
     app.include_router(gdpr_router)
+    app.include_router(graph_router)
     app.include_router(memory_router)
+    app.include_router(wisdom_router)
+    app.include_router(intelligence_router)
+    app.include_router(meta_router)
     app.include_router(oauth_router)
     # skills REST API not yet implemented (all endpoints return 501)
     app.include_router(source_rules_router)
@@ -421,6 +428,6 @@ def create_app() -> ASGIApp:
             if scope["type"] == "http" and scope.get("path") == "/mcp":
                 scope = dict(scope)
                 scope["path"] = "/mcp/"
-            await self.app(scope, receive, send)  # type: ignore[arg-type]
+            await self.app(scope, receive, send)
 
-    return MCPPathNormalizer(app)  # type: ignore[return-value]
+    return MCPPathNormalizer(app)

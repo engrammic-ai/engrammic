@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+import os
 import uuid
 from pathlib import Path
 
 import structlog
 
-_DEFAULT_PATH = Path("/var/lib/engrammic/install_id")
+
+def _default_install_id_path() -> Path:
+    """Return platform-appropriate path for install_id persistence."""
+    xdg_data = os.environ.get("XDG_DATA_HOME")
+    if xdg_data:
+        return Path(xdg_data) / "engrammic" / "install_id"
+    return Path.home() / ".local" / "share" / "engrammic" / "install_id"
+
+
+_DEFAULT_PATH = _default_install_id_path()
 _EPHEMERAL_ID: str | None = None
 
 logger = structlog.get_logger(__name__)

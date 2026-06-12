@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
-from dtaidistance import dtw_ndim  # type: ignore[import-untyped]
+from dtaidistance import dtw_ndim
 
 
 def dtw_similarity(

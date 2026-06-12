@@ -24,10 +24,24 @@ def run_migrations() -> bool:
     return True
 
 
+def validate_config() -> None:
+    """Validate config at startup. Fail fast with actionable errors."""
+    from context_service.config.validation import validate_config as _validate
+
+    _validate()
+
+
 if __name__ == "__main__":
     run_migrations_flag = os.environ.get("RUN_MIGRATIONS", "true").lower()
 
     if run_migrations_flag in ("true", "1", "yes") and not run_migrations():
+        sys.exit(1)
+
+    print("Validating configuration...")
+    try:
+        validate_config()
+    except Exception as e:
+        print(f"Config validation failed: {e}", file=sys.stderr)
         sys.exit(1)
 
     port = os.environ.get("PORT", "8000")

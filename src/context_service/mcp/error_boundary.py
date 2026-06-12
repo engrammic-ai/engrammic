@@ -9,7 +9,7 @@ import structlog
 from mcp.shared.exceptions import McpError
 from mcp.types import ErrorData
 
-from context_service.api.rate_limit import RateLimitExceeded
+from context_service.exceptions import RateLimitExceeded
 from context_service.sage.transactions import BrainError
 
 # JSON-RPC server error code (-32000 to -32099 are reserved for implementation-defined server errors)
@@ -80,7 +80,7 @@ def mcp_error_boundary[**P, R](func: Callable[P, Awaitable[R]]) -> Callable[P, A
                 tool=func.__name__,
                 retry_after=exc.retry_after,
             )
-            return {  # type: ignore[return-value]
+            return {
                 "error": "rate_limit_exceeded",
                 "message": str(exc),
                 "retry_after": exc.retry_after,

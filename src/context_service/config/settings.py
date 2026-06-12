@@ -11,6 +11,7 @@ Settings precedence:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -146,6 +147,93 @@ class TrustGateConfig(BaseModel):
         default=True,
         description="Withhold results whose conflict_status is 'unresolved'",
     )
+
+
+class EpistemicFusionConfig(BaseModel):
+    """Settings for post-rerank epistemic score fusion.
+
+    Reranker scores previously overwrote confidence/conflict signal in
+    recall ranking; fusion multiplies the final relevance score by an
+    epistemic adjustment so evidence state is load-bearing at read time.
+    Withholding (trust gate) is separate and unaffected.
+    """
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    enabled: bool = Field(default=True, description="Enable epistemic score fusion")
+    confidence_weight: float = Field(
+        default=0.3,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Weight of node confidence in the fused score for knowledge/wisdom "
+            "layers: factor = (1 - w) + w * confidence"
+        ),
+    )
+    conflict_penalty: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Score multiplier applied to unresolved-contradiction nodes",
+    )
+
+
+class BM25ChannelConfig(BaseModel):
+    """BM25 keyword search channel configuration."""
+
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = True
+    top_k: int = 100
+
+
+class TemporalChannelConfig(BaseModel):
+    """Temporal date-aware retrieval channel configuration.
+
+    Only Memory layer uses time-based recency decay. Knowledge/Wisdom persist
+    until superseded (evidence-gated). Intelligence is session-scoped.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = True
+    memory_half_life_days: float = 7.0
+
+    def half_life_for_layer(self, layer: str) -> float | None:
+        """Return the half-life in days for a given cognitive layer.
+
+        Returns None for non-Memory layers (no time-based decay).
+        """
+        if layer.lower() == "memory":
+            return self.memory_half_life_days
+        return None
+
+
+class GraphChannelConfig(BaseModel):
+    """PPR graph traversal channel configuration."""
+
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = True
+    damping: float = 0.85
+    max_iterations: int = 50
+    edge_weights: dict[str, float] = Field(
+        default_factory=lambda: {
+            "SYNTHESIZED_FROM": 1.5,
+            "SUPERSEDES": 1.5,
+            "LINK": 1.0,
+        }
+    )
+
+
+class CrossEncoderConfig(BaseModel):
+    """Local cross-encoder reranker configuration."""
+
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = True
+    model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    top_k: int = 50
 
 
 class RerankingSettings(BaseModel):
@@ -385,6 +473,7 @@ class RetrievalConfig(BaseModel):
     cluster: ClusterRetrievalConfig = Field(default_factory=ClusterRetrievalConfig)
     supersession: SupersessionConfig = Field(default_factory=SupersessionConfig)
     fusion: FusionConfig = Field(default_factory=FusionConfig)
+    temporal_channel: TemporalChannelConfig = Field(default_factory=TemporalChannelConfig)
 
 
 class ServerConfig(BaseModel):
@@ -698,11 +787,52 @@ class ClusteringConfig(BaseModel):
     post_ingest_threshold: int = 50
 
 
+class ConsensusConfig(BaseModel):
+    """Configuration for TX6 CONSENSUS and TX7 TRACE handlers."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    min_chains: int = Field(
+        default=3,
+        ge=1,
+        description="Minimum number of chains (K) required for consensus promotion.",
+    )
+    min_agents: int = Field(
+        default=2,
+        ge=1,
+        description="Minimum number of distinct agents (J) required for consensus.",
+    )
+    conclusion_threshold: float = Field(
+        default=0.85,
+        ge=0.0,
+        le=1.0,
+        description="ANN cosine similarity threshold for matching conclusions (Layer 1).",
+    )
+    reasoning_threshold: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="DTW similarity threshold for compatible reasoning paths (Layer 2).",
+    )
+    trace_on_commit: bool = Field(
+        default=True,
+        description="When true, TX7 TRACE emits CHECK_CONSENSUS for each traced chain.",
+    )
+
+
 class ExtractionConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     mode: str = "eager"
     batch_concurrency: int = 8
+
+    # TX1 EXTRACT settings
+    enabled: bool = True
+    threshold: int = 200  # Minimum content length to trigger extraction
+    max_claims: int = 10  # Cap on claims extracted per memory
+    model: str = "gemini-1.5-flash"  # LLM model for extraction
+    timeout_ms: int = 25000  # Extraction timeout
+    reextract_before_version: str | None = None  # Re-extract nodes with version < this
 
 
 class EndpointLimits(BaseModel):
@@ -977,6 +1107,7 @@ class Settings(BaseSettings):
     causal: CausalConfig = Field(default_factory=CausalConfig)
     pattern: PatternConfig = Field(default_factory=PatternConfig)
     weak_links: WeakLinksSettings = Field(default_factory=WeakLinksSettings)
+    consensus: ConsensusConfig = Field(default_factory=ConsensusConfig)
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
     identities: IdentitiesConfig = Field(default_factory=_load_identities_config)
     models: ModelsConfig = Field(default_factory=_load_models_config)
@@ -989,6 +1120,11 @@ class Settings(BaseSettings):
         default_factory=EvidenceEnforcementConfig
     )
     trust_gate: TrustGateConfig = Field(default_factory=TrustGateConfig)
+    epistemic_fusion: EpistemicFusionConfig = Field(default_factory=EpistemicFusionConfig)
+    bm25_channel: BM25ChannelConfig = Field(default_factory=BM25ChannelConfig)
+    temporal_channel: TemporalChannelConfig = Field(default_factory=TemporalChannelConfig)
+    graph_channel: GraphChannelConfig = Field(default_factory=GraphChannelConfig)
+    cross_encoder: CrossEncoderConfig = Field(default_factory=CrossEncoderConfig)
     usage: UsageRetentionConfig = Field(default_factory=UsageRetentionConfig)
 
     # =========================================================================
@@ -1078,17 +1214,10 @@ class Settings(BaseSettings):
     jina_api_url: str = Field(default="")
 
     # =========================================================================
-    # LiteLLM Embedding Settings
+    # Embedding Settings (dimensions moved to models.yaml, provider via tier)
     # =========================================================================
 
-    litellm_embedding_model: str = Field(default="openai/text-embedding-3-small")
-    embedding_dimensions: int = Field(default=768)
-
-    # =========================================================================
-    # Embedding Provider
-    # =========================================================================
-
-    embedding_provider: str = Field(default="jina")
+    embedding_dimensions: int = Field(default=2048)
 
     hybrid_search_enabled: bool = Field(default=True)
 
@@ -1142,7 +1271,26 @@ class Settings(BaseSettings):
     gemini_api_key: SecretStr | None = Field(default=None)
 
     # Self-hosted LLM (Ollama, vLLM)
-    ollama_base_url: str = Field(default="http://localhost:11434")
+    # Any of OLLAMA_URL, OLLAMA_BASE_URL, OLLAMA_API_BASE work (unified)
+    @property
+    def ollama_url(self) -> str:
+        """Canonical Ollama URL. Reads from multiple env var names for compatibility."""
+        return (
+            os.environ.get("OLLAMA_URL")
+            or os.environ.get("OLLAMA_BASE_URL")
+            or os.environ.get("OLLAMA_API_BASE")
+            or "http://localhost:11434"
+        )
+
+    @property
+    def ollama_base_url(self) -> str:
+        """Alias for ollama_url (litellm LLM convention)."""
+        return self.ollama_url
+
+    @property
+    def ollama_api_base(self) -> str:
+        """Alias for ollama_url (litellm embeddings convention)."""
+        return self.ollama_url
 
     # =========================================================================
     # WorkOS Auth Settings

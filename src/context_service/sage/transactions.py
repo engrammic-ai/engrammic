@@ -354,16 +354,18 @@ async def llm_synthesize(
         prompt += f"\n\nPrevious belief (now stale): {previous_belief}"
 
     try:
-        response = await asyncio.wait_for(
+        response_text, _usage = await asyncio.wait_for(
             llm.complete(
-                system_prompt=_SYNTHESIS_SYSTEM_PROMPT,
-                user_prompt=prompt,
+                messages=[
+                    {"role": "system", "content": _SYNTHESIS_SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt},
+                ],
             ),
             timeout=timeout,
         )
         return LLMSynthesisResult(
             success=True,
-            content=response.strip(),
+            content=response_text.strip(),
             caveats=[],
             timed_out=False,
         )
@@ -502,7 +504,7 @@ async def synthesize(
         belief_id = uuid.uuid4()
         created_at = datetime.now(UTC)
         expires_at = created_at + timedelta(days=7)  # 7-day expiry for unreviewed proposals
-        fact_ids = [f["id"] for f in facts]
+        fact_ids = [f["fact_id"] for f in facts]
 
         await store.execute_write(
             q.CREATE_PROPOSED_BELIEF,
@@ -1769,7 +1771,7 @@ async def revise_belief(
                 "confidence": aggregate_confidence,
                 "source_cluster_id": cluster_id,
             }
-            fact_ids = [f["id"] for f in facts]
+            fact_ids = [f["fact_id"] for f in facts]
 
             await store.execute_write(
                 q.CREATE_BELIEF_WITH_SYNTHESIZED_FROM,
@@ -2462,6 +2464,18 @@ async def forget(
 
     cascade_count = 0
     events: list[ReactionEvent] = []
+
+    # TX11: Emit CHAIN_TOMBSTONED only for ReasoningChain nodes
+    # to trigger consensus Fact staleness cascade
+    if node.get("node_type") == "ReasoningChain":
+        events.append(
+            ReactionEvent(
+                event_type=ReactionEventType.CHAIN_TOMBSTONED,
+                node_id=node_id,
+                silo_id=silo_id,
+                payload={"reason": reason},
+            )
+        )
 
     if cascade:
         # Trigger staleness cascade

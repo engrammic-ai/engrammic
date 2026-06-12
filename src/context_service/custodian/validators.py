@@ -148,7 +148,7 @@ class CitationValidator:
         """
         pre = self._pre_check_edge(edge)
         if pre is not None:
-            self._record(pre.rejection_reason)  # type: ignore[arg-type]
+            self._record(pre.rejection_reason)
             return pre
 
         all_ids = self._edge_node_ids(edge)
@@ -205,7 +205,7 @@ class CitationValidator:
         edge_results: list[EdgeValidationResult] = []
         for edge, pre in zip(finding.inferred_relations, edge_pre, strict=True):
             if pre is not None:
-                self._record(pre.rejection_reason)  # type: ignore[arg-type]
+                self._record(pre.rejection_reason)
                 edge_results.append(pre)
                 continue
             all_ids = self._edge_node_ids(edge)

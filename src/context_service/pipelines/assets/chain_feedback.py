@@ -159,7 +159,7 @@ async def compute_chain_usefulness(delivery: dict[str, Any]) -> str | None:
     description="Computes usefulness signals for delivered reasoning chains",
     group_name="chain_feedback",
 )
-def chain_usefulness_signals(context) -> dg.Output[dict[str, Any]]:  # type: ignore[no-untyped-def]
+def chain_usefulness_signals(context) -> dg.Output[dict[str, Any]]:
     """Analyze recent chain deliveries and compute implicit usefulness signals."""
     t0 = time.monotonic()
 

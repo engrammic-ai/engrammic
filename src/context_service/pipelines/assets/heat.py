@@ -150,7 +150,7 @@ def heat_asset(
             return 0, 0, "0-0"
 
         driver = await memgraph.driver()
-        mg_client: HyperGraphStore = MemgraphClient(driver)  # type: ignore[assignment]
+        mg_client: HyperGraphStore = MemgraphClient(driver)
         redis_conn = await redis.client()
 
         stream_key = access_stream_key(silo_id)

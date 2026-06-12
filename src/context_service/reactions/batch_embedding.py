@@ -24,7 +24,10 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 # Flush when this many items have been collected.
-_BATCH_SIZE = 50
+# NOTE: Vertex AI text-embedding-005 has 20K token limit. With large documents
+# (e.g. a11y trees), 4 items at ~4K tokens each stays safely under the limit.
+# TODO: Make this configurable or compute dynamically based on content size.
+_BATCH_SIZE = 4
 
 # Maximum milliseconds to wait before flushing a partial batch.
 _FLUSH_TIMEOUT_MS = 100

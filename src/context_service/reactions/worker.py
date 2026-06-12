@@ -236,13 +236,10 @@ def _register_worker_hooks(broker: ListQueueBroker) -> None:
             logger.info("worker_redis_connected")
 
             # Initialize embedding rate limiter for distributed coordination
-            from context_service.config.config_loader import load_config
             from context_service.config.settings import ModelRateLimitConfig
             from context_service.embeddings import set_embedding_rate_limiter
 
-            embeddings_config = load_config("embeddings")
-            rate_limit_dict = embeddings_config.get("rate_limit", {})
-            rate_limit_config = ModelRateLimitConfig(**rate_limit_dict)
+            rate_limit_config = ModelRateLimitConfig()
             set_embedding_rate_limiter(
                 redis=redis_client,
                 config=rate_limit_config,
@@ -406,9 +403,7 @@ def _register_health_check(broker: ListQueueBroker) -> None:
 
             settings = get_settings()
             async with AsyncRedis.from_url(settings.redis_url, socket_timeout=2) as r:
-                # redis-py stubs declare ping() as Awaitable[bool] | bool;
-                # in the asyncio client it always returns a coroutine.
-                ping_result: bool = await r.ping()  # type: ignore[misc]
+                ping_result: bool = await r.ping()
                 redis_ok = bool(ping_result)
         except Exception as exc:
             logger.warning("health_check_redis_ping_failed", error=repr(exc))
