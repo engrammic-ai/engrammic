@@ -207,11 +207,11 @@ class QueryExpander:
         """
         import litellm
 
+        # Qwen MaaS doesn't support response_format, rely on prompt for JSON
         response = await asyncio.wait_for(
             litellm.acompletion(
                 model=self._raw_model,  # Use full model string with provider prefix
                 messages=[{"role": "user", "content": prompt}],
-                response_format={"type": "json_object"},
                 vertex_project=self._vertex_project,
                 vertex_location=self._vertex_location,
             ),
