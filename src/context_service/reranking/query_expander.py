@@ -57,7 +57,9 @@ class QueryExpander:
         vertex_location: str | None = None,
         provider: str | None = None,
     ) -> None:
-        self._model = llm_model or DEFAULT_EXPANSION_MODEL
+        raw_model = llm_model or DEFAULT_EXPANSION_MODEL
+        # Strip provider prefix if present (e.g., vertex_ai/gemini-3.5-flash -> gemini-3.5-flash)
+        self._model = raw_model.split("/", 1)[-1] if "/" in raw_model else raw_model
         self._redis = redis
         self._cache_ttl = cache_ttl_seconds
         self._timeout = timeout_seconds
