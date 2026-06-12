@@ -48,6 +48,8 @@ class RememberResponse(BaseModel):
 class RecallRequest(BaseModel):
     query: str
     top_k: int = Field(default=20, ge=1, le=100)
+    layers: list[str] | None = None
+    tags: list[str] | None = None
 
 
 class RecallResultItem(BaseModel):
@@ -206,12 +208,15 @@ async def recall(
                 logger.warning("rest_query_expansion_failed", error=str(exc))
 
     try:
-        # Use 4-channel FusionRetriever for multi-modal retrieval
-        retriever = FusionRetriever(ctx_svc)
+        # Use 5-channel FusionRetriever for multi-modal retrieval
+        settings = get_settings()
+        fusion_cfg = settings.retrieval.fusion
+        retriever = FusionRetriever(ctx_svc, k=fusion_cfg.rrf_k)
         fused_results = await retriever.retrieve(
             query=effective_query,
             scope=scope,
             top_k=request_body.top_k,
+            layers=request_body.layers,
         )
 
         # Batch fetch full node data for ranked IDs

@@ -99,6 +99,7 @@ class FusionRetriever:
             "bm25": True,
             "temporal": True,
             "ppr": True,
+            "grep": True,
         }
         if channel_config is not None:
             self._channel_config.update(channel_config)
@@ -152,6 +153,9 @@ class FusionRetriever:
         if self._channel_config.get("temporal", True):
             channel_coros.append(self._temporal_channel(query, scope, fetch_k, layers))
             channel_names.append("temporal")
+        if self._channel_config.get("grep", True):
+            channel_coros.append(self._grep_channel(query, scope, fetch_k, layers))
+            channel_names.append("grep")
 
         raw_results = await asyncio.gather(*channel_coros, return_exceptions=True) if channel_coros else []
 
@@ -221,12 +225,19 @@ class FusionRetriever:
                     f.created_at = node.created_at
                     f.tags = list(node.properties.get("tags", []))
 
+        # Log per-channel hit counts for diagnostics
+        channel_counts = {
+            c.channel_name: len(c.ranked_ids)
+            for c in channel_results
+            if c.error is None
+        }
         logger.info(
             "fusion_complete",
             query_len=len(query),
             top_k=top_k,
             fused_count=len(final_results),
             channels=[c.channel_name for c in channel_results if c.error is None],
+            channel_counts=channel_counts,
         )
         return final_results
 
@@ -394,6 +405,63 @@ class FusionRetriever:
             latency_ms = (time.perf_counter() - t0) * 1000.0
             return ChannelResult(
                 channel_name="bm25",
+                ranked_ids=[],
+                latency_ms=latency_ms,
+                error=str(exc),
+            )
+
+    async def _grep_channel(
+        self,
+        query: str,
+        scope: ScopeContext,
+        top_k: int,
+        layers: list[str] | None,  # noqa: ARG002 - layer filter not yet implemented
+    ) -> ChannelResult:
+        """Regex text search via Memgraph text_search.regex_search.
+
+        Converts query words to a fuzzy regex pattern (.*word1.*word2.*)
+        and searches the node_content text index. Returns matches ranked
+        by presence (binary match, no relevance scoring).
+        """
+        if not query.strip():
+            return ChannelResult(channel_name="grep", ranked_ids=[], latency_ms=0.0)
+
+        t0 = time.perf_counter()
+        try:
+            # Convert query to regex: "foo bar" -> ".*foo.*bar.*"
+            words = re.findall(r"\w+", query.lower())
+            if not words:
+                return ChannelResult(channel_name="grep", ranked_ids=[], latency_ms=0.0)
+
+            # Build case-insensitive regex pattern
+            pattern = ".*" + ".*".join(re.escape(w) for w in words[:5]) + ".*"
+
+            # Query Memgraph text index
+            cypher = """
+                CALL text_search.regex_search("node_content", $pattern, $limit)
+                YIELD node, score
+                WHERE node.silo_id = $silo_id
+                RETURN node.id AS id
+            """
+            rows = await self._ctx.graph_store.execute_query(
+                cypher,
+                {
+                    "pattern": pattern,
+                    "limit": top_k * 2,  # Over-fetch, filter by silo after
+                    "silo_id": str(scope.silo_id),
+                },
+            )
+            ranked_ids = [str(row["id"]) for row in rows if row.get("id")]
+            latency_ms = (time.perf_counter() - t0) * 1000.0
+            return ChannelResult(
+                channel_name="grep",
+                ranked_ids=ranked_ids[:top_k],
+                latency_ms=latency_ms,
+            )
+        except Exception as exc:
+            latency_ms = (time.perf_counter() - t0) * 1000.0
+            return ChannelResult(
+                channel_name="grep",
                 ranked_ids=[],
                 latency_ms=latency_ms,
                 error=str(exc),
