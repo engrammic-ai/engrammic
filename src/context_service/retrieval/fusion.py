@@ -417,45 +417,52 @@ class FusionRetriever:
         top_k: int,
         layers: list[str] | None,  # noqa: ARG002 - layer filter not yet implemented
     ) -> ChannelResult:
-        """Regex text search via Memgraph text_search.regex_search.
+        """Keyword text search via Memgraph text_search.regex_search.
 
-        Converts query words to a fuzzy regex pattern (.*word1.*word2.*)
-        and searches the node_content text index. Returns matches ranked
-        by presence (binary match, no relevance scoring).
+        Searches for each query word independently and ranks results by
+        how many words matched (pseudo-trigram behavior). Words can appear
+        in any order, unlike the sequential AND pattern.
         """
         if not query.strip():
             return ChannelResult(channel_name="grep", ranked_ids=[], latency_ms=0.0)
 
         t0 = time.perf_counter()
         try:
-            # Convert query to regex: "foo bar" -> ".*foo.*bar.*"
             words = re.findall(r"\w+", query.lower())
+            # Filter short words and limit to top 5
+            words = [w for w in words if len(w) >= 3][:5]
             if not words:
                 return ChannelResult(channel_name="grep", ranked_ids=[], latency_ms=0.0)
 
-            # Build case-insensitive regex pattern
-            pattern = ".*" + ".*".join(re.escape(w) for w in words[:5]) + ".*"
+            # Search for each word independently, count matches per node
+            match_counts: dict[str, int] = {}
+            silo_id = str(scope.silo_id)
 
-            # Query Memgraph text index
-            cypher = """
-                CALL text_search.regex_search("node_content", $pattern, $limit)
-                YIELD node, score
-                WHERE node.silo_id = $silo_id
-                RETURN node.id AS id
-            """
-            rows = await self._ctx.graph_store.execute_query(
-                cypher,
-                {
-                    "pattern": pattern,
-                    "limit": top_k * 2,  # Over-fetch, filter by silo after
-                    "silo_id": str(scope.silo_id),
-                },
-            )
-            ranked_ids = [str(row["id"]) for row in rows if row.get("id")]
+            for word in words:
+                pattern = f".*{re.escape(word)}.*"
+                cypher = """
+                    CALL text_search.regex_search("node_content", $pattern, $limit)
+                    YIELD node, score
+                    WHERE node.silo_id = $silo_id
+                    RETURN node.id AS id
+                """
+                rows = await self._ctx.graph_store.execute_query(
+                    cypher,
+                    {"pattern": pattern, "limit": top_k * 4, "silo_id": silo_id},
+                )
+                for row in rows:
+                    node_id = str(row.get("id", ""))
+                    if node_id:
+                        match_counts[node_id] = match_counts.get(node_id, 0) + 1
+
+            # Rank by match count (more words = higher rank)
+            ranked = sorted(match_counts.items(), key=lambda x: -x[1])
+            ranked_ids = [node_id for node_id, _ in ranked[:top_k]]
+
             latency_ms = (time.perf_counter() - t0) * 1000.0
             return ChannelResult(
                 channel_name="grep",
-                ranked_ids=ranked_ids[:top_k],
+                ranked_ids=ranked_ids,
                 latency_ms=latency_ms,
             )
         except Exception as exc:
