@@ -212,8 +212,8 @@ class QueryExpander:
             litellm.acompletion(
                 model=self._raw_model,  # Use full model string with provider prefix
                 messages=[{"role": "user", "content": prompt}],
-                vertex_project=self._vertex_project,
-                vertex_location=self._vertex_location,
+                vertex_ai_project=self._vertex_project,
+                vertex_ai_location=self._vertex_location,
             ),
             timeout=self._timeout,
         )
