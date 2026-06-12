@@ -5,5 +5,6 @@ from context_service.retrieval.fusion import (
     FusedResult,
     FusionRetriever,
 )
+from context_service.retrieval.ppr import PersonalizedPageRank
 
-__all__ = ["ChannelResult", "FusedResult", "FusionRetriever"]
+__all__ = ["ChannelResult", "FusedResult", "FusionRetriever", "PersonalizedPageRank"]
