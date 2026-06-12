@@ -17,6 +17,8 @@ from pydantic import BaseModel, Field
 from context_service.config.models import load_models_config
 from context_service.config.settings import get_settings
 from context_service.mcp.server import get_context_service
+from context_service.mcp.tools.context_link import _context_link
+from context_service.mcp.tools.context_store import _context_assert
 from context_service.reranking.query_classifier import is_hard_query
 from context_service.reranking.query_expander import QueryExpander
 from context_service.sage.transactions import store_memory
@@ -60,6 +62,28 @@ class RecallResultItem(BaseModel):
 
 class RecallResponse(BaseModel):
     results: list[RecallResultItem]
+
+
+class LearnRequest(BaseModel):
+    claim: str
+    evidence: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+
+
+class LearnResponse(BaseModel):
+    node_id: str
+    created_at: str
+
+
+class LinkRequest(BaseModel):
+    from_node: str
+    to_node: str
+    relation: str
+
+
+class LinkResponse(BaseModel):
+    success: bool
+    edge_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -221,3 +245,107 @@ async def recall(
     )
 
     return RecallResponse(results=items)
+
+
+@router.post(
+    "/learn",
+    response_model=LearnResponse,
+    operation_id="memory_learn",
+    summary="Store a claim with evidence to knowledge layer",
+)
+async def learn(
+    request_body: LearnRequest,
+    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
+    x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
+) -> LearnResponse:
+    """Store a verifiable claim with evidence.
+
+    Creates a Knowledge layer node (Claim) that can be verified by SAGE.
+    """
+    if not x_silo_id:
+        raise HTTPException(status_code=400, detail="X-Silo-ID header is required")
+    if not x_session_id:
+        raise HTTPException(status_code=400, detail="X-Session-ID header is required")
+
+    silo_uuid = derive_silo_id(x_silo_id)
+
+    try:
+        result = await _context_assert(
+            silo_id=str(silo_uuid),
+            claim=request_body.claim,
+            evidence=request_body.evidence,
+            source_type="external",
+            confidence=0.8,
+            tags=request_body.tags or None,
+            source_tier=None,
+            supersedes=None,
+        )
+    except Exception as exc:
+        logger.error(
+            "rest_learn_failed",
+            silo_id=str(silo_uuid),
+            error=str(exc),
+        )
+        raise HTTPException(status_code=500, detail="Failed to store claim") from exc
+
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result.get("message", "Invalid claim"))
+
+    logger.info(
+        "rest_learn_ok",
+        node_id=result.get("node_id", "unknown"),
+        silo_id=str(silo_uuid),
+    )
+
+    return LearnResponse(
+        node_id=result.get("node_id", ""),
+        created_at=result.get("created_at", ""),
+    )
+
+
+@router.post(
+    "/link",
+    response_model=LinkResponse,
+    operation_id="memory_link",
+    summary="Create a relationship between nodes",
+)
+async def link(
+    request_body: LinkRequest,
+    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
+) -> LinkResponse:
+    """Create a typed relationship between two nodes."""
+    if not x_silo_id:
+        raise HTTPException(status_code=400, detail="X-Silo-ID header is required")
+
+    silo_uuid = derive_silo_id(x_silo_id)
+
+    try:
+        result = await _context_link(
+            silo_id=str(silo_uuid),
+            from_node=request_body.from_node,
+            to_node=request_body.to_node,
+            relationship=request_body.relation,
+            weight=1.0,
+            note=None,
+        )
+    except Exception as exc:
+        logger.error(
+            "rest_link_failed",
+            silo_id=str(silo_uuid),
+            error=str(exc),
+        )
+        raise HTTPException(status_code=500, detail="Failed to create link") from exc
+
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result.get("message", "Invalid link"))
+
+    logger.info(
+        "rest_link_ok",
+        edge_id=result.get("edge_id"),
+        silo_id=str(silo_uuid),
+    )
+
+    return LinkResponse(
+        success=True,
+        edge_id=result.get("edge_id"),
+    )
