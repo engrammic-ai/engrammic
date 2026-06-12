@@ -217,7 +217,26 @@ build:
     timeout: 1200s
 ```
 
-## CI/CD Workflow
+## CI/CD Workflows
+
+### build-base-images.yml (new)
+
+Triggers on `uv.lock`, `pyproject.toml`, or `Dockerfile.base-*` changes. Rebuilds base images only when deps change.
+
+```yaml
+name: Build Base Images
+
+on:
+  push:
+    branches: [main, beta]
+    paths:
+      - 'uv.lock'
+      - 'pyproject.toml'
+      - 'docker/Dockerfile.base-*'
+  workflow_dispatch:
+```
+
+Builds `base-api` and `base-dagster` in parallel with registry caching.
 
 ### deploy-beta.yml (updated)
 
@@ -320,6 +339,7 @@ If implemented later:
 - `docker/Dockerfile.base-api`
 - `docker/Dockerfile.base-dagster`
 - `skaffold.yaml`
+- `.github/workflows/build-base-images.yml`
 
 **Modified files:**
 - `docker/Dockerfile.api`
