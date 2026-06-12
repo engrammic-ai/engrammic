@@ -1,8 +1,8 @@
-# Docker Build Optimization: Three-Tier Base Images + Skaffold
+# Docker Build Optimization: Two-Tier Base Images + Skaffold
 
 ## Problem
 
-Current CI/CD builds take 10-15 minutes per deploy. Each Dockerfile (api, dagster, beacon) independently installs ~2GB of Python dependencies, even though most are shared. This causes:
+Current CI/CD builds take 10-15 minutes per deploy. Each Dockerfile (api, dagster, beacon) independently installs ~2GB of Python dependencies. This causes:
 
 - Slow deploys (uv sync 2-8 min per image)
 - Cloud Run cold start latency (large images)
@@ -11,19 +11,27 @@ Current CI/CD builds take 10-15 minutes per deploy. Each Dockerfile (api, dagste
 
 ## Solution
 
-Three-tier base image hierarchy managed by Skaffold:
+Two-tier base image model managed by Skaffold:
 
 ```
-base-common (shared deps, ~400MB)
-├── base-api (+ api/mcp/auth, ~100MB)
-│   └── engrammic-api (+ code, ~10MB)
-└── base-dagster (+ pipelines/splade, ~2GB)
-    └── engrammic-dagster (+ code, ~10MB)
+base-api (all API deps, ~500MB)
+└── engrammic-api (+ code, ~10MB)
 
-engrammic-beacon (standalone, python:slim)
+base-dagster (all Dagster deps, ~2.5GB)
+└── engrammic-dagster (+ code, ~10MB)
+
+engrammic-beacon (standalone, python:slim, ~200MB)
 ```
 
-Skaffold handles build ordering and skips unchanged images automatically.
+Base images rebuild only when `uv.lock` changes. App images rebuild on every deploy but are fast (~30s) since deps are pre-installed.
+
+### Why Two-Tier (not Three)
+
+A three-tier model (base-common -> base-api/dagster -> app) was considered but rejected because:
+
+1. **uv doesn't support incremental group installation** — each `uv sync` replaces the venv, so child images would lose parent deps
+2. **Cloud Build doesn't persist `--mount=type=cache`** — no real cache benefit between builds
+3. **Shared deps rarely change independently** — the extra layer adds complexity without meaningful cache wins
 
 ## Image Hierarchy
 
@@ -31,10 +39,10 @@ Skaffold handles build ordering and skips unchanged images automatically.
 
 ```
 europe-north1-docker.pkg.dev/engrammic/engrammic/
-├── base-common:latest
-├── base-common:<lock-hash>
 ├── base-api:latest
+├── base-api:<lock-hash>
 ├── base-dagster:latest
+├── base-dagster:<lock-hash>
 ├── engrammic-api:latest
 ├── engrammic-dagster:latest
 └── engrammic-beacon:latest
@@ -44,14 +52,13 @@ europe-north1-docker.pkg.dev/engrammic/engrammic/
 
 | Image | Dependency Groups | Est. Size |
 |-------|-------------------|-----------|
-| base-common | graph, postgres, redis, llm-core, numeric, sparse | ~400MB |
-| base-api | + api, mcp, auth | ~100MB delta |
-| base-dagster | + pipelines, custodian, splade | ~2GB delta |
+| base-api | graph, postgres, redis, llm-core, numeric, sparse, api, mcp, auth | ~500MB |
+| base-dagster | graph, postgres, redis, llm-core, numeric, sparse, pipelines, custodian, splade | ~2.5GB |
 | engrammic-beacon | standalone (no base) | ~200MB |
 
 ## Dockerfiles
 
-### Dockerfile.base-common
+### Dockerfile.base-api
 
 ```dockerfile
 FROM python:3.13-slim
@@ -68,32 +75,28 @@ ENV UV_COMPILE_BYTECODE=1
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project \
       --group graph --group postgres --group redis \
-      --group llm-core --group numeric --group sparse
-```
-
-### Dockerfile.base-api
-
-```dockerfile
-ARG BASE_TAG=latest
-FROM europe-north1-docker.pkg.dev/engrammic/engrammic/base-common:${BASE_TAG}
-
-COPY pyproject.toml uv.lock README.md ./
-
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev --no-install-project \
+      --group llm-core --group numeric --group sparse \
       --group api --group mcp --group auth
 ```
 
 ### Dockerfile.base-dagster
 
 ```dockerfile
-ARG BASE_TAG=latest
-FROM europe-north1-docker.pkg.dev/engrammic/engrammic/base-common:${BASE_TAG}
+FROM python:3.13-slim
+
+WORKDIR /app
+
+COPY --from=ghcr.io/astral-sh/uv:0.6.14 /uv /usr/local/bin/uv
 
 COPY pyproject.toml uv.lock README.md ./
 
+ENV UV_LINK_MODE=copy
+ENV UV_COMPILE_BYTECODE=1
+
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project \
+      --group graph --group postgres --group redis \
+      --group llm-core --group numeric --group sparse \
       --group pipelines --group custodian --group splade
 ```
 
@@ -132,6 +135,37 @@ EXPOSE 8000
 CMD ["python", "-m", "context_service.entrypoint"]
 ```
 
+### Dockerfile.dagster (updated)
+
+```dockerfile
+ARG BASE_TAG=latest
+FROM europe-north1-docker.pkg.dev/engrammic/engrammic/base-dagster:${BASE_TAG}
+
+WORKDIR /app
+
+RUN useradd -m -u 1000 dagster
+
+COPY pyproject.toml uv.lock README.md ./
+COPY src/ /app/src/
+COPY config/ /app/config/
+COPY dagster.yaml workspace.yaml ./
+COPY scripts/validate_imports.py /app/scripts/
+COPY scripts/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH="/app/src"
+ENV DAGSTER_HOME="/app"
+
+RUN BUILD_TARGET=dagster python /app/scripts/validate_imports.py
+
+RUN chown -R dagster:dagster /app
+
+USER dagster
+
+ENTRYPOINT ["/entrypoint.sh"]
+```
+
 ## Skaffold Configuration
 
 ```yaml
@@ -146,24 +180,20 @@ build:
     gitCommit:
       prefix: ""
   artifacts:
-    - image: europe-north1-docker.pkg.dev/engrammic/engrammic/base-common
-      docker:
-        dockerfile: docker/Dockerfile.base-common
-        cacheFrom:
-          - europe-north1-docker.pkg.dev/engrammic/engrammic/base-common:latest
-
+    # Base images (rebuild on uv.lock change)
     - image: europe-north1-docker.pkg.dev/engrammic/engrammic/base-api
       docker:
         dockerfile: docker/Dockerfile.base-api
-      requires:
-        - image: europe-north1-docker.pkg.dev/engrammic/engrammic/base-common
+        cacheFrom:
+          - europe-north1-docker.pkg.dev/engrammic/engrammic/base-api:latest
 
     - image: europe-north1-docker.pkg.dev/engrammic/engrammic/base-dagster
       docker:
         dockerfile: docker/Dockerfile.base-dagster
-      requires:
-        - image: europe-north1-docker.pkg.dev/engrammic/engrammic/base-common
+        cacheFrom:
+          - europe-north1-docker.pkg.dev/engrammic/engrammic/base-dagster:latest
 
+    # App images (fast, code-only)
     - image: europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-api
       docker:
         dockerfile: docker/Dockerfile.api
@@ -176,6 +206,7 @@ build:
       requires:
         - image: europe-north1-docker.pkg.dev/engrammic/engrammic/base-dagster
 
+    # Beacon: standalone, no base
     - image: europe-north1-docker.pkg.dev/engrammic/engrammic/engrammic-beacon
       docker:
         dockerfile: docker/Dockerfile.beacon
@@ -243,7 +274,6 @@ jobs:
 
 ### Phase 1: Add New Files (no disruption)
 
-- Create `docker/Dockerfile.base-common`
 - Create `docker/Dockerfile.base-api`
 - Create `docker/Dockerfile.base-dagster`
 - Create `skaffold.yaml`
@@ -263,10 +293,10 @@ jobs:
 
 ### Phase 4: Selfhosted (optional, future)
 
-Selfhosted images (`Dockerfile.selfhosted.*`) could reuse `base-common` but have a Cython compilation step. Since releases are infrequent and GHA cache is adequate, this is lower priority.
+Selfhosted images (`Dockerfile.selfhosted.*`) could reuse base images but have a Cython compilation step. Since releases are infrequent and GHA cache is adequate, this is lower priority.
 
 If implemented later:
-- Selfhosted Dockerfiles would `FROM base-common` then add Cython step
+- `Dockerfile.selfhosted.api` would `FROM base-api` then add Cython step
 - Reduces release build time by ~3-5 minutes
 
 ## Rollback Plan
@@ -287,7 +317,6 @@ If implemented later:
 ## Files to Create/Modify
 
 **New files:**
-- `docker/Dockerfile.base-common`
 - `docker/Dockerfile.base-api`
 - `docker/Dockerfile.base-dagster`
 - `skaffold.yaml`
