@@ -225,6 +225,9 @@ async def hypothesize(
     """
     silo_id, session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
 
+    if not hasattr(request.app.state, "memgraph"):
+        raise HTTPException(status_code=503, detail="Memgraph not available")
+
     try:
         result = await _context_store_belief(
             silo_id=silo_id,
@@ -323,6 +326,9 @@ async def dismiss(
     """
     silo_id, _session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
 
+    if not hasattr(request.app.state, "memgraph"):
+        raise HTTPException(status_code=503, detail="Memgraph not available")
+
     try:
         result = await _dismiss_marker(
             marker_id=request_body.marker_id,
@@ -363,6 +369,9 @@ async def revise(
     Equivalent to the MCP ``revise`` verb.
     """
     silo_id, _session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
+
+    if not hasattr(request.app.state, "memgraph"):
+        raise HTTPException(status_code=503, detail="Memgraph not available")
 
     try:
         result = await _context_update_belief(

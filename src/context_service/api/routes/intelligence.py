@@ -13,7 +13,6 @@ from __future__ import annotations
 import time
 import uuid
 from datetime import UTC, datetime
-from typing import Any
 
 import structlog
 from fastapi import APIRouter, Header, HTTPException, Request

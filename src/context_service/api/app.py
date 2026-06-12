@@ -24,13 +24,13 @@ from context_service.api.middleware import PrometheusTimingMiddleware, RateLimit
 from context_service.api.routes import admin, health
 from context_service.api.routes.gdpr import router as gdpr_router
 from context_service.api.routes.graph import router as graph_router
-from context_service.api.routes.license import router as license_router
 from context_service.api.routes.intelligence import router as intelligence_router
+from context_service.api.routes.license import router as license_router
 from context_service.api.routes.memory import router as memory_router
 from context_service.api.routes.meta import router as meta_router
 from context_service.api.routes.oauth import router as oauth_router
-from context_service.api.routes.wisdom import router as wisdom_router
 from context_service.api.routes.source_rules import router as source_rules_router
+from context_service.api.routes.wisdom import router as wisdom_router
 from context_service.config.logging import configure_logging, get_logger
 from context_service.config.settings import get_settings
 from context_service.core.service_registry import ServiceRegistry

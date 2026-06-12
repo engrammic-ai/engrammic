@@ -342,7 +342,8 @@ async def forget(
 
     store = request.app.state.memgraph
 
-    from context_service.sage.transactions import InvariantViolation, forget as brain_forget
+    from context_service.sage.transactions import InvariantViolation
+    from context_service.sage.transactions import forget as brain_forget
 
     try:
         result_tx, _events = await brain_forget(

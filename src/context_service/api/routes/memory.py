@@ -14,12 +14,12 @@ import structlog
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from context_service.api.routes._auth import get_silo_context
 from context_service.config.models import load_models_config
 from context_service.config.settings import get_settings
 from context_service.mcp.server import get_context_service
 from context_service.reranking.query_classifier import is_hard_query
 from context_service.reranking.query_expander import QueryExpander
-from context_service.api.routes._auth import get_silo_context
 from context_service.sage.transactions import LinkType, store_claim, store_memory
 from context_service.sage.transactions import link as brain_link
 from context_service.services.models import ScopeContext

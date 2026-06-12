@@ -25,6 +25,8 @@ async def get_silo_context(
         Tuple of (silo_id, session_id) where silo_id is derived UUID string
     """
     settings = get_settings()
+    silo_id: str
+    session_id: str | None
 
     if not settings.auth_enabled:
         # Dev mode: use header or fallback to dev defaults
