@@ -192,6 +192,7 @@ async def recall(
                     timeout_seconds=settings.reranking.expander_timeout_seconds,
                     vertex_project=models_config.vertex_project or None,
                     vertex_location=models_config.vertex_location or None,
+                    provider=models_config.expander_provider,
                 )
                 effective_query = await expander.expand(request_body.query, silo_id)
                 if effective_query != request_body.query:

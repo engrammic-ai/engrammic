@@ -34,9 +34,9 @@ Examples:
 """
 
 
-def _is_gemini_model(model: str) -> bool:
-    """Check if model is a Gemini model (use google-genai SDK)."""
-    return "gemini" in model.lower()
+def _use_genai_sdk(provider: str | None, model: str) -> bool:
+    """Check if we should use google-genai SDK (Vertex AI with Gemini)."""
+    return provider == "vertex_ai" and "gemini" in model.lower()
 
 
 class QueryExpander:
@@ -55,13 +55,15 @@ class QueryExpander:
         timeout_seconds: float = 5.0,
         vertex_project: str | None = None,
         vertex_location: str | None = None,
+        provider: str | None = None,
     ) -> None:
         self._model = llm_model or DEFAULT_EXPANSION_MODEL
         self._redis = redis
         self._cache_ttl = cache_ttl_seconds
         self._timeout = timeout_seconds
         self._vertex_project = vertex_project
-        self._use_genai = _is_gemini_model(self._model)
+        self._provider = provider
+        self._use_genai = _use_genai_sdk(provider, self._model)
         # Force global for Gemini 3.x models (required by API)
         self._vertex_location = (
             "global" if "gemini-3" in self._model else (vertex_location or "global")
@@ -100,7 +102,7 @@ class QueryExpander:
             from google import genai
 
             self._client = genai.Client(
-                vertexai=True,
+                enterprise=True,
                 project=self._vertex_project or "engrammic",
                 location=self._vertex_location,
             )
@@ -114,9 +116,17 @@ class QueryExpander:
         for attempt in range(MAX_RETRIES + 1):
             try:
                 if self._use_genai:
-                    content = await self._expand_with_genai(prompt)
+                    content, input_tokens, output_tokens = await self._expand_with_genai(prompt)
                 else:
-                    content = await self._expand_with_litellm(prompt)
+                    content, input_tokens, output_tokens = await self._expand_with_litellm(prompt)
+
+                logger.debug(
+                    "query_expansion_tokens",
+                    model=self._model,
+                    provider=self._provider,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                )
 
                 try:
                     data = json.loads(content)
@@ -142,8 +152,11 @@ class QueryExpander:
                 raise
         raise last_error  # type: ignore[misc]
 
-    async def _expand_with_genai(self, prompt: str) -> str:
-        """Expand using google-genai SDK (for Gemini models)."""
+    async def _expand_with_genai(self, prompt: str) -> tuple[str, int, int]:
+        """Expand using google-genai SDK (for Gemini models).
+
+        Returns (content, input_tokens, output_tokens).
+        """
         client = self._get_genai_client()
         loop = asyncio.get_running_loop()
 
@@ -158,10 +171,16 @@ class QueryExpander:
             loop.run_in_executor(None, _generate),
             timeout=self._timeout,
         )
-        return response.text or ""  # type: ignore[attr-defined]
+        usage = getattr(response, "usage_metadata", None)
+        input_tokens = getattr(usage, "prompt_token_count", 0) or 0 if usage else 0
+        output_tokens = getattr(usage, "candidates_token_count", 0) or 0 if usage else 0
+        return response.text or "", input_tokens, output_tokens  # type: ignore[attr-defined]
 
-    async def _expand_with_litellm(self, prompt: str) -> str:
-        """Expand using litellm (for non-Gemini models)."""
+    async def _expand_with_litellm(self, prompt: str) -> tuple[str, int, int]:
+        """Expand using litellm (for non-Gemini models).
+
+        Returns (content, input_tokens, output_tokens).
+        """
         import litellm
 
         response = await asyncio.wait_for(
@@ -172,7 +191,10 @@ class QueryExpander:
             ),
             timeout=self._timeout,
         )
-        return response.choices[0].message.content or ""
+        usage = getattr(response, "usage", None)
+        input_tokens = getattr(usage, "prompt_tokens", 0) or 0 if usage else 0
+        output_tokens = getattr(usage, "completion_tokens", 0) or 0 if usage else 0
+        return response.choices[0].message.content or "", input_tokens, output_tokens
 
     def _normalize(self, query: str) -> str:
         """Normalize query for cache key."""

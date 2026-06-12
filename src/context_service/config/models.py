@@ -124,6 +124,12 @@ class ModelsConfig(BaseModel):
             return None
         return f"{spec.provider}/{spec.model}"
 
+    @property
+    def expander_provider(self) -> str | None:
+        """Get the query expander provider for the active tier."""
+        spec = self.get_query_expander_model()
+        return spec.provider if spec else None
+
 
 def _load_models_yaml(path: Path) -> dict[str, Any]:
     """Load and parse models.yaml."""

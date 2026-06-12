@@ -260,6 +260,7 @@ async def _maybe_expand_query(
         timeout_seconds=settings.reranking.expander_timeout_seconds,
         vertex_project=models_config.vertex_project or None,
         vertex_location=models_config.vertex_location or None,
+        provider=models_config.expander_provider,
     )
 
     with tracer.start_as_current_span("recall.expand_query") as span:
