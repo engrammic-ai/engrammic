@@ -1,0 +1,112 @@
+name: Build Base Images
+
+on:
+  push:
+    branches: [main, beta]
+    paths:
+      - 'uv.lock'
+      - 'pyproject.toml'
+      - 'docker/Dockerfile.base-*'
+  workflow_dispatch:
+
+env:
+  REGION: europe-north1
+  PROJECT_ID: engrammic
+  REGISTRY: europe-north1-docker.pkg.dev/engrammic/engrammic
+
+jobs:
+  check-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      deps-changed: ${{ steps.check.outputs.deps-changed }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check for dependency changes
+        id: check
+        run: |
+          if git diff --name-only HEAD~1 | grep -qE '(uv\.lock|pyproject\.toml|Dockerfile\.base-)'; then
+            echo "deps-changed=true" >> $GITHUB_OUTPUT
+            echo "Dependency files changed - will rebuild base images"
+          else
+            echo "deps-changed=false" >> $GITHUB_OUTPUT
+            echo "No dependency changes - skipping base image rebuild"
+          fi
+
+  build-base-api:
+    needs: check-changes
+    if: needs.check-changes.outputs.deps-changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push base-api
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.base-api
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/base-api:latest
+            ${{ env.REGISTRY }}/base-api:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/base-api:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/base-api:buildcache,mode=max
+
+  build-base-dagster:
+    needs: check-changes
+    if: needs.check-changes.outputs.deps-changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push base-dagster
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.base-dagster
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/base-dagster:latest
+            ${{ env.REGISTRY }}/base-dagster:${{ github.sha }}
+          cache-from: type=registry,ref=${{ env.REGISTRY }}/base-dagster:buildcache
+          cache-to: type=registry,ref=${{ env.REGISTRY }}/base-dagster:buildcache,mode=max
