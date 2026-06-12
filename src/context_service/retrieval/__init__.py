@@ -1,5 +1,6 @@
 """Retrieval module - fusion and channel orchestration."""
 
+from context_service.retrieval.cross_encoder import CrossEncoderReranker, CrossEncoderResult
 from context_service.retrieval.fusion import (
     ChannelResult,
     FusedResult,
@@ -14,6 +15,8 @@ from context_service.retrieval.temporal import (
 
 __all__ = [
     "ChannelResult",
+    "CrossEncoderReranker",
+    "CrossEncoderResult",
     "FusedResult",
     "FusionRetriever",
     "PersonalizedPageRank",
