@@ -31,18 +31,38 @@ jobs:
 
       - name: Build base-api via Cloud Build
         run: |
-          gcloud builds submit \
+          BUILD_ID=$(gcloud builds submit \
             --project ${{ env.PROJECT_ID }} \
             --region ${{ env.REGION }} \
             --config docker/cloudbuild-base.yaml \
             --substitutions _REGISTRY=${{ env.REGISTRY }},_IMAGE=base-api \
-            .
+            --async --format='value(id)' .)
+          echo "Build ID: $BUILD_ID"
+          while true; do
+            STATUS=$(gcloud builds describe $BUILD_ID --project ${{ env.PROJECT_ID }} --region ${{ env.REGION }} --format='value(status)')
+            echo "Status: $STATUS"
+            case $STATUS in
+              SUCCESS) exit 0 ;;
+              FAILURE|TIMEOUT|CANCELLED) exit 1 ;;
+            esac
+            sleep 15
+          done
 
       - name: Build base-dagster via Cloud Build
         run: |
-          gcloud builds submit \
+          BUILD_ID=$(gcloud builds submit \
             --project ${{ env.PROJECT_ID }} \
             --region ${{ env.REGION }} \
             --config docker/cloudbuild-base.yaml \
             --substitutions _REGISTRY=${{ env.REGISTRY }},_IMAGE=base-dagster \
-            .
+            --async --format='value(id)' .)
+          echo "Build ID: $BUILD_ID"
+          while true; do
+            STATUS=$(gcloud builds describe $BUILD_ID --project ${{ env.PROJECT_ID }} --region ${{ env.REGION }} --format='value(status)')
+            echo "Status: $STATUS"
+            case $STATUS in
+              SUCCESS) exit 0 ;;
+              FAILURE|TIMEOUT|CANCELLED) exit 1 ;;
+            esac
+            sleep 15
+          done
