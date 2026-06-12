@@ -1,12 +1,17 @@
 # Embedding service configuration
 provider: litellm
-model: vertex_ai/text-embedding-005
-# IMPORTANT: Switching to Matryoshka 512-dim (Phase 1 of recall optimization)
-# requires changing dimensions to 512 AND recreating all Qdrant collections with
-# size=512 AND re-embedding all existing documents. See:
-# context/specs/2026-05-19-recall-optimization.md
-dimensions: 768
-model_version: text-embedding-005
+model: vertex_ai/gemini-embedding-001
+# gemini-embedding-001 supports Matryoshka: 768, 1536, 2048, 3072
+# Using 2048 for better retrieval quality (MTEB 68.3 vs 63.0 for text-embedding-005)
+# IMPORTANT: Changing dimensions requires recreating Qdrant collections and re-embedding.
+dimensions: 2048
+model_version: gemini-embedding-001
+
+# Sparse encoder for hybrid search (BM25 via FastEmbed, no torch required)
+sparse:
+  enabled: true
+  provider: fastembed
+  model: Qdrant/bm25
 
 # Qdrant collection name (tests use context_vectors_test)
 qdrant_collection: context_vectors

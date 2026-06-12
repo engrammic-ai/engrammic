@@ -14,17 +14,18 @@ ENV UV_LINK_MODE=copy
 ENV UV_COMPILE_BYTECODE=1
 
 # Install production dependencies for API (no dagster/pydantic-ai)
-# INCLUDE_SPLADE=true adds torch (~2GB) for hybrid search
+# sparse group = FastEmbed BM25 (ONNX, ~100MB, no CUDA)
+# splade group = torch SPLADE (~2GB, optional CUDA) - use for higher quality sparse
 ARG INCLUDE_SPLADE=false
 RUN --mount=type=cache,target=/root/.cache/uv \
     if [ "$INCLUDE_SPLADE" = "true" ]; then \
       uv sync --frozen --no-dev --no-install-project \
         --group api --group mcp --group graph --group postgres \
-        --group redis --group llm-core --group numeric --group auth --group splade; \
+        --group redis --group llm-core --group numeric --group auth --group sparse --group splade; \
     else \
       uv sync --frozen --no-dev --no-install-project \
         --group api --group mcp --group graph --group postgres \
-        --group redis --group llm-core --group numeric --group auth; \
+        --group redis --group llm-core --group numeric --group auth --group sparse; \
     fi
 
 # Stage 2: Runtime

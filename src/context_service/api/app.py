@@ -202,17 +202,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 hint="create config/embeddings.yaml to enable semantic search",
             )
 
-        splade_encoder = None
+        sparse_encoder = None
         if settings.hybrid_search_enabled:
             try:
-                from context_service.embeddings.splade import SpladeEncoder
+                from context_service.embeddings.sparse import get_sparse_encoder
 
-                splade_encoder = SpladeEncoder(model_name=settings.embedding.splade.model)
-                logger.info("splade_encoder_configured")
-            except ImportError:
-                logger.warning(
-                    "splade_unavailable", reason="torch not installed, hybrid search disabled"
-                )
+                sparse_config = embed_config.get("sparse", {})
+                provider = sparse_config.get("provider", "fastembed")
+                model = sparse_config.get("model")
+                sparse_encoder = get_sparse_encoder(provider=provider, model=model)
+                logger.info("sparse_encoder_configured", provider=provider)
+            except ImportError as exc:
+                logger.warning("sparse_unavailable", reason=str(exc), hint="hybrid search disabled")
 
         from context_service.engine.memgraph_store import MemgraphStore
         from context_service.services.auto_tagging import AutoTaggingService
@@ -247,7 +248,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             qdrant=qdrant_client,
             redis=redis_client,
             embedding=embedding_service,
-            splade=splade_encoder,
+            sparse=sparse_encoder,
             auto_tagging=auto_tagging,
             db_session=skills_session,
             skills_dir=Path("skills"),

@@ -16,7 +16,7 @@ from context_service.auth.context import AuthContext
 
 if TYPE_CHECKING:
     from context_service.embeddings import EmbeddingService
-    from context_service.embeddings.splade import SpladeEncoder
+    from context_service.embeddings.sparse import SparseEncoder
     from context_service.engine.protocols import HyperGraphStore
     from context_service.mcp.preset_resolver import PresetResolver
     from context_service.services.auto_tagging import AutoTaggingService
@@ -36,7 +36,7 @@ def configure_services(
     qdrant: QdrantClient,
     redis: RedisClient | None = None,
     embedding: EmbeddingService | None = None,
-    splade: SpladeEncoder | None = None,
+    sparse: SparseEncoder | None = None,
     auto_tagging: AutoTaggingService | None = None,
     db_session: Any | None = None,
     skills_dir: Path | None = None,
@@ -55,7 +55,7 @@ def configure_services(
         qdrant=qdrant,
         embedding=embedding,
         cache=redis,
-        splade=splade,
+        sparse=sparse,
         auto_tagging=auto_tagging,
     )
     ownership_cache = SiloOwnershipCache(redis) if redis is not None else None

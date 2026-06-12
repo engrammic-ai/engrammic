@@ -27,7 +27,7 @@ from context_service.utils.json import dumps, loads
 
 if TYPE_CHECKING:
     from context_service.embeddings import EmbeddingService
-    from context_service.embeddings.splade import SpladeEncoder
+    from context_service.embeddings.sparse import SparseEncoder
     from context_service.engine.history import BeliefHistory
     from context_service.engine.protocols import HyperGraphStore
     from context_service.expansion.generator import ExpansionGenerator
@@ -114,7 +114,7 @@ class ContextService:
         qdrant: QdrantClient,
         embedding: EmbeddingService | None = None,
         cache: RedisClient | None = None,
-        splade: SpladeEncoder | None = None,
+        sparse: SparseEncoder | None = None,
         expansion_generator: ExpansionGenerator | None = None,
         auto_tagging: AutoTaggingService | None = None,
     ) -> None:
@@ -122,7 +122,7 @@ class ContextService:
         self._qdrant = qdrant
         self._embedding = embedding
         self._cache = cache
-        self._splade = splade
+        self._sparse = sparse
         self._expansion_generator = expansion_generator
         self._auto_tagging = auto_tagging
 
@@ -326,15 +326,15 @@ class ContextService:
 
             sparse_indices: list[int] | None = None
             sparse_values: list[float] | None = None
-            if self._splade is not None:
+            if self._sparse is not None:
                 # Concatenate expansion to content for SPLADE encoding only.
                 # Dense embedding always uses the original content (unchanged).
                 splade_input = content
                 if expansion:
                     splade_input = content + " " + expansion
                 try:
-                    sparse = await self._splade.encode(splade_input)
-                    sparse_indices, sparse_values = self._splade.to_qdrant(sparse)
+                    sparse = await self._sparse.encode(splade_input)
+                    sparse_indices, sparse_values = self._sparse.to_qdrant(sparse)
                 except Exception as exc:
                     logger.warning(
                         "splade_encode_failed_in_store",
@@ -1426,12 +1426,12 @@ class ContextService:
         effective_mode = search_mode
 
         # Run dense embedding and sparse encoding in parallel when both are needed
-        if search_mode in ("hybrid", "sparse") and self._splade is not None:
+        if search_mode in ("hybrid", "sparse") and self._sparse is not None:
             embed_task = self._embedding.embed_query(query)
-            sparse_task = self._splade.encode_query(query)
+            sparse_task = self._sparse.encode_query(query)
             try:
                 query_vector, sparse = await asyncio.gather(embed_task, sparse_task)
-                sparse_indices, sparse_values = self._splade.to_qdrant(sparse)
+                sparse_indices, sparse_values = self._sparse.to_qdrant(sparse)
             except Exception as exc:
                 logger.warning(
                     "parallel_encode_failed",
@@ -1443,7 +1443,7 @@ class ContextService:
                 effective_mode = "dense"
         else:
             query_vector = await self._embedding.embed_query(query)
-            if search_mode in ("hybrid", "sparse") and self._splade is None:
+            if search_mode in ("hybrid", "sparse") and self._sparse is None:
                 logger.debug("splade_not_configured", fallback="dense")
                 effective_mode = "dense"
 

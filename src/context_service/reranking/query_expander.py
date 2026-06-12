@@ -6,7 +6,6 @@ import asyncio
 import json
 from typing import TYPE_CHECKING
 
-import litellm
 import structlog
 
 if TYPE_CHECKING:
@@ -16,6 +15,9 @@ logger = structlog.get_logger(__name__)
 
 MAX_RETRIES = 2
 RETRY_DELAY = 0.1
+
+# Default model for query expansion (Gemini 3.1 flash-lite via global endpoint)
+DEFAULT_EXPANSION_MODEL = "gemini-3.1-flash-lite-preview"
 
 EXPANSION_PROMPT = """Expand this search query with semantically equivalent phrases.
 The goal is to find documents that ANSWER the query, even if they use different words.
@@ -33,25 +35,32 @@ Examples:
 
 
 class QueryExpander:
-    """LLM-based query expansion with Redis caching."""
+    """LLM-based query expansion with Redis caching.
+
+    Uses google-genai SDK with Vertex AI for low-latency expansion.
+    """
 
     CACHE_PREFIX = "qexp:"
 
     def __init__(
         self,
-        llm_model: str,
+        llm_model: str | None,
         redis: Redis,
         cache_ttl_seconds: int = 86400 * 7,
         timeout_seconds: float = 5.0,
         vertex_project: str | None = None,
         vertex_location: str | None = None,
     ) -> None:
-        self._model = llm_model
+        self._model = llm_model or DEFAULT_EXPANSION_MODEL
         self._redis = redis
         self._cache_ttl = cache_ttl_seconds
         self._timeout = timeout_seconds
         self._vertex_project = vertex_project
-        self._vertex_location = vertex_location
+        # Force global for Gemini 3.x models (required by API)
+        self._vertex_location = (
+            "global" if "gemini-3" in self._model else (vertex_location or "global")
+        )
+        self._client: object | None = None
 
     async def expand(self, query: str, silo_id: str) -> str:
         """Expand query with semantic equivalents."""
@@ -79,6 +88,18 @@ class QueryExpander:
             logger.warning("query_expansion_failed", query=query, error=str(e))
             return query  # fallback to original
 
+    def _get_client(self) -> object:
+        """Lazy-init google-genai client."""
+        if self._client is None:
+            from google import genai
+
+            self._client = genai.Client(
+                vertexai=True,
+                project=self._vertex_project or "engrammic",
+                location=self._vertex_location,
+            )
+        return self._client
+
     async def _llm_expand(self, query: str) -> str:
         """Expand query using LLM."""
         prompt = EXPANSION_PROMPT.format(query=query)
@@ -86,15 +107,21 @@ class QueryExpander:
 
         for attempt in range(MAX_RETRIES + 1):
             try:
-                response = await litellm.acompletion(
-                    model=self._model,
-                    messages=[{"role": "user", "content": prompt}],
-                    response_format={"type": "json_object"},
+                client = self._get_client()
+                loop = asyncio.get_running_loop()
+
+                def _generate(c: object = client) -> object:
+                    return c.models.generate_content(  # type: ignore[union-attr]
+                        model=self._model,
+                        contents=prompt,
+                        config={"response_mime_type": "application/json"},
+                    )
+
+                response = await asyncio.wait_for(
+                    loop.run_in_executor(None, _generate),
                     timeout=self._timeout,
-                    vertex_ai_project=self._vertex_project,
-                    vertex_ai_location=self._vertex_location,
                 )
-                content = response.choices[0].message.content or ""
+                content = response.text or ""
                 try:
                     data = json.loads(content)
                     return str(data.get("expanded", query))
@@ -103,6 +130,13 @@ class QueryExpander:
                         "query_expansion_json_parse_failed", error=str(e), content=content[:100]
                     )
                     raise
+            except TimeoutError:
+                last_error = TimeoutError(f"Query expansion timed out after {self._timeout}s")
+                if attempt < MAX_RETRIES:
+                    logger.debug("query_expansion_retry", attempt=attempt + 1, error="timeout")
+                    await asyncio.sleep(RETRY_DELAY)
+                    continue
+                raise last_error from None
             except Exception as e:
                 last_error = e
                 if attempt < MAX_RETRIES:

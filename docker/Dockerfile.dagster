@@ -14,10 +14,11 @@ ENV UV_LINK_MODE=copy
 ENV UV_COMPILE_BYTECODE=1
 
 # Install production dependencies for Dagster (includes pipelines + custodian)
+# sparse = FastEmbed BM25 (fast, ONNX), splade = torch SPLADE (higher quality, GPU-capable)
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project \
       --group graph --group postgres --group redis --group llm-core \
-      --group numeric --group pipelines --group custodian --group splade
+      --group numeric --group pipelines --group custodian --group sparse --group splade
 
 # Copy application code
 COPY src/ /app/src/
@@ -28,7 +29,7 @@ COPY dagster.yaml workspace.yaml ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev \
       --group graph --group postgres --group redis --group llm-core \
-      --group numeric --group pipelines --group custodian --group splade
+      --group numeric --group pipelines --group custodian --group sparse --group splade
 
 # Stage 2: Runtime
 FROM python:3.13-slim

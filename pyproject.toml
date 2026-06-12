@@ -92,6 +92,10 @@ auth = [
     "workos==6.0.8",
     "google-cloud-secret-manager>=2.20",
 ]
+sparse = [
+    "fastembed>=0.8",
+]
+# Legacy SPLADE (requires torch ~2GB, use sparse group instead)
 splade = [
     "torch>=2.0",
     "transformers>=4.40",
