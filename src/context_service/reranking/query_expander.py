@@ -102,7 +102,7 @@ class QueryExpander:
             from google import genai
 
             self._client = genai.Client(
-                enterprise=True,
+                vertexai=True,
                 project=self._vertex_project or "engrammic",
                 location=self._vertex_location,
             )
