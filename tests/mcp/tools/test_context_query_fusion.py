@@ -2,27 +2,24 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 
 @dataclass
-class _FakeQueryResult:
+class _FakeFusedResult:
     node_id: str
-    layer: str
-    content: str
-    confidence: float
-    relevance_score: float
-    summary: str | None = None
+    rrf_score: float
+    channel_contributions: dict = field(default_factory=dict)
+    content: str | None = None
+    layer: str | None = None
+    confidence: float | None = None
+    conflict_status: str | None = None
+    created_at: datetime | None = None
     tags: list[str] | None = None
-    created_at: None = None
-    conflict_status: str = "none"
-    credibility: float = 0.0
-    credibility_factors: dict | None = None
-    tier: str | None = None
-    superseded_by: str | None = None
 
 
 def _settings(fusion_enabled: bool = True) -> MagicMock:
@@ -53,20 +50,21 @@ async def test_fusion_reorders_and_surfaces_breakdown() -> None:
     mock_auth = MagicMock()
     mock_auth.org_id = "test-org"
 
-    low_evidence = _FakeQueryResult(
-        node_id="low",
-        layer="knowledge",
+    low_evidence = _FakeFusedResult(
+        node_id="00000000-0000-0000-0000-000000000001",
+        rrf_score=0.80,
         content="unsourced claim",
-        confidence=0.1,
-        relevance_score=0.80,
-    )
-    high_evidence = _FakeQueryResult(
-        node_id="high",
         layer="knowledge",
+        confidence=0.1,
+        conflict_status="none",
+    )
+    high_evidence = _FakeFusedResult(
+        node_id="00000000-0000-0000-0000-000000000002",
+        rrf_score=0.70,
         content="corroborated fact",
+        layer="knowledge",
         confidence=1.0,
-        relevance_score=0.70,
-        superseded_by=None,
+        conflict_status="none",
     )
 
     with (
@@ -88,10 +86,14 @@ async def test_fusion_reorders_and_surfaces_breakdown() -> None:
             return_value=_settings(),
         ),
         patch("context_service.mcp.tools.context_query.get_redis", return_value=None),
+        patch(
+            "context_service.mcp.tools.context_query.FusionRetriever"
+        ) as mock_fr_cls,
     ):
-        mock_svc.return_value.query = AsyncMock(return_value=[low_evidence, high_evidence])
-        mock_svc.return_value.vector_store = None
-        mock_svc.return_value.embedding_client = None
+        mock_fr_cls.return_value.retrieve = AsyncMock(
+            return_value=[low_evidence, high_evidence]
+        )
+        mock_svc.return_value.query = AsyncMock(return_value=[])
 
         from context_service.mcp.tools.context_query import _context_query
 
@@ -101,8 +103,9 @@ async def test_fusion_reorders_and_surfaces_breakdown() -> None:
 
     ids = [r["node_id"] for r in result["results"]]
     # fused: low = 0.80 * (0.5 + 0.5*0.1) = 0.44; high = 0.70 * 1.0 = 0.70
-    assert ids == ["high", "low"]
-    low_dict = next(r for r in result["results"] if r["node_id"] == "low")
+    assert ids[0] == "00000000-0000-0000-0000-000000000002"
+    assert ids[1] == "00000000-0000-0000-0000-000000000001"
+    low_dict = next(r for r in result["results"] if "000001" in r["node_id"])
     assert low_dict["epistemic"]["confidence_factor"] == pytest.approx(0.55)
     assert low_dict["epistemic"]["multiplier"] == pytest.approx(0.55)
     assert low_dict["relevance_score"] == pytest.approx(0.44)
@@ -116,19 +119,21 @@ async def test_fusion_disabled_preserves_order() -> None:
     mock_auth = MagicMock()
     mock_auth.org_id = "test-org"
 
-    low_evidence = _FakeQueryResult(
-        node_id="low",
-        layer="knowledge",
+    low_evidence = _FakeFusedResult(
+        node_id="00000000-0000-0000-0000-000000000001",
+        rrf_score=0.80,
         content="unsourced claim",
-        confidence=0.1,
-        relevance_score=0.80,
-    )
-    high_evidence = _FakeQueryResult(
-        node_id="high",
         layer="knowledge",
+        confidence=0.1,
+        conflict_status="none",
+    )
+    high_evidence = _FakeFusedResult(
+        node_id="00000000-0000-0000-0000-000000000002",
+        rrf_score=0.70,
         content="corroborated fact",
+        layer="knowledge",
         confidence=1.0,
-        relevance_score=0.70,
+        conflict_status="none",
     )
 
     with (
@@ -150,10 +155,14 @@ async def test_fusion_disabled_preserves_order() -> None:
             return_value=_settings(fusion_enabled=False),
         ),
         patch("context_service.mcp.tools.context_query.get_redis", return_value=None),
+        patch(
+            "context_service.mcp.tools.context_query.FusionRetriever"
+        ) as mock_fr_cls,
     ):
-        mock_svc.return_value.query = AsyncMock(return_value=[low_evidence, high_evidence])
-        mock_svc.return_value.vector_store = None
-        mock_svc.return_value.embedding_client = None
+        mock_fr_cls.return_value.retrieve = AsyncMock(
+            return_value=[low_evidence, high_evidence]
+        )
+        mock_svc.return_value.query = AsyncMock(return_value=[])
 
         from context_service.mcp.tools.context_query import _context_query
 
@@ -162,5 +171,6 @@ async def test_fusion_disabled_preserves_order() -> None:
         )
 
     ids = [r["node_id"] for r in result["results"]]
-    assert ids == ["low", "high"]
+    assert ids[0] == "00000000-0000-0000-0000-000000000001"
+    assert ids[1] == "00000000-0000-0000-0000-000000000002"
     assert result["results"][0].get("epistemic") is None

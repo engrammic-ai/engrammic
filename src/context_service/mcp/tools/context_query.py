@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 import time
 from datetime import UTC, datetime
 from typing import Any, Literal
@@ -35,7 +36,8 @@ from context_service.reranking.epistemic_fusion import (
     EpistemicAdjustment,
     apply_epistemic_fusion,
 )
-from context_service.services.models import ScopeContext, derive_silo_id
+from context_service.retrieval.fusion import FusionRetriever
+from context_service.services.models import QueryResult, ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
 from context_service.signals import emit_access_event
 from context_service.telemetry.metrics import (
@@ -50,6 +52,19 @@ logger = structlog.get_logger(__name__)
 tracer = trace.get_tracer(__name__)
 
 _VALID_SEARCH_MODES = frozenset({"hybrid", "dense", "sparse"})
+
+CACHE_VERSION = "v2"
+
+
+def _search_mode_to_channels(mode: str) -> dict[str, bool]:
+    """Map deprecated search_mode to channel toggles."""
+    if mode == "dense":
+        logger.warning("search_mode='dense' deprecated, use channel config")
+        return {"semantic": True, "bm25": False, "temporal": False, "ppr": False}
+    if mode == "sparse":
+        logger.warning("search_mode='sparse' deprecated, use channel config")
+        return {"semantic": False, "bm25": True, "temporal": False, "ppr": False}
+    return {"semantic": True, "bm25": True, "temporal": True, "ppr": True}
 
 _result_cache: ResultCacheStore | None = None
 _rerank_cache: SemanticRerankCache | None = None
@@ -375,6 +390,9 @@ async def _context_query(
 
     layer_ttls = _layer_ttls_for(layers)
 
+    # Embed cache version into search_mode key to invalidate stale entries
+    cache_mode_key = f"{CACHE_VERSION}:{search_mode}"
+
     # Result cache lookup (skipped when bypass_cache is set)
     if not bypass_cache:
         cached = _get_result_cache().get(
@@ -385,7 +403,7 @@ async def _context_query(
             top_k,
             filters,
             include_superseded,
-            search_mode,
+            cache_mode_key,
         )
         if cached is not None:
             cached_results, cached_at_ts = cached
@@ -413,37 +431,38 @@ async def _context_query(
                     "cache_meta": cache_meta,
                 }
 
-    results = await ctx_svc.query(
-        scope=scope,
+    channel_config = _search_mode_to_channels(search_mode)
+    retriever = FusionRetriever(ctx_svc, channel_config=channel_config)
+    fused_results = await retriever.retrieve(
         query=effective_query,
-        layers=valid_layers,
-        filters=parsed_filters,
+        scope=scope,
         top_k=top_k,
+        layers=valid_layers,
         include_superseded=include_superseded,
-        as_of=None,
-        search_mode=search_mode,
+        filters=parsed_filters,
+        fetch_content=True,
     )
+
+    results = [
+        QueryResult(
+            node_id=uuid.UUID(f.node_id),
+            layer=f.layer or "unknown",
+            content=f.content or "",
+            confidence=f.confidence or 0.0,
+            relevance_score=f.rrf_score,
+            conflict_status=f.conflict_status or "none",
+            created_at=f.created_at,
+            tags=f.tags,
+        )
+        for f in fused_results
+    ]
+
     elapsed_s = time.perf_counter() - start
     record_mcp_tool("context_query", elapsed_s * 1000)
     elapsed_ms = int(elapsed_s * 1000)
 
-    # Get query embedding for rerank cache (reuses cached embedding from vector search)
-    query_embedding: list[float] | None = None
-    rerank_cache = _get_rerank_cache(ctx_svc.vector_store, settings)
-    if rerank_cache is not None and ctx_svc.embedding_client is not None:
-        try:
-            query_embedding = await ctx_svc.embedding_client.embed_query(effective_query)
-        except Exception as e:
-            logger.warning("rerank_cache_embed_failed", error=str(e))
-
-    results, rerank_fallback, reranked_applied = await _apply_reranking(
-        effective_query,
-        results,
-        settings,
-        query_embedding=query_embedding,
-        silo_id=silo_id,
-        rerank_cache=rerank_cache,
-    )
+    rerank_fallback = False
+    reranked_applied = False
 
     # Epistemic fusion: scale post-rerank scores by confidence/conflict state
     # so evidence is load-bearing in final ranking (sprint step 1). The
@@ -563,7 +582,7 @@ async def _context_query(
             top_k,
             filters,
             include_superseded,
-            search_mode,
+            cache_mode_key,
             result_dicts,
         )
 

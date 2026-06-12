@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,33 +11,42 @@ import pytest
 from context_service.reranking.reranker import RerankResult
 
 
+@dataclass
+class _FakeFusedResult:
+    node_id: str
+    rrf_score: float
+    channel_contributions: dict = field(default_factory=dict)
+    content: str | None = None
+    layer: str | None = None
+    confidence: float | None = None
+    conflict_status: str | None = None
+    created_at: datetime | None = None
+    tags: list[str] | None = None
+
+
 class TestContextQueryReranking:
     @pytest.mark.asyncio
     async def test_query_with_reranking_enabled(self) -> None:
-        """Test that reranking is applied when enabled."""
+        """Test that FusionRetriever is called (which handles reranking internally)."""
         mock_auth = MagicMock()
         mock_auth.org_id = "test-org"
 
-        mock_results = [
-            MagicMock(
-                node_id="node-1",
+        fused_results = [
+            _FakeFusedResult(
+                node_id="00000000-0000-0000-0000-000000000001",
+                rrf_score=0.8,
                 layer="memory",
                 content="First result",
-                summary=None,
                 confidence=0.9,
-                relevance_score=0.8,
-                tags=[],
-                created_at=None,
+                conflict_status="none",
             ),
-            MagicMock(
-                node_id="node-2",
+            _FakeFusedResult(
+                node_id="00000000-0000-0000-0000-000000000002",
+                rrf_score=0.7,
                 layer="memory",
                 content="Second result - no longer viable",
-                summary=None,
                 confidence=0.85,
-                relevance_score=0.7,
-                tags=[],
-                created_at=None,
+                conflict_status="none",
             ),
         ]
 
@@ -48,15 +59,18 @@ class TestContextQueryReranking:
         mock_silo = MagicMock()
         mock_silo.freshness_decay_lambda = 0.01
         mock_silo.default_recall_threshold = 0.5
+        mock_silo.metadata = {}
         mock_silo_service = MagicMock()
         mock_silo_service.get_by_id = AsyncMock(return_value=mock_silo)
+
+        mock_fr = AsyncMock(return_value=fused_results)
 
         with (
             patch(
                 "context_service.mcp.tools.context_query.get_mcp_auth_context",
                 return_value=mock_auth,
             ),
-            patch("context_service.mcp.tools.context_query.get_context_service") as mock_svc,
+            patch("context_service.mcp.tools.context_query.get_context_service"),
             patch(
                 "context_service.mcp.tools.context_query.get_silo_service",
                 return_value=mock_silo_service,
@@ -68,8 +82,11 @@ class TestContextQueryReranking:
                 "context_service.mcp.tools.context_query.get_settings", return_value=mock_settings
             ),
             patch("context_service.mcp.tools.context_query.get_redis", return_value=None),
+            patch(
+                "context_service.mcp.tools.context_query.FusionRetriever"
+            ) as mock_fr_cls,
         ):
-            mock_svc.return_value.query = AsyncMock(return_value=mock_results)
+            mock_fr_cls.return_value.retrieve = mock_fr
 
             from context_service.mcp.tools.context_query import _context_query
 
@@ -80,24 +97,22 @@ class TestContextQueryReranking:
             )
 
             assert "results" in result
-            mock_svc.return_value.query.assert_called_once()
+            mock_fr.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_query_with_reranking_disabled(self) -> None:
-        """Test that results are returned unchanged when reranking is disabled."""
+        """Test that results are returned when FusionRetriever returns results."""
         mock_auth = MagicMock()
         mock_auth.org_id = "test-org"
 
-        mock_results = [
-            MagicMock(
-                node_id="node-1",
+        fused_results = [
+            _FakeFusedResult(
+                node_id="00000000-0000-0000-0000-000000000001",
+                rrf_score=0.8,
                 layer="memory",
                 content="First result",
-                summary=None,
                 confidence=0.9,
-                relevance_score=0.8,
-                tags=[],
-                created_at=None,
+                conflict_status="none",
             ),
         ]
 
@@ -110,6 +125,7 @@ class TestContextQueryReranking:
         mock_silo = MagicMock()
         mock_silo.freshness_decay_lambda = 0.01
         mock_silo.default_recall_threshold = 0.5
+        mock_silo.metadata = {}
         mock_silo_service = MagicMock()
         mock_silo_service.get_by_id = AsyncMock(return_value=mock_silo)
 
@@ -118,7 +134,7 @@ class TestContextQueryReranking:
                 "context_service.mcp.tools.context_query.get_mcp_auth_context",
                 return_value=mock_auth,
             ),
-            patch("context_service.mcp.tools.context_query.get_context_service") as mock_svc,
+            patch("context_service.mcp.tools.context_query.get_context_service"),
             patch(
                 "context_service.mcp.tools.context_query.get_silo_service",
                 return_value=mock_silo_service,
@@ -130,8 +146,11 @@ class TestContextQueryReranking:
                 "context_service.mcp.tools.context_query.get_settings", return_value=mock_settings
             ),
             patch("context_service.mcp.tools.context_query.get_redis", return_value=None),
+            patch(
+                "context_service.mcp.tools.context_query.FusionRetriever"
+            ) as mock_fr_cls,
         ):
-            mock_svc.return_value.query = AsyncMock(return_value=mock_results)
+            mock_fr_cls.return_value.retrieve = AsyncMock(return_value=fused_results)
 
             from context_service.mcp.tools.context_query import _context_query
 
@@ -387,75 +406,56 @@ class TestContextQueryReranking:
         assert score_map["node-2"] == 0.80
 
     @pytest.mark.asyncio
-    async def test_end_to_end_fallback_applies_per_layer_floors_not_rerank_floor(self) -> None:
-        """Integration: when reranker raises, per-layer cosine floors apply (NOT the rerank floor).
+    async def test_end_to_end_per_layer_floors_applied(self) -> None:
+        """Integration: per-layer score floors are applied to FusionRetriever results.
 
-        A knowledge-layer result with cosine 0.30 is:
-        - dropped under per-layer knowledge floor (0.35)  <-- expected when fallback
-        - would be kept under rerank_floor (0.05)         <-- must NOT happen on fallback
-
-        This validates the call-site wiring:
-          rerank_floor=RERANK_SCORE_FLOOR if reranked_applied else None
+        A knowledge-layer result with rrf_score 0.30 is dropped by the
+        knowledge floor (0.35). FR handles reranking internally, so there
+        is no separate fallback path -- per-layer floors always apply.
         """
         mock_auth = MagicMock()
         mock_auth.org_id = "test-org"
 
-        # Two knowledge-layer results:
-        # node-1: cosine 0.30  -> below knowledge floor 0.35, would pass rerank_floor 0.05
-        # node-2: cosine 0.80  -> above both floors
-        mock_results = [
-            MagicMock(
-                node_id="node-1",
+        # Two knowledge-layer results from FR:
+        # node-1: rrf_score 0.30 -> below knowledge floor 0.35
+        # node-2: rrf_score 0.80 -> above floor
+        fused_results = [
+            _FakeFusedResult(
+                node_id="00000000-0000-0000-0000-000000000001",
+                rrf_score=0.30,
                 layer="knowledge",
                 content="Borderline result",
-                summary=None,
                 confidence=0.7,
-                relevance_score=0.30,
-                tags=[],
-                created_at=None,
-                conflict_status=None,
-                credibility=None,
-                credibility_factors=None,
+                conflict_status="none",
             ),
-            MagicMock(
-                node_id="node-2",
+            _FakeFusedResult(
+                node_id="00000000-0000-0000-0000-000000000002",
+                rrf_score=0.80,
                 layer="knowledge",
                 content="Strong result",
-                summary=None,
                 confidence=0.9,
-                relevance_score=0.80,
-                tags=[],
-                created_at=None,
-                conflict_status=None,
-                credibility=None,
-                credibility_factors=None,
+                conflict_status="none",
             ),
         ]
 
         mock_settings = MagicMock()
         mock_settings.reranking.enabled = True
-        mock_settings.reranking.reranker_timeout_seconds = 2.0
-        mock_settings.vertex_project = None
+        mock_settings.reranking.adaptive_threshold_enabled = False
         mock_settings.causal = MagicMock()
         mock_settings.causal.query_enabled = False
         mock_settings.epistemic_fusion.enabled = False
 
         mock_silo = MagicMock()
-        mock_silo.freshness_decay_lambda = 0.01
-        mock_silo.default_recall_threshold = 0.5
         mock_silo.metadata = {}
         mock_silo_service = MagicMock()
         mock_silo_service.get_by_id = AsyncMock(return_value=mock_silo)
-
-        mock_models_config = MagicMock()
-        mock_models_config.litellm_reranker_model = "test-model"
 
         with (
             patch(
                 "context_service.mcp.tools.context_query.get_mcp_auth_context",
                 return_value=mock_auth,
             ),
-            patch("context_service.mcp.tools.context_query.get_context_service") as mock_svc,
+            patch("context_service.mcp.tools.context_query.get_context_service"),
             patch(
                 "context_service.mcp.tools.context_query.get_silo_service",
                 return_value=mock_silo_service,
@@ -468,17 +468,10 @@ class TestContextQueryReranking:
             ),
             patch("context_service.mcp.tools.context_query.get_redis", return_value=None),
             patch(
-                "context_service.mcp.tools.context_query.load_models_config",
-                return_value=mock_models_config,
-            ),
-            patch(
-                "context_service.mcp.tools.context_query.LiteLLMReranker",
-            ) as mock_reranker_cls,
+                "context_service.mcp.tools.context_query.FusionRetriever"
+            ) as mock_fr_cls,
         ):
-            mock_reranker_cls.return_value.rerank = AsyncMock(
-                side_effect=RuntimeError("reranker unavailable")
-            )
-            mock_svc.return_value.query = AsyncMock(return_value=mock_results)
+            mock_fr_cls.return_value.retrieve = AsyncMock(return_value=fused_results)
 
             from context_service.mcp.tools.context_query import _context_query
 
@@ -489,13 +482,9 @@ class TestContextQueryReranking:
             )
 
         assert "results" in result
-        # node-1 (cosine 0.30 < knowledge floor 0.35) must be dropped
-        # proving per-layer floor was applied, NOT the rerank_floor=0.05
+        # node-1 (rrf_score 0.30 < knowledge floor 0.35) must be dropped
         result_ids = [r["node_id"] for r in result["results"]]
-        assert "node-1" not in result_ids, (
-            "node-1 with cosine 0.30 should be filtered by per-layer knowledge floor 0.35"
+        assert "00000000-0000-0000-0000-000000000001" not in result_ids, (
+            "node-1 with rrf_score 0.30 should be filtered by per-layer knowledge floor 0.35"
         )
-        assert "node-2" in result_ids
-
-        # retrieval_quality must be capped at "partial" (fallback_used=True caps "high" to "partial")
-        assert result["retrieval_quality"] != "high"
+        assert "00000000-0000-0000-0000-000000000002" in result_ids
