@@ -62,7 +62,8 @@ class QueryExpander:
         provider: str | None = None,
     ) -> None:
         raw_model = llm_model or DEFAULT_EXPANSION_MODEL
-        # Strip provider prefix if present (e.g., vertex_ai/gemini-3.5-flash -> gemini-3.5-flash)
+        self._raw_model = raw_model  # Keep full model string for litellm
+        # Strip provider prefix for genai SDK (e.g., vertex_ai/gemini-3.5-flash -> gemini-3.5-flash)
         self._model = raw_model.split("/", 1)[-1] if "/" in raw_model else raw_model
         self._redis = redis
         self._cache_ttl = cache_ttl_seconds
@@ -208,7 +209,7 @@ class QueryExpander:
 
         response = await asyncio.wait_for(
             litellm.acompletion(
-                model=self._model,
+                model=self._raw_model,  # Use full model string with provider prefix
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
             ),
