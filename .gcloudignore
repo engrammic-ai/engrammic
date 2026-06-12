@@ -1,0 +1,60 @@
+# Include .dockerignore
+#!include:.dockerignore
+
+# Version control
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.py[codz]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Testing and quality
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+tests/
+
+# Documentation
+context/
+docs/
+*.md
+
+# Docker data volumes
+docker-data/
+memgraph-data/
+qdrant-data/
+redis-data/
+
+# Local config
+.env
+.env.*
+.secrets/
+secrets/
+
+# Tool caches
+.claude/
+.prefect/
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
