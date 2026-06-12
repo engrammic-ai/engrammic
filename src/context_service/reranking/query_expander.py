@@ -13,6 +13,10 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
+# Module-level genai client cache (avoid cold start per request)
+_GENAI_CLIENT: object | None = None
+_GENAI_CLIENT_KEY: tuple[str | None, str | None] = (None, None)
+
 MAX_RETRIES = 2
 RETRY_DELAY = 0.1
 
@@ -76,7 +80,6 @@ class QueryExpander:
         self._vertex_location = (
             "global" if "gemini-3" in self._model else (vertex_location or "us-central1")
         )
-        self._client: object | None = None
 
     async def expand(self, query: str, silo_id: str) -> str:
         """Expand query with semantic equivalents."""
@@ -105,16 +108,21 @@ class QueryExpander:
             return query  # fallback to original
 
     def _get_genai_client(self) -> object:
-        """Lazy-init google-genai client for Gemini models."""
-        if self._client is None:
+        """Get cached google-genai client for Gemini models."""
+        global _GENAI_CLIENT, _GENAI_CLIENT_KEY
+
+        key = (self._vertex_project, self._vertex_location)
+        if _GENAI_CLIENT is None or _GENAI_CLIENT_KEY != key:
             from google import genai
 
-            self._client = genai.Client(
+            _GENAI_CLIENT = genai.Client(
                 vertexai=True,
                 project=self._vertex_project or "engrammic",
                 location=self._vertex_location,
             )
-        return self._client
+            _GENAI_CLIENT_KEY = key
+            logger.info("genai_client_created", project=self._vertex_project, location=self._vertex_location)
+        return _GENAI_CLIENT
 
     async def _llm_expand(self, query: str) -> str:
         """Expand query using LLM."""
