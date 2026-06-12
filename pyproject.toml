@@ -61,6 +61,8 @@ numeric = [
     "numpy>=1.26",
     "dtaidistance>=2.3.0",
 ]
+# Cross-encoder reranking (heavy - ML models)
+reranking = ["sentence-transformers>=3.0"]
 # Dagster pipelines (heavy - dagster only)
 pipelines = [
     "dagster>=1.7",

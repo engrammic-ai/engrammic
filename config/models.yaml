@@ -41,7 +41,7 @@ tiers:
       model: semantic-ranker-default@latest
     query_expander:
       provider: vertex_ai
-      model: gemini-3.1-flash-lite-preview
+      model: gemini-3.5-flash
 
   balanced:
     embeddings:
@@ -59,7 +59,7 @@ tiers:
       model: semantic-ranker-default@latest
     query_expander:
       provider: vertex_ai
-      model: gemini-3.1-flash-lite-preview
+      model: gemini-3.5-flash
 
   premium:
     embeddings:
@@ -97,7 +97,7 @@ tiers:
       model: semantic-ranker-default@latest
     query_expander:
       provider: vertex_ai
-      model: gemini-3.1-flash-lite-preview
+      model: gemini-3.5-flash
 
   # Fully self-hosted (vLLM + TEI)
   # Requires: vLLM server, TEI server, GPU infrastructure

@@ -16,17 +16,14 @@ ENV UV_COMPILE_BYTECODE=1
 # Install production dependencies for API (no dagster/pydantic-ai)
 # sparse group = FastEmbed BM25 (ONNX, ~100MB, no CUDA)
 # splade group = torch SPLADE (~2GB, optional CUDA) - use for higher quality sparse
+# reranking group = sentence-transformers cross-encoder (~500MB)
 ARG INCLUDE_SPLADE=false
+ARG INCLUDE_RERANKING=false
 RUN --mount=type=cache,target=/root/.cache/uv \
-    if [ "$INCLUDE_SPLADE" = "true" ]; then \
-      uv sync --frozen --no-dev --no-install-project \
-        --group api --group mcp --group graph --group postgres \
-        --group redis --group llm-core --group numeric --group auth --group sparse --group splade; \
-    else \
-      uv sync --frozen --no-dev --no-install-project \
-        --group api --group mcp --group graph --group postgres \
-        --group redis --group llm-core --group numeric --group auth --group sparse; \
-    fi
+    GROUPS="--group api --group mcp --group graph --group postgres --group redis --group llm-core --group numeric --group auth --group sparse"; \
+    if [ "$INCLUDE_SPLADE" = "true" ]; then GROUPS="$GROUPS --group splade"; fi; \
+    if [ "$INCLUDE_RERANKING" = "true" ]; then GROUPS="$GROUPS --group reranking"; fi; \
+    uv sync --frozen --no-dev --no-install-project $GROUPS
 
 # Stage 2: Runtime
 FROM python:3.13-slim

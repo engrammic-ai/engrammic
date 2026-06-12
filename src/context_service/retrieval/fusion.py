@@ -469,21 +469,172 @@ class FusionRetriever:
 
     async def _ppr_channel(
         self,
-        seed_ids: list[str],  # noqa: ARG002
-        scope: ScopeContext,  # noqa: ARG002
-        top_k: int,  # noqa: ARG002
-        layers: list[str] | None,  # noqa: ARG002
+        seed_ids: list[str],
+        scope: ScopeContext,
+        top_k: int,
+        layers: list[str] | None,
     ) -> ChannelResult:
-        """PPR graph traversal from semantic seeds. (Stub - implement in Task 2.4)"""
-        return ChannelResult(channel_name="ppr", ranked_ids=[], latency_ms=0.0)
+        """PPR graph traversal from semantic seeds.
+
+        Fetches 2-hop edges from Memgraph, builds adjacency, runs PPR.
+        """
+        from context_service.config.settings import get_settings
+        from context_service.retrieval.ppr import PersonalizedPageRank
+
+        t0 = time.perf_counter()
+        settings = get_settings()
+        graph_cfg = settings.graph_channel
+
+        if not graph_cfg.enabled or not seed_ids:
+            return ChannelResult(channel_name="ppr", ranked_ids=[], latency_ms=0.0)
+
+        try:
+            # Fetch 2-hop edges from seeds
+            cypher = """
+            UNWIND $seed_ids AS seed
+            MATCH (n:Node {id: seed, silo_id: $silo_id})-[r]-(m:Node {silo_id: $silo_id})
+            RETURN n.id AS source, m.id AS target, type(r) AS edge_type
+            UNION
+            UNWIND $seed_ids AS seed
+            MATCH (n:Node {id: seed, silo_id: $silo_id})-[r1]-(m1:Node {silo_id: $silo_id})-[r2]-(m2:Node {silo_id: $silo_id})
+            RETURN m1.id AS source, m2.id AS target, type(r2) AS edge_type
+            """
+            rows = await self._ctx.graph_store.execute_query(
+                cypher, {"seed_ids": seed_ids, "silo_id": str(scope.silo_id)}
+            )
+
+            # Build adjacency with edge weights
+            adjacency: dict[str, list[tuple[str, float]]] = {}
+            for row in rows:
+                source = row.get("source")
+                target = row.get("target")
+                edge_type = row.get("edge_type", "LINK")
+                if source is None or target is None:
+                    continue
+                weight = graph_cfg.edge_weights.get(edge_type, 1.0)
+                adjacency.setdefault(str(source), []).append((str(target), weight))
+
+            if not adjacency:
+                return ChannelResult(
+                    channel_name="ppr",
+                    ranked_ids=seed_ids[:top_k],
+                    latency_ms=(time.perf_counter() - t0) * 1000.0,
+                )
+
+            # Run PPR
+            ppr = PersonalizedPageRank(
+                damping=graph_cfg.damping,
+                max_iterations=graph_cfg.max_iterations,
+            )
+            scores = ppr.compute(seed_ids=seed_ids, adjacency=adjacency)
+
+            # Filter by layers if specified
+            if layers:
+                layer_cypher = """
+                UNWIND $node_ids AS nid
+                MATCH (n:Node {id: nid, silo_id: $silo_id})
+                WHERE n.layer IN $layers
+                RETURN n.id AS node_id
+                """
+                layer_rows = await self._ctx.graph_store.execute_query(
+                    layer_cypher,
+                    {"node_ids": list(scores.keys()), "silo_id": str(scope.silo_id), "layers": layers},
+                )
+                valid_ids = {r["node_id"] for r in layer_rows}
+                scores = {k: v for k, v in scores.items() if k in valid_ids}
+
+            # Sort and return top_k
+            ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+            ranked_ids = [node_id for node_id, _ in ranked[:top_k]]
+
+            latency_ms = (time.perf_counter() - t0) * 1000.0
+            return ChannelResult(
+                channel_name="ppr",
+                ranked_ids=ranked_ids,
+                latency_ms=latency_ms,
+            )
+        except Exception as exc:
+            latency_ms = (time.perf_counter() - t0) * 1000.0
+            return ChannelResult(
+                channel_name="ppr",
+                ranked_ids=[],
+                latency_ms=latency_ms,
+                error=str(exc),
+            )
 
     async def _rerank(
         self,
-        query: str,  # noqa: ARG002
+        query: str,
         fused: list[FusedResult],
     ) -> list[FusedResult]:
-        """Cross-encoder reranking. (Stub - implement in Task 2.2)"""
-        return fused
+        """Cross-encoder reranking of fused results.
+
+        Fetches document content for top candidates, scores with cross-encoder,
+        and reorders by rerank score. Falls back to RRF order on error.
+        """
+        from context_service.config.settings import get_settings
+        from context_service.retrieval.cross_encoder import CrossEncoderReranker
+
+        settings = get_settings()
+        if not settings.cross_encoder.enabled or not fused:
+            return fused
+
+        t0 = time.perf_counter()
+        try:
+            # Get node IDs to rerank (up to cross_encoder.top_k)
+            node_ids = [f.node_id for f in fused[: settings.cross_encoder.top_k]]
+
+            # Fetch content for these nodes
+            cypher = """
+            UNWIND $node_ids AS nid
+            MATCH (n:Node {id: nid})
+            RETURN n.id AS node_id, n.content AS content
+            """
+            rows = await self._ctx.graph_store.execute_query(cypher, {"node_ids": node_ids})
+            id_to_content = {row["node_id"]: row.get("content", "") for row in rows}
+
+            # Prepare for reranking
+            documents = []
+            valid_ids = []
+            for node_id in node_ids:
+                content = id_to_content.get(node_id, "")
+                if content:
+                    documents.append(content[:2000])  # Truncate for efficiency
+                    valid_ids.append(node_id)
+
+            if not documents:
+                return fused
+
+            # Rerank
+            reranker = CrossEncoderReranker(model=settings.cross_encoder.model)
+            rerank_results = reranker.rerank(
+                query=query,
+                documents=documents,
+                node_ids=valid_ids,
+            )
+
+            # Build score lookup
+            rerank_scores = {r.node_id: r.score for r in rerank_results}
+
+            # Update fused results with rerank scores and reorder
+            max_rerank = max(rerank_scores.values()) if rerank_scores else 1.0
+            for f in fused:
+                if f.node_id in rerank_scores:
+                    f.channel_contributions["rerank"] = rerank_scores[f.node_id]
+                    # Boost RRF score by normalized rerank score
+                    normalized = rerank_scores[f.node_id] / max_rerank if max_rerank > 0 else 0
+                    f.rrf_score = f.rrf_score * (0.5 + 0.5 * normalized)
+
+            # Re-sort by updated score
+            fused.sort(key=lambda f: f.rrf_score, reverse=True)
+
+            latency_ms = (time.perf_counter() - t0) * 1000.0
+            logger.debug("rerank_complete", latency_ms=latency_ms, count=len(rerank_results))
+
+            return fused
+        except Exception as exc:
+            logger.warning("rerank_fallback", error=str(exc))
+            return fused
 
     def _fuse_rrf(
         self,
