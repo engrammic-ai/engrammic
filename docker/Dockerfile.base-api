@@ -13,4 +13,4 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-install-project \
       --group graph --group postgres --group redis \
       --group llm-core --group numeric --group sparse \
-      --group api --group mcp --group auth
+      --group reranking --group api --group mcp --group auth

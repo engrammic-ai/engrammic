@@ -106,7 +106,7 @@ class MemgraphStore(EAGKnowledgeStore):
     def __init__(
         self,
         client: MemgraphClient,
-        redis_client: Redis[bytes] | None = None,  # type: ignore[type-arg]
+        redis_client: Redis[bytes] | None = None,
     ) -> None:
         self._client = client
         self._redis = redis_client

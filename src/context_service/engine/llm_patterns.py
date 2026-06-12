@@ -323,7 +323,7 @@ async def process_llm_candidates(
         # use the existing Cypher schema without a schema change.
         infra_type: PatternType
         if classification.pattern_type in ("temporal_correlation", "co_occurrence", "causal_chain"):
-            infra_type = classification.pattern_type  # type: ignore[assignment]
+            infra_type = classification.pattern_type
         else:
             infra_type = "co_occurrence"
 

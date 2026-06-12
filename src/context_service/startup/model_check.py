@@ -46,10 +46,8 @@ async def verify_models(*, timeout: float = 120.0) -> None:
             logger.info("model_check_skip", model="splade", reason="hybrid search disabled")
             return
 
-        from context_service.config.config_loader import load_config
-
-        embed_config = load_config("embeddings")
-        sparse_provider = embed_config.get("sparse", {}).get("provider", "fastembed")
+        sparse_config = settings.models.sparse
+        sparse_provider = sparse_config.provider if sparse_config.enabled else None
         if sparse_provider != "splade":
             logger.info("model_check_skip", model="splade", reason=f"using {sparse_provider}")
             return

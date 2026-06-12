@@ -152,7 +152,7 @@ class MemgraphClient:
                         )
                         continue
             else:
-                raise last_err  # type: ignore[misc]
+                raise last_err
             try:
                 yield tx
             except Exception:

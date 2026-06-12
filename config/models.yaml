@@ -24,6 +24,15 @@ tier: balanced
 vertex_location: us-south1
 vertex_project: engrammic
 
+# BM25 sparse encoder for hybrid search (fastembed-based, no torch required)
+sparse:
+  enabled: true
+  provider: fastembed
+  model: Qdrant/bm25
+
+# Qdrant collection name (tests use context_vectors_test)
+qdrant_collection: context_vectors
+
 tiers:
   economy:
     embeddings:

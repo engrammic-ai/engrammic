@@ -34,7 +34,7 @@ class ToolUsage(Base):
     ) -> None:
         super().__init__(**kw)
         self.id = uuid4()
-        self.user_id = user_id  # type: ignore[assignment]
+        self.user_id = user_id
         self.silo_id = silo_id
         self.tool_name = tool_name
 

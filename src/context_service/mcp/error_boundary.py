@@ -80,7 +80,7 @@ def mcp_error_boundary[**P, R](func: Callable[P, Awaitable[R]]) -> Callable[P, A
                 tool=func.__name__,
                 retry_after=exc.retry_after,
             )
-            return {  # type: ignore[return-value]
+            return {
                 "error": "rate_limit_exceeded",
                 "message": str(exc),
                 "retry_after": exc.retry_after,

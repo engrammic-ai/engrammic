@@ -343,8 +343,8 @@ class EngineQdrantStore:
                 response = await client.query_points(
                     collection_name=collection,
                     query=SparseVector(
-                        indices=sparse_indices,  # type: ignore[arg-type]
-                        values=sparse_values,  # type: ignore[arg-type]
+                        indices=sparse_indices,
+                        values=sparse_values,
                     ),
                     using=self.SPARSE_VECTOR_NAME,
                     query_filter=query_filter,
@@ -364,8 +364,8 @@ class EngineQdrantStore:
                         ),
                         Prefetch(
                             query=SparseVector(
-                                indices=sparse_indices,  # type: ignore[arg-type]
-                                values=sparse_values,  # type: ignore[arg-type]
+                                indices=sparse_indices,
+                                values=sparse_values,
                             ),
                             using=self.SPARSE_VECTOR_NAME,
                             filter=query_filter,

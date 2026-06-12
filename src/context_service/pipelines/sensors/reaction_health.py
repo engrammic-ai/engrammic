@@ -32,7 +32,7 @@ async def _scan_queue_depths(
     """Scan Redis for keys matching pattern and return key -> LLEN mapping."""
     from redis.asyncio import Redis
 
-    client: Redis = redis_client  # type: ignore[assignment]
+    client: Redis = redis_client
     depths: dict[str, int] = {}
 
     async for key in client.scan_iter(match=pattern, count=200):

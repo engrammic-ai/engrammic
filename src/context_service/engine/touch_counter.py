@@ -44,7 +44,7 @@ def _now_ns() -> int:
 
 
 async def record_touch(
-    redis: Redis[bytes],  # type: ignore[type-arg]
+    redis: Redis[bytes],
     silo_id: str,
     marker_id: str,
     session_id: str,
@@ -115,7 +115,7 @@ async def record_touch(
 
 
 async def get_touch_count(
-    redis: Redis[bytes],  # type: ignore[type-arg]
+    redis: Redis[bytes],
     silo_id: str,
     marker_id: str,
     session_id: str,
@@ -170,7 +170,7 @@ async def get_touch_count(
 
 
 async def clear_touches(
-    redis: Redis[bytes],  # type: ignore[type-arg]
+    redis: Redis[bytes],
     silo_id: str,
     marker_id: str,
 ) -> None:

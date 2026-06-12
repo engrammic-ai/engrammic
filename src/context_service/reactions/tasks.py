@@ -75,11 +75,11 @@ def _chains_reasoning_compatible(
     if chain_a.steps:
         steps_a = [
             s.get("embedding") for s in chain_a.steps if isinstance(s, dict) and s.get("embedding")
-        ]  # type: ignore[misc]
+        ]
     if chain_b.steps:
         steps_b = [
             s.get("embedding") for s in chain_b.steps if isinstance(s, dict) and s.get("embedding")
-        ]  # type: ignore[misc]
+        ]
 
     if not steps_a or not steps_b:
         # No step data; assume compatible (spec: "assume compatible")

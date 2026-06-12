@@ -53,7 +53,7 @@ class DeadLetterMiddleware(TaskiqMiddleware):
         self._startup_lock = asyncio.Lock()
         self._started = False
 
-    def set_broker(self, broker: ListQueueBroker) -> None:  # type: ignore[override]
+    def set_broker(self, broker: ListQueueBroker) -> None:
         super().set_broker(broker)
         settings = get_settings()
         self._dlq_broker = ListQueueBroker(

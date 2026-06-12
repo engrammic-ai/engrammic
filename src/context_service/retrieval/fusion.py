@@ -163,7 +163,7 @@ class FusionRetriever:
                 logger.warning(f"{name}_channel_error", error=str(raw_results[i]))
                 result = ChannelResult(name, [], 0.0, str(raw_results[i]))
             else:
-                result = raw_results[i]  # type: ignore[assignment]
+                result = raw_results[i]
             channel_results.append(result)
             if name == "semantic":
                 semantic_result = result

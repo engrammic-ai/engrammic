@@ -11,6 +11,7 @@ Settings precedence:
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -1213,17 +1214,10 @@ class Settings(BaseSettings):
     jina_api_url: str = Field(default="")
 
     # =========================================================================
-    # LiteLLM Embedding Settings
+    # Embedding Settings (dimensions moved to models.yaml, provider via tier)
     # =========================================================================
 
-    litellm_embedding_model: str = Field(default="openai/text-embedding-3-small")
-    embedding_dimensions: int = Field(default=768)
-
-    # =========================================================================
-    # Embedding Provider
-    # =========================================================================
-
-    embedding_provider: str = Field(default="jina")
+    embedding_dimensions: int = Field(default=2048)
 
     hybrid_search_enabled: bool = Field(default=True)
 
@@ -1277,7 +1271,26 @@ class Settings(BaseSettings):
     gemini_api_key: SecretStr | None = Field(default=None)
 
     # Self-hosted LLM (Ollama, vLLM)
-    ollama_base_url: str = Field(default="http://localhost:11434")
+    # Any of OLLAMA_URL, OLLAMA_BASE_URL, OLLAMA_API_BASE work (unified)
+    @property
+    def ollama_url(self) -> str:
+        """Canonical Ollama URL. Reads from multiple env var names for compatibility."""
+        return (
+            os.environ.get("OLLAMA_URL")
+            or os.environ.get("OLLAMA_BASE_URL")
+            or os.environ.get("OLLAMA_API_BASE")
+            or "http://localhost:11434"
+        )
+
+    @property
+    def ollama_base_url(self) -> str:
+        """Alias for ollama_url (litellm LLM convention)."""
+        return self.ollama_url
+
+    @property
+    def ollama_api_base(self) -> str:
+        """Alias for ollama_url (litellm embeddings convention)."""
+        return self.ollama_url
 
     # =========================================================================
     # WorkOS Auth Settings

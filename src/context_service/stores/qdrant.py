@@ -96,16 +96,13 @@ class QdrantClient:
         Returns:
             Configured QdrantClient.
         """
-        from context_service.config.config_loader import load_config
-
-        embed_config = load_config("embeddings")
+        models = settings.models
         api_key = settings.qdrant_api_key.get_secret_value() if settings.qdrant_api_key else None
-        collection_name = str(embed_config.get("qdrant_collection", "context_vectors"))
         return cls(
             url=settings.qdrant_url,
             api_key=api_key,
-            vector_size=embed_config["dimensions"],
-            collection_name=collection_name,
+            vector_size=models.embedding_dimensions,
+            collection_name=models.qdrant_collection,
             scalar_quantization=settings.qdrant_scalar_quantization_enabled,
             always_ram=settings.qdrant_quantization_always_ram,
         )
@@ -366,8 +363,8 @@ class QdrantClient:
                     point_vector: Any = {DENSE_VECTOR_NAME: vector}
                     if has_sparse:
                         point_vector[SPARSE_VECTOR_NAME] = models.SparseVector(
-                            indices=sparse_indices,  # type: ignore[arg-type]
-                            values=sparse_values,  # type: ignore[arg-type]
+                            indices=sparse_indices,
+                            values=sparse_values,
                         )
                 else:
                     point_vector = vector
@@ -474,7 +471,7 @@ class QdrantClient:
         if filter_conditions:
             must_conditions.extend(filter_conditions)
         query_filter: models.Filter | None = (
-            models.Filter(must=must_conditions) if must_conditions else None  # type: ignore[arg-type]
+            models.Filter(must=must_conditions) if must_conditions else None
         )
 
         has_sparse = sparse_indices is not None and sparse_values is not None
@@ -500,9 +497,7 @@ class QdrantClient:
                     response = await client.query_points(
                         collection_name=self._collection_name,
                         query=models.SparseVector(
-                            indices=sparse_indices,  # type: ignore[arg-type]
-                            values=sparse_values,  # type: ignore[arg-type]
-                        ),
+                            indices=sparse_indices,                            values=sparse_values,                        ),
                         using=SPARSE_VECTOR_NAME,
                         limit=limit,
                         score_threshold=score_threshold,
@@ -520,9 +515,7 @@ class QdrantClient:
                             ),
                             models.Prefetch(
                                 query=models.SparseVector(
-                                    indices=sparse_indices,  # type: ignore[arg-type]
-                                    values=sparse_values,  # type: ignore[arg-type]
-                                ),
+                                    indices=sparse_indices,                                    values=sparse_values,                                ),
                                 using=SPARSE_VECTOR_NAME,
                                 filter=query_filter,
                                 limit=limit * 2,

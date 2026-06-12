@@ -38,7 +38,7 @@ def delete_old_usage(context) -> dict[str, object]:
 
     async def _delete() -> int:
         async with get_session() as session:
-            cursor: CursorResult[Any] = await session.execute(  # type: ignore[assignment]
+            cursor: CursorResult[Any] = await session.execute(
                 delete(ToolUsage).where(ToolUsage.called_at < cutoff)
             )
             await session.commit()

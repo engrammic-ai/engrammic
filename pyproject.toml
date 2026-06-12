@@ -130,15 +130,91 @@ ignore = ["E501"]
 python_version = "3.12"
 strict = true
 
-# Dagster sensors/ops don't support typed context parameters at runtime
+# Dagster sensors/ops/schedules/assets use untyped decorators
 [[tool.mypy.overrides]]
-module = ["context_service.pipelines.sensors.*", "context_service.pipelines.jobs.*"]
+module = ["context_service.pipelines.sensors.*", "context_service.pipelines.jobs.*", "context_service.pipelines.schedules", "context_service.pipelines.assets.*"]
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
+disallow_untyped_decorators = false
 
-# fastmcp lacks py.typed marker (upstream issue)
+# dagster is optional (pipelines group) - ignore when not installed
 [[tool.mypy.overrides]]
-module = ["fastmcp", "fastmcp.*"]
+module = ["dagster", "dagster.*"]
+ignore_missing_imports = true
+
+# neo4j driver lacks py.typed marker
+[[tool.mypy.overrides]]
+module = ["neo4j", "neo4j.*"]
+ignore_missing_imports = true
+
+# qdrant-client lacks py.typed marker
+[[tool.mypy.overrides]]
+module = ["qdrant_client", "qdrant_client.*"]
+ignore_missing_imports = true
+
+# redis.asyncio lacks stubs
+[[tool.mypy.overrides]]
+module = ["redis", "redis.*"]
+ignore_missing_imports = true
+
+# opentelemetry optional
+[[tool.mypy.overrides]]
+module = ["opentelemetry", "opentelemetry.*"]
+ignore_missing_imports = true
+
+# fastapi/starlette lack complete stubs
+[[tool.mypy.overrides]]
+module = ["fastapi", "fastapi.*", "starlette", "starlette.*"]
+ignore_missing_imports = true
+
+# sqlalchemy lacks complete stubs
+[[tool.mypy.overrides]]
+module = ["sqlalchemy", "sqlalchemy.*"]
+ignore_missing_imports = true
+
+# batched lacks stubs
+[[tool.mypy.overrides]]
+module = ["batched", "batched.*"]
+ignore_missing_imports = true
+
+# litellm lacks stubs
+[[tool.mypy.overrides]]
+module = ["litellm", "litellm.*"]
+ignore_missing_imports = true
+
+# taskiq lacks stubs
+[[tool.mypy.overrides]]
+module = ["taskiq", "taskiq.*", "taskiq_redis", "taskiq_redis.*"]
+ignore_missing_imports = true
+
+# prometheus_client lacks stubs
+[[tool.mypy.overrides]]
+module = ["prometheus_client", "prometheus_client.*"]
+ignore_missing_imports = true
+
+# ML/embedding libs (optional heavy deps)
+[[tool.mypy.overrides]]
+module = ["torch", "torch.*", "transformers", "transformers.*", "sentence_transformers", "sentence_transformers.*", "fastembed", "fastembed.*", "dtaidistance", "dtaidistance.*"]
+ignore_missing_imports = true
+
+# jwt/uvicorn
+[[tool.mypy.overrides]]
+module = ["jwt", "jwt.*", "uvicorn", "uvicorn.*"]
+ignore_missing_imports = true
+
+# pydantic-ai (custodian agents)
+[[tool.mypy.overrides]]
+module = ["pydantic_ai", "pydantic_ai.*"]
+ignore_missing_imports = true
+
+# SPARQLWrapper (wikidata extraction)
+[[tool.mypy.overrides]]
+module = ["SPARQLWrapper", "SPARQLWrapper.*"]
+ignore_missing_imports = true
+
+# fastmcp and mcp SDK lack py.typed markers (upstream issue)
+[[tool.mypy.overrides]]
+module = ["fastmcp", "fastmcp.*", "mcp", "mcp.*"]
 ignore_missing_imports = true
 
 # workos lacks type stubs (no types-workos on PyPI)
@@ -159,6 +235,16 @@ ignore_missing_imports = true
 # MCP tools use untyped @mcp.tool decorator from fastmcp
 [[tool.mypy.overrides]]
 module = ["context_service.mcp.tools.*", "context_service.mcp.server"]
+disallow_untyped_decorators = false
+
+# FastAPI routes use untyped decorators (@app.get, @router.post, etc.)
+[[tool.mypy.overrides]]
+module = ["context_service.api.*", "beacon_service.*"]
+disallow_untyped_decorators = false
+
+# Taskiq worker/tasks use untyped decorators
+[[tool.mypy.overrides]]
+module = ["context_service.reactions.worker", "context_service.reactions.tasks"]
 disallow_untyped_decorators = false
 
 [tool.pytest.ini_options]

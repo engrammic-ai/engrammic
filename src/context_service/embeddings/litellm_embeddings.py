@@ -7,13 +7,12 @@ import random
 import time
 from typing import TYPE_CHECKING, Any
 
-import batched  # type: ignore[import-untyped]
+import batched
 import litellm
 from opentelemetry import trace
 
-from context_service.config.config_loader import load_config
 from context_service.config.logging import get_logger
-from context_service.config.settings import ModelRateLimitConfig
+from context_service.config.settings import ModelRateLimitConfig, get_settings
 from context_service.embeddings.rate_limit import get_embedding_rate_limiter
 from context_service.embeddings.token_budget_batcher import TokenBudgetBatcher
 from context_service.telemetry.metrics import (
@@ -108,11 +107,11 @@ class LiteLLMEmbeddingService:
         return self._dimensions
 
     @classmethod
-    def from_config(
+    def from_settings(
         cls,
         _embedding_cache: EmbeddingCache | None = None,
     ) -> LiteLLMEmbeddingService:
-        """Create a LiteLLMEmbeddingService from config/embeddings.yaml.
+        """Create a LiteLLMEmbeddingService from settings.models tier config.
 
         Args:
             _embedding_cache: Optional Redis-backed embedding cache.
@@ -120,28 +119,22 @@ class LiteLLMEmbeddingService:
         Returns:
             Configured LiteLLMEmbeddingService.
         """
-        config = load_config("embeddings")
-
-        # Load rate_limit from YAML, fall back to defaults
-        rate_limit_dict = config.get("rate_limit", {})
-        rate_limit = ModelRateLimitConfig(**rate_limit_dict)
-
-        batching = config.get("batching", {})
+        settings = get_settings()
+        models = settings.models
 
         return cls(
-            model=config["model"],
-            dimensions=config["dimensions"],
-            max_input_chars=config.get("max_input_chars", 30000),
-            rate_limit=rate_limit,
+            model=models.litellm_embedding_model,
+            dimensions=models.embedding_dimensions,
             _embedding_cache=_embedding_cache,
-            batching_enabled=batching.get("enabled", True),
-            batch_size=batching.get("batch_size", 32),
-            timeout_ms=batching.get("timeout_ms", 100),
-            small_batch_threshold=batching.get("small_batch_threshold", 4),
-            batching_mode=batching.get("mode", "count"),
-            token_budget=batching.get("token_budget", 8000),
-            max_batch_size=batching.get("max_batch_size", 64),
         )
+
+    @classmethod
+    def from_config(
+        cls,
+        _embedding_cache: EmbeddingCache | None = None,
+    ) -> LiteLLMEmbeddingService:
+        """Deprecated: use from_settings() instead."""
+        return cls.from_settings(_embedding_cache=_embedding_cache)
 
     @traced(capture_args=["texts"])
     async def embed(self, texts: list[str]) -> list[list[float]]:
@@ -364,7 +357,7 @@ class LiteLLMEmbeddingService:
                 )
             else:
 
-                @batched.aio.dynamically(  # type: ignore[untyped-decorator]
+                @batched.aio.dynamically(
                     batch_size=self._batch_size,
                     timeout_ms=self._timeout_ms,
                     small_batch_threshold=self._small_batch_threshold,

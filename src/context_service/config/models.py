@@ -43,6 +43,16 @@ class TierConfig(BaseModel):
     query_expander: ModelSpec | None = None
 
 
+class SparseConfig(BaseModel):
+    """Sparse encoder config (BM25 via fastembed or SPLADE)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    enabled: bool = True
+    provider: Literal["fastembed", "splade"] = "fastembed"
+    model: str = "Qdrant/bm25"
+
+
 class ModelsConfig(BaseModel):
     """Central model configuration with tier presets."""
 
@@ -64,6 +74,11 @@ class ModelsConfig(BaseModel):
     tiers: dict[str, TierConfig]
     task_mapping: dict[str, str] = Field(default_factory=dict)
     overrides: dict[str, ModelSpec] = Field(default_factory=dict)
+    sparse: SparseConfig = Field(default_factory=SparseConfig)
+    embedding_dimensions_override: int | None = Field(
+        default=None, description="Override tier's embedding dimensions"
+    )
+    qdrant_collection: str = "context_vectors"
 
     def get_model(self, task: str) -> ModelSpec:
         """Resolve model for a task: override > tier mapping > default.
@@ -96,9 +111,11 @@ class ModelsConfig(BaseModel):
 
     @property
     def embedding_dimensions(self) -> int:
-        """Embedding dimensions for the active tier."""
+        """Embedding dimensions: override > tier default > 768."""
+        if self.embedding_dimensions_override is not None:
+            return self.embedding_dimensions_override
         spec = self.get_embedding_model()
-        return spec.dimensions or 768
+        return spec.dimensions or 2048
 
     def get_reranker_model(self) -> ModelSpec | None:
         """Get the reranker model for the active tier, if configured."""

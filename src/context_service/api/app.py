@@ -109,8 +109,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 from context_service.db.custodian_queries import bootstrap_custodian_schema
                 from context_service.db.indexes import apply_all_indexes
 
-                await apply_all_indexes(memgraph_client)  # type: ignore[arg-type]
-                await bootstrap_custodian_schema(memgraph_client)  # type: ignore[arg-type]
+                await apply_all_indexes(memgraph_client)
+                await bootstrap_custodian_schema(memgraph_client)
                 logger.info("memgraph_schema_applied")
             except Exception as exc:
                 logger.error("memgraph_schema_failed", error=str(exc))
@@ -181,42 +181,38 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         embedding_cache = EmbeddingCache(redis_client)
         embedding_service: EmbeddingService | None = None
         try:
-            from context_service.config.config_loader import CONFIG_DIR, load_config
             from context_service.embeddings import build_embedding_service
 
-            logger.info("embedding_config_loading", config_dir=str(CONFIG_DIR))
-            embed_config = load_config("embeddings")
-            # Filter sensitive keys before logging
-            safe_config = {
-                k: v
-                for k, v in embed_config.items()
-                if k.lower() not in ("api_key", "secret", "password", "token", "credential")
-            }
-            logger.info("embedding_config_loaded", config=safe_config)
+            models = settings.models
+            logger.info(
+                "embedding_config_loading",
+                tier=models.tier,
+                model=models.litellm_embedding_model,
+            )
             embedding_service = build_embedding_service(embedding_cache)
             logger.info(
                 "embedding_service_configured",
-                provider="LiteLLMEmbeddingService",
-                model=embed_config["model"],
+                provider=models.get_embedding_model().provider,
+                model=models.litellm_embedding_model,
             )
         except Exception as exc:
             logger.warning(
                 "embedding_service_unconfigured",
                 error_type=type(exc).__name__,
                 error_message=str(exc),
-                hint="create config/embeddings.yaml to enable semantic search",
+                hint="check MODELS__TIER and tier config in models.yaml",
             )
 
         sparse_encoder = None
-        if settings.hybrid_search_enabled:
+        if settings.hybrid_search_enabled and models.sparse.enabled:
             try:
                 from context_service.embeddings.sparse import get_sparse_encoder
 
-                sparse_config = embed_config.get("sparse", {})
-                provider = sparse_config.get("provider", "fastembed")
-                model = sparse_config.get("model")
-                sparse_encoder = get_sparse_encoder(provider=provider, model=model)
-                logger.info("sparse_encoder_configured", provider=provider)
+                sparse_encoder = get_sparse_encoder(
+                    provider=models.sparse.provider,
+                    model=models.sparse.model,
+                )
+                logger.info("sparse_encoder_configured", provider=models.sparse.provider)
             except ImportError as exc:
                 logger.warning("sparse_unavailable", reason=str(exc), hint="hybrid search disabled")
 
@@ -432,6 +428,6 @@ def create_app() -> ASGIApp:
             if scope["type"] == "http" and scope.get("path") == "/mcp":
                 scope = dict(scope)
                 scope["path"] = "/mcp/"
-            await self.app(scope, receive, send)  # type: ignore[arg-type]
+            await self.app(scope, receive, send)
 
-    return MCPPathNormalizer(app)  # type: ignore[return-value]
+    return MCPPathNormalizer(app)
