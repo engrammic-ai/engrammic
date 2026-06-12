@@ -54,6 +54,7 @@ llm-core = [
     "litellm>=1.40",
     "batched>=0.1.5",
     "google-genai>=1.75.0",
+    "google-cloud-aiplatform>=1.50",
     "json-repair>=0.28",
 ]
 # Numeric (reasoning chain matching)

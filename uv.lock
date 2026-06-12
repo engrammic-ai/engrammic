@@ -611,6 +611,7 @@ llm = [
 ]
 llm-core = [
     { name = "batched" },
+    { name = "google-cloud-aiplatform" },
     { name = "google-genai" },
     { name = "json-repair" },
     { name = "litellm" },
@@ -699,6 +700,7 @@ llm = [
 ]
 llm-core = [
     { name = "batched", specifier = ">=0.1.5" },
+    { name = "google-cloud-aiplatform", specifier = ">=1.50" },
     { name = "google-genai", specifier = ">=1.75.0" },
     { name = "json-repair", specifier = ">=0.28" },
     { name = "litellm", specifier = ">=1.40" },
