@@ -77,10 +77,11 @@ class QueryExpander:
             provider=provider,
             use_genai=self._use_genai,
         )
-        # Force global for Gemini 3.x models (required by API), us-central1 for others
-        self._vertex_location = (
-            "global" if "gemini-3" in self._model else (vertex_location or "us-central1")
-        )
+        # Gemini 3.x requires global region; otherwise use passed location
+        if "gemini-3" in self._model:
+            self._vertex_location = "global"
+        else:
+            self._vertex_location = vertex_location or "us-central1"
 
     async def expand(self, query: str, silo_id: str) -> str:
         """Expand query with semantic equivalents."""
@@ -206,6 +207,13 @@ class QueryExpander:
         Returns (content, input_tokens, output_tokens).
         """
         import litellm
+
+        logger.info(
+            "litellm_expand_start",
+            raw_model=self._raw_model,
+            vertex_project=self._vertex_project,
+            vertex_location=self._vertex_location,
+        )
 
         # Qwen MaaS doesn't support response_format, rely on prompt for JSON
         response = await asyncio.wait_for(
