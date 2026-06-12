@@ -149,10 +149,18 @@ class QueryExpander:
                 try:
                     data = json.loads(content)
                     return str(data.get("expanded", query))
-                except (json.JSONDecodeError, TypeError) as e:
-                    logger.warning(
-                        "query_expansion_json_parse_failed", error=str(e), content=content[:100]
-                    )
+                except (json.JSONDecodeError, TypeError):
+                    # Try json-repair for malformed JSON from models without response_format
+                    try:
+                        from json_repair import repair_json
+
+                        repaired = repair_json(content, return_objects=True)
+                        if isinstance(repaired, dict) and "expanded" in repaired:
+                            logger.debug("query_expansion_json_repaired", content=content[:100])
+                            return str(repaired["expanded"])
+                    except Exception:
+                        pass
+                    logger.warning("query_expansion_json_parse_failed", content=content[:100])
                     raise
             except TimeoutError:
                 last_error = TimeoutError(f"Query expansion timed out after {self._timeout}s")
@@ -208,17 +216,9 @@ class QueryExpander:
         """
         import litellm
 
-        logger.info(
-            "litellm_expand_start",
-            raw_model=self._raw_model,
-            vertex_project=self._vertex_project,
-            vertex_location=self._vertex_location,
-        )
-
-        # Qwen MaaS doesn't support response_format, rely on prompt for JSON
         response = await asyncio.wait_for(
             litellm.acompletion(
-                model=self._raw_model,  # Use full model string with provider prefix
+                model=self._raw_model,
                 messages=[{"role": "user", "content": prompt}],
                 vertex_ai_project=self._vertex_project,
                 vertex_ai_location=self._vertex_location,
