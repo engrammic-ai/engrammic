@@ -1,0 +1,50 @@
+name: Build Base Images
+
+on:
+  push:
+    branches: [main, beta]
+    paths:
+      - 'uv.lock'
+      - 'pyproject.toml'
+      - 'docker/Dockerfile.base-*'
+  workflow_dispatch:
+
+env:
+  REGION: europe-north1
+  PROJECT_ID: engrammic
+  REGISTRY: europe-north1-docker.pkg.dev/engrammic/engrammic
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - name: Build base-api via Cloud Build
+        run: |
+          gcloud builds submit \
+            --project ${{ env.PROJECT_ID }} \
+            --region ${{ env.REGION }} \
+            --tag ${{ env.REGISTRY }}/base-api:latest \
+            --tag ${{ env.REGISTRY }}/base-api:${{ github.sha }} \
+            -f docker/Dockerfile.base-api \
+            .
+
+      - name: Build base-dagster via Cloud Build
+        run: |
+          gcloud builds submit \
+            --project ${{ env.PROJECT_ID }} \
+            --region ${{ env.REGION }} \
+            --tag ${{ env.REGISTRY }}/base-dagster:latest \
+            --tag ${{ env.REGISTRY }}/base-dagster:${{ github.sha }} \
+            -f docker/Dockerfile.base-dagster \
+            .
