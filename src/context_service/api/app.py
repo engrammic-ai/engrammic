@@ -120,6 +120,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         qdrant_client = QdrantClient.from_settings(settings)
         await qdrant_client.ensure_collection(hybrid=settings.hybrid_search_enabled)
+        await qdrant_client.ensure_reasoning_chains_collection()
         logger.info("qdrant_connected")
 
         from context_service.db.postgres import init_postgres
@@ -157,6 +158,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         async def rebuild_qdrant() -> QdrantClient:
             client = QdrantClient.from_settings(settings)
             await client.ensure_collection()
+            await client.ensure_reasoning_chains_collection()
             return client
 
         registry.register("memgraph", memgraph_client, factory=rebuild_memgraph)

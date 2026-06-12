@@ -314,6 +314,48 @@ def record_recall_depth(depth: int, silo_id: str | None = None) -> None:
     _buffer.record(metric_name=f"recall.depth.{depth}", silo_id=silo_id or "unknown")
 
 
+# TX1 EXTRACT metrics
+
+
+def record_extraction_triggered(silo_id: str | None = None) -> None:
+    """Record extraction task triggered."""
+    if _buffer is None:
+        return
+    _buffer.record(metric_name="extraction.triggered", silo_id=silo_id or "unknown")
+
+
+def record_extraction_skipped(reason: str, silo_id: str | None = None) -> None:
+    """Record extraction skipped with reason."""
+    if _buffer is None:
+        return
+    _buffer.record(metric_name=f"extraction.skipped.{reason}", silo_id=silo_id or "unknown")
+
+
+def record_extraction_claims(count: int, silo_id: str | None = None) -> None:
+    """Record claims extracted."""
+    if _buffer is None:
+        return
+    _buffer.record(metric_name="extraction.claims", silo_id=silo_id or "unknown", count=count)
+
+
+def record_extraction_corroborates(count: int, silo_id: str | None = None) -> None:
+    """Record CORROBORATES edges created during extraction."""
+    if _buffer is None:
+        return
+    _buffer.record(
+        metric_name="extraction.corroborates", silo_id=silo_id or "unknown", count=count
+    )
+
+
+def record_extraction_latency(duration_ms: float, silo_id: str | None = None) -> None:
+    """Record extraction operation latency."""
+    if _buffer is None:
+        return
+    _buffer.record(
+        metric_name="extraction.latency", silo_id=silo_id or "unknown", latency_ms=duration_ms
+    )
+
+
 def record_recall_result_count(count: int, layer: str, silo_id: str | None = None) -> None:
     """Record recall result count."""
     if _buffer is None:

@@ -113,6 +113,9 @@ class TestBrokerTaskRegistration:
             ReactionEventType.CONSOLIDATE,
             ReactionEventType.CHECK_SYNTHESIS,
             ReactionEventType.PROPAGATE_CONFIDENCE,
+            ReactionEventType.CHECK_EXTRACTION_TRIGGER,
+            ReactionEventType.TRACE_REASONING,
+            ReactionEventType.CHECK_CONSENSUS,
         }
     )
 

@@ -264,6 +264,97 @@ class RedisClient:
         finally:
             record_db_query("redis.remove_session_node", (time.perf_counter() - start) * 1000)
 
+    # Session activity tracking for TX7 TRACE
+
+    @staticmethod
+    def _session_activity_key(silo_id: str, session_id: str) -> str:
+        """Build a session activity tracking key."""
+        return f"session:{silo_id}:{session_id}:last_activity"
+
+    async def touch_session_activity(
+        self,
+        silo_id: str,
+        session_id: str,
+        ttl_seconds: int | None = None,
+    ) -> bool:
+        """Touch session activity timestamp with TTL.
+
+        When the key expires (TTL passes), the session is considered ended
+        and eligible for TX7 TRACE processing.
+
+        Args:
+            silo_id: Silo identifier.
+            session_id: Session identifier.
+            ttl_seconds: TTL in seconds. Uses settings.session_timeout_minutes * 60 if None.
+
+        Returns:
+            True if successful, False if circuit open.
+        """
+        return await guard_degrade(
+            STORE_REDIS,
+            self._touch_session_activity_impl(silo_id, session_id, ttl_seconds),
+            False,
+        )
+
+    async def _touch_session_activity_impl(
+        self,
+        silo_id: str,
+        session_id: str,
+        ttl_seconds: int | None = None,
+    ) -> bool:
+        if ttl_seconds is None:
+            settings = get_settings()
+            ttl_seconds = settings.session_timeout_minutes * 60
+
+        key = self._session_activity_key(silo_id, session_id)
+        start = time.perf_counter()
+        try:
+            # Store current timestamp with TTL
+            import datetime
+
+            timestamp = datetime.datetime.now(datetime.UTC).isoformat()
+            await self._redis.set(key, timestamp.encode(), ex=ttl_seconds)
+            return True
+        except (RedisConnectionError, RedisError) as e:
+            logger.error(
+                "redis_touch_session_activity_failed",
+                silo_id=silo_id,
+                session_id=session_id,
+                error=str(e),
+            )
+            raise RedisOperationError(f"Failed to touch session activity: {e}") from e
+        finally:
+            record_db_query("redis.touch_session_activity", (time.perf_counter() - start) * 1000)
+
+    async def check_session_active(self, silo_id: str, session_id: str) -> bool:
+        """Check if session activity key exists (session is active).
+
+        Returns:
+            True if active, False if expired or circuit open.
+        """
+        return await guard_degrade(
+            STORE_REDIS,
+            self._check_session_active_impl(silo_id, session_id),
+            False,
+        )
+
+    async def _check_session_active_impl(self, silo_id: str, session_id: str) -> bool:
+        key = self._session_activity_key(silo_id, session_id)
+        start = time.perf_counter()
+        try:
+            exists = await self._redis.exists(key)
+            return bool(exists)
+        except (RedisConnectionError, RedisError) as e:
+            logger.error(
+                "redis_check_session_active_failed",
+                silo_id=silo_id,
+                session_id=session_id,
+                error=str(e),
+            )
+            raise RedisOperationError(f"Failed to check session active: {e}") from e
+        finally:
+            record_db_query("redis.check_session_active", (time.perf_counter() - start) * 1000)
+
     # Generic cache operations
 
     async def set(

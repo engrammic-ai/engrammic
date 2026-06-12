@@ -49,6 +49,9 @@ class TestReactionEventType:
             "CHECK_EXTRACTION_TRIGGER",
             "PROPAGATE_CONFIDENCE",
             "CONSOLIDATE",
+            "PROPOSAL_READY",
+            "TRACE_REASONING",
+            "CHECK_CONSENSUS",
         }
         actual = {m.name for m in ReactionEventType}
         assert expected == actual
