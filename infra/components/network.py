@@ -135,6 +135,25 @@ class NetworkStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self),
         )
 
+        # Cloud Router + NAT for TEI region (needs outbound for model downloads)
+        self.tei_router = compute.Router(
+            f"{name}-tei-router",
+            name=f"engrammic-{env}-router-west",
+            network=self.vpc.id,
+            region=tei_region,
+            opts=pulumi.ResourceOptions(parent=self),
+        )
+
+        self.tei_nat = compute.RouterNat(
+            f"{name}-tei-nat",
+            name=f"engrammic-{env}-nat-west",
+            router=self.tei_router.name,
+            region=tei_region,
+            nat_ip_allocate_option="AUTO_ONLY",
+            source_subnetwork_ip_ranges_to_nat="ALL_SUBNETWORKS_ALL_IP_RANGES",
+            opts=pulumi.ResourceOptions(parent=self),
+        )
+
         # Firewall: allow Cloud Run and stateful host to reach TEI
         self.fw_tei = compute.Firewall(
             f"{name}-fw-tei",

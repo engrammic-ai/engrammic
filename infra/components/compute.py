@@ -389,7 +389,10 @@ echo "Stateful host ready"
                 "postgres-host": self._postgres_host or "postgres",
             },
             allow_stopping_for_update=True,
-            opts=pulumi.ResourceOptions(parent=self),
+            opts=pulumi.ResourceOptions(
+                parent=self,
+                ignore_changes=["boot_disk"],  # Prevent false-positive disk size updates
+            ),
         )
 
         # Health check for monitoring - can be used for alerting/dashboards
@@ -428,7 +431,7 @@ class TEIHost(pulumi.ComponentResource):
         network: compute.Network,
         subnet: compute.Subnetwork,
         service_account_email: str,
-        model_id: str = "Qwen/Qwen3-Embedding-4B",
+        model_id: str = "BAAI/bge-m3",
         opts: pulumi.ResourceOptions | None = None,
     ):
         super().__init__("engrammic:compute:TEIHost", name, None, opts)
@@ -438,22 +441,28 @@ class TEIHost(pulumi.ComponentResource):
         zone = config.get("tei_zone") or "europe-west1-b"
 
         startup_script = f"""#!/bin/bash
-set -e
 
 # Install GPU drivers (COS has built-in support)
 cos-extensions install gpu
 
-# Wait for driver installation
-sleep 10
+# Wait for driver installation (gpu driver takes a moment)
+for i in {{1..30}}; do
+    if [ -c /dev/nvidia0 ]; then
+        echo "GPU device ready"
+        break
+    fi
+    sleep 2
+done
 
 # Mount nvidia driver libraries
 mount --bind /var/lib/nvidia /var/lib/nvidia
 mount -o remount,exec /var/lib/nvidia
 
-# Create cache directory
-mkdir -p /var/lib/tei-cache
+# Create cache directory on persistent disk
+mkdir -p /mnt/stateful_partition/tei-cache
+chmod 777 /mnt/stateful_partition/tei-cache
 
-# Run TEI with GPU
+# Run TEI with GPU (device passthrough for COS)
 docker run -d --name tei \\
   --device /dev/nvidia0:/dev/nvidia0 \\
   --device /dev/nvidiactl:/dev/nvidiactl \\
@@ -462,7 +471,7 @@ docker run -d --name tei \\
   -v /var/lib/nvidia/lib64:/usr/local/nvidia/lib64 \\
   -e LD_LIBRARY_PATH=/usr/local/nvidia/lib64 \\
   -p 8080:80 \\
-  -v /var/lib/tei-cache:/data \\
+  -v /mnt/stateful_partition/tei-cache:/data \\
   -e HF_HUB_ENABLE_HF_TRANSFER=1 \\
   --restart unless-stopped \\
   ghcr.io/huggingface/text-embeddings-inference:turing-1.7 \\

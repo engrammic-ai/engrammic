@@ -88,13 +88,13 @@ tiers:
       provider: vertex_ai
       model: gemini-2.5-pro
 
-  # Beta: TEI with Qwen3-Embedding-4B (2048 dims) + Vertex LLMs
-  # Fast local embeddings on upgraded VM, GC for LLMs
+  # Beta: TEI with BGE-M3 (1024 dims) + Vertex LLMs
+  # Fast local embeddings on T4 GPU, GC for LLMs
   beta:
     embeddings:
       provider: tei
-      model: Qwen/Qwen3-Embedding-4B  # 69.45 MTEB, GPU via T4
-      dimensions: 2560
+      model: BAAI/bge-m3  # 68.0 MTEB, well-tested with TEI
+      dimensions: 1024
     reasoning:
       provider: vertex_ai
       model: gemini-2.5-pro

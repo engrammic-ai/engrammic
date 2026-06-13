@@ -102,7 +102,7 @@ if use_tei:
         network=network.vpc,
         subnet=network.tei_subnet,
         service_account_email=iam.stateful_host.email,
-        model_id="Qwen/Qwen3-Embedding-4B",
+        model_id="BAAI/bge-m3",
     )
     tei_url = tei_host.instance.network_interfaces[0].network_ip.apply(
         lambda ip: f"http://{ip}:8080"
