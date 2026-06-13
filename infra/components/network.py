@@ -135,6 +135,17 @@ class NetworkStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self),
         )
 
+        # Firewall: allow Cloud Run and stateful host to reach TEI
+        self.fw_tei = compute.Firewall(
+            f"{name}-fw-tei",
+            name=f"engrammic-{env}-allow-tei",
+            network=self.vpc.id,
+            allows=[compute.FirewallAllowArgs(protocol="tcp", ports=["8080"])],
+            source_ranges=["10.0.0.0/16"],
+            target_tags=["tei-server"],
+            opts=pulumi.ResourceOptions(parent=self),
+        )
+
         # Private services access for Cloud SQL
         self.private_ip_range = compute.GlobalAddress(
             f"{name}-private-ip-range",
