@@ -222,3 +222,33 @@ async def apply_all_indexes(client: HyperGraphStore) -> None:
             except Exception as exc:
                 logger.debug("index_apply_skipped", statement=statement, error=str(exc))
     logger.info("indexes_applied", applied=applied, total=len(ALL_INDEX_QUERIES))
+
+    # Ensure text search index for grep channel (idempotent)
+    await ensure_text_search_index(client)
+
+
+async def ensure_text_search_index(client: HyperGraphStore) -> None:
+    """Create text_search index on Node.content if not exists.
+
+    Required by the grep channel in FusionRetriever.
+    """
+    async with client.session() as session:
+        try:
+            result = await session.run("CALL text_search.info() YIELD * RETURN *")
+            records = [r async for r in result]
+            existing = [r for r in records if r.get("index_name") == "node_content"]
+            if existing:
+                logger.debug("text_search_index_exists", index="node_content")
+                return
+        except Exception as exc:
+            # text_search module might not be loaded
+            logger.warning("text_search_info_failed", error=str(exc))
+            return
+
+        try:
+            await session.run(
+                'CALL text_search.create_index("node_content", "Node", "content")'
+            )
+            logger.info("text_search_index_created", index="node_content")
+        except Exception as exc:
+            logger.warning("text_search_index_create_failed", error=str(exc))
