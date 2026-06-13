@@ -37,6 +37,7 @@ tests/
 context/
 docs/
 *.md
+!README.md
 
 # Docker data volumes
 docker-data/
