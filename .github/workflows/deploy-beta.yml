@@ -8,6 +8,7 @@ on:
 env:
   REGION: europe-north1
   PROJECT_ID: engrammic
+  REGISTRY: europe-north1-docker.pkg.dev/engrammic/engrammic
 
 jobs:
   build:
@@ -23,18 +24,63 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          token_format: access_token
 
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Install Skaffold
+      - name: Build API image
         run: |
-          curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/latest/skaffold-linux-amd64
-          chmod +x skaffold && sudo mv skaffold /usr/local/bin/
+          BUILD_ID=$(gcloud builds submit \
+            --project ${{ env.PROJECT_ID }} \
+            --region ${{ env.REGION }} \
+            --config docker/cloudbuild-app.yaml \
+            --substitutions _REGISTRY=${{ env.REGISTRY }},_IMAGE=engrammic-api,_DOCKERFILE=api,SHORT_SHA=${GITHUB_SHA::7} \
+            --async --format='value(id)' .)
+          echo "Build ID: $BUILD_ID"
+          while true; do
+            STATUS=$(gcloud builds describe $BUILD_ID --project ${{ env.PROJECT_ID }} --region ${{ env.REGION }} --format='value(status)')
+            echo "Status: $STATUS"
+            case $STATUS in
+              SUCCESS) exit 0 ;;
+              FAILURE|TIMEOUT|CANCELLED) exit 1 ;;
+            esac
+            sleep 15
+          done
 
-      - name: Build & Push via Skaffold
-        run: skaffold build --file-output=tags.json
+      - name: Build Dagster image
+        run: |
+          BUILD_ID=$(gcloud builds submit \
+            --project ${{ env.PROJECT_ID }} \
+            --region ${{ env.REGION }} \
+            --config docker/cloudbuild-app.yaml \
+            --substitutions _REGISTRY=${{ env.REGISTRY }},_IMAGE=engrammic-dagster,_DOCKERFILE=dagster,SHORT_SHA=${GITHUB_SHA::7} \
+            --async --format='value(id)' .)
+          echo "Build ID: $BUILD_ID"
+          while true; do
+            STATUS=$(gcloud builds describe $BUILD_ID --project ${{ env.PROJECT_ID }} --region ${{ env.REGION }} --format='value(status)')
+            echo "Status: $STATUS"
+            case $STATUS in
+              SUCCESS) exit 0 ;;
+              FAILURE|TIMEOUT|CANCELLED) exit 1 ;;
+            esac
+            sleep 15
+          done
+
+      - name: Build Beacon image
+        run: |
+          BUILD_ID=$(gcloud builds submit \
+            --project ${{ env.PROJECT_ID }} \
+            --region ${{ env.REGION }} \
+            --config docker/cloudbuild-app.yaml \
+            --substitutions _REGISTRY=${{ env.REGISTRY }},_IMAGE=engrammic-beacon,_DOCKERFILE=beacon,SHORT_SHA=${GITHUB_SHA::7} \
+            --async --format='value(id)' .)
+          echo "Build ID: $BUILD_ID"
+          while true; do
+            STATUS=$(gcloud builds describe $BUILD_ID --project ${{ env.PROJECT_ID }} --region ${{ env.REGION }} --format='value(status)')
+            echo "Status: $STATUS"
+            case $STATUS in
+              SUCCESS) exit 0 ;;
+              FAILURE|TIMEOUT|CANCELLED) exit 1 ;;
+            esac
+            sleep 15
+          done
 
   deploy:
     needs: build
