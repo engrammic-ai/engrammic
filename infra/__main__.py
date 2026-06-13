@@ -129,7 +129,7 @@ context_service = ContextServiceRun(
         "POSTGRES_DATABASE": "engrammic",
         "VERTEX_PROJECT_ID": "engrammic",
         "VERTEX_LOCATION": "europe-north1",
-        "EMBEDDING_PROVIDER": "vertex",
+        "EMBEDDING_PROVIDER": "tei" if use_tei else "vertex",
         "LLM_PROVIDER": "vertex_gemini",
         "DEFAULT_LLM_MODEL": "gemini-3.1-flash-lite",
         "AUTH_ENABLED": "false" if env == "dev" else "true",
