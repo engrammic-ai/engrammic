@@ -9,17 +9,17 @@ from context_service.models.mcp import Layer
 # Default per-layer minimum relevance thresholds.
 # Results below the threshold for their layer are filtered from recall output.
 LAYER_THRESHOLDS: dict[str, float] = {
-    Layer.KNOWLEDGE: 0.01,
-    Layer.WISDOM: 0.01,
-    Layer.MEMORY: 0.005,
-    Layer.INTELLIGENCE: 0.005,
+    Layer.KNOWLEDGE: 0.25,
+    Layer.WISDOM: 0.25,
+    Layer.MEMORY: 0.15,
+    Layer.INTELLIGENCE: 0.15,
 }
 
 # Minimum relevance threshold applied when reranking actually ran and wrote back
 # its scores.  A zero floor is intentionally avoided: the benchmark includes
 # adversarial questions where the correct answer is abstention; returning every
 # weak node at score 0.0 would induce hallucination.
-RERANK_SCORE_FLOOR: float = 0.005
+RERANK_SCORE_FLOOR: float = 0.05
 
 RetrievalQuality = Literal["high", "partial", "low", "none"]
 
