@@ -1410,8 +1410,12 @@ class Settings(BaseSettings):
     embedding_cache_ttl: int = Field(default=604800)
     lookup_cache_ttl: int = Field(default=300)
     tei_url: str | None = Field(default=None, description="TEI sidecar URL for local embeddings")
-    reranker_url: str | None = Field(default=None, description="TEI reranker URL (overrides models.yaml url)")
-    tei_reranker_url: str | None = Field(default=None, description="Alias for reranker_url (backwards compat)")
+    reranker_url: str | None = Field(
+        default=None, description="TEI reranker URL (overrides models.yaml url)"
+    )
+    tei_reranker_url: str | None = Field(
+        default=None, description="Alias for reranker_url (backwards compat)"
+    )
 
     # =========================================================================
     # Temporal Decay Settings (unified decay via heat asset)

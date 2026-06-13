@@ -97,7 +97,6 @@ def edge_heat_asset(
     t0 = time.monotonic()
 
     async def _run() -> tuple[int, int, str]:
-        from context_service.engine.protocols import HyperGraphStore
         from context_service.stores import MemgraphClient
 
         driver = await memgraph.driver()

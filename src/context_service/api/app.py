@@ -434,6 +434,6 @@ def create_app() -> ASGIApp:
             if scope["type"] == "http" and scope.get("path") == "/mcp":
                 scope = dict(scope)
                 scope["path"] = "/mcp/"
-            await self.app(scope, receive, send)  # type: ignore[arg-type]
+            await self.app(scope, receive, send)
 
-    return MCPPathNormalizer(app)  # type: ignore[return-value]
+    return MCPPathNormalizer(app)

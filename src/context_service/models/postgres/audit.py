@@ -64,7 +64,8 @@ class Events(Base):
         self.event_type = event_type
         self.content = content
         self.source_chain_id = (
-            source_chain_id if source_chain_id is None or isinstance(source_chain_id, UUID)
+            source_chain_id
+            if source_chain_id is None or isinstance(source_chain_id, UUID)
             else UUID(source_chain_id)
         )
         self.agent_id = agent_id

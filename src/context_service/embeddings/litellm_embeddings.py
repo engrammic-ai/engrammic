@@ -400,7 +400,7 @@ class LiteLLMEmbeddingService:
                 )
             else:
 
-                @batched.aio.dynamically(  # type: ignore[misc]
+                @batched.aio.dynamically(  # type: ignore[untyped-decorator]
                     batch_size=self._batch_size,
                     timeout_ms=self._timeout_ms,
                     small_batch_threshold=self._small_batch_threshold,

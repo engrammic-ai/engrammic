@@ -798,9 +798,7 @@ class FusionRetriever:
 
         # Normalize RRF scores to 0-1 range.
         # Theoretical max is num_channels / (k + 1) when a node ranks #1 in all channels.
-        num_active_channels = sum(
-            1 for c in channel_results if c.error is None and c.ranked_ids
-        )
+        num_active_channels = sum(1 for c in channel_results if c.error is None and c.ranked_ids)
         max_theoretical = num_active_channels / (self._k + 1) if num_active_channels > 0 else 1.0
 
         fused = [

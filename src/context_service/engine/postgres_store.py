@@ -66,9 +66,9 @@ class PostgresStore:
                     set_={"steps": stmt.excluded.steps},
                 )
                 result = await session.execute(stmt)
-                if result.rowcount != 1:  # type: ignore[union-attr]
+                if result.rowcount != 1:  # type: ignore[attr-defined]
                     raise RuntimeError(
-                        f"upsert_chain_steps expected rowcount=1, got {result.rowcount} "  # type: ignore[union-attr]
+                        f"upsert_chain_steps expected rowcount=1, got {result.rowcount} "  # type: ignore[attr-defined]
                         f"for chain_id={chain_id}"
                     )
         finally:
@@ -95,7 +95,7 @@ class PostgresStore:
             async with get_session() as session:
                 stmt = delete(ReasoningChainSteps).where(ReasoningChainSteps.chain_id == chain_id)
                 result = await session.execute(stmt)
-                return bool(result.rowcount and result.rowcount > 0)
+                return bool(result.rowcount and result.rowcount > 0)  # type: ignore[attr-defined]
         finally:
             record_db_query("postgres.delete_chain_steps", (time.perf_counter() - start) * 1000)
 
@@ -135,9 +135,9 @@ class PostgresStore:
                     },
                 )
                 result = await session.execute(stmt)
-                if result.rowcount != 1:  # type: ignore[union-attr]
+                if result.rowcount != 1:  # type: ignore[attr-defined]
                     raise RuntimeError(
-                        f"add_orphaned_chain expected rowcount=1, got {result.rowcount} "  # type: ignore[union-attr]
+                        f"add_orphaned_chain expected rowcount=1, got {result.rowcount} "  # type: ignore[attr-defined]
                         f"for chain_id={chain_id}"
                     )
         finally:

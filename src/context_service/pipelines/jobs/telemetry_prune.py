@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 import dagster as dg
-
-
-from typing import Any, Callable, TypeVar
 
 _T = TypeVar("_T")
 

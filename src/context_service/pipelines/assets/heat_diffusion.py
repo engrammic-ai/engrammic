@@ -54,7 +54,6 @@ def heat_diffusion_asset(
             context.log.info(f"silo={silo_id} heat_diffusion disabled, skipping")
             return {"skipped": True}
 
-        from context_service.engine.protocols import HyperGraphStore
         from context_service.stores import MemgraphClient
 
         driver = await memgraph.driver()
@@ -63,12 +62,12 @@ def heat_diffusion_asset(
         with tracer.start_as_current_span("heat_diffusion") as span:
             span.set_attribute("silo_id", silo_id)
 
-            result = await diffuse_heat(store, silo_id, config)
+            result = await diffuse_heat(store, silo_id, config)  # type: ignore[arg-type]
 
             span.set_attribute("hot_nodes", result.hot_nodes)
             span.set_attribute("nodes_updated", result.nodes_updated)
 
-            distribution = await get_materialization_distribution(store, silo_id)
+            distribution = await get_materialization_distribution(store, silo_id)  # type: ignore[arg-type]
 
         return {
             "silo_id": silo_id,

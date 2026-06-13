@@ -127,7 +127,6 @@ def heat_asset(
         from sqlalchemy import select
 
         from context_service.db import get_session
-        from context_service.engine.protocols import HyperGraphStore
         from context_service.models.postgres.org import SiloConfig as PGSiloConfig
         from context_service.signals.cursor import (
             advance_heat_cursor,
@@ -154,7 +153,7 @@ def heat_asset(
         redis_conn = await redis.client()
 
         stream_key = access_stream_key(silo_id)
-        last_id = await fetch_or_init_heat_cursor(mg_client, silo_id)
+        last_id = await fetch_or_init_heat_cursor(mg_client, silo_id)  # type: ignore[arg-type]
 
         from context_service.config.settings import get_settings
 
@@ -197,7 +196,7 @@ def heat_asset(
         if not raw_counts:
             # Nothing new to process; still advance cursor if entries were read.
             if new_last_id != last_id:
-                await advance_heat_cursor(mg_client, silo_id, new_last_id)
+                await advance_heat_cursor(mg_client, silo_id, new_last_id)  # type: ignore[arg-type]
             return 0, total_events, new_last_id
 
         # Fetch existing heat scores so we can apply time decay before combining
@@ -253,7 +252,7 @@ def heat_asset(
             {"silo_id": silo_id, "updates": updates, "now": now_iso},
         )
 
-        await advance_heat_cursor(mg_client, silo_id, new_last_id)
+        await advance_heat_cursor(mg_client, silo_id, new_last_id)  # type: ignore[arg-type]
         return len(updates), total_events, new_last_id
 
     nodes_updated, events_consumed, final_cursor = _run_async(_run())

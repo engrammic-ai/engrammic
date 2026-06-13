@@ -161,7 +161,8 @@ class TestResolutionResponse(BaseModel):
 
 def _row_to_response(row: object) -> SourceRuleResponse:
     """Convert a SQLAlchemy Row to SourceRuleResponse."""
-    from typing import Any, Sequence, cast
+    from collections.abc import Sequence
+    from typing import Any, cast
 
     r = cast(Sequence[Any], row)
     return SourceRuleResponse(

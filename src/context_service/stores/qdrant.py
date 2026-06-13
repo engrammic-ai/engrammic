@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, Sequence
+from typing import TYPE_CHECKING, Any, Literal
 
 from opentelemetry import trace
 from qdrant_client import AsyncQdrantClient
@@ -461,7 +461,15 @@ class QdrantClient:
         """
         client = await self._get_client()
 
-        must_conditions: list[models.FieldCondition | models.IsEmptyCondition | models.IsNullCondition | models.HasIdCondition | models.HasVectorCondition | models.NestedCondition | models.Filter] = []
+        must_conditions: list[
+            models.FieldCondition
+            | models.IsEmptyCondition
+            | models.IsNullCondition
+            | models.HasIdCondition
+            | models.HasVectorCondition
+            | models.NestedCondition
+            | models.Filter
+        ] = []
         if silo_id is not None:
             must_conditions.append(
                 models.FieldCondition(

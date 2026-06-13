@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 import structlog
 from dagster import job, op, schedule
@@ -37,11 +36,9 @@ def delete_old_usage(context) -> dict[str, object]:
 
     async def _delete() -> int:
         async with get_session() as session:
-            cursor = await session.execute(
-                delete(ToolUsage).where(ToolUsage.called_at < cutoff)
-            )
+            cursor = await session.execute(delete(ToolUsage).where(ToolUsage.called_at < cutoff))
             await session.commit()
-            return cursor.rowcount or 0  # type: ignore[union-attr]
+            return cursor.rowcount or 0  # type: ignore[attr-defined]
 
     deleted = asyncio.run(_delete())
     log.info("usage_retention_completed", deleted=deleted, retention_days=retention_days)

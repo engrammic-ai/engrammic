@@ -35,7 +35,9 @@ def get_reranker(
         settings = get_settings()
         url = spec.url or settings.reranker_url or settings.tei_reranker_url
         if not url:
-            raise ValueError("TEI reranker requires 'url' in ModelSpec or RERANKER_URL/TEI_RERANKER_URL env var")
+            raise ValueError(
+                "TEI reranker requires 'url' in ModelSpec or RERANKER_URL/TEI_RERANKER_URL env var"
+            )
         return TEIReranker(
             base_url=url,
             timeout_seconds=timeout_seconds,
