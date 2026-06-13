@@ -26,6 +26,11 @@ jobs:
           - image: engrammic-beacon
             dockerfile: beacon
     steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker system prune -af
+
       - uses: actions/checkout@v4
 
       - name: Authenticate to GCP
