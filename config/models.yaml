@@ -88,8 +88,8 @@ tiers:
       provider: vertex_ai
       model: gemini-2.5-pro
 
-  # Beta: TEI with BGE-M3 (1024 dims) + Vertex LLMs
-  # Fast local embeddings on T4 GPU, GC for LLMs
+  # Beta: TEI with BGE-M3 (1024 dims) + local reranker + Vertex LLMs
+  # Fast local embeddings + reranking on T4 GPU, GC for LLMs
   beta:
     embeddings:
       provider: tei
@@ -102,8 +102,8 @@ tiers:
       provider: vertex_ai
       model: gemini-2.5-flash
     reranker:
-      provider: vertex_ai
-      model: semantic-ranker-default@latest
+      provider: tei
+      model: BAAI/bge-reranker-base  # 57.0 BEIR, fits T4 alongside bge-m3
     query_expander:
       provider: vertex_ai
       model: gemini-2.5-flash

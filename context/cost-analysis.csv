@@ -2,20 +2,23 @@ Category,Item,10 customers,100 customers,500 customers,Unit Cost Basis,Calculati
 ,,,,,,
 === SHARED INFRASTRUCTURE (single deployment serving all tenants via silo_id) ===,,,,,,
 ,,,,,,
-COMPUTE + RUNTIME,,,,,,
-Compute,GCP Cloud Run,$30/mo,$200/mo,$800/mo,$0.00002400/vCPU-sec (Tier 1),50k/500k/2M req/mo; 180k vCPU-sec/mo free tier,https://cloud.google.com/run/pricing
-Orchestration,Dagster+ Starter (Hybrid),$120/mo,$190/mo,$450/mo,$100/mo base + $0.035/credit,500/2.5k/10k credits; May 2026 repricing to $1200/mo flat,https://dagster.io/pricing
+ACTUAL BETA DEPLOYMENT (June 2026 — all self-hosted on GCP),,,,,,
+TEI Host,n1-standard-4 + T4 GPU,$394/mo,$394/mo,$394/mo,~$0.54/hr,Embeddings (bge-m3) + reranker (bge-reranker-base); europe-west1-b,https://cloud.google.com/compute/gpus-pricing
+Stateful Host,e2-standard-8,$197/mo,$197/mo,$250/mo,~$0.27/hr,Memgraph + Qdrant + Redis + Dagster; scales at ~200 customers,https://cloud.google.com/compute/vm-instance-pricing
+Cloud SQL,db-f1-micro,$8/mo,$8/mo,$50/mo,~$0.01/hr,Postgres; tier up at ~100 customers,https://cloud.google.com/sql/pricing
+Cloud Run,Scales,$30/mo,$100/mo,$400/mo,$0.00002400/vCPU-sec,API surface; 180k vCPU-sec/mo free tier,https://cloud.google.com/run/pricing
+Disks,pd-balanced (~300GB),$30/mo,$30/mo,$60/mo,$0.10/GB/mo,100GB memgraph + 100GB qdrant + 50GB postgres + 50GB boot,https://cloud.google.com/compute/disks-image-pricing
+Networking,NAT + egress,$25/mo,$50/mo,$150/mo,~$0.085/GB egress,Cloud NAT for both regions + internet egress,https://cloud.google.com/vpc/network-pricing
 ,,,,,,
-DATA STORES,,,,,,
-Graph DB,Memgraph Cloud,$65/mo,$250/mo,$500/mo,~$16/GB/mo (cloud tier),4GB/16GB/32GB shared instance; all silos colocated,https://memgraph.com/pricing
-Vector DB,Qdrant Cloud,$80/mo,$300/mo,$1200/mo,Usage-based (no published rate),4GB/16GB/64GB dedicated cluster; shared across silos,https://qdrant.tech/pricing/
-Cache,GCP Memorystore Redis (Standard),$35/mo,$170/mo,$335/mo,$0.046/GB/hr (standard HA),1GB/5GB/10GB; embedding + node + lookup caches,https://cloud.google.com/memorystore/docs/redis/pricing
-Object Storage,GCP Cloud Storage,$5/mo,$12/mo,$50/mo,$0.023/GB/mo (standard US),50GB/500GB/2TB,https://cloud.google.com/storage/pricing
+INFRA SUBTOTAL (ACTUAL),,$684/mo,$779/mo,$1304/mo,,Self-hosted; no managed DB fees,,
 ,,,,,,
-NETWORKING,,,,,,
-Egress + LB,GCP,$30/mo,$100/mo,$400/mo,~$0.085/GB internet egress + ~$18/mo LB,100GB/500GB/2TB egress,https://cloud.google.com/vpc/network-pricing
+CREDITS: $25k available = ~36 months runway at current burn,,,,,,
 ,,,,,,
-INFRA SUBTOTAL,,$365/mo,$1222/mo,$3735/mo,,Shared across all tenants,,
+MANAGED SERVICES (reference — not currently used),,,,,,
+Orchestration,Dagster+ Starter (Hybrid),$120/mo,$190/mo,$450/mo,$100/mo base + $0.035/credit,Alternative to self-hosted Dagster,https://dagster.io/pricing
+Graph DB,Memgraph Cloud,$65/mo,$250/mo,$500/mo,~$16/GB/mo (cloud tier),Alternative to self-hosted Memgraph,https://memgraph.com/pricing
+Vector DB,Qdrant Cloud,$80/mo,$300/mo,$1200/mo,Usage-based (no published rate),Alternative to self-hosted Qdrant,https://qdrant.tech/pricing/
+Cache,GCP Memorystore Redis,$35/mo,$170/mo,$335/mo,$0.046/GB/hr (standard HA),Alternative to self-hosted Redis,https://cloud.google.com/memorystore/docs/redis/pricing
 ,,,,,,
 ,,,,,,
 === USAGE-PROPORTIONAL COSTS (scale linearly with customer activity) ===,,,,,,
@@ -159,6 +162,32 @@ HYBRID EXAMPLE: Claude for large + OpenAI for small/mid (100 customers),,,,,,
 ,Premium for hybrid,+$790/mo (+99%),,,Worth it only if large-cap retention improves measurably,,
 ,,,,,,
 ,,,,,,
+=== SELF-HOSTED TEI (June 2026 update) ===,,,,,,
+,,,,,,
+"Beta tier now runs local embeddings + reranker on T4 GPU in europe-west1-b. Replaces Vertex for both.",,,,,,
+,,,,,,
+TEI HOST (n1-standard-4 + T4),,,,,,
+GPU Instance,GCP n1-standard-4 + T4,$394/mo,$394/mo,$394/mo,~$0.54/hr,730 hrs/mo; on-demand (spot would be ~$150/mo but volatile),https://cloud.google.com/compute/gpus-pricing
+"What's included",BAAI/bge-m3 (embeddings) + BAAI/bge-reranker-base,,,,"Unlimited local inference; no per-token cost",,
+,,,,,,
+VERTEX COSTS REPLACED,,,,,,
+"Embeddings (Vertex text-embedding-005)",Was,$6/mo,$48/mo,$240/mo,$0.006/1M tokens,Now free (local TEI),,
+"Reranker (Vertex semantic-ranker)",Was,$50/mo,$400/mo,$2000/mo,~$0.001/call,Now free (local TEI); also fixes 4.5s cold starts,,
+,,,,,,
+TEI VS VERTEX COMPARISON,,,,,,
+,Vertex total,$56/mo,$448/mo,$2240/mo,,,
+,TEI host,$394/mo,$394/mo,$394/mo,,,
+,Delta,+$338/mo,-$54/mo,-$1846/mo,,"TEI wins at ~80+ customers; latency win immediate",,
+,,,,,,
+LATENCY IMPROVEMENT,,,,,,
+,Vertex recall,3-4s (cold),,,Reranker cold starts + embedding API roundtrip,,
+,TEI recall,<400ms,,,~8ms embedding + ~100ms rerank; no cold starts,,
+,,,,,,
+BETA TIER UPDATED INFRA,,,,,,
+"Compute",TEI Host + Cloud Run,$424/mo,$594/mo,$1194/mo,,TEI $394 + Cloud Run scales,,
+"Note","TEI cost is fixed; scales to ~1000 customers before needing second GPU or larger instance",,,,,,
+,,,,,,
+,,,,,,
 === NEW COST DRIVERS (May 2026 update) ===,,,,,,
 ,,,,,,
 "Based on code review of commits since April 27, 2026",,,,,,
@@ -201,15 +230,18 @@ Large cap (pattern detection ON),$46.90/mo,$83.50/mo,+$36.60,Pattern detection i
 1,"Small-cap customers cost ~$1/mo in variable spend — practically free to serve once infra exists",,,,,,
 2,"Large-cap customers cost ~$47/mo (OpenAI) to ~$126/mo (Claude) — 50-130x a small customer",,,,,,
 3,"Summarization (GPT-4o / Gemini Pro / Sonnet) is 70%+ of per-customer LLM cost — optimize there first",,,,,,
-4,"Fixed infra ($365/mo minimum) is the floor you pay whether you have 1 customer or 10",,,,,,
+4,"Fixed infra ($684/mo actual) is the floor — TEI GPU is 58% of it but eliminates per-token fees",,,,,,
 5,"Compliance ($3450/mo) dwarfs everything else below ~50 customers — defer until required by enterprise sales",,,,,,
 6,"First infra tier-up at ~50 customers: Memgraph + Qdrant jump from ~$145/mo to ~$550/mo",,,,,,
 7,"A hybrid LLM strategy (Claude for enterprise + OpenAI for everyone else) roughly doubles variable cost",,,,,,
-8,"At 100 customers with a realistic mix the total bill is ~$2k/mo (no compliance) — very lean",,,,,,
+8,"At 100 customers: ~$1.3k/mo infra + ~$800 variable = ~$2.1k/mo (no compliance)",,,,,,
 9,"Qdrant and Memgraph don't publish rates — get actual quotes before committing to budget numbers",,,,,,
 10,"LLM pattern detection ($36/mo/silo if enabled) is the largest optional cost swing — keep feature-flagged until needed",,,,,,
 11,"SAGE schedules increase Dagster credit burn at scale — monitor credit usage as silo count grows",,,,,,
 12,"Step embeddings add ~$0.06-0.60/mo per customer — negligible but tracked for completeness",,,,,,
+13,"TEI on T4 GPU ($394/mo) replaces Vertex embeddings+reranker; breaks even at ~80 customers but wins on latency (<400ms vs 3-4s) immediately",,,,,,
+14,"Local reranker eliminates Vertex cold starts (4.5s) — critical for interactive recall UX",,,,,,
+15,"Current runway: $25k credits / $684/mo = ~36 months before real spend (as of June 2026)",,,,,,
 ,,,,,,
 SOURCES,,,,,,
 ,Qdrant Cloud,https://qdrant.tech/pricing/,,,,
@@ -224,3 +256,5 @@ SOURCES,,,,,,
 ,SOC 2 Cost Guide 2026,https://cavanex.com/blog/soc-2-compliance-cost-2026,,,,
 ,All prices verified April 2026 — Qdrant/Memgraph are estimates (get quotes),,,,,,
 ,Cost drivers updated May 2026 — added heat diffusion / SAGE schedules / step embeddings / LLM pattern detection,,,,,,
+,TEI self-hosted added June 2026 — T4 GPU ($394/mo) replaces Vertex embeddings + reranker; latency <400ms,,,,,,
+,Actual beta costs verified June 2026 — $684/mo total; $25k credits = 36mo runway,,,,,,

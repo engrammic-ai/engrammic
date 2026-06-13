@@ -423,7 +423,7 @@ echo "Stateful host ready"
 
 
 class TEIHost(pulumi.ComponentResource):
-    """GCE instance with T4 GPU for TEI (Text Embeddings Inference)."""
+    """GCE instance with T4 GPU for TEI (Text Embeddings Inference) + reranker."""
 
     def __init__(
         self,
@@ -432,6 +432,7 @@ class TEIHost(pulumi.ComponentResource):
         subnet: compute.Subnetwork,
         service_account_email: str,
         model_id: str = "BAAI/bge-m3",
+        reranker_model_id: str = "BAAI/bge-reranker-base",
         opts: pulumi.ResourceOptions | None = None,
     ):
         super().__init__("engrammic:compute:TEIHost", name, None, opts)
@@ -458,11 +459,13 @@ done
 mount --bind /var/lib/nvidia /var/lib/nvidia
 mount -o remount,exec /var/lib/nvidia
 
-# Create cache directory on persistent disk
+# Create cache directories on persistent disk
 mkdir -p /mnt/stateful_partition/tei-cache
+mkdir -p /mnt/stateful_partition/reranker-cache
 chmod 777 /mnt/stateful_partition/tei-cache
+chmod 777 /mnt/stateful_partition/reranker-cache
 
-# Run TEI with GPU (device passthrough for COS)
+# Run TEI embeddings on port 8080
 docker run -d --name tei \\
   --device /dev/nvidia0:/dev/nvidia0 \\
   --device /dev/nvidiactl:/dev/nvidiactl \\
@@ -479,7 +482,22 @@ docker run -d --name tei \\
   --pooling cls \\
   --max-client-batch-size 32
 
-echo "TEI host ready"
+# Run TEI reranker on port 8081
+docker run -d --name reranker \\
+  --device /dev/nvidia0:/dev/nvidia0 \\
+  --device /dev/nvidiactl:/dev/nvidiactl \\
+  --device /dev/nvidia-uvm:/dev/nvidia-uvm \\
+  --device /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools \\
+  -v /var/lib/nvidia/lib64:/usr/local/nvidia/lib64 \\
+  -e LD_LIBRARY_PATH=/usr/local/nvidia/lib64 \\
+  -p 8081:80 \\
+  -v /mnt/stateful_partition/reranker-cache:/data \\
+  -e HF_HUB_ENABLE_HF_TRANSFER=1 \\
+  --restart unless-stopped \\
+  ghcr.io/huggingface/text-embeddings-inference:turing-1.7 \\
+  --model-id {reranker_model_id}
+
+echo "TEI host ready (embeddings:8080 + reranker:8081)"
 """
 
         self.instance = compute.Instance(

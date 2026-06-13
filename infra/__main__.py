@@ -95,6 +95,7 @@ stateful_hostname = internal_dns.hostname
 # TEI GPU host for local embeddings (beta only - T4 GPUs in europe-west1)
 tei_host = None
 tei_url = None
+reranker_url = None
 use_tei = config.get_bool("use_tei") or False
 if use_tei:
     tei_host = TEIHost(
@@ -106,6 +107,9 @@ if use_tei:
     )
     tei_url = tei_host.instance.network_interfaces[0].network_ip.apply(
         lambda ip: f"http://{ip}:8080"
+    )
+    reranker_url = tei_host.instance.network_interfaces[0].network_ip.apply(
+        lambda ip: f"http://{ip}:8081"
     )
 
 # Cloud Run API deployment
@@ -146,7 +150,7 @@ context_service = ContextServiceRun(
         # Feature flags
         **feature_flags.get(env, {}),
         # TEI URL (dynamic, only when use_tei=true)
-        **({"TEI_URL": tei_url} if tei_url else {}),
+        **({"TEI_URL": tei_url, "RERANKER_URL": reranker_url} if tei_url else {}),
     },
     secrets={
         "POSTGRES_PASSWORD": secrets.secrets["postgres-password"].id,
