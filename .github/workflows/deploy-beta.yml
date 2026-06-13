@@ -89,7 +89,7 @@ jobs:
             --no-cpu-throttling \
             --session-affinity \
             --timeout 3600 \
-            --update-env-vars "TEI_URL=http://10.0.4.2:8080,MODEL_TIER=beta" \
+            --update-env-vars "TEI_URL=http://10.0.4.2:8080,MODEL_TIER=beta,POSTGRES_HOST=10.162.0.3,POSTGRES_USER=context,POSTGRES_DATABASE=engrammic" \
             --no-traffic
 
       - name: Run migrations
