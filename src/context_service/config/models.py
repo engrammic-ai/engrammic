@@ -62,6 +62,7 @@ class ModelsConfig(BaseModel):
         "economy",
         "balanced",
         "premium",
+        "beta",
         "hybrid",
         "self_hosted",
         "self_hosted_budget",
