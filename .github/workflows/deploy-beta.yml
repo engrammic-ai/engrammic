@@ -16,6 +16,15 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    strategy:
+      matrix:
+        include:
+          - image: engrammic-api
+            dockerfile: api
+          - image: engrammic-dagster
+            dockerfile: dagster
+          - image: engrammic-beacon
+            dockerfile: beacon
     steps:
       - uses: actions/checkout@v4
 
@@ -24,67 +33,24 @@ jobs:
         with:
           workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
 
-      - name: Build API image
-        run: |
-          BUILD_ID=$(gcloud builds submit \
-            --project ${{ env.PROJECT_ID }} \
-            --region ${{ env.REGION }} \
-            --config docker/cloudbuild-app.yaml \
-            --substitutions _REGISTRY=${{ env.REGISTRY }},_IMAGE=engrammic-api,_DOCKERFILE=api,SHORT_SHA=${GITHUB_SHA::7} \
-            --async --format='value(id)' .)
-          echo "Build ID: $BUILD_ID"
-          while true; do
-            STATUS=$(gcloud builds describe $BUILD_ID --project ${{ env.PROJECT_ID }} --region ${{ env.REGION }} --format='value(status)')
-            echo "Status: $STATUS"
-            case $STATUS in
-              SUCCESS) exit 0 ;;
-              FAILURE|TIMEOUT|CANCELLED) exit 1 ;;
-            esac
-            sleep 15
-          done
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
 
-      - name: Build Dagster image
+      - name: Build and push ${{ matrix.image }}
         run: |
-          BUILD_ID=$(gcloud builds submit \
-            --project ${{ env.PROJECT_ID }} \
-            --region ${{ env.REGION }} \
-            --config docker/cloudbuild-app.yaml \
-            --substitutions _REGISTRY=${{ env.REGISTRY }},_IMAGE=engrammic-dagster,_DOCKERFILE=dagster,SHORT_SHA=${GITHUB_SHA::7} \
-            --async --format='value(id)' .)
-          echo "Build ID: $BUILD_ID"
-          while true; do
-            STATUS=$(gcloud builds describe $BUILD_ID --project ${{ env.PROJECT_ID }} --region ${{ env.REGION }} --format='value(status)')
-            echo "Status: $STATUS"
-            case $STATUS in
-              SUCCESS) exit 0 ;;
-              FAILURE|TIMEOUT|CANCELLED) exit 1 ;;
-            esac
-            sleep 15
-          done
-
-      - name: Build Beacon image
-        run: |
-          BUILD_ID=$(gcloud builds submit \
-            --project ${{ env.PROJECT_ID }} \
-            --region ${{ env.REGION }} \
-            --config docker/cloudbuild-app.yaml \
-            --substitutions _REGISTRY=${{ env.REGISTRY }},_IMAGE=engrammic-beacon,_DOCKERFILE=beacon,SHORT_SHA=${GITHUB_SHA::7} \
-            --async --format='value(id)' .)
-          echo "Build ID: $BUILD_ID"
-          while true; do
-            STATUS=$(gcloud builds describe $BUILD_ID --project ${{ env.PROJECT_ID }} --region ${{ env.REGION }} --format='value(status)')
-            echo "Status: $STATUS"
-            case $STATUS in
-              SUCCESS) exit 0 ;;
-              FAILURE|TIMEOUT|CANCELLED) exit 1 ;;
-            esac
-            sleep 15
-          done
+          docker build \
+            -t ${{ env.REGISTRY }}/${{ matrix.image }}:latest \
+            -t ${{ env.REGISTRY }}/${{ matrix.image }}:${GITHUB_SHA::7} \
+            -f docker/Dockerfile.${{ matrix.dockerfile }} \
+            --build-arg BASE_TAG=latest \
+            .
+          docker push ${{ env.REGISTRY }}/${{ matrix.image }}:latest
+          docker push ${{ env.REGISTRY }}/${{ matrix.image }}:${GITHUB_SHA::7}
 
   deploy:
     needs: build
-    if: always() && needs.build.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -102,13 +68,6 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Cleanup old images on VM
-        run: |
-          gcloud compute ssh engrammic-beta-stateful \
-            --zone ${{ env.REGION }}-a \
-            --tunnel-through-iap \
-            --command "sudo docker image prune -af --filter 'until=72h' && sudo docker system prune -f --volumes"
-
       - name: Deploy to VM
         run: |
           gcloud compute ssh engrammic-beta-stateful \
@@ -116,18 +75,10 @@ jobs:
             --tunnel-through-iap \
             --command "cd /opt/engrammic && sudo docker compose pull && sudo docker compose up -d"
 
-      - name: Wait for VM services to be healthy
-        run: |
-          sleep 30
-          gcloud compute ssh engrammic-beta-stateful \
-            --zone ${{ env.REGION }}-a \
-            --tunnel-through-iap \
-            --command "docker ps --format '{{.Names}}: {{.Status}}' | grep -E 'qdrant|memgraph|redis'"
-
       - name: Deploy API to Cloud Run
         run: |
           gcloud run deploy engrammic-beta-api \
-            --image ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/engrammic/engrammic-api:latest \
+            --image ${{ env.REGISTRY }}/engrammic-api:latest \
             --region ${{ env.REGION }} \
             --min-instances 1 \
             --no-cpu-throttling \
@@ -135,13 +86,13 @@ jobs:
             --timeout 3600 \
             --no-traffic
 
-      - name: Run migrations via Cloud Run Job
+      - name: Run migrations
         run: |
           gcloud run jobs execute engrammic-beta-migrate \
             --region ${{ env.REGION }} \
             --wait
 
-      - name: Route traffic to new revision
+      - name: Route traffic
         run: |
           gcloud run services update-traffic engrammic-beta-api \
             --region ${{ env.REGION }} \

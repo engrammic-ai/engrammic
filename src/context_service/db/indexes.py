@@ -231,24 +231,15 @@ async def ensure_text_search_index(client: HyperGraphStore) -> None:
     """Create text_search index on Node.content if not exists.
 
     Required by the grep channel in FusionRetriever.
+    Uses DDL syntax (CREATE TEXT INDEX) which is idempotent in Memgraph MAGE.
     """
     async with client.session() as session:
         try:
-            result = await session.run("CALL text_search.info() YIELD * RETURN *")
-            records = [r async for r in result]
-            existing = [r for r in records if r.get("index_name") == "node_content"]
-            if existing:
-                logger.debug("text_search_index_exists", index="node_content")
-                return
-        except Exception as exc:
-            # text_search module might not be loaded
-            logger.warning("text_search_info_failed", error=str(exc))
-            return
-
-        try:
-            await session.run(
-                'CALL text_search.create_index("node_content", "Node", "content")'
-            )
+            result = await session.run("CREATE TEXT INDEX node_content ON :Node(content)")
+            await result.consume()
             logger.info("text_search_index_created", index="node_content")
         except Exception as exc:
-            logger.warning("text_search_index_create_failed", error=str(exc))
+            if "already exists" in str(exc).lower():
+                logger.debug("text_search_index_exists", index="node_content")
+            else:
+                logger.warning("text_search_index_create_failed", error=str(exc))
