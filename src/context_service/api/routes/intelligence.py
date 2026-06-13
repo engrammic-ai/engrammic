@@ -10,7 +10,7 @@ Headers:
 from __future__ import annotations
 
 import time
-import uuid as uuid_mod
+import uuid
 from datetime import UTC, datetime
 from uuid import UUID
 
