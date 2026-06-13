@@ -82,15 +82,10 @@ jobs:
 
       - name: Deploy API to Cloud Run
         run: |
-          gcloud run deploy engrammic-beta-api \
+          # Only update the image - env vars are managed by Pulumi
+          gcloud run services update engrammic-beta-api \
             --image ${{ env.REGISTRY }}/engrammic-api:latest \
-            --region ${{ env.REGION }} \
-            --min-instances 1 \
-            --no-cpu-throttling \
-            --session-affinity \
-            --timeout 3600 \
-            --update-env-vars "TEI_URL=http://10.0.4.2:8080,MODEL_TIER=beta,POSTGRES_HOST=10.162.0.3,POSTGRES_USER=context,POSTGRES_DATABASE=engrammic" \
-            --no-traffic
+            --region ${{ env.REGION }}
 
       - name: Run migrations
         run: |

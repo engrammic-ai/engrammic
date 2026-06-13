@@ -29,6 +29,8 @@ feature_flags = {
         "ENABLE_EXPERIMENTAL_RECALL": "true",
         "ENABLE_DEBUG_ENDPOINTS": "true",
         "SECURITY__RATE_LIMIT__ENABLED": "true",
+        "MODEL_TIER": "beta",
+        "TEI_URL": "http://10.0.4.2:8080",  # TEI GPU VM in europe-west1
     },
     "prod": {
         "ENABLE_EXPERIMENTAL_RECALL": "false",
