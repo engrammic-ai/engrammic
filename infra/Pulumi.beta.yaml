@@ -1,2 +1,5 @@
 environment:
   - engrammic-infra/beta
+config:
+  context-service:use_tei: true
+  context-service:tei_zone: europe-west1-b

@@ -15,6 +15,7 @@ from components import (
     SecretsStack,
     StatefulHost,
     StorageStack,
+    TEIHost,
 )
 from pulumi_gcp import secretmanager
 
@@ -23,14 +24,13 @@ use_cloudsql = config.get_bool("use_cloudsql") or False
 
 env = config.require("environment")
 
-# Feature flags per environment
+# Feature flags per environment (static flags only - dynamic ones added below)
 feature_flags = {
     "beta": {
         "ENABLE_EXPERIMENTAL_RECALL": "true",
         "ENABLE_DEBUG_ENDPOINTS": "true",
         "SECURITY__RATE_LIMIT__ENABLED": "true",
         "MODEL_TIER": "beta",
-        "TEI_URL": "http://10.0.4.2:8080",  # TEI GPU VM in europe-west1
     },
     "prod": {
         "ENABLE_EXPERIMENTAL_RECALL": "false",
@@ -92,6 +92,22 @@ internal_dns = InternalDNS(
 )
 stateful_hostname = internal_dns.hostname
 
+# TEI GPU host for local embeddings (beta only - T4 GPUs in europe-west1)
+tei_host = None
+tei_url = None
+use_tei = config.get_bool("use_tei") or False
+if use_tei:
+    tei_host = TEIHost(
+        "engrammic-tei",
+        network=network.vpc,
+        subnet=network.tei_subnet,
+        service_account_email=iam.stateful_host.email,
+        model_id="Qwen/Qwen3-Embedding-4B",
+    )
+    tei_url = tei_host.instance.network_interfaces[0].network_ip.apply(
+        lambda ip: f"http://{ip}:8080"
+    )
+
 # Cloud Run API deployment
 context_service = ContextServiceRun(
     "engrammic-context-service",
@@ -129,6 +145,8 @@ context_service = ContextServiceRun(
         else "",
         # Feature flags
         **feature_flags.get(env, {}),
+        # TEI URL (dynamic, only when use_tei=true)
+        **({"TEI_URL": tei_url} if tei_url else {}),
     },
     secrets={
         "POSTGRES_PASSWORD": secrets.secrets["postgres-password"].id,
@@ -217,6 +235,10 @@ if migration_job:
 
 if beacon_service:
     pulumi.export("beacon_url", beacon_service.service.uri)
+
+if tei_host:
+    pulumi.export("tei_host_ip", tei_host.instance.network_interfaces[0].network_ip)
+    pulumi.export("tei_url", tei_url)
 
 if metabase_service:
     pulumi.export("metabase_url", metabase_service.service.uri)
