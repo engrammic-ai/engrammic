@@ -168,8 +168,9 @@ def load_models_config() -> ModelsConfig:
     path = resolve_config_file("models.yaml", config_dir() / "models.yaml")
     data = _load_models_yaml(path)
 
-    # Allow env var to override tier
-    env_tier = os.environ.get("MODELS__TIER")
+    # Allow env var to override tier (use MODEL_TIER to avoid pydantic-settings
+    # nested field interpretation of MODELS__TIER)
+    env_tier = os.environ.get("MODEL_TIER") or os.environ.get("MODELS__TIER")
     if env_tier and env_tier in (
         "economy",
         "balanced",
