@@ -53,7 +53,7 @@ def _score(dt: datetime) -> float:
 
 async def create_contradiction(
     store: HyperGraphStore,
-    redis: Redis[bytes],
+    redis: Redis,
     silo_id: str,
     node_a_id: str,
     node_b_id: str,
@@ -129,7 +129,7 @@ async def create_contradiction(
 
 async def create_stale_commitment(
     store: HyperGraphStore,
-    redis: Redis[bytes],
+    redis: Redis,
     silo_id: str,
     commitment_id: str,
     evidence_ids: list[str],
@@ -207,7 +207,7 @@ async def create_stale_commitment(
 
 async def resolve_marker(
     store: HyperGraphStore,
-    redis: Redis[bytes],
+    redis: Redis,
     silo_id: str,
     marker_id: str,
     resolution: str,
@@ -241,7 +241,7 @@ async def resolve_marker(
 
 async def dismiss_marker(
     store: HyperGraphStore,
-    redis: Redis[bytes],
+    redis: Redis,
     silo_id: str,
     marker_id: str,
     reason: str,
@@ -276,7 +276,7 @@ async def dismiss_marker(
 
 
 async def get_markers_for_about_set(
-    redis: Redis[bytes],
+    redis: Redis,
     silo_id: str,
     about_ids: list[str],
 ) -> list[str]:
@@ -397,7 +397,7 @@ async def get_marker_details(
 
 
 async def _index_marker(
-    redis: Redis[bytes],
+    redis: Redis,
     silo_id: str,
     marker_id: str,
     about_ids: list[str],
@@ -423,7 +423,7 @@ async def _index_marker(
 
 
 async def _deindex_marker(
-    redis: Redis[bytes],
+    redis: Redis,
     silo_id: str,
     marker_id: str,
     about_ids: list[str],
@@ -449,7 +449,7 @@ async def _deindex_marker(
 
 async def _transition_marker(
     store: HyperGraphStore,
-    redis: Redis[bytes],
+    redis: Redis,
     silo_id: str,
     marker_id: str,
     status: str,

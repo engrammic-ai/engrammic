@@ -19,8 +19,8 @@ from context_service.embeddings.rate_limit import (
 try:
     from context_service.embeddings.splade import SpladeEncoder, SpladeEncoderError
 except ImportError:
-    SpladeEncoder = None
-    SpladeEncoderError = None
+    SpladeEncoder = None  # type: ignore[misc,assignment]
+    SpladeEncoderError = None  # type: ignore[misc,assignment]
 from context_service.embeddings.tei_embeddings import (
     TEIEmbeddingError,
     TEIEmbeddingService,

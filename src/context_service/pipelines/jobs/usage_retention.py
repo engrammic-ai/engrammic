@@ -14,7 +14,6 @@ from typing import Any
 import structlog
 from dagster import job, op, schedule
 from sqlalchemy import delete
-from sqlalchemy.engine import CursorResult
 
 from context_service.config.settings import get_settings
 from context_service.db.postgres import get_session
@@ -38,11 +37,11 @@ def delete_old_usage(context) -> dict[str, object]:
 
     async def _delete() -> int:
         async with get_session() as session:
-            cursor: CursorResult[Any] = await session.execute(
+            cursor = await session.execute(
                 delete(ToolUsage).where(ToolUsage.called_at < cutoff)
             )
             await session.commit()
-            return cursor.rowcount
+            return cursor.rowcount or 0  # type: ignore[union-attr]
 
     deleted = asyncio.run(_delete())
     log.info("usage_retention_completed", deleted=deleted, retention_days=retention_days)

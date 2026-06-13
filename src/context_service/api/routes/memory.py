@@ -21,6 +21,8 @@ from context_service.mcp.server import get_context_service
 from context_service.reranking.query_classifier import is_hard_query
 from context_service.reranking.query_expander import QueryExpander
 from context_service.retrieval.fusion import FusionRetriever
+from uuid import UUID
+
 from context_service.sage.transactions import LinkType, store_claim, store_memory
 from context_service.sage.transactions import link as brain_link
 from context_service.services.models import ScopeContext
@@ -124,7 +126,7 @@ async def remember(
             store=store,
             content=request_body.content,
             silo_id=silo_id,
-            agent_id=session_id,
+            agent_id=session_id or "",
             layer="memory",
             tags=request_body.tags or None,
             content_type="text",
@@ -177,7 +179,7 @@ async def recall(
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail="Context service not available") from exc
 
-    scope = ScopeContext(org_id=x_silo_id or silo_id, silo_id=silo_id)
+    scope = ScopeContext(org_id=x_silo_id or silo_id, silo_id=UUID(silo_id))
 
     # Query expansion for hard queries (same logic as MCP recall)
     effective_query = request_body.query
@@ -294,7 +296,7 @@ async def learn(
             content=request_body.claim,
             evidence_refs=request_body.evidence,
             silo_id=silo_id,
-            agent_id=session_id,
+            agent_id=session_id or "",
             confidence=0.8,
             tags=request_body.tags or None,
         )

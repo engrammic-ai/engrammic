@@ -29,8 +29,8 @@ litellm.suppress_debug_info = True
 _llm_retry = retry(
     retry=retry_if_exception_type(
         (
-            litellm.RateLimitError,
-            litellm.ServiceUnavailableError,
+            litellm.RateLimitError,  # type: ignore[attr-defined]
+            litellm.ServiceUnavailableError,  # type: ignore[attr-defined]
         )
     ),
     stop=stop_after_attempt(3),

@@ -10,8 +10,9 @@ Headers:
 from __future__ import annotations
 
 import time
-import uuid
+import uuid as uuid_mod
 from datetime import UTC, datetime
+from uuid import UUID
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -151,7 +152,7 @@ async def reason(
         await create_or_join_session(store, resolved_session_id, silo_id)
         await saga.write_chain(
             chain_id=chain_id,
-            silo_id=silo_id,
+            silo_id=UUID(silo_id),
             steps=chain_steps,
             produced_by_model="unknown",
             produced_by_agent_id=produced_by_agent_id,

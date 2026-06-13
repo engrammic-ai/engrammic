@@ -403,7 +403,7 @@ def _register_health_check(broker: ListQueueBroker) -> None:
 
             settings = get_settings()
             async with AsyncRedis.from_url(settings.redis_url, socket_timeout=2) as r:
-                ping_result: bool = await r.ping()
+                ping_result: bool = await r.ping()  # type: ignore[misc]
                 redis_ok = bool(ping_result)
         except Exception as exc:
             logger.warning("health_check_redis_ping_failed", error=repr(exc))

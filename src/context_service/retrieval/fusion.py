@@ -165,11 +165,12 @@ class FusionRetriever:
         channel_results: list[ChannelResult] = []
         semantic_result: ChannelResult | None = None
         for i, name in enumerate(channel_names):
-            if isinstance(raw_results[i], Exception):
-                logger.warning(f"{name}_channel_error", error=str(raw_results[i]))
-                result = ChannelResult(name, [], 0.0, str(raw_results[i]))
+            raw = raw_results[i]
+            if isinstance(raw, BaseException):
+                logger.warning(f"{name}_channel_error", error=str(raw))
+                result = ChannelResult(name, [], 0.0, str(raw))
             else:
-                result = raw_results[i]
+                result = raw
             channel_results.append(result)
             if name == "semantic":
                 semantic_result = result

@@ -9,9 +9,10 @@ os.environ.setdefault("DISABLE_AIOHTTP_TRANSPORT", "true")
 
 import asyncio
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable, MutableMapping
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
+from typing import Any
 
 import asyncpg
 from fastapi import FastAPI, Request
@@ -109,8 +110,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 from context_service.db.custodian_queries import bootstrap_custodian_schema
                 from context_service.db.indexes import apply_all_indexes
 
-                await apply_all_indexes(memgraph_client)
-                await bootstrap_custodian_schema(memgraph_client)
+                await apply_all_indexes(memgraph_client)  # type: ignore[arg-type]
+                await bootstrap_custodian_schema(memgraph_client)  # type: ignore[arg-type]
                 logger.info("memgraph_schema_applied")
             except Exception as exc:
                 logger.error("memgraph_schema_failed", error=str(exc))
@@ -424,10 +425,15 @@ def create_app() -> ASGIApp:
         def __init__(self, wrapped_app: ASGIApp) -> None:
             self.app = wrapped_app
 
-        async def __call__(self, scope: dict[str, object], receive: object, send: object) -> None:
+        async def __call__(
+            self,
+            scope: MutableMapping[str, Any],
+            receive: Callable[[], Awaitable[MutableMapping[str, Any]]],
+            send: Callable[[MutableMapping[str, Any]], Awaitable[None]],
+        ) -> None:
             if scope["type"] == "http" and scope.get("path") == "/mcp":
                 scope = dict(scope)
                 scope["path"] = "/mcp/"
-            await self.app(scope, receive, send)
+            await self.app(scope, receive, send)  # type: ignore[arg-type]
 
-    return MCPPathNormalizer(app)
+    return MCPPathNormalizer(app)  # type: ignore[return-value]

@@ -322,8 +322,10 @@ async def process_llm_candidates(
         # are stored under co_occurrence as the closest structural fit so they
         # use the existing Cypher schema without a schema change.
         infra_type: PatternType
-        if classification.pattern_type in ("temporal_correlation", "co_occurrence", "causal_chain"):
-            infra_type = classification.pattern_type
+        if classification.pattern_type == "temporal_correlation":
+            infra_type = "temporal_correlation"
+        elif classification.pattern_type == "causal_chain":
+            infra_type = "causal_chain"
         else:
             infra_type = "co_occurrence"
 

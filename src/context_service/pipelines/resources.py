@@ -67,7 +67,7 @@ def _build_embedding_service() -> EmbeddingService:
     return build_embedding_service()
 
 
-class PostgresResource(dg.ConfigurableResource):
+class PostgresResource(dg.ConfigurableResource):  # type: ignore[type-arg]
     """Wraps asyncpg connection pool for Dagster jobs.
 
     Uses asyncio.run() to create pool in sync context. This works because Dagster
@@ -114,7 +114,7 @@ class PostgresResource(dg.ConfigurableResource):
             _close_async(pool.close)
 
 
-class MemgraphResource(dg.ConfigurableResource):
+class MemgraphResource(dg.ConfigurableResource):  # type: ignore[type-arg]
     """Wraps context_service.stores.memgraph.create_memgraph_driver.
 
     Asset bodies call `await resource.driver()` inside an async context, or
@@ -159,7 +159,7 @@ class MemgraphResource(dg.ConfigurableResource):
             _close_async(driver.close)
 
 
-class RedisResource(dg.ConfigurableResource):
+class RedisResource(dg.ConfigurableResource):  # type: ignore[type-arg]
     """Wraps context_service.stores.redis.create_redis_pool."""
 
     url: str
@@ -186,7 +186,7 @@ class RedisResource(dg.ConfigurableResource):
             _close_async(client.aclose)
 
 
-class QdrantResource(dg.ConfigurableResource):
+class QdrantResource(dg.ConfigurableResource):  # type: ignore[type-arg]
     """Holds Qdrant config. Asset bodies build AsyncQdrantClient on demand."""
 
     url: str
@@ -230,7 +230,7 @@ class QdrantResource(dg.ConfigurableResource):
             _close_async(client.close)
 
 
-class LLMResource(dg.ConfigurableResource):
+class LLMResource(dg.ConfigurableResource):  # type: ignore[type-arg]
     """Dispatches to an LLMProvider implementation based on `provider`.
 
     Supported values: "anthropic", "gemini", "openai", "vertex_gemini".
@@ -255,7 +255,7 @@ class LLMResource(dg.ConfigurableResource):
             _close_async(llm.close)
 
 
-class EmbeddingResource(dg.ConfigurableResource):
+class EmbeddingResource(dg.ConfigurableResource):  # type: ignore[type-arg]
     """Loads EmbeddingService from config/embeddings.yaml."""
 
     _service: EmbeddingService | None = PrivateAttr(default=None)
@@ -272,7 +272,7 @@ class EmbeddingResource(dg.ConfigurableResource):
             _close_async(svc.close)
 
 
-def build_default_resources() -> dict[str, dg.ConfigurableResource]:
+def build_default_resources() -> dict[str, dg.ConfigurableResource]:  # type: ignore[type-arg]
     """Constructs the standard resource dict for Definitions(resources=...).
 
     All values sourced from context_service.config.settings.get_settings().

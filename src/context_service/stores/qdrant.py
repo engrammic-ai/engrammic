@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Sequence
 
 from opentelemetry import trace
 from qdrant_client import AsyncQdrantClient
@@ -362,6 +362,7 @@ class QdrantClient:
                 if self._hybrid_mode:
                     point_vector: Any = {DENSE_VECTOR_NAME: vector}
                     if has_sparse:
+                        assert sparse_indices is not None and sparse_values is not None
                         point_vector[SPARSE_VECTOR_NAME] = models.SparseVector(
                             indices=sparse_indices,
                             values=sparse_values,
@@ -460,7 +461,7 @@ class QdrantClient:
         """
         client = await self._get_client()
 
-        must_conditions: list[models.FieldCondition] = []
+        must_conditions: list[models.FieldCondition | models.IsEmptyCondition | models.IsNullCondition | models.HasIdCondition | models.HasVectorCondition | models.NestedCondition | models.Filter] = []
         if silo_id is not None:
             must_conditions.append(
                 models.FieldCondition(
@@ -494,6 +495,7 @@ class QdrantClient:
                         raise QdrantOperationError(
                             "sparse_indices and sparse_values are required for sparse mode"
                         )
+                    assert sparse_indices is not None and sparse_values is not None
                     response = await client.query_points(
                         collection_name=self._collection_name,
                         query=models.SparseVector(
@@ -506,6 +508,8 @@ class QdrantClient:
                         query_filter=query_filter,
                     )
                 elif effective_mode == "hybrid":
+                    # hybrid mode guaranteed to have sparse by earlier check
+                    assert sparse_indices is not None and sparse_values is not None
                     response = await client.query_points(
                         collection_name=self._collection_name,
                         prefetch=[

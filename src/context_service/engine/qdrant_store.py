@@ -340,6 +340,7 @@ class EngineQdrantStore:
                     raise ValueError(
                         "sparse_indices and sparse_values are required for sparse mode"
                     )
+                assert sparse_indices is not None and sparse_values is not None
                 response = await client.query_points(
                     collection_name=collection,
                     query=SparseVector(
@@ -353,6 +354,8 @@ class EngineQdrantStore:
                 )
             else:
                 # Hybrid: RRF fusion over dense + sparse prefetch legs.
+                # effective_mode == "hybrid" guaranteed by fallback logic above
+                assert sparse_indices is not None and sparse_values is not None
                 response = await client.query_points(
                     collection_name=collection,
                     prefetch=[

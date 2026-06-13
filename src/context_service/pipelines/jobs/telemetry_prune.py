@@ -8,7 +8,12 @@ import concurrent.futures
 import dagster as dg
 
 
-def _run_async(coro_fn):
+from typing import Any, Callable, TypeVar
+
+_T = TypeVar("_T")
+
+
+def _run_async(coro_fn: Callable[[], Any]) -> Any:
     """Run async function, handling both sync and async contexts."""
     try:
         asyncio.get_running_loop()
@@ -37,7 +42,7 @@ def prune_service_metrics(context) -> int:
                 count = int(result.split()[-1]) if result else 0
                 return count
 
-    deleted = _run_async(_run)
+    deleted: int = _run_async(_run)
     context.log.info(f"prune_service_metrics: deleted={deleted}")
     return deleted
 
@@ -56,7 +61,7 @@ def prune_service_errors(context) -> int:
                 count = int(result.split()[-1]) if result else 0
                 return count
 
-    deleted = _run_async(_run)
+    deleted: int = _run_async(_run)
     context.log.info(f"prune_service_errors: deleted={deleted}")
     return deleted
 
@@ -77,7 +82,7 @@ def prune_service_gauges(context) -> int:
                 count = int(result.split()[-1]) if result else 0
                 return count
 
-    deleted = _run_async(_run)
+    deleted: int = _run_async(_run)
     context.log.info(f"prune_service_gauges: deleted={deleted}")
     return deleted
 
@@ -98,7 +103,7 @@ def prune_beacon_events(context) -> int:
                 count = int(result.split()[-1]) if result else 0
                 return count
 
-    deleted = _run_async(_run)
+    deleted: int = _run_async(_run)
     context.log.info(f"prune_beacon_events: deleted={deleted}")
     return deleted
 

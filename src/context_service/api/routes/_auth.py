@@ -60,7 +60,7 @@ async def get_silo_context(
             raise HTTPException(status_code=400, detail="X-Silo-ID header is required")
         if require_session and not x_session_id:
             raise HTTPException(status_code=400, detail="X-Session-ID header is required")
-        silo_id = x_silo_id
+        silo_id: str = x_silo_id
         session_id = x_session_id
 
     return str(derive_silo_id(silo_id)), session_id

@@ -161,16 +161,19 @@ class TestResolutionResponse(BaseModel):
 
 def _row_to_response(row: object) -> SourceRuleResponse:
     """Convert a SQLAlchemy Row to SourceRuleResponse."""
+    from typing import Any, Sequence, cast
+
+    r = cast(Sequence[Any], row)
     return SourceRuleResponse(
-        id=str(row[0]),
-        silo_id=str(row[1]) if row[1] is not None else None,
-        pattern=row[2],
-        tier=row[3],
-        reason=row[4],
-        priority=row[5],
-        created_at=row[6],
-        created_by=row[7],
-        source="global" if row[1] is None else "silo",
+        id=str(r[0]),
+        silo_id=str(r[1]) if r[1] is not None else None,
+        pattern=r[2],
+        tier=r[3],
+        reason=r[4],
+        priority=r[5],
+        created_at=r[6],
+        created_by=r[7],
+        source="global" if r[1] is None else "silo",
     )
 
 

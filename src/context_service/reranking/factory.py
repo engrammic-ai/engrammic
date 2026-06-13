@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from context_service.config import get_settings
 from context_service.reranking.reranker import LiteLLMReranker
 from context_service.reranking.tei_reranker import TEIReranker
 
@@ -31,10 +32,12 @@ def get_reranker(
         return None
 
     if spec.provider == "tei":
-        if not spec.url:
-            raise ValueError("TEI reranker requires 'url' field in ModelSpec")
+        settings = get_settings()
+        url = spec.url or settings.reranker_url or settings.tei_reranker_url
+        if not url:
+            raise ValueError("TEI reranker requires 'url' in ModelSpec or RERANKER_URL/TEI_RERANKER_URL env var")
         return TEIReranker(
-            base_url=spec.url,
+            base_url=url,
             timeout_seconds=timeout_seconds,
         )
 

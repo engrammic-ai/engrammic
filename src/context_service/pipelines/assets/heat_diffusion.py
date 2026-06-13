@@ -58,7 +58,7 @@ def heat_diffusion_asset(
         from context_service.stores import MemgraphClient
 
         driver = await memgraph.driver()
-        store: HyperGraphStore = MemgraphClient(driver)
+        store = MemgraphClient(driver)
 
         with tracer.start_as_current_span("heat_diffusion") as span:
             span.set_attribute("silo_id", silo_id)

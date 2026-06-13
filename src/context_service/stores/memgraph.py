@@ -152,7 +152,9 @@ class MemgraphClient:
                         )
                         continue
             else:
-                raise last_err
+                if last_err is not None:
+                    raise last_err
+                raise RuntimeError("Transaction failed without capturing error")
             try:
                 yield tx
             except Exception:

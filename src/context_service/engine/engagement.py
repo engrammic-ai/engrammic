@@ -143,7 +143,7 @@ def _get_decision_required(marker_type: str) -> str:
 
 
 async def get_engagement_for_about_set(
-    redis: Redis[bytes],
+    redis: Redis,
     store: HyperGraphStore,
     silo_id: str,
     about_ids: list[str],
@@ -256,7 +256,7 @@ async def get_engagement_for_about_set(
 
 
 async def get_engagement_for_silo(
-    redis: Redis[bytes],  # noqa: ARG001
+    redis: Redis,  # noqa: ARG001
     store: HyperGraphStore,
     silo_id: str,
 ) -> dict[str, Any] | None:

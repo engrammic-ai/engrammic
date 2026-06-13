@@ -199,7 +199,7 @@ tiers:
       model: gemma4:12b
 
   # Standalone pro - high-quality offline deployment
-  # Requires: Ollama (gemma4:26b), TEI (nomic-embed + jina-reranker), 48-64GB RAM
+  # Requires: Ollama (gemma4:26b), TEI (nomic-embed + bge-reranker), 48-64GB RAM
   standalone_pro:
     embeddings:
       provider: tei
@@ -213,7 +213,7 @@ tiers:
       model: gemma4:12b
     reranker:
       provider: tei
-      model: jinaai/jina-reranker-v2-base-multilingual
+      model: BAAI/bge-reranker-v2-m3
       url: http://tei-reranker:8080
     query_expander:
       provider: ollama

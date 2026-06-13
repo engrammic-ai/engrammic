@@ -74,11 +74,11 @@ def _chains_reasoning_compatible(
     # as a separate column (conclusion_embedding) or within each step dict.
     if chain_a.steps:
         steps_a = [
-            s.get("embedding") for s in chain_a.steps if isinstance(s, dict) and s.get("embedding")
+            s["embedding"] for s in chain_a.steps if isinstance(s, dict) and s.get("embedding")
         ]
     if chain_b.steps:
         steps_b = [
-            s.get("embedding") for s in chain_b.steps if isinstance(s, dict) and s.get("embedding")
+            s["embedding"] for s in chain_b.steps if isinstance(s, dict) and s.get("embedding")
         ]
 
     if not steps_a or not steps_b:

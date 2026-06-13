@@ -46,7 +46,7 @@ def rate_limited(tool_name: str) -> Callable[[F], F]:
             await _check_rate_limit(auth, tool_name)
             return await func(*args, **kwargs)
 
-        return wrapper
+        return wrapper  # type: ignore[return-value]
 
     return decorator
 

@@ -69,10 +69,12 @@ def _ensure_partition_exists(context: dg.SensorEvaluationContext, silo_id: str) 
     from context_service.pipelines.partitions import silo_partitions
 
     with contextlib.suppress(Exception):
-        context.instance.add_dynamic_partitions(
-            partitions_def_name=silo_partitions.name,
-            partition_keys=[silo_id],
-        )
+        partition_name = silo_partitions.name
+        if partition_name is not None:
+            context.instance.add_dynamic_partitions(
+                partitions_def_name=partition_name,
+                partition_keys=[silo_id],
+            )
 
 
 @dg.sensor(

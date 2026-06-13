@@ -60,10 +60,13 @@ class Events(Base):
     ) -> None:
         super().__init__(**kw)
         self.id = uuid4()
-        self.silo_id = silo_id
+        self.silo_id = silo_id if isinstance(silo_id, UUID) else UUID(silo_id)
         self.event_type = event_type
         self.content = content
-        self.source_chain_id = source_chain_id
+        self.source_chain_id = (
+            source_chain_id if source_chain_id is None or isinstance(source_chain_id, UUID)
+            else UUID(source_chain_id)
+        )
         self.agent_id = agent_id
         self.step_count = step_count
         self.outcome = outcome
@@ -101,7 +104,7 @@ class AuditEvents(Base):
     ) -> None:
         super().__init__(**kw)
         self.id = uuid4()
-        self.silo_id = silo_id
+        self.silo_id = silo_id if isinstance(silo_id, UUID) else UUID(silo_id)
         self.event_type = event_type
         self.actor_id = actor_id
         self.actor_type = actor_type

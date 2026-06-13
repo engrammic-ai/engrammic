@@ -49,7 +49,7 @@ _RATE_KEY_TEMPLATE = "auto_reflect:rate:{silo_id}"
 _RATE_WINDOW_SECONDS = 3600
 
 
-async def check_rate_limit(redis: Redis[bytes], silo_id: str) -> bool:
+async def check_rate_limit(redis: Redis, silo_id: str) -> bool:
     """Return ``True`` when the silo is within its hourly reflection budget.
 
     Increments the rolling counter and returns ``False`` (budget exhausted) if
@@ -114,7 +114,7 @@ def compute_reflection_suggested(results: list[dict[str, Any]]) -> bool:
 
 async def maybe_trigger_confidence_shift(
     store: HyperGraphStore,
-    redis: Redis[bytes] | None,
+    redis: Redis | None,
     silo_id: str,
     node_id: str,
     confidence_before: float,
@@ -167,7 +167,7 @@ async def maybe_trigger_confidence_shift(
 
 async def maybe_trigger_contradiction(
     store: HyperGraphStore,
-    redis: Redis[bytes] | None,
+    redis: Redis | None,
     silo_id: str,
     new_node_id: str,
     contradicted_node_id: str,

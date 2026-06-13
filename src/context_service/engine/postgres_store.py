@@ -8,7 +8,6 @@ from uuid import UUID
 
 from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.engine import CursorResult
 
 from context_service.db.postgres import get_session
 from context_service.models.postgres.org import OrgPreferences, SiloConfig
@@ -66,10 +65,10 @@ class PostgresStore:
                     index_elements=["chain_id"],
                     set_={"steps": stmt.excluded.steps},
                 )
-                result: CursorResult[Any] = await session.execute(stmt)
-                if result.rowcount != 1:
+                result = await session.execute(stmt)
+                if result.rowcount != 1:  # type: ignore[union-attr]
                     raise RuntimeError(
-                        f"upsert_chain_steps expected rowcount=1, got {result.rowcount} "
+                        f"upsert_chain_steps expected rowcount=1, got {result.rowcount} "  # type: ignore[union-attr]
                         f"for chain_id={chain_id}"
                     )
         finally:
@@ -95,8 +94,8 @@ class PostgresStore:
         try:
             async with get_session() as session:
                 stmt = delete(ReasoningChainSteps).where(ReasoningChainSteps.chain_id == chain_id)
-                result: CursorResult[Any] = await session.execute(stmt)
-                return result.rowcount > 0
+                result = await session.execute(stmt)
+                return bool(result.rowcount and result.rowcount > 0)
         finally:
             record_db_query("postgres.delete_chain_steps", (time.perf_counter() - start) * 1000)
 
@@ -135,10 +134,10 @@ class PostgresStore:
                         "last_error": error,
                     },
                 )
-                result: CursorResult[Any] = await session.execute(stmt)
-                if result.rowcount != 1:
+                result = await session.execute(stmt)
+                if result.rowcount != 1:  # type: ignore[union-attr]
                     raise RuntimeError(
-                        f"add_orphaned_chain expected rowcount=1, got {result.rowcount} "
+                        f"add_orphaned_chain expected rowcount=1, got {result.rowcount} "  # type: ignore[union-attr]
                         f"for chain_id={chain_id}"
                     )
         finally:

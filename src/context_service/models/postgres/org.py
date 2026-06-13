@@ -37,7 +37,7 @@ class OrgPreferences(Base):
         **kw: Any,
     ) -> None:
         super().__init__(**kw)
-        self.org_id = org_id
+        self.org_id = org_id if isinstance(org_id, UUID) else UUID(org_id)
         self.default_llm = default_llm
         self.embedding_model = embedding_model
         self.settings = settings if settings is not None else {}
@@ -72,8 +72,8 @@ class SiloConfig(Base):
         **kw: Any,
     ) -> None:
         super().__init__(**kw)
-        self.silo_id = silo_id
-        self.org_id = org_id
+        self.silo_id = silo_id if isinstance(silo_id, UUID) else UUID(silo_id)
+        self.org_id = org_id if isinstance(org_id, UUID) else UUID(org_id)
         self.name = name
         self.quotas = quotas if quotas is not None else {}
         self.feature_flags = feature_flags if feature_flags is not None else {}

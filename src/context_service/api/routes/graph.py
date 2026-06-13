@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -48,7 +49,7 @@ class GraphNodeResponse(BaseModel):
     tags: list[str] = Field(default_factory=list)
     created_at: str
     updated_at: str
-    metadata: dict | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class GraphEdgeResponse(BaseModel):
@@ -56,7 +57,7 @@ class GraphEdgeResponse(BaseModel):
     source: str
     target: str
     type: str
-    metadata: dict | None = None
+    metadata: dict[str, Any] | None = None
 
 
 class NeighborhoodResponse(BaseModel):
@@ -94,7 +95,7 @@ class SearchResponse(BaseModel):
     results: list[SearchResultItem]
 
 
-def _node_to_response(node) -> GraphNodeResponse:
+def _node_to_response(node: Any) -> GraphNodeResponse:
     tags = node.properties.get("tags", []) if hasattr(node, "properties") else []
     if isinstance(tags, str):
         tags = [tags]
@@ -113,7 +114,7 @@ def _node_to_response(node) -> GraphNodeResponse:
     )
 
 
-def _edge_to_response(edge) -> GraphEdgeResponse:
+def _edge_to_response(edge: Any) -> GraphEdgeResponse:
     return GraphEdgeResponse(
         id=str(edge.id),
         source=str(edge.source_id),

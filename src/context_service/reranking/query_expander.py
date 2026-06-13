@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -178,7 +178,9 @@ class QueryExpander:
                     await asyncio.sleep(RETRY_DELAY)
                     continue
                 raise
-        raise last_error
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("Query expansion failed without capturing error")
 
     async def _expand_with_genai(self, prompt: str) -> tuple[str, int, int]:
         """Expand using google-genai SDK (for Gemini models).
@@ -192,7 +194,7 @@ class QueryExpander:
         logger.debug("genai_expand_start", model=self._model, prompt_len=len(prompt))
         loop = asyncio.get_running_loop()
 
-        def _generate(c: object = client) -> object:
+        def _generate(c: Any = client) -> Any:
             gen_start = time.monotonic()
             result = c.models.generate_content(
                 model=self._model,
@@ -212,7 +214,7 @@ class QueryExpander:
         usage = getattr(response, "usage_metadata", None)
         input_tokens = getattr(usage, "prompt_token_count", 0) or 0 if usage else 0
         output_tokens = getattr(usage, "candidates_token_count", 0) or 0 if usage else 0
-        return response.text or "", input_tokens, output_tokens
+        return str(response.text) if response.text else "", input_tokens, output_tokens
 
     async def _expand_with_litellm(self, prompt: str) -> tuple[str, int, int]:
         """Expand using litellm (for non-Gemini models).

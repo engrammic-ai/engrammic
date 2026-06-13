@@ -45,7 +45,7 @@ async def enqueue_failed_delete(silo_id: str, node_id: str, error: str) -> None:
         "error": error,
         "created_at": datetime.now(UTC).isoformat(),
     }
-    await redis.lpush(DEAD_LETTER_KEY, json.dumps(entry))
+    await redis.lpush(DEAD_LETTER_KEY, json.dumps(entry))  # type: ignore[misc]
     logger.warning("enqueued_dead_letter", silo_id=silo_id, node_id=node_id)
 
 
@@ -54,7 +54,7 @@ async def dequeue_failed_deletes(batch_size: int = 100) -> list[dict[str, str]]:
     redis = await _get_redis()
     entries: list[dict[str, str]] = []
     for _ in range(batch_size):
-        raw = await redis.rpop(DEAD_LETTER_KEY)
+        raw = await redis.rpop(DEAD_LETTER_KEY)  # type: ignore[misc]
         if raw is None:
             break
         entries.append(json.loads(raw))
