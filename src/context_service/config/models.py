@@ -174,6 +174,7 @@ def load_models_config() -> ModelsConfig:
         "economy",
         "balanced",
         "premium",
+        "beta",
         "hybrid",
         "self_hosted",
         "self_hosted_budget",
