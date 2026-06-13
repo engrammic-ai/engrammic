@@ -3,7 +3,7 @@
 from components.beacon import BeaconServiceRun
 from components.cloudrun import ContextServiceRun
 from components.cloudsql import CloudSQLPostgres
-from components.compute import StatefulHost
+from components.compute import StatefulHost, TEIHost
 from components.dns import InternalDNS
 from components.iam import IAMStack
 from components.metabase import MetabaseRun
@@ -24,4 +24,5 @@ __all__ = [
     "SecretsStack",
     "StatefulHost",
     "StorageStack",
+    "TEIHost",
 ]

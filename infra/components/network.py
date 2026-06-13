@@ -123,6 +123,18 @@ class NetworkStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self),
         )
 
+        # TEI subnet in europe-west1 (T4 GPUs available)
+        tei_region = config.get("tei_region") or "europe-west1"
+        self.tei_subnet = compute.Subnetwork(
+            f"{name}-tei-subnet",
+            name=f"engrammic-{env}-tei",
+            ip_cidr_range="10.0.4.0/24",
+            region=tei_region,
+            network=self.vpc.id,
+            private_ip_google_access=True,
+            opts=pulumi.ResourceOptions(parent=self),
+        )
+
         # Private services access for Cloud SQL
         self.private_ip_range = compute.GlobalAddress(
             f"{name}-private-ip-range",
@@ -147,5 +159,6 @@ class NetworkStack(pulumi.ComponentResource):
                 "vpc_id": self.vpc.id,
                 "private_subnet_id": self.private_subnet.id,
                 "connector_subnet_id": self.vpc_connector.id,
+                "tei_subnet_id": self.tei_subnet.id,
             }
         )

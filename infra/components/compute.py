@@ -417,3 +417,104 @@ echo "Stateful host ready"
                 "health_check_id": self.health_check.id,
             }
         )
+
+
+class TEIHost(pulumi.ComponentResource):
+    """GCE instance with T4 GPU for TEI (Text Embeddings Inference)."""
+
+    def __init__(
+        self,
+        name: str,
+        network: compute.Network,
+        subnet: compute.Subnetwork,
+        service_account_email: str,
+        model_id: str = "Qwen/Qwen3-Embedding-4B",
+        opts: pulumi.ResourceOptions | None = None,
+    ):
+        super().__init__("engrammic:compute:TEIHost", name, None, opts)
+
+        config = pulumi.Config()
+        env = config.require("environment")
+        zone = config.get("tei_zone") or "europe-west1-b"
+
+        startup_script = f"""#!/bin/bash
+set -e
+
+# Install GPU drivers (COS has built-in support)
+cos-extensions install gpu
+
+# Wait for driver installation
+sleep 10
+
+# Mount nvidia driver libraries
+mount --bind /var/lib/nvidia /var/lib/nvidia
+mount -o remount,exec /var/lib/nvidia
+
+# Create cache directory
+mkdir -p /var/lib/tei-cache
+
+# Run TEI with GPU
+docker run -d --name tei \\
+  --device /dev/nvidia0:/dev/nvidia0 \\
+  --device /dev/nvidiactl:/dev/nvidiactl \\
+  --device /dev/nvidia-uvm:/dev/nvidia-uvm \\
+  --device /dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools \\
+  -v /var/lib/nvidia/lib64:/usr/local/nvidia/lib64 \\
+  -e LD_LIBRARY_PATH=/usr/local/nvidia/lib64 \\
+  -p 8080:80 \\
+  -v /var/lib/tei-cache:/data \\
+  -e HF_HUB_ENABLE_HF_TRANSFER=1 \\
+  --restart unless-stopped \\
+  ghcr.io/huggingface/text-embeddings-inference:turing-1.7 \\
+  --model-id {model_id} \\
+  --pooling cls \\
+  --max-client-batch-size 32
+
+echo "TEI host ready"
+"""
+
+        self.instance = compute.Instance(
+            f"{name}-instance",
+            name=f"engrammic-{env}-tei",
+            machine_type="n1-standard-4",
+            zone=zone,
+            boot_disk=compute.InstanceBootDiskArgs(
+                initialize_params=compute.InstanceBootDiskInitializeParamsArgs(
+                    image="cos-cloud/cos-stable",
+                    size=50,
+                    type="pd-balanced",
+                ),
+            ),
+            guest_accelerators=[
+                compute.InstanceGuestAcceleratorArgs(
+                    type="nvidia-tesla-t4",
+                    count=1,
+                )
+            ],
+            scheduling=compute.InstanceSchedulingArgs(
+                on_host_maintenance="TERMINATE",
+                automatic_restart=True,
+            ),
+            network_interfaces=[
+                compute.InstanceNetworkInterfaceArgs(
+                    network=network.id,
+                    subnetwork=subnet.id,
+                )
+            ],
+            service_account=compute.InstanceServiceAccountArgs(
+                email=service_account_email,
+                scopes=["cloud-platform"],
+            ),
+            metadata_startup_script=startup_script,
+            tags=["tei-server"],
+            allow_stopping_for_update=True,
+            opts=pulumi.ResourceOptions(parent=self),
+        )
+
+        self.register_outputs(
+            {
+                "instance_id": self.instance.id,
+                "instance_name": self.instance.name,
+                "internal_ip": self.instance.network_interfaces[0].network_ip,
+            }
+        )
