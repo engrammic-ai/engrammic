@@ -1605,6 +1605,15 @@ class Settings(BaseSettings):
     )
 
     # =========================================================================
+    # Wisdom/Intelligence Activation
+    # =========================================================================
+
+    recall_hints_enabled: bool = Field(
+        default=False,
+        description="Enable recall hints for wisdom/intelligence layer suggestions",
+    )
+
+    # =========================================================================
     # tick() engagement
     # =========================================================================
 

@@ -4,14 +4,23 @@
 from __future__ import annotations
 
 import time
+import uuid
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
+import structlog
+
+from context_service.db import queries as q
 from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.rate_limit import rate_limited
-from context_service.mcp.server import get_context_service, get_mcp_auth_context, track_tool_usage
+from context_service.mcp.server import (
+    get_context_service,
+    get_mcp_auth_context,
+    get_postgres_store,
+    track_tool_usage,
+)
 from context_service.mcp.tools.coerce import coerce_list
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.reactions.events import emit_reaction
@@ -19,6 +28,8 @@ from context_service.sage.transactions import InvariantViolation
 from context_service.sage.transactions import commit as tx_commit
 from context_service.services.models import derive_silo_id
 from context_service.telemetry.metrics import record_belief_confidence, record_mcp_tool
+
+logger = structlog.get_logger()
 
 
 @rate_limited("decide")
@@ -41,7 +52,8 @@ async def _decide_impl(
     if not about:
         return {"error": "missing_about", "message": "about must reference at least one node"}
 
-    silo_id = str(derive_silo_id(auth.org_id))
+    silo_uuid = derive_silo_id(auth.org_id)
+    silo_id = str(silo_uuid)
     ctx_svc = get_context_service()
     agent_id = auth.agent_id or auth.org_id
 
@@ -70,6 +82,68 @@ async def _decide_impl(
 
         record_belief_confidence(confidence, silo_id=silo_id)
 
+        # Auto-create ReasoningChain when reasoning is provided (supplementary).
+        # Commitment is always the primary artifact - chain failure does not block.
+        chain_id: uuid.UUID | None = None
+        if reasoning:
+            from context_service.engine.chain_saga import ChainSagaWriter
+            from context_service.models.inference import ChainStep
+
+            chain_id = uuid.uuid4()
+            saga = ChainSagaWriter(get_postgres_store(), ctx_svc.graph_store)
+
+            try:
+                await saga.write_chain(
+                    chain_id=chain_id,
+                    silo_id=silo_uuid,
+                    steps=[
+                        ChainStep(
+                            step_index=0,
+                            operation="decide",
+                            conclusion=reasoning,
+                            confidence=confidence,
+                            premise_refs=about,
+                        )
+                    ],
+                    produced_by_model="agent",
+                    produced_by_agent_id=agent_id,
+                    status="committed",
+                    source="decide_reasoning",
+                    conclusion=decision,
+                    evidence_used=about,
+                )
+
+                # Link chain to commitment in the graph.
+                await ctx_svc.graph_store.execute_write(
+                    q.LINK_CHAIN_TO_COMMITMENT,
+                    {
+                        "chain_id": str(chain_id),
+                        "commitment_id": str(result.commitment_id),
+                        "silo_id": silo_id,
+                    },
+                )
+
+                # Embed chain conclusion for recall-time surfacing.
+                from context_service.mcp.tools.context_store import (
+                    _upsert_chain_embedding,
+                    embed,
+                )
+
+                try:
+                    conclusion_embedding = await embed(decision)
+                    await _upsert_chain_embedding(
+                        chain_id,
+                        silo_id,
+                        conclusion_embedding,
+                        evidence_used=about,
+                    )
+                except Exception:
+                    logger.warning("decide_chain_embedding_failed", chain_id=str(chain_id))
+
+            except Exception as exc:
+                logger.warning("decide_chain_write_failed", error=str(exc))
+                chain_id = None
+
         response: dict[str, Any] = {
             "commitment_id": str(result.commitment_id),
             "created_at": result.created_at.isoformat(),
@@ -77,6 +151,8 @@ async def _decide_impl(
         }
         if supersedes:
             response["supersedes"] = supersedes
+        if chain_id:
+            response["chain_id"] = str(chain_id)
         return response
 
     except InvariantViolation as e:
@@ -114,7 +190,7 @@ def register(mcp: FastMCP) -> None:
             supersedes: Node ID this decision replaces. Creates version chain.
 
         Returns:
-            {commitment_id, created_at, confidence, supersedes?}
+            {commitment_id, created_at, confidence, supersedes?, chain_id?}
         """
         start = time.perf_counter()
         success = True

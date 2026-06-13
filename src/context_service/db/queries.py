@@ -121,6 +121,22 @@ RETURN cluster.id AS cluster_id,
        cluster.current_belief_id AS current_belief_id
 """
 
+# Extended version of GET_CLUSTERS_FOR_NODES that also returns fact_count and
+# a sample of fact_ids. Used by belief candidate hint detection to determine
+# whether a cluster has enough corroborating facts to suggest belief formation.
+GET_CLUSTERS_FOR_NODES_WITH_FACTS = """
+MATCH (n {silo_id: $silo_id})-[:MEMBER_OF]->(cluster:Cluster)
+WHERE n.id IN $node_ids
+WITH cluster, collect(n.id) AS matching_ids
+OPTIONAL MATCH (f:Fact {silo_id: $silo_id})-[:MEMBER_OF]->(cluster)
+WITH cluster, matching_ids, collect(f.id) AS all_fact_ids
+RETURN cluster.id AS cluster_id,
+       cluster.state AS state,
+       cluster.current_belief_id AS current_belief_id,
+       size(all_fact_ids) AS fact_count,
+       all_fact_ids[0..5] AS fact_ids
+"""
+
 # Cluster CRUD queries
 CREATE_CLUSTER = """
 CREATE (c:Cluster {
@@ -1296,6 +1312,15 @@ RETURN c
 """
 
 # --- Crystallization edges (Intelligence -> Knowledge) ---
+
+# Link a ReasoningChain to a Commitment (Wisdom layer).
+# Used by decide() when a reasoning parameter is provided to attach
+# the auto-created chain to the resulting Commitment node.
+LINK_CHAIN_TO_COMMITMENT = """
+MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})
+MATCH (c:Commitment {id: $commitment_id, silo_id: $silo_id})
+MERGE (chain)-[:CRYSTALLIZED_INTO]->(c)
+"""
 
 CREATE_CRYSTALLIZES_EDGE = """
 MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})

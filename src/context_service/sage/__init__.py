@@ -12,7 +12,9 @@ from context_service.sage.confidence import (
 )
 from context_service.sage.recall import (
     Layer,
+    RecallHint,
     RecallOptions,
+    RecallResponse,
     RecallResult,
     RecallResultItem,
     RelatedNode,
@@ -60,6 +62,8 @@ from context_service.sage.transactions import (
 
 __all__ = [
     # Results
+    "RecallHint",
+    "RecallResponse",
     "RecallResult",
     "RecallResultItem",
     "RelatedNode",

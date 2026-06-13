@@ -109,6 +109,157 @@ class RecallResult:
     has_unresolved_conflicts: bool = False
 
 
+@dataclass
+class RecallHint:
+    """Hint suggesting an action based on recall results."""
+
+    hint_type: str  # "belief_candidate" | "chain_continuation" | "stale_commitment"
+    message: str
+    node_ids: list[str] = field(default_factory=list)
+    suggested_action: str | None = None  # e.g. "decide(about=[...])"
+
+
+@dataclass
+class RecallResponse:
+    """Extended recall response with hints.
+
+    Superset of RecallResult, adding an optional hints list for wisdom/intelligence
+    layer suggestions surfaced during retrieval.
+    """
+
+    results: list[RecallResultItem]
+    hints: list[RecallHint] = field(default_factory=list)
+    total_candidates: int = 0
+    synthesis_pending: bool = False
+    query_time_ms: float = 0.0
+    has_unresolved_conflicts: bool = False
+
+
+async def _detect_belief_candidates(
+    store: HyperGraphStore,
+    results: list[RecallResultItem],
+    silo_id: str,
+) -> list[RecallHint]:
+    """Detect when facts cluster enough to suggest belief formation.
+
+    Returns hints when 3+ knowledge-layer results share a cluster that lacks
+    an existing belief and is not already queued for lazy synthesis.
+    """
+    from context_service.db import queries as q
+
+    hints: list[RecallHint] = []
+
+    knowledge_results = [r for r in results if r.layer == Layer.KNOWLEDGE]
+    if len(knowledge_results) < 3:
+        return hints
+
+    cluster_result = await store.execute_query(
+        q.GET_CLUSTERS_FOR_NODES_WITH_FACTS,
+        {"silo_id": silo_id, "node_ids": [r.node_id for r in knowledge_results]},
+    )
+
+    for cluster in cluster_result:
+        fact_count = cluster.get("fact_count", 0)
+        has_belief = cluster.get("current_belief_id") is not None
+
+        # Skip clusters already queued for lazy synthesis to avoid redundant hints
+        cluster_state = cluster.get("state")
+        if cluster_state in ("READY", "STALE"):
+            continue
+
+        if fact_count >= 3 and not has_belief:
+            fact_ids: list[str] = (cluster.get("fact_ids") or [])[:5]
+            hints.append(
+                RecallHint(
+                    hint_type="belief_candidate",
+                    message=f"{fact_count} corroborating facts found. Consider forming a belief.",
+                    node_ids=fact_ids,
+                    suggested_action=f"decide(decision='...', about={fact_ids[:3]})",
+                )
+            )
+
+    return hints
+
+
+async def _detect_chain_continuations(
+    query_embedding: list[float],
+    silo_id: str,
+) -> list[RecallHint]:
+    """Find reasoning chains whose conclusions are relevant to this query.
+
+    Searches the Qdrant reasoning_chains collection for vectors similar to the
+    current query. Returns hints when prior chains have conclusions that match.
+    Skips silently if the collection does not exist yet.
+    """
+    import asyncio
+
+    from qdrant_client.http import models as qdrant_models
+
+    from context_service.mcp.server import get_context_service
+
+    if not query_embedding:
+        return []
+
+    try:
+        ctx_svc = get_context_service()
+    except RuntimeError:
+        # Services not configured (e.g. in tests without full setup)
+        logger.debug("chain_continuation_detection_skipped", reason="services_not_configured")
+        return []
+
+    try:
+        client = await ctx_svc._qdrant._get_client()
+    except Exception as exc:
+        logger.debug("chain_continuation_detection_skipped", reason="qdrant_unavailable", error=str(exc))
+        return []
+
+    try:
+        collections = await asyncio.wait_for(client.get_collections(), timeout=0.5)
+        if "reasoning_chains" not in {c.name for c in collections.collections}:
+            return []
+    except Exception:
+        return []
+
+    try:
+        response = await asyncio.wait_for(
+            client.query_points(
+                collection_name="reasoning_chains",
+                query=query_embedding,
+                query_filter=qdrant_models.Filter(
+                    must=[
+                        qdrant_models.FieldCondition(
+                            key="silo_id",
+                            match=qdrant_models.MatchValue(value=silo_id),
+                        )
+                    ]
+                ),
+                limit=3,
+                score_threshold=0.7,
+            ),
+            timeout=1.0,
+        )
+    except Exception as exc:
+        logger.warning("chain_continuation_search_failed", error=str(exc))
+        return []
+
+    hints: list[RecallHint] = []
+    for point in response.points:
+        payload = point.payload or {}
+        chain_id = payload.get("chain_id") or payload.get("node_id") or str(point.id)
+        conclusion = (payload.get("conclusion") or "")[:100]
+
+        hints.append(
+            RecallHint(
+                hint_type="chain_continuation",
+                message=f"Prior reasoning: \"{conclusion}...\"",
+                node_ids=[chain_id],
+                suggested_action=f"reason(steps=[...], parent_chain_id='{chain_id}')",
+            )
+        )
+
+    return hints
+
+
 def gaussian_decay(age_days: float, sigma: float = MEMORY_DECAY_SIGMA) -> float:
     """Apply Gaussian decay based on age. Returns value in [0, 1]."""
     return math.exp(-(age_days**2) / (2 * sigma**2))
@@ -259,7 +410,7 @@ async def recall(
     silo_id: str,
     options: RecallOptions | None = None,
     llm: Any | None = None,
-) -> RecallResult:
+) -> RecallResponse:
     """RECALL: Query transaction with epistemic-aware retrieval.
 
     Per brain-transactions-pseudocode.md RECALL:
@@ -268,6 +419,7 @@ async def recall(
     3. Score by layer semantics
     4. Graph traversal (if depth > 0)
     5. Lazy synthesis (if enabled)
+    6. Belief candidate hint detection (if enabled)
     """
     from context_service.db import queries as q
     from context_service.sage.transactions import synthesize as tx4_synthesize
@@ -497,8 +649,19 @@ async def recall(
 
     has_unresolved = any(r.conflict_status == "unresolved" for r in results)
 
-    return RecallResult(
+    hints: list[RecallHint] = []
+    if get_settings().recall_hints_enabled:
+        import asyncio
+
+        belief_hints, chain_hints = await asyncio.gather(
+            _detect_belief_candidates(store, results, silo_id),
+            _detect_chain_continuations(query_embedding, silo_id),
+        )
+        hints = belief_hints + chain_hints
+
+    return RecallResponse(
         results=results,
+        hints=hints,
         total_candidates=len(candidates),
         synthesis_pending=synthesis_pending,
         query_time_ms=elapsed_ms,

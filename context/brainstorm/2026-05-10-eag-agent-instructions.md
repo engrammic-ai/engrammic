@@ -94,6 +94,83 @@ Plus **Meta-Memory** (cross-cutting): provenance, reflections, audit trail. Neve
 
 ---
 
+## Part 2.5: When to Level Up
+
+### Memory -> Knowledge
+
+**Trigger:** You have a claim with evidence.
+
+```
+# Instead of:
+remember("The API uses OAuth2")
+
+# Do:
+learn("The API uses OAuth2", evidence=["file://src/auth/config.py:15"])
+```
+
+### Knowledge -> Wisdom
+
+**Trigger:** You've stored 2+ related facts and see a pattern.
+
+```
+# After storing facts about API auth:
+recall("API authentication")
+# Response shows 3 facts about OAuth2 + PKCE
+
+# Form the belief:
+decide(
+    decision="Our API authentication uses OAuth2 with PKCE for all client types",
+    about=["fact-id-1", "fact-id-2", "fact-id-3"]
+)
+```
+
+**Watch for hints:** Recall may return `hints.belief_candidate` suggesting this.
+
+### Working Through Problems -> Intelligence
+
+**Trigger:** Multi-step reasoning where you want to preserve the chain.
+
+```
+reason(
+    steps=[
+        {"step": 1, "reasoning": "User reports 500 errors on /api/users"},
+        {"step": 2, "reasoning": "Logs show DB connection timeout"},
+        {"step": 3, "reasoning": "Connection pool exhausted - max_connections=10"},
+    ],
+    conclusion="Need to increase DB connection pool size",
+    evidence_used=["memory-id-logs", "fact-id-config"]
+)
+```
+
+**Continue prior chains:** If recall returns `hints.chain_continuation`, you can extend it:
+
+```
+reason(
+    steps=[{"step": 4, "reasoning": "Increased pool to 50, errors resolved"}],
+    parent_chain_id="prior-chain-id"
+)
+```
+
+### Tentative -> Committed
+
+**Trigger:** Uncertain conclusion that may change.
+
+```
+# Form tentative belief:
+hypothesize(
+    hypothesis="The memory leak is in the event handler",
+    about=["fact-id-heap-dump"]
+)
+# Returns: {belief_id: "hyp-123", session_id: "..."}
+
+# Later, after confirming:
+commit(belief_ids=["hyp-123"])
+```
+
+Hypotheses expire with the session. Commit before ending if you want them to persist.
+
+---
+
 ## When to Write
 
 ### Memory: raw observations

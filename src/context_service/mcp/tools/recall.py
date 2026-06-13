@@ -224,6 +224,16 @@ async def _recall_impl(
                 )
             result["withheld"] = withheld
 
+    # Wisdom/Intelligence activation hints.
+    # Populated by Parts 1 and 2 once detection logic is wired in.
+    # Empty array for now; keyed on feature flag for safe rollout.
+    settings = get_settings()
+    if settings.recall_hints_enabled:
+        hints: list[dict[str, Any]] = []
+        result["hints"] = hints
+    else:
+        result["hints"] = None
+
     return result
 
 
