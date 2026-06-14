@@ -6,12 +6,12 @@
 ARG BASE_TAG=latest
 FROM europe-north1-docker.pkg.dev/engrammic/engrammic/base-selfhosted:${BASE_TAG} AS compiler
 
-WORKDIR /build
+WORKDIR /build/src
 
 COPY src/ /build/src/
 COPY scripts/compile_cython.py /build/scripts/
 
-# Compile to native .so files
+# Compile to native .so files (must run from src dir for --inplace to work)
 RUN python /build/scripts/compile_cython.py /build/src/context_service
 
 # Verify compilation succeeded
