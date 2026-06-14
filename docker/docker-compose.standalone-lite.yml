@@ -127,7 +127,7 @@ services:
     restart: unless-stopped
 
   tei:
-    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.5
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-latest
     container_name: engrammic-tei
     ports:
       - "8081:8080"
