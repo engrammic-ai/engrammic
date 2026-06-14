@@ -348,11 +348,7 @@ class FusionRetriever:
         top_k: int,
         layers: list[str] | None,
     ) -> ChannelResult:
-        """BM25 keyword search via Postgres GIN index.
-
-        Uses ts_rank with plainto_tsquery for scoring. Falls back to empty
-        result if query is blank, pool is unavailable, or the database errors.
-        """
+        """Hybrid BM25 + trigram text search via Postgres."""
         if not query.strip():
             return ChannelResult(channel_name="bm25", ranked_ids=[], latency_ms=0.0)
 
@@ -369,16 +365,21 @@ class FusionRetriever:
         try:
             silo_id = str(scope.silo_id)
 
+            # Hybrid: combine ts_rank (BM25-like) with trigram similarity
             if layers:
                 sql = """
                     SELECT id,
-                           ts_rank(to_tsvector('english', content),
-                                   plainto_tsquery('english', $1)) AS rank
+                           (0.7 * COALESCE(ts_rank(to_tsvector('english', content),
+                                                  plainto_tsquery('english', $1)), 0)
+                            + 0.3 * COALESCE(similarity(content, $1), 0)) AS rank
                     FROM nodes
-                    WHERE silo_id = $2
-                      AND to_tsvector('english', content)
-                          @@ plainto_tsquery('english', $1)
+                    WHERE silo_id = $2::uuid
+                      AND state = 'ACTIVE'
                       AND layer = ANY($3)
+                      AND (
+                          to_tsvector('english', content) @@ plainto_tsquery('english', $1)
+                          OR similarity(content, $1) > 0.1
+                      )
                     ORDER BY rank DESC
                     LIMIT $4
                 """
@@ -387,12 +388,16 @@ class FusionRetriever:
             else:
                 sql = """
                     SELECT id,
-                           ts_rank(to_tsvector('english', content),
-                                   plainto_tsquery('english', $1)) AS rank
+                           (0.7 * COALESCE(ts_rank(to_tsvector('english', content),
+                                                  plainto_tsquery('english', $1)), 0)
+                            + 0.3 * COALESCE(similarity(content, $1), 0)) AS rank
                     FROM nodes
-                    WHERE silo_id = $2
-                      AND to_tsvector('english', content)
-                          @@ plainto_tsquery('english', $1)
+                    WHERE silo_id = $2::uuid
+                      AND state = 'ACTIVE'
+                      AND (
+                          to_tsvector('english', content) @@ plainto_tsquery('english', $1)
+                          OR similarity(content, $1) > 0.1
+                      )
                     ORDER BY rank DESC
                     LIMIT $3
                 """

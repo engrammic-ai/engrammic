@@ -582,6 +582,104 @@ async def synthesize(
         raise
 
 
+async def _sync_to_postgres(
+    node_id: uuid.UUID,
+    silo_id: str,
+    layer: str,
+    content: str,
+    state: str = "ACTIVE",
+) -> None:
+    """Sync node to Postgres shadow table for text search.
+
+    Best-effort: logs warning on failure, does not raise.
+    Memgraph remains source of truth.
+    """
+    import time
+
+    from context_service.telemetry.recorder import (
+        get_db_pool,
+        record_postgres_sync_error,
+        record_postgres_sync_latency,
+    )
+
+    pool = get_db_pool()
+    if pool is None:
+        logger.warning("postgres_sync_skip_no_pool", node_id=str(node_id))
+        return
+
+    t0 = time.monotonic()
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO nodes (id, silo_id, layer, content, state, created_at)
+                VALUES ($1, $2::uuid, $3, $4, $5, now())
+                ON CONFLICT (id) DO UPDATE SET
+                    content = EXCLUDED.content,
+                    state = EXCLUDED.state
+                """,
+                node_id,
+                uuid.UUID(silo_id) if isinstance(silo_id, str) else silo_id,
+                layer,
+                content,
+                state,
+            )
+        record_postgres_sync_latency((time.monotonic() - t0) * 1000, "upsert")
+    except Exception as exc:
+        record_postgres_sync_error("upsert")
+        logger.warning(
+            "postgres_sync_failed",
+            node_id=str(node_id),
+            silo_id=silo_id,
+            error=str(exc),
+        )
+
+
+async def _sync_postgres_state(
+    node_id: str,
+    silo_id: str,
+    state: str,
+) -> None:
+    """Update only the state of an existing node in Postgres.
+
+    For supersession: update loser state without touching content.
+    """
+    import time
+
+    from context_service.telemetry.recorder import (
+        get_db_pool,
+        record_postgres_sync_error,
+        record_postgres_sync_latency,
+    )
+
+    pool = get_db_pool()
+    if pool is None:
+        return
+
+    t0 = time.monotonic()
+    try:
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE nodes SET state = $1
+                WHERE id = $2::uuid AND silo_id = $3::uuid
+                """,
+                state,
+                uuid.UUID(node_id) if isinstance(node_id, str) else node_id,
+                uuid.UUID(silo_id) if isinstance(silo_id, str) else silo_id,
+            )
+        record_postgres_sync_latency((time.monotonic() - t0) * 1000, "state_update")
+    except Exception as exc:
+        record_postgres_sync_error("state_update")
+        logger.warning(
+            "postgres_state_sync_failed",
+            node_id=node_id,
+            silo_id=silo_id,
+            state=state,
+            error=str(exc),
+        )
+
+
 async def store_memory(
     store: HyperGraphStore,
     content: str,
@@ -666,6 +764,8 @@ async def store_memory(
         node_id=node_id,
         created_at=created_at,
     )
+
+    await _sync_to_postgres(node_id, silo_id, layer, content)
 
     events: list[ReactionEvent] = [
         ReactionEvent(
@@ -887,6 +987,8 @@ async def store_claim(
         corroboration_count=corroboration_count,
         promoted=promoted,
     )
+
+    await _sync_to_postgres(node_id, silo_id, "knowledge", content)
 
     events: list[ReactionEvent] = [
         ReactionEvent(
@@ -1248,6 +1350,8 @@ async def commit(
         confidence=confidence,
     )
 
+    await _sync_to_postgres(commitment_id, silo_id, "wisdom", content)
+
     events: list[ReactionEvent] = [
         ReactionEvent(
             event_type=ReactionEventType.COMPUTE_EMBEDDING,
@@ -1550,6 +1654,10 @@ async def accept_proposal(
         accepted_at=now,
         confidence=final_confidence,
     )
+
+    proposal_content = row.get("content", "")
+    if proposal_content:
+        await _sync_to_postgres(belief_id, silo_id, "wisdom", proposal_content)
 
     events: list[ReactionEvent] = [
         ReactionEvent(
@@ -2031,6 +2139,8 @@ async def _create_supersedes_edge(
             "created_at": datetime.now(UTC).isoformat(),
         },
     )
+
+    await _sync_postgres_state(loser_id, silo_id, NodeState.SUPERSEDED.value)
 
 
 async def check_corroboration(

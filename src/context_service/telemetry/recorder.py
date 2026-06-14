@@ -430,5 +430,27 @@ def record_embedding_token_utilization(tokens_used: int, budget: int) -> None:
     )
 
 
+def record_postgres_sync_latency(duration_ms: float, operation: str) -> None:
+    """Record Postgres shadow-table sync latency (postgres_sync_latency_ms)."""
+    if _buffer is None:
+        return
+    _buffer.record(
+        metric_name=f"postgres_sync.{operation}",
+        silo_id="system",
+        latency_ms=duration_ms,
+    )
+
+
+def record_postgres_sync_error(operation: str) -> None:
+    """Record Postgres shadow-table sync error (postgres_sync_errors_total)."""
+    if _buffer is None:
+        return
+    _buffer.record(
+        metric_name=f"postgres_sync.{operation}",
+        silo_id="system",
+        error=True,
+    )
+
+
 ORPHAN_CHAINS_EXHAUSTED = record_orphan_chain_exhausted
 ORPHAN_CHAINS_RECOVERED = record_orphan_chain_recovered
