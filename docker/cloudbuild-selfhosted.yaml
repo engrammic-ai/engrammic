@@ -1,0 +1,50 @@
+steps:
+  # Build API image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-api'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGISTRY}/engrammic-api:${_VERSION}'
+      - '-t'
+      - '${_REGISTRY}/engrammic-api:latest'
+      - '-f'
+      - 'docker/Dockerfile.selfhosted.api'
+      - '--build-arg'
+      - 'BASE_TAG=latest'
+      - '.'
+    env:
+      - 'DOCKER_BUILDKIT=1'
+
+  # Build Dagster image (parallel)
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'build-dagster'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGISTRY}/engrammic-dagster:${_VERSION}'
+      - '-t'
+      - '${_REGISTRY}/engrammic-dagster:latest'
+      - '-f'
+      - 'docker/Dockerfile.selfhosted.dagster'
+      - '--build-arg'
+      - 'BASE_TAG=latest'
+      - '.'
+    env:
+      - 'DOCKER_BUILDKIT=1'
+    waitFor: ['-']  # Run in parallel with API build
+
+images:
+  - '${_REGISTRY}/engrammic-api:${_VERSION}'
+  - '${_REGISTRY}/engrammic-api:latest'
+  - '${_REGISTRY}/engrammic-dagster:${_VERSION}'
+  - '${_REGISTRY}/engrammic-dagster:latest'
+
+substitutions:
+  _REGISTRY: 'europe-north1-docker.pkg.dev/engrammic/releases'
+  _VERSION: 'latest'
+
+options:
+  machineType: 'E2_HIGHCPU_32'
+  logging: CLOUD_LOGGING_ONLY
+timeout: '3600s'

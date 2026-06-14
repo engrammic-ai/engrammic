@@ -17,7 +17,7 @@ env:
   REGISTRY: europe-north1-docker.pkg.dev/engrammic/releases
 
 jobs:
-  build-selfhosted-api:
+  build-selfhosted:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -26,9 +26,6 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set short SHA
-        run: echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
 
       - name: Resolve version
         id: version
@@ -50,95 +47,28 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push API image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/Dockerfile.selfhosted.api
-          build-args: |
-            BASE_TAG=latest
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/engrammic-api:v${{ steps.version.outputs.version }}
-            ${{ env.REGISTRY }}/engrammic-api:v${{ steps.version.outputs.version }}-${{ env.SHORT_SHA }}
-            ${{ env.REGISTRY }}/engrammic-api:latest
-          cache-from: type=gha,scope=selfhosted-api
-          cache-to: type=gha,mode=max,scope=selfhosted-api
-
-  build-selfhosted-dagster:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set short SHA
-        run: echo "SHORT_SHA=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
-
-      - name: Resolve version
-        id: version
+      - name: Submit to Cloud Build
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-          else
-            VERSION="${GITHUB_REF#refs/tags/v}"
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-
-      - name: Authenticate to GCP
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build and push Dagster image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/Dockerfile.selfhosted.dagster
-          build-args: |
-            BASE_TAG=latest
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/engrammic-dagster:v${{ steps.version.outputs.version }}
-            ${{ env.REGISTRY }}/engrammic-dagster:v${{ steps.version.outputs.version }}-${{ env.SHORT_SHA }}
-            ${{ env.REGISTRY }}/engrammic-dagster:latest
-          cache-from: type=gha,scope=selfhosted-dagster
-          cache-to: type=gha,mode=max,scope=selfhosted-dagster
+          gcloud builds submit \
+            --config=docker/cloudbuild-selfhosted.yaml \
+            --substitutions=_VERSION=v${{ steps.version.outputs.version }} \
+            --timeout=3600s \
+            .
 
   verify:
-    needs: [build-selfhosted-api, build-selfhosted-dagster]
+    needs: [build-selfhosted]
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - name: Pull images without auth to verify public access
         run: |
-          VERSION=${{ needs.build-selfhosted-api.outputs.version }}
+          VERSION=${{ needs.build-selfhosted.outputs.version }}
           docker pull ${{ env.REGISTRY }}/engrammic-api:v${VERSION}
           docker pull ${{ env.REGISTRY }}/engrammic-dagster:v${VERSION}
 
   create-standalone-bundles:
-    needs: [build-selfhosted-api, build-selfhosted-dagster]
+    needs: [build-selfhosted]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -147,7 +77,7 @@ jobs:
 
       - name: Create bundles
         run: |
-          VERSION=${{ needs.build-selfhosted-api.outputs.version }}
+          VERSION=${{ needs.build-selfhosted.outputs.version }}
 
           for tier in lite standard pro; do
             mkdir -p standalone-${tier}
