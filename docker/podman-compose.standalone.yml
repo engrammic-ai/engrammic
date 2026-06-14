@@ -30,7 +30,7 @@ services:
       - LLM_PROVIDER=ollama
       - OLLAMA_BASE_URL=http://ollama:11434
       - DEFAULT_LLM_MODEL=${OLLAMA_MODEL:-deepseek-r1:7b}
-      - MODELS__TIER=${MODEL_TIER:-standalone_standard}
+      - MODEL_TIER=${MODEL_TIER:-standalone_standard}
     depends_on:
       memgraph:
         condition: service_healthy
@@ -75,7 +75,7 @@ services:
       - LLM_PROVIDER=ollama
       - OLLAMA_BASE_URL=http://ollama:11434
       - DEFAULT_LLM_MODEL=${OLLAMA_MODEL:-deepseek-r1:7b}
-      - MODELS__TIER=${MODEL_TIER:-standalone_standard}
+      - MODEL_TIER=${MODEL_TIER:-standalone_standard}
     depends_on:
       memgraph:
         condition: service_healthy
@@ -138,7 +138,7 @@ services:
       - "8081:8080"
     command: ["--model-id", "${TEI_MODEL:-nomic-ai/nomic-embed-text-v1.5}"]
     healthcheck:
-      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8080' 2>/dev/null"]
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/80' 2>/dev/null"]
       interval: 30s
       timeout: 10s
       retries: 5

@@ -71,7 +71,13 @@ async def _periodic_version_check(interval_hours: int = 24) -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage application lifespan."""
-    settings = get_settings()
+    # Clear cached config to pick up runtime environment (migrations may have
+    # cached stale values before env vars or config mounts were ready)
+    from context_service.config.models import load_models_config
+    from context_service.config.settings import reload_settings
+
+    load_models_config.cache_clear()
+    settings = reload_settings()
 
     app.state.start_time = time.monotonic()
 
