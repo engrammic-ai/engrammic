@@ -61,6 +61,8 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile.selfhosted.api
+          build-args: |
+            BASE_TAG=latest
           push: true
           tags: |
             ${{ env.REGISTRY }}/engrammic-api:v${{ steps.version.outputs.version }}
@@ -113,6 +115,8 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile.selfhosted.dagster
+          build-args: |
+            BASE_TAG=latest
           push: true
           tags: |
             ${{ env.REGISTRY }}/engrammic-dagster:v${{ steps.version.outputs.version }}
