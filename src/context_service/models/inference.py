@@ -57,7 +57,7 @@ def _compute_claim_id(
     valid_from: datetime | None,
     valid_to: datetime | None,
     source_doc_id: str | None,
-    label_tier: str = KnowledgeLabel.CLAIM,
+    label_tier: str = KnowledgeLabel.CLAIM.value,
 ) -> str:
     """O-12 claim-ID hash extended with label_tier per R16-12."""
     parts = [
@@ -150,7 +150,7 @@ class ReasoningChain(BaseModel):
 
     model_config = {"extra": "forbid"}
 
-    node_label: str = IntelligenceLabel.REASONING_CHAIN
+    node_label: str = IntelligenceLabel.REASONING_CHAIN.value
 
     silo_id: str
     tier: Literal["hot", "cold"] = "hot"
@@ -258,7 +258,7 @@ class Commitment(BaseModel):
 
     # Computed
     id: str | None = None
-    label_tier: str = KnowledgeLabel.COMMITMENT
+    label_tier: str = KnowledgeLabel.COMMITMENT.value
 
     @field_validator("predicate")
     @classmethod
