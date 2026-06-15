@@ -140,13 +140,25 @@ class ModelsConfig(BaseModel):
         spec = self.get_query_expander_model()
         if spec is None:
             return None
+        # Defensive: handle case where spec is a raw dict (misconfigured YAML)
+        if isinstance(spec, dict):
+            provider = spec.get("provider", "")
+            model = spec.get("model", "")
+            if provider and model:
+                return f"{provider}/{model}"
+            return None
         return f"{spec.provider}/{spec.model}"
 
     @property
     def expander_provider(self) -> str | None:
         """Get the query expander provider for the active tier."""
         spec = self.get_query_expander_model()
-        return spec.provider if spec else None
+        if spec is None:
+            return None
+        # Defensive: handle case where spec is a raw dict
+        if isinstance(spec, dict):
+            return spec.get("provider")
+        return spec.provider
 
 
 def _load_models_yaml(path: Path) -> dict[str, Any]:

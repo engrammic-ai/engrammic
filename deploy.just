@@ -8,12 +8,15 @@
 # Build all images (tags :latest + :SHORT_SHA)
 [group('deploy')]
 build sha="latest":
-    gcloud builds submit --config=deploy/cloudbuild/api.yaml \
-        --substitutions=SHORT_SHA={{sha}} --region={{region}} .
-    gcloud builds submit --config=deploy/cloudbuild/beacon.yaml \
-        --substitutions=SHORT_SHA={{sha}} --region={{region}} .
-    gcloud builds submit --config=deploy/cloudbuild/dagster.yaml \
-        --substitutions=SHORT_SHA={{sha}} --region={{region}} .
+    gcloud builds submit --config=docker/cloudbuild-app.yaml \
+        --substitutions=SHORT_SHA={{sha}},_REGISTRY={{registry}},_IMAGE=engrammic-api,_DOCKERFILE=api \
+        --region={{region}} .
+    gcloud builds submit --config=docker/cloudbuild-app.yaml \
+        --substitutions=SHORT_SHA={{sha}},_REGISTRY={{registry}},_IMAGE=engrammic-beacon,_DOCKERFILE=beacon \
+        --region={{region}} .
+    gcloud builds submit --config=docker/cloudbuild-app.yaml \
+        --substitutions=SHORT_SHA={{sha}},_REGISTRY={{registry}},_IMAGE=engrammic-dagster,_DOCKERFILE=dagster \
+        --region={{region}} .
 
 # Build partners image (bytecode-only distribution)
 [group('deploy')]
