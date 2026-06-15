@@ -37,14 +37,24 @@ def find_py_files(src_dir: Path) -> tuple[list[Path], list[Path]]:
     """Find all .py files except __init__.py.
 
     Returns (compilable, skipped) where skipped contains files
-    with unsupported syntax.
+    with unsupported syntax or that must remain as .py for runtime reasons.
     """
+    # Files that must stay as .py:
+    # - entrypoint.py/__main__.py: `python -m` needs __code__ object
+    # - config/: Pydantic models with methods break when compiled
+    skip_files = {"entrypoint.py", "__main__.py"}
+    skip_dirs = {"config", "test"}
+
     compilable = []
     skipped = []
     for py_file in src_dir.rglob("*.py"):
         if py_file.name == "__init__.py":
             continue
-        if "test" in py_file.parts:
+        if py_file.name in skip_files:
+            skipped.append(py_file)
+            continue
+        if any(d in py_file.parts for d in skip_dirs):
+            skipped.append(py_file)
             continue
         if uses_pep695_syntax(py_file):
             skipped.append(py_file)
@@ -68,11 +78,11 @@ def compile_package(src_dir: Path) -> None:
     print(f"Compiling {src_dir}...")
 
     py_files, skipped = find_py_files(src_dir)
-    print(f"Found {len(py_files)} files to compile, {len(skipped)} skipped (PEP 695)")
+    print(f"Found {len(py_files)} files to compile, {len(skipped)} skipped")
 
     if skipped:
         for f in skipped:
-            print(f"  Skipping (PEP 695): {f.relative_to(src_dir)}")
+            print(f"  Skipping: {f.relative_to(src_dir)}")
 
     if not py_files:
         print("No files to compile")
