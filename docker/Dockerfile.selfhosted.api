@@ -14,10 +14,12 @@ COPY scripts/compile_cython.py /build/scripts/
 # Compile to native .so files (must run from src dir for --inplace to work)
 RUN python /build/scripts/compile_cython.py /build/src/context_service
 
-# Verify compilation succeeded (3 PEP 695 files are intentionally skipped)
+# Verify compilation succeeded
+# Excluded: PEP 695 files, entrypoint (needs __code__), config/ (Pydantic models)
 RUN remaining=$(find /build/src/context_service -name "*.py" ! -name "__init__.py" \
-        ! -name "storage_circuit.py" ! -name "error_boundary.py" ! -name "concurrency.py" | wc -l) && \
-    echo "Remaining .py files (excluding PEP 695): $remaining" && \
+        ! -name "storage_circuit.py" ! -name "error_boundary.py" ! -name "concurrency.py" \
+        ! -name "entrypoint.py" ! -name "__main__.py" ! -path "*/config/*" | wc -l) && \
+    echo "Remaining .py files (excluding expected): $remaining" && \
     [ "$remaining" -eq 0 ] || (echo "ERROR: Uncompiled files remain" && exit 1)
 
 
