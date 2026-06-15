@@ -82,25 +82,14 @@ async def verify_models(*, timeout: float = 120.0) -> None:
             logger.info("model_check_skip", model="reranker", reason="reranking disabled")
             return
         try:
-            from context_service.config.config_loader import load_config
-            from context_service.reranking import LiteLLMReranker
+            from context_service.config.models import load_models_config
+            from context_service.reranking.factory import get_reranker
 
-            config = load_config("models")
-            tier = config.get("tier", "default")
-            tier_config = config.get("tiers", {}).get(tier, {})
-            reranker_spec = tier_config.get("reranker")
-            if reranker_spec is None:
+            config = load_models_config()
+            reranker = get_reranker(config, timeout_seconds=30.0)
+            if reranker is None:
                 logger.info("model_check_skip", model="reranker", reason="no reranker in config")
                 return
-            provider = reranker_spec.get("provider", "")
-            model = reranker_spec.get("model", "rerank-v3.5")
-            full_model = f"{provider}/{model}" if provider else model
-            vertex_project = config.get("vertex_project") or None
-            reranker = LiteLLMReranker(
-                model=full_model,
-                vertex_project=vertex_project,
-                timeout_seconds=30.0,  # longer for cold start
-            )
             await reranker.rerank("test query", ["test document"], ["test-node"])
             logger.info("model_check_ok", model="reranker")
         except Exception as e:

@@ -54,14 +54,16 @@ class LiteLLMReranker:
 
         for attempt in range(MAX_RETRIES + 1):
             try:
-                response = await litellm.arerank(
-                    model=self._model,
-                    query=query,
-                    documents=documents,
-                    top_n=top_k,
-                    timeout=self._timeout,
-                    vertex_ai_project=self._vertex_project,
-                )
+                kwargs: dict[str, object] = {
+                    "model": self._model,
+                    "query": query,
+                    "documents": documents,
+                    "top_n": top_k,
+                    "timeout": self._timeout,
+                }
+                if self._vertex_project and self._model.startswith("vertex_ai/"):
+                    kwargs["vertex_ai_project"] = self._vertex_project
+                response = await litellm.arerank(**kwargs)
                 return [
                     RerankResult(
                         node_id=node_ids[r["index"]],

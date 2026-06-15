@@ -131,6 +131,7 @@ services:
     container_name: engrammic-tei
     ports:
       - "8081:8080"
+    # nomic-embed-text-v1.5: 2G; bge-m3: 14G (ONNX warmup needs headroom)
     command: ["--model-id", "nomic-ai/nomic-embed-text-v1.5"]
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/80' 2>/dev/null"]
