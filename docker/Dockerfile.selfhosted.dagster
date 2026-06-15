@@ -14,10 +14,11 @@ COPY scripts/compile_cython.py /build/scripts/
 # Compile to native .so files (must run from src dir for --inplace to work)
 RUN python /build/scripts/compile_cython.py /build/src/context_service
 
-# Verify compilation (excluded: PEP 695 files, entrypoint, config/, models/)
+# Verify compilation (excluded: PEP 695 files, entrypoint, Pydantic dirs)
 RUN remaining=$(find /build/src/context_service -name "*.py" ! -name "__init__.py" \
         ! -name "storage_circuit.py" ! -name "error_boundary.py" ! -name "concurrency.py" \
-        ! -name "entrypoint.py" ! -name "__main__.py" ! -path "*/config/*" ! -path "*/models/*" | wc -l) && \
+        ! -name "entrypoint.py" ! -name "__main__.py" \
+        ! -path "*/config/*" ! -path "*/models/*" ! -path "*/retention/*" ! -path "*/schemas/*" | wc -l) && \
     [ "$remaining" -eq 0 ] || (echo "ERROR: Uncompiled files remain" && exit 1)
 
 

@@ -42,10 +42,9 @@ def find_py_files(src_dir: Path) -> tuple[list[Path], list[Path]]:
     """
     # Files that must stay as .py:
     # - entrypoint.py/__main__.py: `python -m` needs __code__ object
-    # - config/: Pydantic models with methods break when compiled
-    # - models/: Pydantic models with methods break when compiled
+    # - Pydantic models with methods break when compiled (methods appear as fields)
     skip_files = {"entrypoint.py", "__main__.py"}
-    skip_dirs = {"config", "models", "test"}
+    skip_dirs = {"config", "models", "retention", "schemas", "test"}
 
     compilable = []
     skipped = []
