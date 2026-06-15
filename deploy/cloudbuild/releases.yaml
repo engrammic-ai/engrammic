@@ -82,4 +82,6 @@ substitutions:
   _VERSION: ''
 
 options:
+  machineType: 'E2_HIGHCPU_32'
   logging: CLOUD_LOGGING_ONLY
+timeout: '3600s'

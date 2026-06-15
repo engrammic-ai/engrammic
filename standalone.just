@@ -73,3 +73,17 @@ pull-models tier="standard":
         docker run --rm -v ollama-models:/root/.ollama ollama/ollama pull deepseek-r1:7b
     fi
     echo "TEI models are pulled on first container start."
+
+# =============================================================================
+# Dev-Box Deployment
+# =============================================================================
+
+# Deploy version to dev-box (usage: just deploy-devbox 0.4.9)
+[group('standalone')]
+deploy-devbox version:
+    #!/usr/bin/env bash
+    set -e
+    echo "Updating dev-box to v{{version}}..."
+    ssh engrammic-dev-box "sudo sed -i 's/engrammic-api:v[0-9.]*/engrammic-api:v{{version}}/g; s/engrammic-dagster:v[0-9.]*/engrammic-dagster:v{{version}}/g' /home/dev/.engrammic/docker-compose.yml"
+    ssh engrammic-dev-box "cd /home/dev/.engrammic && docker compose pull app dagster && docker compose up -d app dagster --force-recreate"
+    echo "Deployed v{{version}} to dev-box"
