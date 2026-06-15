@@ -13,6 +13,7 @@ Based on: https://shawinnes.com/protecting-python/
 
 from __future__ import annotations
 
+import multiprocessing
 import os
 import shutil
 import sys
@@ -100,17 +101,18 @@ def compile_package(src_dir: Path) -> None:
             "embedsignature": False,
             "emit_code_comments": False,
         },
-        nthreads=4,
+        nthreads=multiprocessing.cpu_count(),
     )
 
-    # Build in-place
+    # Build in-place with parallel compilation
+    nproc = multiprocessing.cpu_count()
     orig_argv = sys.argv
-    sys.argv = ["setup.py", "build_ext", "--inplace"]
+    sys.argv = ["setup.py", "build_ext", "--inplace", f"-j{nproc}"]
     try:
         setup(
             name="context_service",
             ext_modules=ext_modules,
-            script_args=["build_ext", "--inplace"],
+            script_args=["build_ext", "--inplace", f"-j{nproc}"],
         )
     finally:
         sys.argv = orig_argv
