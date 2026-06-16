@@ -2,24 +2,29 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-06-12)
+## Current state (2026-06-16)
 
-**Focus:** TEMPR parity sprint - 4-channel retrieval + mem0 benchmark for Antler
+**Focus:** mem0 benchmark - TEMPR 4-channel retrieval complete, benchmark remaining
 
 **Recent:**
-- v2.39 Read-path epistemic fusion (step 1) - confidence/conflict weighting in ranking (complete)
-- v2.38 Embedding Batching Phase 1 - Vertex AI batch calls via `batched` library (complete)
-- v2.37 Heat Utilization Phase 1 - Brain path decay floor + tier-driven summaries (complete)
+- v2.41 Wisdom/Intelligence layer activation (complete)
+- v2.40 Trigram search integration for BM25 channel (complete)
+- v2.39 TEMPR 4-channel retrieval - BM25, temporal, PPR, cross-encoder (complete)
+- v2.38 Mypy strict: 115 -> 0 errors (complete)
 
 ## Active plans
 
 | Plan | Description | Status |
 |------|-------------|--------|
-| [2026-06-12-tempr-parity-sprint.md](./2026-06-12-tempr-parity-sprint.md) | 4-channel TEMPR retrieval (BM25, temporal, PPR, reranker) + mem0 benchmark | Active |
 | [2026-06-09-longmemeval-v2-harness.md](./2026-06-09-longmemeval-v2-harness.md) | Official LongMemEval-V2 harness with Engrammic adapter | Ready |
-| [2026-06-07-fix-recall-read-path.md](./2026-06-07-fix-recall-read-path.md) | Fix rerank score write-back + threshold, full content by default | Active |
 | [recall-quality-improvement.md](./recall-quality-improvement.md) | Question-answer asymmetry research, query expansion | Draft |
 | [polish-audit-2026-06-08.md](./polish-audit-2026-06-08.md) | 7 critical + high findings from codebase audit | Triage |
+
+## Benchmark (next priority)
+
+- [ ] Create epistemic slice test cases (supersession, contradiction, abstention)
+- [ ] Run benchmark: Engrammic full vs baseline vs mem0
+- [ ] Document benchmark results
 
 ## Draft / design
 
@@ -64,14 +69,13 @@ Specced or checkpointed for later implementation:
 
 ## Archive
 
-Completed plans in `archive/` (130+ files). Recent:
+Completed plans in `archive/` (135+ files). Recent:
+- TEMPR parity sprint - 4-channel retrieval (2026-06-16)
+- Wisdom/Intelligence layer activation (2026-06-14)
+- Trigram search integration (2026-06-13)
 - Read-path epistemic fusion step 1 (2026-06-11)
 - Brain architecture phases 2-9 (2026-06-01/02)
 - Embedding Batching Phase 1 (2026-06-05)
-- Heat Utilization Phase 1 (2026-06-04)
-- Enforcement Spine (2026-06-04)
-- Multi-Format Skill Installation (2026-05-28)
-- Harness-Agnostic Enforcement (2026-05-28)
 
 ## Plan format
 
