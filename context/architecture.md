@@ -30,7 +30,7 @@
 
 ### MCP Server (Primary)
 
-Agent-facing tool surface via FastMCP. Tools are intent/verb-based (`remember`, `learn`, `believe`, etc.).
+Agent-facing tool surface via FastMCP. Tools are intent/verb-based (`remember`, `learn`, `decide`, etc.).
 
 | Component | Path | Responsibility |
 |-----------|------|----------------|
@@ -283,7 +283,7 @@ Node
 ### Write Path (Agent -> Storage)
 
 ```
-Agent calls `remember` / `learn` / `believe`
+Agent calls `remember` / `learn` / `decide`
            |
            v
     MCP Tool Handler
