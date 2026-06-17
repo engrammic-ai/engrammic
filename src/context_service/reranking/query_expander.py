@@ -190,7 +190,11 @@ class QueryExpander:
         import time
 
         start = time.monotonic()
-        client = self._get_genai_client()
+        try:
+            client = self._get_genai_client()
+        except Exception as e:
+            logger.warning("genai_client_init_failed", error=str(e))
+            raise RuntimeError(f"Failed to initialize genai client: {e}") from e
         logger.debug("genai_expand_start", model=self._model, prompt_len=len(prompt))
         loop = asyncio.get_running_loop()
 

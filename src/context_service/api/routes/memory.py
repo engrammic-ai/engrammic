@@ -213,7 +213,11 @@ async def recall(
         # Use 5-channel FusionRetriever for multi-modal retrieval
         settings = get_settings()
         fusion_cfg = settings.retrieval.fusion
-        retriever = FusionRetriever(ctx_svc, k=fusion_cfg.rrf_k)
+        channel_config = {
+            "ppr": settings.graph_channel.enabled,
+            "grep": settings.graph_channel.enabled,  # reuse ppr setting for grep
+        }
+        retriever = FusionRetriever(ctx_svc, k=fusion_cfg.rrf_k, channel_config=channel_config)
         fused_results = await retriever.retrieve(
             query=effective_query,
             scope=scope,

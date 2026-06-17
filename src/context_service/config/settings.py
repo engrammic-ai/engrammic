@@ -243,7 +243,8 @@ class RerankingSettings(BaseModel):
 
     enabled: bool = Field(default=True, description="Enable cross-encoder reranking")
     expand_hard_queries: bool = Field(
-        default=True, description="Enable LLM query expansion for hard queries"
+        default=False,
+        description="Enable LLM query expansion for hard queries (disabled by default due to genai SDK stability)",
     )
     expansion_cache_ttl_days: int = Field(
         default=7, description="TTL for cached query expansions in Redis"
