@@ -61,6 +61,7 @@ class QdrantClient:
         collection_name: str = "context_vectors",
         scalar_quantization: bool = False,
         always_ram: bool = True,
+        recreate_on_dimension_mismatch: bool = False,
     ) -> None:
         """Initialize the Qdrant client.
 
@@ -74,6 +75,9 @@ class QdrantClient:
                 new collections to reduce search latency.
             always_ram: When True, keeps quantized vectors in RAM for fastest
                 access. Only relevant when scalar_quantization is True.
+            recreate_on_dimension_mismatch: When True, automatically delete and
+                recreate the collection if embedding dimensions change. WARNING:
+                This destroys all existing vectors.
         """
         self._url = url
         self._api_key = api_key
@@ -81,6 +85,7 @@ class QdrantClient:
         self._collection_name = collection_name
         self._scalar_quantization = scalar_quantization
         self._always_ram = always_ram
+        self._recreate_on_dimension_mismatch = recreate_on_dimension_mismatch
         self._client: AsyncQdrantClient | None = None
         self._init_lock: asyncio.Lock = asyncio.Lock()
         self._hybrid_mode: bool = False
@@ -105,6 +110,7 @@ class QdrantClient:
             collection_name=models.qdrant_collection,
             scalar_quantization=settings.qdrant_scalar_quantization_enabled,
             always_ram=settings.qdrant_quantization_always_ram,
+            recreate_on_dimension_mismatch=settings.qdrant_recreate_on_dimension_mismatch,
         )
 
     async def _get_client(self) -> AsyncQdrantClient:
@@ -205,38 +211,81 @@ class QdrantClient:
             record_db_query("qdrant.ensure_collection", (time.perf_counter() - start) * 1000)
 
     async def _check_dimension_mismatch(self, client: AsyncQdrantClient) -> None:
-        """Warn if the configured vector size differs from the existing collection's size.
+        """Check if embedding dimensions match and handle mismatch.
 
-        For hybrid collections, ``vectors`` is a dict of named VectorParams; for
-        non-hybrid collections it is a single VectorParams object.  Both cases
-        are handled.  Any failure to retrieve or parse collection info is logged
-        and silently ignored so that normal startup is never blocked.
+        If dimensions differ:
+        - With recreate_on_dimension_mismatch=True: delete and recreate collection
+        - Otherwise: raise QdrantOperationError with clear instructions
         """
         try:
             collection_info = await client.get_collection(self._collection_name)
             vectors_config = collection_info.config.params.vectors
 
             if isinstance(vectors_config, dict):
-                # Hybrid collection — check the dense vector config.
                 dense = vectors_config.get(DENSE_VECTOR_NAME)
                 existing_size: int | None = dense.size if dense is not None else None
             else:
                 existing_size = vectors_config.size if vectors_config is not None else None
 
             if existing_size is not None and existing_size != self._vector_size:
-                logger.warning(
-                    "qdrant_dimension_mismatch",
-                    configured=self._vector_size,
-                    existing=existing_size,
-                    hint=(
-                        "Re-embed all documents before switching Matryoshka dimensions. "
-                        "See context/specs/2026-05-19-recall-optimization.md Task 4."
-                    ),
-                )
+                if self._recreate_on_dimension_mismatch:
+                    logger.warning(
+                        "qdrant_dimension_mismatch_recreating",
+                        configured=self._vector_size,
+                        existing=existing_size,
+                        collection=self._collection_name,
+                        message="Deleting and recreating collection. ALL EXISTING VECTORS WILL BE LOST.",
+                    )
+                    await client.delete_collection(self._collection_name)
+                    await self._create_collection_with_config(client)
+                    logger.info(
+                        "qdrant_collection_recreated",
+                        collection=self._collection_name,
+                        vector_size=self._vector_size,
+                    )
+                else:
+                    raise QdrantOperationError(
+                        f"Embedding dimension mismatch: configured {self._vector_size} but "
+                        f"collection '{self._collection_name}' has {existing_size}. "
+                        f"This usually happens when changing embedding models.\n\n"
+                        f"Options:\n"
+                        f"  1. Set QDRANT_RECREATE_ON_DIMENSION_MISMATCH=true to auto-recreate "
+                        f"(WARNING: destroys all existing vectors)\n"
+                        f"  2. Manually delete the collection: "
+                        f"curl -X DELETE {self._url}/collections/{self._collection_name}\n"
+                        f"  3. Run 'uv run python -m context_service.cli reembed' to re-embed "
+                        f"existing data with the new model (preserves data)"
+                    )
+        except QdrantOperationError:
+            raise
         except Exception as exc:
-            logger.debug(
-                "qdrant_dimension_check_skipped",
-                error=str(exc),
+            logger.debug("qdrant_dimension_check_skipped", error=str(exc))
+
+    async def _create_collection_with_config(self, client: AsyncQdrantClient) -> None:
+        """Create collection with current config (used after dimension mismatch recreation)."""
+        quant_config = self.get_quantization_config()
+        if self._hybrid_mode:
+            await client.create_collection(
+                collection_name=self._collection_name,
+                vectors_config={
+                    DENSE_VECTOR_NAME: models.VectorParams(
+                        size=self._vector_size,
+                        distance=models.Distance.COSINE,
+                    ),
+                },
+                sparse_vectors_config={
+                    SPARSE_VECTOR_NAME: models.SparseVectorParams(),
+                },
+                quantization_config=quant_config,
+            )
+        else:
+            await client.create_collection(
+                collection_name=self._collection_name,
+                vectors_config=models.VectorParams(
+                    size=self._vector_size,
+                    distance=models.Distance.COSINE,
+                ),
+                quantization_config=quant_config,
             )
 
     async def ensure_reasoning_chains_collection(self) -> None:

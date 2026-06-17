@@ -339,6 +339,7 @@ class QdrantConfig(BaseModel):
     api_key: SecretStr | None = None
     scalar_quantization_enabled: bool = False
     quantization_always_ram: bool = True
+    recreate_on_dimension_mismatch: bool = False
 
 
 class RedisConfig(BaseModel):
@@ -1199,6 +1200,7 @@ class Settings(BaseSettings):
     qdrant_api_key: SecretStr | None = Field(default=None)
     qdrant_scalar_quantization_enabled: bool = Field(default=False)
     qdrant_quantization_always_ram: bool = Field(default=True)
+    qdrant_recreate_on_dimension_mismatch: bool = Field(default=False)
 
     @property
     def qdrant_url(self) -> str:
