@@ -1343,6 +1343,7 @@ GET_NODE_CLUSTERS = "RETURN null LIMIT 0"
 GET_CLUSTERS_FOR_NODES_WITH_FACTS = "RETURN null LIMIT 0"
 GET_CLUSTERS_FOR_NODES = "RETURN null LIMIT 0"
 BATCH_UPSERT_ENTITY_MENTIONS = "RETURN 0 AS upserted"
+GET_ENTITY_GRAPH_NEIGHBORS = "RETURN null LIMIT 0"
 
 
 # ---------------------------------------------------------------------------

@@ -565,8 +565,9 @@ LIMIT $limit
 
 # DEPRECATED (CITE v2): Entity graph queries relied on EXTRACTED_FROM / MENTIONS edges
 # and :Entity nodes — all removed in v2. The entity pivot is replaced by ABOUT edges
-# and the Claim-centric knowledge model. Mark dead; no replacement query needed.
-# GET_ENTITY_GRAPH_NEIGHBORS = ...  # removed
+# and the Claim-centric knowledge model.
+# TODO: remove stub after all callers are updated to v2 APIs
+GET_ENTITY_GRAPH_NEIGHBORS = "RETURN null LIMIT 0"
 
 DELETE_BINARY_EDGE = """
 MATCH ()-[e:EDGE {id: $id, silo_id: $silo_id}]->()

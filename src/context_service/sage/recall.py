@@ -210,7 +210,9 @@ async def _detect_chain_continuations(
     try:
         client = await ctx_svc._qdrant._get_client()
     except Exception as exc:
-        logger.debug("chain_continuation_detection_skipped", reason="qdrant_unavailable", error=str(exc))
+        logger.debug(
+            "chain_continuation_detection_skipped", reason="qdrant_unavailable", error=str(exc)
+        )
         return []
 
     try:
@@ -251,7 +253,7 @@ async def _detect_chain_continuations(
         hints.append(
             RecallHint(
                 hint_type="chain_continuation",
-                message=f"Prior reasoning: \"{conclusion}...\"",
+                message=f'Prior reasoning: "{conclusion}..."',
                 node_ids=[chain_id],
                 suggested_action=f"reason(steps=[...], parent_chain_id='{chain_id}')",
             )
