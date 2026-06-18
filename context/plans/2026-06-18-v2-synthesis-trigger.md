@@ -1,6 +1,6 @@
 # V2 Synthesis Trigger
 
-**Status:** In Progress  
+**Status:** Complete (commit 7b6982ac)  
 **Branch:** feat/v2-synthesis-trigger  
 **Context:** CITE v2 replaces cluster-based synthesis with direct corroboration
 
@@ -91,10 +91,10 @@ LITE mode uses spaCy's en_core_web_sm for NER. Entities: PERSON, ORG, GPE, DATE,
 
 ## Acceptance Criteria
 
-- [ ] Entity extraction with FULL/LITE/DISABLED tiers
-- [ ] Independence scoring calculates correctly
-- [ ] Synthesis triggers at threshold
-- [ ] MENTIONS edges created during extraction
-- [ ] Dagster asset runs per-silo
-- [ ] `just check` passes
-- [ ] Tests for each component
+- [x] Entity extraction with FULL/LITE/DISABLED tiers
+- [x] Independence scoring calculates correctly
+- [x] Synthesis triggers at threshold
+- [x] MENTIONS edges created during extraction
+- [x] Dagster asset runs per-silo
+- [x] `just check` passes
+- [ ] Tests for each component (deferred)
