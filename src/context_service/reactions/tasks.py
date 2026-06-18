@@ -949,6 +949,53 @@ Return only valid JSON, no other text."""
                 )
                 claims_created += 1
 
+                # Extract entities from claim text and create MENTIONS edges
+                _tier_map = {"full": "llm", "lite": "spacy", "disabled": "disabled"}
+                _extractor_tier = _tier_map.get(settings.synthesis.tier, "disabled")
+                if _extractor_tier != "disabled":
+                    from context_service.synthesis.entities import get_entity_extractor
+
+                    _extractor = get_entity_extractor(_extractor_tier)
+                    try:
+                        _entities = await _extractor.extract(claim_content)
+                    except Exception:
+                        log.warning("extract_claims_entity_extraction_error", claim_id=str(claim_result.node_id))
+                        _entities = []
+
+                    import datetime as _datetime_mod
+
+                    _now_iso = _datetime_mod.datetime.now(_datetime_mod.UTC).isoformat()
+                    for _entity in _entities:
+                        _entity_id = str(uuid.uuid4())
+                        _entity_cypher = (
+                            "MERGE (e:Entity {name: $name, silo_id: $silo_id}) "
+                            "ON CREATE SET e.id = $id, e.type = $type, e.created_at = $created_at "
+                            "RETURN e.id AS entity_id"
+                        )
+                        await store.execute_write(
+                            _entity_cypher,
+                            {
+                                "name": _entity.name,
+                                "silo_id": silo_id,
+                                "id": _entity_id,
+                                "type": _entity.type,
+                                "created_at": _now_iso,
+                            },
+                        )
+                        _mentions_cypher = (
+                            "MATCH (c:Claim {id: $claim_id, silo_id: $silo_id}) "
+                            "MATCH (e:Entity {name: $entity_name, silo_id: $silo_id}) "
+                            "MERGE (c)-[:MENTIONS]->(e)"
+                        )
+                        await store.execute_write(
+                            _mentions_cypher,
+                            {
+                                "claim_id": str(claim_result.node_id),
+                                "silo_id": silo_id,
+                                "entity_name": _entity.name,
+                            },
+                        )
+
         # 5. Mark as extracted
         from datetime import UTC, datetime
 

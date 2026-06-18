@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from dotenv import load_dotenv
@@ -1011,6 +1011,32 @@ class ChainFeedbackConfig(BaseModel):
     usefulness_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
 
 
+class SynthesisSettings(BaseModel):
+    """Synthesis pipeline configuration."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    tier: Literal["full", "lite", "disabled"] = Field(
+        default="full",
+        description="Synthesis tier: full (LLM-based), lite (spaCy NLP), disabled (off)",
+    )
+    similarity_threshold: float = Field(
+        default=0.85,
+        ge=0.0,
+        le=1.0,
+        description="Cosine similarity threshold for claim clustering",
+    )
+    independence_threshold: float = Field(
+        default=2.0,
+        ge=0.0,
+        description="Minimum independence score required to emit a synthesis",
+    )
+    spacy_model: str = Field(
+        default="en_core_web_sm",
+        description="spaCy model name used by the lite tier",
+    )
+
+
 class WeakLinksSettings(BaseModel):
     """Weak links (speculative RELATED_TO edges) configuration."""
 
@@ -1109,6 +1135,7 @@ class Settings(BaseSettings):
     causal: CausalConfig = Field(default_factory=CausalConfig)
     pattern: PatternConfig = Field(default_factory=PatternConfig)
     weak_links: WeakLinksSettings = Field(default_factory=WeakLinksSettings)
+    synthesis: SynthesisSettings = Field(default_factory=SynthesisSettings)
     consensus: ConsensusConfig = Field(default_factory=ConsensusConfig)
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
     identities: IdentitiesConfig = Field(default_factory=_load_identities_config)

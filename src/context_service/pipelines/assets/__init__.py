@@ -32,6 +32,7 @@ from context_service.pipelines.assets.step_embedding import (
     session_step_embedding,
     step_embedding_backfill,
 )
+from context_service.pipelines.assets.synthesis_trigger import synthesis_trigger
 from context_service.pipelines.assets.tag_maintenance import tag_maintenance
 from context_service.pipelines.assets.validator_contradiction import (
     validator_contradiction_asset,
@@ -49,6 +50,7 @@ all_assets: list[Any] = [
     embedding,
     custodian_finalize,
     claim_to_fact_promotion,
+    synthesis_trigger,
     causal_transitivity,
     causal_tombstone,
     heat_asset,
