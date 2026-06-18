@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 from functools import lru_cache
 from typing import Final, Literal
 
-from primitives.schema.labels import IntelligenceLabel, KnowledgeLabel
+from primitives.schema import IntelligenceLabel, KnowledgeLabel, WisdomLabel
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ---------------------------------------------------------------------------
@@ -229,12 +229,12 @@ class Commitment(BaseModel):
     Multi-labeled on :Claim. Reuses full claim lifecycle (SUPERSEDES, O-14 gate,
     Finding promotion).
 
-    Node labels: KnowledgeLabel.CLAIM + KnowledgeLabel.COMMITMENT
+    Node labels: KnowledgeLabel.CLAIM + WisdomLabel.COMMITMENT
     """
 
     model_config = {"extra": "forbid"}
 
-    node_labels: tuple[str, str] = (KnowledgeLabel.CLAIM, KnowledgeLabel.COMMITMENT)
+    node_labels: tuple[str, str] = (KnowledgeLabel.CLAIM, WisdomLabel.COMMITMENT)
 
     silo_id: str
     subject: str
@@ -258,7 +258,7 @@ class Commitment(BaseModel):
 
     # Computed
     id: str | None = None
-    label_tier: str = KnowledgeLabel.COMMITMENT.value
+    label_tier: str = WisdomLabel.COMMITMENT.value
 
     @field_validator("predicate")
     @classmethod

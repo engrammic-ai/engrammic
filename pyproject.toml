@@ -9,7 +9,7 @@ authors = [{ name = "Aliasgar Khimani", email = "khimanialiasgar@gmail.com" }]
 
 # Core dependencies - truly universal, every image needs these
 dependencies = [
-    "engrammic-primitives",
+    "engrammic-primitives>=0.1.7",
     "pydantic>=2.7",
     "pydantic-settings>=2.2",
     "httpx>=0.27",

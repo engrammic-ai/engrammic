@@ -9,7 +9,7 @@ class TestRerankingSettings:
 
         settings = RerankingSettings()
         assert settings.enabled is True
-        assert settings.expand_hard_queries is True
+        assert settings.expand_hard_queries is False  # disabled by default (c667fe09)
         assert settings.expansion_cache_ttl_days == 7
 
     def test_reranking_settings_in_main_settings(self) -> None:

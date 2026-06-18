@@ -46,7 +46,7 @@ from primitives.eag.queries.silo import (
 from primitives.eag.queries.silo import (
     UPDATE_SILO as UPDATE_SILO,
 )
-from primitives.schema.labels import IntelligenceLabel, WisdomLabel
+from primitives.schema import IntelligenceLabel, WisdomLabel
 
 from context_service.db.schema import (
     EDGE_ABOUT,

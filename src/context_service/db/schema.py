@@ -88,7 +88,12 @@ def cite_union_predicate(var: str = "n") -> str:
     return "(" + " OR ".join(f"{var}:{lbl}" for lbl in CITE_NODE_LABELS) + ")"
 
 
-# --- Legacy constants (for migration) ---
+# --- Legacy label constants (for migration) ---
+# Aliases for v1 labels. Remove after all callers updated to v2.
+LABEL_DOCUMENT = LABEL_MEMORY  # v1 -> v2 alias
+LABEL_PASSAGE = LABEL_MEMORY  # v1 -> v2 alias
+LABEL_ENTITY = LABEL_MEMORY  # v1 -> v2 alias (entities become Memory nodes)
+
 # These map old labels to new. Remove after migration complete.
 LEGACY_LABEL_MAP: dict[str, str] = {
     "Document": LABEL_MEMORY,

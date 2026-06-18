@@ -216,6 +216,7 @@ async def recall(
         channel_config = {
             "ppr": settings.graph_channel.enabled,
             "grep": settings.graph_channel.enabled,  # reuse ppr setting for grep
+            "bm25": settings.bm25_channel.enabled,
         }
         retriever = FusionRetriever(ctx_svc, k=fusion_cfg.rrf_k, channel_config=channel_config)
         fused_results = await retriever.retrieve(

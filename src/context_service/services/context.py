@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import structlog
-from primitives.schema.labels import ALL_CITE_LABELS
+from primitives.schema import ALL_CITE_LABELS
 
 from context_service.config.settings import get_settings
 from context_service.engine.epistemics import CONFIDENCE_FORMULA_VERSION, effective_confidence

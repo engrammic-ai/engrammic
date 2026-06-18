@@ -707,8 +707,9 @@ class FusionRetriever:
         Fetches document content for top candidates, scores with cross-encoder,
         and reorders by rerank score. Falls back to RRF order on error.
         """
+        from context_service.config.models import load_models_config
         from context_service.config.settings import get_settings
-        from context_service.retrieval.cross_encoder import CrossEncoderReranker
+        from context_service.reranking.factory import get_reranker
 
         settings = get_settings()
         if not settings.cross_encoder.enabled or not fused:
@@ -716,6 +717,13 @@ class FusionRetriever:
 
         t0 = time.perf_counter()
         try:
+            # Get reranker from factory (uses TEI if configured, else LiteLLM)
+            models_config = load_models_config()
+            reranker = get_reranker(models_config, timeout_seconds=10.0)
+            if reranker is None:
+                logger.debug("rerank_skip_no_reranker")
+                return fused
+
             # Get node IDs to rerank (up to cross_encoder.top_k)
             node_ids = [f.node_id for f in fused[: settings.cross_encoder.top_k]]
 
@@ -740,9 +748,8 @@ class FusionRetriever:
             if not documents:
                 return fused
 
-            # Rerank
-            reranker = CrossEncoderReranker(model=settings.cross_encoder.model)
-            rerank_results = reranker.rerank(
+            # Rerank (TEIReranker is async, wrap if needed)
+            rerank_results = await reranker.rerank(
                 query=query,
                 documents=documents,
                 node_ids=valid_ids,

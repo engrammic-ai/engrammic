@@ -21,7 +21,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from context_service.db.schema import (
-    LABEL_ENTITY,
     content_union_predicate,
 )
 
@@ -125,23 +124,12 @@ RETURN n.id AS id,
 # DEPRECATED (CITE v2): :Cluster nodes and all cluster membership / hierarchy
 # queries are removed in v2. Belief synthesis uses SYNTHESIZED_FROM edges
 # directly. Leiden community detection is no longer run on the graph.
-# Kept as comments for migration reference only.
-#
-# CREATE_CLUSTER, GET_CLUSTER, LIST_CLUSTERS, COUNT_CLUSTERS,
-# DELETE_CLUSTERS, DELETE_ALL_CLUSTERS, CREATE_MEMBER_OF,
-# CREATE_PART_OF, BATCH_CREATE_PART_OF, GET_CLUSTER_MEMBERS,
-# GET_NODE_CLUSTERS, GET_CLUSTER_PARENT  — all removed
-
-# DEPRECATED (CITE v2): Leiden community detection and cluster-based PageRank
-# are removed. :Cluster nodes no longer exist; MEMBER_OF edges are killed.
-# PageRank can still be run over content nodes for importance scoring but
-# no longer feeds a clustering pipeline.
-# RUN_LEIDEN   = ...   # removed
-# RUN_PAGERANK = ...   # removed (replace with a direct content-node variant if needed)
-
-# DEPRECATED (CITE v2): Cluster summary / importance queries removed with :Cluster.
-# UPDATE_CLUSTER_SUMMARY, BATCH_UPDATE_CLUSTER_SUMMARIES,
-# BATCH_CREATE_MEMBER_OF — all removed
+# TODO: remove stubs after all callers are updated to v2 APIs
+# Backwards-compat stubs below - return empty results; callers should migrate to v2.
+DELETE_ALL_CLUSTERS = "RETURN 0 AS deleted_count"
+BATCH_CREATE_PART_OF = "RETURN 0 AS created_count"
+BATCH_UPDATE_CLUSTER_SUMMARIES = "RETURN 0 AS updated_count"
+BATCH_CREATE_MEMBER_OF = "RETURN 0 AS created_count"
 
 # Node importance update still valid for content nodes (used by PageRank scorer).
 BATCH_UPDATE_NODE_IMPORTANCE = f"""
@@ -668,8 +656,14 @@ RETURN from_chain.id AS from_id, to_chain.id AS to_id
 # used MEMBER_OF to link Facts to Clusters. In v2 the synthesizer selects
 # Facts directly by semantic similarity / confidence without clustering.
 # Use GET_FACTS_FOR_SYNTHESIS below instead.
-# GET_FACTS_IN_CLUSTER      = ...  # removed
-# BATCH_GET_FACTS_BY_CLUSTERS = ... # removed
+# TODO: remove stubs after all callers are updated to v2 APIs
+# Backwards-compat stub - returns empty result, callers should migrate to v2 API.
+GET_FACTS_IN_CLUSTER = """
+RETURN null AS fact_id, null AS content, null AS confidence LIMIT 0
+"""
+BATCH_GET_FACTS_BY_CLUSTERS = """
+RETURN null AS cluster_id, null AS fact_ids LIMIT 0
+"""
 
 # Fetch Facts in a silo for synthesis, ordered by confidence.
 GET_FACTS_FOR_SYNTHESIS = """
@@ -794,9 +788,16 @@ RETURN b.id AS belief_id
 # and co-occurrence detection relied on :Cluster / MEMBER_OF which are also
 # gone. Causal chain detection (CAUSES edges) was speculative and unused.
 #
-# CREATE_PATTERN, UPDATE_PATTERN_FREQUENCY, GET_PATTERN_BY_TYPE_AND_SUBJECT,
-# DETECT_TEMPORAL_CORRELATIONS, DETECT_CO_OCCURRING_FACTS, DETECT_CAUSAL_CHAINS,
-# DECAY_STALE_PATTERNS, TOMBSTONE_LOW_CONFIDENCE_PATTERNS — all removed.
+# TODO: remove stubs after all callers are updated to v2 APIs
+# Backwards-compat stubs for pattern queries - return empty results.
+CREATE_PATTERN = "RETURN null AS pattern_id LIMIT 0"
+UPDATE_PATTERN_FREQUENCY = "RETURN 0 AS updated"
+GET_PATTERN_BY_TYPE_AND_SUBJECT = "RETURN null AS pattern_id LIMIT 0"
+DETECT_TEMPORAL_CORRELATIONS = "RETURN null AS pattern_id LIMIT 0"
+DETECT_CO_OCCURRING_FACTS = "RETURN null AS pattern_id LIMIT 0"
+DETECT_CAUSAL_CHAINS = "RETURN null AS pattern_id LIMIT 0"
+DECAY_STALE_PATTERNS = "RETURN 0 AS decayed"
+TOMBSTONE_LOW_CONFIDENCE_PATTERNS = "RETURN 0 AS tombstoned"
 #
 # Temporal correlation is replaced by bitemporal edges in the SAGE synthesizer.
 # ---------------------------------------------------------------------------
@@ -1323,6 +1324,7 @@ ORDER BY b.created_at DESC
 # Backward-compat aliases for callers still using old names.
 GET_PENDING_PROPOSAL_COUNT_FOR_SILO = GET_PENDING_BELIEF_COUNT_FOR_SILO
 GET_PENDING_PROPOSED_BELIEFS_FOR_CLAIMS = GET_PENDING_BELIEFS_FOR_FACTS
+GET_PROPOSED_BELIEFS_FOR_SILO = GET_PENDING_BELIEFS_FOR_SILO
 
 
 # ---------------------------------------------------------------------------

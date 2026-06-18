@@ -490,12 +490,13 @@ async def finalize_pass(
 
 
 async def fetch_clusters_by_level(
-    client: HyperGraphStore,
+    _client: HyperGraphStore,
     *,
-    silo_id: str,
-    level: int,
+    _silo_id: str,
+    _level: int,
 ) -> list[dict[str, Any]]:
     """DEPRECATED (CITE v2): Clustering removed in v2. Returns empty list."""
+    # TODO: remove function after all callers are updated to v2 APIs
     # :Cluster nodes and MEMBER_OF edges are gone; no replacement.
     return []
 

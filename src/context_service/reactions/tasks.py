@@ -851,8 +851,7 @@ RETURN
         import json
         import time
 
-        from primitives.schema.edges import CITEEdgeType
-        from primitives.schema.labels import PersistenceLayer, layer_for_label
+        from primitives.schema import CITEEdgeType, PersistenceLayer, layer_for_label
 
         log = logger.bind(
             node_id=node_id, silo_id=silo_id, task=ReactionEventType.CHECK_EXTRACTION_TRIGGER
@@ -1117,7 +1116,7 @@ RETURN n.id
         chains_traced: list[str] = []
         traced_hypothesis_ids: list[str] = []
 
-        from primitives.schema.labels import IntelligenceLabel
+        from primitives.schema import IntelligenceLabel
 
         from context_service.embeddings import build_embedding_service
 
@@ -1342,7 +1341,7 @@ RETURN n.id AS id
         )
         log.info("check_consensus_task_start")
 
-        from primitives.schema.labels import KnowledgeLabel
+        from primitives.schema import KnowledgeLabel
         from sqlalchemy import select
 
         from context_service.db.postgres import get_session as get_pg_session
