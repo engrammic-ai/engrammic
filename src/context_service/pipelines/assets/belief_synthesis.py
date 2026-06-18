@@ -1,4 +1,10 @@
-"""Dagster asset: batch synthesise :Belief nodes from dense fact clusters."""
+"""Dagster asset: batch synthesise :Belief nodes from dense fact clusters.
+
+DEPRECATED (CITE v2): Clustering removed. This asset returns immediately with
+zero results. Retained for Dagster job compatibility until pipeline is updated.
+
+TODO: Remove asset after v2 synthesis pipeline is implemented.
+"""
 
 import asyncio
 import concurrent.futures
@@ -12,17 +18,8 @@ from context_service.engine.synthesis import _get_min_facts_for_belief
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import LLMResource, MemgraphResource
 
-_LIST_PENDING_CLUSTERS = """
-MATCH (f:Fact)-[:MEMBER_OF]->(c:Cluster {silo_id: $silo_id})
-WITH c, count(f) AS fact_count
-WHERE fact_count >= $min_facts
-OPTIONAL MATCH (c)<-[:SYNTHESIZED_FROM]-(b:Belief {silo_id: $silo_id})
-WITH c, fact_count, b
-WHERE b IS NULL
-RETURN c.id AS cluster_id, fact_count
-ORDER BY fact_count DESC
-LIMIT $max_clusters
-"""
+# Stub query returns no clusters (v2: clustering removed)
+_LIST_PENDING_CLUSTERS = "RETURN null AS cluster_id, null AS fact_count LIMIT 0"
 
 _MAX_CLUSTERS_PER_RUN = 50
 

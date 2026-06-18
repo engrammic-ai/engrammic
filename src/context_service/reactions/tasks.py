@@ -370,83 +370,17 @@ def register_tasks(broker: ListQueueBroker) -> None:
         log.info("update_heat_task_done", heat_score=updated)
 
     @broker.task(task_name=ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP, timeout=_TIMEOUT_SIMPLE)
-    async def update_cluster_membership_task(node_id: str, silo_id: str, **payload: Any) -> None:
-        """Confirm cluster membership for a node after Dagster clustering has run.
+    async def update_cluster_membership_task(
+        node_id: str, silo_id: str, **_payload: Any
+    ) -> None:
+        """DEPRECATED (CITE v2): Clustering removed. No-op stub.
 
-        Full Leiden clustering is handled by the Dagster custodian job. This
-        reactive handler runs after that job and:
-
-        1. Resolves the cluster the node belongs to (via ``cluster_id`` payload
-           hint or by querying the MEMBER_OF edge).
-        2. Counts the cluster's current members.
-        3. Emits CHECK_SYNTHESIS if the member count meets SYNTHESIS_THRESHOLD.
-
-        No-ops silently if the node has no cluster membership.
-
-        Args:
-            node_id: String UUID of the node to check.
-            silo_id: Tenant isolation identifier.
-            **payload: Optional ``cluster_id`` hint from the triggering event.
+        TODO: Remove task after all event emitters are updated to v2 APIs.
         """
         log = logger.bind(
             node_id=node_id, silo_id=silo_id, task=ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP
         )
-        log.info("update_cluster_membership_task_start")
-
-        from context_service.mcp.server import get_context_service
-
-        try:
-            ctx_svc = get_context_service()
-        except RuntimeError:
-            log.error("update_cluster_membership_services_not_configured")
-            return
-
-        store = ctx_svc.graph_store
-
-        # Use cluster_id from payload if provided; otherwise query the graph.
-        cluster_id: str | None = payload.get("cluster_id")
-
-        if not cluster_id:
-            result = await store.execute_query(
-                "MATCH (n {id: $node_id, silo_id: $silo_id})-[:MEMBER_OF]->(c:Cluster) "
-                "RETURN c.id AS cluster_id LIMIT 1",
-                {"node_id": node_id, "silo_id": silo_id},
-            )
-            if result:
-                cluster_id = result[0].get("cluster_id")
-
-        if not cluster_id:
-            log.info("update_cluster_membership_no_cluster_found")
-            return
-
-        count_result = await store.execute_query(
-            "MATCH (n)-[:MEMBER_OF]->(c:Cluster {id: $cluster_id, silo_id: $silo_id}) "
-            "RETURN count(n) AS member_count",
-            {"cluster_id": cluster_id, "silo_id": silo_id},
-        )
-        member_count: int = count_result[0].get("member_count", 0) if count_result else 0
-
-        log.info(
-            "update_cluster_membership_counted",
-            cluster_id=cluster_id,
-            member_count=member_count,
-        )
-
-        from context_service.sage.transactions import SYNTHESIS_THRESHOLD
-
-        if member_count >= SYNTHESIS_THRESHOLD:
-            from context_service.reactions.events import ReactionEvent, emit_reaction
-
-            event = ReactionEvent(
-                event_type=ReactionEventType.CHECK_SYNTHESIS,
-                node_id=node_id,
-                silo_id=silo_id,
-                payload={"cluster_id": cluster_id},
-            )
-            await emit_reaction(event)
-            log.info("update_cluster_membership_synthesis_triggered", cluster_id=cluster_id)
-
-        log.info("update_cluster_membership_task_done", cluster_id=cluster_id)
+        log.info("update_cluster_membership_task_noop_v2")
 
     @broker.task(task_name=ReactionEventType.CASCADE_STALENESS, timeout=_TIMEOUT_CASCADE)
     async def cascade_staleness_task(

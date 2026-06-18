@@ -127,20 +127,12 @@ RETURN
     b.wisdom_status AS wisdom_status
 """
 
-_GET_BELIEF_CLUSTER = """
-MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})-[:SYNTHESIZED_FROM]->(f:Fact)
-      -[:MEMBER_OF]->(c:Cluster {silo_id: $silo_id})
-RETURN DISTINCT c.id AS cluster_id
-LIMIT 1
-"""
+# DEPRECATED (CITE v2): Clustering removed. Belief revision via cluster drift
+# no longer applies. These stubs return empty results to avoid runtime errors.
+# TODO: Refactor revision to use direct SYNTHESIZED_FROM edges without clusters.
 
-_GET_FACT_CONTENTS_IN_CLUSTER = """
-MATCH (f:Fact)-[:MEMBER_OF]->(c:Cluster {id: $cluster_id, silo_id: $silo_id})
-RETURN f.id AS fact_id, f.content AS content,
-       coalesce(f.confidence, 1.0) AS confidence,
-       f.valid_from AS valid_from
-ORDER BY coalesce(f.confidence, 1.0) DESC
-"""
+_GET_BELIEF_CLUSTER = "RETURN null AS cluster_id LIMIT 0"
+_GET_FACT_CONTENTS_IN_CLUSTER = "RETURN null AS fact_id, null AS content, null AS confidence, null AS valid_from LIMIT 0"
 
 
 def _cosine_distance(a: list[float], b: list[float]) -> float:

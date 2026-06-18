@@ -11,7 +11,6 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from primitives.eag import noisy_or_aggregate
 from pydantic_ai import Agent
 
 from context_service.config.settings import get_settings
@@ -21,7 +20,6 @@ from context_service.db.queries import (
     CREATE_PROPOSED_BELIEF,
     GET_PENDING_PROPOSAL_COUNT_FOR_SILO,
     GET_RECENTLY_REJECTED_PROPOSAL_FOR_CLUSTER,
-    LIST_DENSE_CLUSTERS_WITHOUT_BELIEF_OR_PROPOSAL,
 )
 from context_service.llm.sanitize import escape_for_prompt
 
@@ -35,73 +33,33 @@ PROPOSAL_SYNTHESIS_SYSTEM_PROMPT = load_prompt("prompts/custodian/proposal_synth
 
 
 async def estimate_cluster_confidence(
-    graph_store: HyperGraphStore,
-    cluster_id: str,
-    silo_id: str,
+    graph_store: HyperGraphStore,  # noqa: ARG001
+    cluster_id: str,  # noqa: ARG001
+    silo_id: str,  # noqa: ARG001
 ) -> float:
-    """Estimate synthesis confidence for a cluster using noisy-or aggregation.
-
-    Fetches confidences of all facts in the cluster and aggregates them.
-    """
-    query = """
-    MATCH (f:Fact)-[:MEMBER_OF]->(c:Cluster {id: $cluster_id, silo_id: $silo_id})
-    RETURN f.confidence AS confidence
-    """
-    rows = await graph_store.execute_query(query, {"cluster_id": cluster_id, "silo_id": silo_id})
-
-    confidences = [float(r["confidence"]) for r in rows if r.get("confidence") is not None]
-    if not confidences:
-        return 0.0
-
-    return noisy_or_aggregate(confidences)
+    """DEPRECATED (CITE v2): Clustering removed. Returns 0.0."""
+    # TODO: Remove function after all callers are updated to v2 APIs.
+    return 0.0
 
 
 async def get_cluster_facts(
-    graph_store: HyperGraphStore,
-    cluster_id: str,
-    silo_id: str,
+    graph_store: HyperGraphStore,  # noqa: ARG001
+    cluster_id: str,  # noqa: ARG001
+    silo_id: str,  # noqa: ARG001
 ) -> list[dict[str, Any]]:
-    """Fetch facts belonging to a cluster."""
-    query = """
-    MATCH (f:Fact)-[:MEMBER_OF]->(c:Cluster {id: $cluster_id, silo_id: $silo_id})
-    RETURN f.id AS fact_id, f.content AS content, f.confidence AS confidence
-    """
-    rows = await graph_store.execute_query(query, {"cluster_id": cluster_id, "silo_id": silo_id})
-    return [dict(r) for r in rows]
+    """DEPRECATED (CITE v2): Clustering removed. Returns empty list."""
+    # TODO: Remove function after all callers are updated to v2 APIs.
+    return []
 
 
 async def get_proposal_candidates(
-    graph_store: HyperGraphStore,
-    silo_id: str,
-    config: ResolvedSiloConfig,
+    graph_store: HyperGraphStore,  # noqa: ARG001
+    silo_id: str,  # noqa: ARG001
+    config: ResolvedSiloConfig,  # noqa: ARG001
 ) -> list[dict[str, Any]]:
-    """Find clusters that qualify for ProposedBelief creation.
-
-    Returns clusters where:
-    - fact count >= belief_density_threshold
-    - no existing Belief or pending ProposedBelief
-    - estimated confidence in [proposal_threshold, auto_synthesis_threshold)
-    """
-    rows = await graph_store.execute_query(
-        LIST_DENSE_CLUSTERS_WITHOUT_BELIEF_OR_PROPOSAL,
-        {"silo_id": silo_id, "min_facts": config.belief_density_threshold},
-    )
-
-    candidates = []
-    for row in rows:
-        cluster_id = str(row["cluster_id"])
-        confidence = await estimate_cluster_confidence(graph_store, cluster_id, silo_id)
-
-        if config.proposal_threshold <= confidence < config.auto_synthesis_threshold:
-            candidates.append(
-                {
-                    "cluster_id": cluster_id,
-                    "fact_count": int(row["fact_count"]),
-                    "confidence": confidence,
-                }
-            )
-
-    return candidates
+    """DEPRECATED (CITE v2): Clustering removed. Returns empty list."""
+    # TODO: Remove function after all callers are updated to v2 APIs.
+    return []
 
 
 async def synthesize_proposal_content(fact_contents: list[str]) -> str:
