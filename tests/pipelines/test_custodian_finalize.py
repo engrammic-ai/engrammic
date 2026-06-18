@@ -36,4 +36,4 @@ def test_custodian_finalize_has_dependency_keys():
 
     dep_keys = list(custodian_finalize.dependency_keys)
     dep_names = [k.path[-1] for k in dep_keys]
-    assert "custodian_visit" in dep_names
+    assert "claim_to_fact_promotion" in dep_names

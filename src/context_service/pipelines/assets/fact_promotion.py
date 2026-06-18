@@ -57,7 +57,7 @@ RETURN DISTINCT cid, properties(other) AS props
 @dg.asset(
     name="claim_to_fact_promotion",
     partitions_def=silo_partitions,
-    deps=["custodian_visit"],  # Soft dep - just ordering
+    deps=["extraction"],  # After extraction completes
     description="Batch-promote :Claim nodes to :Fact per silo using EAG R1/R2 rules.",
     retry_policy=dg.RetryPolicy(max_retries=3, delay=10.0, backoff=dg.Backoff.EXPONENTIAL),
     tags={"dagster/concurrency_key": "claim_to_fact_promotion"},

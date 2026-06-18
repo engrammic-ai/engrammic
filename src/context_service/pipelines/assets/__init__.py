@@ -10,11 +10,8 @@ from context_service.pipelines.assets.causal import causal_transitivity
 from context_service.pipelines.assets.causal_tombstone import causal_tombstone
 from context_service.pipelines.assets.chain_feedback import chain_usefulness_signals
 from context_service.pipelines.assets.chain_pruning import chain_pruning
-from context_service.pipelines.assets.chain_stitch import chain_stitch
-from context_service.pipelines.assets.clustering import clustering
 from context_service.pipelines.assets.compaction import reasoning_compaction
 from context_service.pipelines.assets.custodian_finalize import custodian_finalize
-from context_service.pipelines.assets.custodian_visit import custodian_visit
 from context_service.pipelines.assets.dead_letter_reconciliation import (
     dead_letter_reconciliation,
 )
@@ -29,7 +26,6 @@ from context_service.pipelines.assets.marker_cleanup import marker_cleanup_asset
 from context_service.pipelines.assets.pattern_detection import pattern_detection
 from context_service.pipelines.assets.prewarm_sweep import prewarm_sweep_asset
 from context_service.pipelines.assets.proposal_cleanup import proposal_cleanup
-from context_service.pipelines.assets.proposal_detection import proposal_detection
 from context_service.pipelines.assets.reconciliation_gc import reconciliation_gc
 from context_service.pipelines.assets.retention import retention_sweep
 from context_service.pipelines.assets.step_embedding import (
@@ -51,12 +47,10 @@ from context_service.pipelines.assets.weak_link_review import weak_link_review_a
 all_assets: list[Any] = [
     extraction,
     embedding,
-    custodian_visit,
     custodian_finalize,
     claim_to_fact_promotion,
     causal_transitivity,
     causal_tombstone,
-    clustering,
     heat_asset,
     heat_diffusion_asset,
     edge_heat_asset,
@@ -65,7 +59,6 @@ all_assets: list[Any] = [
     retention_sweep,
     pattern_detection,
     llm_pattern_detection,
-    chain_stitch,
     belief_merge_asset,
     cascade_review_asset,
     weak_link_review_asset,
@@ -73,7 +66,6 @@ all_assets: list[Any] = [
     tag_maintenance,
     dead_letter_reconciliation,
     reconciliation_gc,
-    proposal_detection,
     proposal_cleanup,
     marker_cleanup_asset,
     chain_usefulness_signals,

@@ -46,8 +46,6 @@ def test_repo_root_is_cached() -> None:
         "prompts/custodian/fast_pass.yaml",
         "prompts/custodian/plan.yaml",
         "prompts/custodian/deep_pass.yaml",
-        "prompts/custodian/stitch.yaml",
-        "prompts/custodian/silo_synthesis.yaml",
         "prompts/custodian/supersession.yaml",
     ],
 )

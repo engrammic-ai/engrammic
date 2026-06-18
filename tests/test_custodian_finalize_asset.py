@@ -9,8 +9,6 @@ import dagster as dg
 from context_service.pipelines.assets.custodian_finalize import custodian_finalize, silo_partitions
 from context_service.pipelines.resources import MemgraphResource
 
-# custodian_finalize has a dg.Nothing typed `custodian_visit` dep that Dagster's runtime excludes
-# from kwargs. We call the underlying decorated function directly so we can provide it.
 _finalize_fn = custodian_finalize.op.compute_fn.decorated_fn
 
 
@@ -31,7 +29,7 @@ def test_custodian_finalize_output_has_required_metadata_keys() -> None:
 
     with patch("context_service.pipelines.assets.custodian_finalize.asyncio.run") as mock_run:
         mock_run.return_value = (5, 3)
-        result = _finalize_fn(ctx, memgraph=memgraph_res, custodian_visit=None)
+        result = _finalize_fn(ctx, memgraph=memgraph_res)
 
     assert isinstance(result, dg.Output)
     meta = result.metadata
@@ -45,7 +43,7 @@ def test_custodian_finalize_output_value_matches_run_result() -> None:
 
     with patch("context_service.pipelines.assets.custodian_finalize.asyncio.run") as mock_run:
         mock_run.return_value = (8, 6)
-        result = _finalize_fn(ctx, memgraph=memgraph_res, custodian_visit=None)
+        result = _finalize_fn(ctx, memgraph=memgraph_res)
 
     val = result.value
     assert val["silo_id"] == "silo-abc"
@@ -60,15 +58,15 @@ def test_custodian_finalize_returns_zeros_when_no_promotable_commitments() -> No
 
     with patch("context_service.pipelines.assets.custodian_finalize.asyncio.run") as mock_run:
         mock_run.return_value = (0, 0)
-        result = _finalize_fn(ctx, memgraph=memgraph_res, custodian_visit=None)
+        result = _finalize_fn(ctx, memgraph=memgraph_res)
 
     assert result.value["clusters_processed"] == 0
     assert result.value["findings_created"] == 0
 
 
-def test_custodian_finalize_depends_on_custodian_visit() -> None:
-    """custodian_finalize must declare a graph dependency on custodian_visit."""
+def test_custodian_finalize_depends_on_claim_to_fact_promotion() -> None:
+    """custodian_finalize must declare a graph dependency on claim_to_fact_promotion."""
     assert any(
-        "custodian_visit" in str(v)
+        "claim_to_fact_promotion" in str(v)
         for v in custodian_finalize.keys_by_input_name.values()  # type: ignore[attr-defined]
-    ), "custodian_finalize must depend on custodian_visit"
+    ), "custodian_finalize must depend on claim_to_fact_promotion"
