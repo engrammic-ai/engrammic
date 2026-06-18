@@ -3,9 +3,17 @@
 All queries use parameterized values for safety.
 Queries are silo-scoped; Node/Entity records carry silo_id only (no tenant_id).
 
-Phase-3 label scheme (O-30): content nodes are :Document, :Passage, :Claim.
-:Entity is the pivot label. No :Node label in new code.
+CITE v2 label scheme (5 nodes, 6 edges):
+  :Memory     — raw observations (was: Document, Passage, Utterance, Event, Observation)
+  :Claim      — evidence-backed assertions
+  :Fact       — SAGE-promoted claims
+  :Belief     — SAGE-synthesized, agent-accepted
+  :Commitment — agent decisions
 All retrieval-facing reads filter AND n.committed = true per O-75.
+
+Deprecated labels (kept as comments for migration reference):
+  :Document, :Passage, :Entity, :Cluster, :ProposedBelief, :Pattern
+Deprecated edges: EXTRACTED_FROM, MENTIONS, REFERENCES, MEMBER_OF
 """
 
 from __future__ import annotations
@@ -23,17 +31,14 @@ if TYPE_CHECKING:
 # Entity queries
 
 
+# DEPRECATED (CITE v2): Entity-to-entity relationship queries are removed.
+# :Entity nodes and their typed relationship edges are no longer part of the
+# v2 schema. Use ABOUT edges on Claim nodes to express entity references.
 def build_create_entity_relationship_query(rel_type: RelationshipType) -> str:
     """Build a CREATE entity relationship query with a real edge label.
 
-    The edge label comes from the closed :class:`RelationshipType` vocabulary.
-    Domain-specific nuance is captured on edge properties:
-    ``kind`` (free-form verb), ``directed``, ``confidence``, ``temporal``,
-    and ``source_node_ids``.
-
-    ``rel_type`` must be a :class:`RelationshipType` member; passing a raw
-    string is a type error.  The caller is responsible for validating the
-    input *before* reaching this function.
+    DEPRECATED (CITE v2): Entity-to-entity edges are removed in v2.
+    Kept for backward compatibility until all callers are updated.
     """
     label = rel_type.value  # guaranteed member of the closed enum
     return f"""
@@ -111,221 +116,58 @@ RETURN n.id AS id,
        n.properties AS properties
 """
 
-# Get clusters containing a set of result nodes (RECALL transaction).
-# Used to surface cluster-level context alongside individual results.
-GET_CLUSTERS_FOR_NODES = """
-MATCH (n {silo_id: $silo_id})-[:MEMBER_OF]->(cluster:Cluster)
-WHERE n.id IN $node_ids
-RETURN cluster.id AS cluster_id,
-       cluster.state AS state,
-       cluster.current_belief_id AS current_belief_id
-"""
+# DEPRECATED (CITE v2): Clustering via :Cluster nodes and :MEMBER_OF edges is
+# removed in v2. Belief synthesis is driven by SYNTHESIZED_FROM edges directly
+# between :Belief and :Fact nodes. These queries are dead code.
+# GET_CLUSTERS_FOR_NODES = ...            # removed
+# GET_CLUSTERS_FOR_NODES_WITH_FACTS = ... # removed
 
-# Extended version of GET_CLUSTERS_FOR_NODES that also returns fact_count and
-# a sample of fact_ids. Used by belief candidate hint detection to determine
-# whether a cluster has enough corroborating facts to suggest belief formation.
-GET_CLUSTERS_FOR_NODES_WITH_FACTS = """
-MATCH (n {silo_id: $silo_id})-[:MEMBER_OF]->(cluster:Cluster)
-WHERE n.id IN $node_ids
-WITH cluster, collect(n.id) AS matching_ids
-OPTIONAL MATCH (f:Fact {silo_id: $silo_id})-[:MEMBER_OF]->(cluster)
-WITH cluster, matching_ids, collect(f.id) AS all_fact_ids
-RETURN cluster.id AS cluster_id,
-       cluster.state AS state,
-       cluster.current_belief_id AS current_belief_id,
-       size(all_fact_ids) AS fact_count,
-       all_fact_ids[0..5] AS fact_ids
-"""
-
-# Cluster CRUD queries
-CREATE_CLUSTER = """
-CREATE (c:Cluster {
-    id: $id,
-    silo_id: $silo_id,
-    level: $level,
-    community_id: $community_id,
-    summary: $summary,
-    key_topics: $key_topics,
-    node_count: $node_count,
-    created_at: $created_at,
-    updated_at: $updated_at
-})
-RETURN c
-"""
-
-GET_CLUSTER = """
-MATCH (c:Cluster {id: $id, silo_id: $silo_id})
-RETURN c
-"""
-
-LIST_CLUSTERS = """
-MATCH (c:Cluster {silo_id: $silo_id})
-WHERE ($level IS NULL OR c.level = $level)
-RETURN c
-ORDER BY c.node_count DESC
-SKIP $offset
-LIMIT $limit
-"""
-
-COUNT_CLUSTERS = """
-MATCH (c:Cluster {silo_id: $silo_id})
-WHERE ($level IS NULL OR c.level = $level)
-RETURN count(c) as total
-"""
-
-DELETE_CLUSTERS = """
-MATCH (c:Cluster {silo_id: $silo_id})
-WHERE c.id IN $cluster_ids
-WITH collect(c) AS clusters, count(c) AS cnt
-FOREACH (c IN clusters | DETACH DELETE c)
-RETURN cnt AS deleted
-"""
-
-DELETE_ALL_CLUSTERS = """
-MATCH (c:Cluster {silo_id: $silo_id})
-WITH collect(c) AS clusters, count(c) AS cnt
-FOREACH (c IN clusters | DETACH DELETE c)
-RETURN cnt AS deleted
-"""
-
-# Cluster membership queries
-CREATE_MEMBER_OF = f"""
-MATCH (n {{id: $node_id, silo_id: $silo_id}})
-MATCH (c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
-WHERE {content_union_predicate("n")} OR n:{LABEL_ENTITY}
-CREATE (n)-[r:MEMBER_OF {{weight: $weight, created_at: $created_at}}]->(c)
-RETURN r
-"""
-
-CREATE_PART_OF = """
-MATCH (child:Cluster {id: $child_id, silo_id: $silo_id})
-MATCH (parent:Cluster {id: $parent_id, silo_id: $silo_id})
-CREATE (child)-[r:PART_OF {created_at: $created_at}]->(parent)
-RETURN r
-"""
-
-# R-006: collapse N per-pair CREATE_PART_OF calls into one UNWIND round-trip.
-# Each entry in $pairs must carry {child_id, parent_id}.
-BATCH_CREATE_PART_OF = """
-UNWIND $pairs AS p
-MATCH (child:Cluster {id: p.child_id, silo_id: $silo_id})
-MATCH (parent:Cluster {id: p.parent_id, silo_id: $silo_id})
-MERGE (child)-[:PART_OF {created_at: $created_at}]->(parent)
-RETURN count(*) AS created
-"""
-
-GET_CLUSTER_MEMBERS = """
-MATCH (n)-[r:MEMBER_OF]->(c:Cluster {id: $cluster_id, silo_id: $silo_id})
-RETURN n, labels(n) as node_labels, r.weight as weight
-ORDER BY r.weight DESC
-"""
-
-GET_NODE_CLUSTERS = """
-MATCH (n {id: $node_id})-[r:MEMBER_OF]->(c:Cluster {silo_id: $silo_id})
-RETURN c, r.weight as weight
-ORDER BY c.level ASC
-"""
-
-GET_CLUSTER_PARENT = """
-MATCH (child:Cluster {id: $child_id, silo_id: $silo_id})-[:PART_OF]->(parent:Cluster)
-RETURN parent.id AS parent_id
-"""
-
-# Leiden community detection via Memgraph MAGE (igraph implementation).
+# DEPRECATED (CITE v2): :Cluster nodes and all cluster membership / hierarchy
+# queries are removed in v2. Belief synthesis uses SYNTHESIZED_FROM edges
+# directly. Leiden community detection is no longer run on the graph.
+# Kept as comments for migration reference only.
 #
-# We use `igraphalg.community_leiden` (igraph's Leiden) instead of MAGE's
-# native `leiden_community_detection.get` because the native implementation
-# raises "No communities detected" on our graph at every resolution value.
-# igraph Leiden handles the same graph fine and is algorithmically the same.
-#
-# Signature:
-#   igraphalg.community_leiden(
-#     objective_function :: STRING = "CPM",
-#     weights :: STRING? = null,
-#     resolution_parameter :: FLOAT = 1.0,
-#     beta :: FLOAT = 0.01,
-#     initial_membership :: LIST? = null,
-#     n_iterations :: INTEGER = 2,
-#     node_weights :: LIST? = null
-#   ) :: (community_id :: INTEGER, node :: NODE)
-#
-# We pass CPM + varying resolution_parameter as our "gamma" to get the
-# hierarchical levels. Silo filtering is done after detection by only
-# processing assignments for nodes belonging to this silo.
-RUN_LEIDEN = f"""
-CALL igraphalg.community_leiden("CPM", null, $gamma, 0.01, null, 2, null)
-YIELD node, community_id
-WITH node, community_id
-WHERE node.silo_id = $silo_id
-  AND ({content_union_predicate("node")} OR node:{LABEL_ENTITY})
-RETURN node.id AS node_id, community_id
-"""
+# CREATE_CLUSTER, GET_CLUSTER, LIST_CLUSTERS, COUNT_CLUSTERS,
+# DELETE_CLUSTERS, DELETE_ALL_CLUSTERS, CREATE_MEMBER_OF,
+# CREATE_PART_OF, BATCH_CREATE_PART_OF, GET_CLUSTER_MEMBERS,
+# GET_NODE_CLUSTERS, GET_CLUSTER_PARENT  — all removed
 
-# PageRank via Memgraph MAGE
-# Note: PageRank runs on the whole graph; filter results by silo. Importance
-# applies to Document, Passage, Claim, and Entity nodes — all participate in
-# clustering and retrieval ranking.
-RUN_PAGERANK = f"""
-CALL pagerank.get()
-YIELD node, rank
-WITH node, rank
-WHERE ({content_union_predicate("node")} OR node:{LABEL_ENTITY})
-  AND node.silo_id = $silo_id
-RETURN node.id AS node_id, rank
-"""
+# DEPRECATED (CITE v2): Leiden community detection and cluster-based PageRank
+# are removed. :Cluster nodes no longer exist; MEMBER_OF edges are killed.
+# PageRank can still be run over content nodes for importance scoring but
+# no longer feeds a clustering pipeline.
+# RUN_LEIDEN   = ...   # removed
+# RUN_PAGERANK = ...   # removed (replace with a direct content-node variant if needed)
 
-UPDATE_CLUSTER_SUMMARY = """
-MATCH (c:Cluster {id: $id, silo_id: $silo_id})
-SET c.summary = $summary, c.key_topics = $key_topics, c.updated_at = $updated_at
-RETURN c
-"""
+# DEPRECATED (CITE v2): Cluster summary / importance queries removed with :Cluster.
+# UPDATE_CLUSTER_SUMMARY, BATCH_UPDATE_CLUSTER_SUMMARIES,
+# BATCH_CREATE_MEMBER_OF — all removed
 
-BATCH_UPDATE_CLUSTER_SUMMARIES = """
-UNWIND $updates AS u
-MATCH (c:Cluster {id: u.id, silo_id: $silo_id})
-SET c.summary = u.summary, c.key_topics = u.key_topics, c.updated_at = $updated_at
-"""
-
-# Batch operations
-BATCH_CREATE_MEMBER_OF = f"""
-MATCH (c:Cluster {{id: $cluster_id, silo_id: $silo_id}})
-UNWIND $node_ids AS nid
-MATCH (n {{id: nid, silo_id: $silo_id}})
-WHERE {content_union_predicate("n")} OR n:{LABEL_ENTITY}
-CREATE (n)-[:MEMBER_OF {{weight: $weight, created_at: $created_at}}]->(c)
-RETURN count(*) as created
-"""
-
+# Node importance update still valid for content nodes (used by PageRank scorer).
 BATCH_UPDATE_NODE_IMPORTANCE = f"""
 UNWIND $updates AS u
 MATCH (n {{id: u.node_id, silo_id: $silo_id}})
-WHERE {content_union_predicate("n")} OR n:{LABEL_ENTITY}
+WHERE {content_union_predicate("n")}
 SET n.importance = u.rank
 RETURN count(n) as updated
 """
 
-# --- Phase-3 §3.3 Claim write-path queries ---
-# NOTE: BATCH_CREATE_EXTRACTED_FROM (legacy Entity->Passage attribution) was
-# removed in phase-3.6. Per O-30, EXTRACTED_FROM is Claim->Passage only; the
-# legacy query wrote a spec-illegal edge shape. The Claim-mediated path lives
-# in ATTACH_CLAIM_TO_PASSAGE + UPSERT_ENTITY_MENTION below.
+# --- CITE v2 Claim write-path queries ---
+# In v2, Claims are linked to Memory nodes via DERIVED_FROM (not EXTRACTED_FROM).
+# Entity mentions use ABOUT edges (not MENTIONS -> :Entity).
 
-ATTACH_CLAIM_TO_PASSAGE = """
-MATCH (ps:Passage {id: $passage_id, silo_id: $silo_id})
+ATTACH_CLAIM_TO_MEMORY = """
+MATCH (m:Memory {id: $passage_id, silo_id: $silo_id})
 MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
-MERGE (ps)<-[:EXTRACTED_FROM]-(c)
+MERGE (c)-[:DERIVED_FROM]->(m)
 """
 
-UPSERT_ENTITY_MENTION = """
-MERGE (e:Entity {id: $entity_id, silo_id: $silo_id})
-ON CREATE SET
-    e.name = $name,
-    e.entity_type = $entity_type,
-    e.created_at = $created_at
-WITH e
-MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
-MERGE (c)-[:MENTIONS]->(e)
-"""
+# Alias retained for callers that used the old name.
+ATTACH_CLAIM_TO_PASSAGE = ATTACH_CLAIM_TO_MEMORY
+
+# DEPRECATED (CITE v2): :Entity nodes and MENTIONS edges are removed.
+# Use ABOUT edges to link Claims to target concepts expressed as node ids.
+# UPSERT_ENTITY_MENTION = ...  # removed
 
 PROMOTE_CLAIM_TO_FACT = """
 MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
@@ -362,13 +204,8 @@ RETURN count(*) AS edges_written
 def build_batch_entity_rel_query(rel_type: RelationshipType) -> str:
     """Build a batch CREATE entity relationship query with a real edge label.
 
-    The edge label comes from the closed :class:`RelationshipType` vocabulary.
-    Each row in ``$rels`` must carry ``source_id``, ``target_id``, ``kind``,
-    ``directed``, ``confidence``, ``temporal``, ``source_node_ids``, and
-    ``created_at``.
-
-    ``rel_type`` must be a :class:`RelationshipType` member; passing a raw
-    string is a type error.
+    DEPRECATED (CITE v2): Entity-to-entity edges are removed in v2.
+    Kept for backward compatibility until all callers are updated.
     """
     label = rel_type.value  # guaranteed member of the closed enum
     return f"""
@@ -387,14 +224,8 @@ RETURN count(*) as created
 """
 
 
-# Batch find-or-create entities in a single round trip.
-#
-# Each row in $entities carries: name, name_lower, qualified_name,
-# qualified_name_lower, entity_type, description, file_path, new_id.
-# Dedup semantics match FIND_ENTITY_BY_QUALIFIED_NAME (case-insensitive name
-# OR qualified_name match within the silo). When no existing match is
-# found, a new :Entity is created using new_id. Returns one row per input
-# entity: {name, id} so the caller can build a name -> id map.
+# DEPRECATED (CITE v2): :Entity nodes are removed. This query is kept for
+# backward compatibility until extraction pipeline callers are updated.
 BATCH_FIND_OR_CREATE_ENTITIES = """
 UNWIND $entities AS ent
 OPTIONAL MATCH (existing:Entity {silo_id: $silo_id})
@@ -422,19 +253,16 @@ WITH ent, coalesce(hit, created) AS e
 RETURN ent.name AS name, e.id AS id
 """
 
-# Per-seed heat + cluster tier batch read for PPR restart-vector weighting
-# (phase-5.2). Returns heat_score (nullable — 0.0 if unset) and the parent
-# Cluster.tier (HOT/WARM/COLD/null) so the walker can apply a tier-based
-# fallback when a seed has no heat yet (cold-start, O-61).
+# Per-seed heat batch read for PPR restart-vector weighting (phase-5.2).
+# In v2 :Cluster nodes are removed; cluster_tier always returns null.
 GET_SEED_HEAT_BATCH = """
 UNWIND $seed_ids AS sid
 MATCH (n {id: sid, silo_id: $silo_id})
 WHERE n.committed = true
   AND n.tombstoned_at IS NULL
-OPTIONAL MATCH (n)-[:MEMBER_OF]->(c:Cluster {silo_id: $silo_id})
 RETURN n.id AS node_id,
        coalesce(n.heat_score, 0.0) AS heat,
-       c.tier AS cluster_tier
+       null AS cluster_tier
 """
 
 # ---------------------------------------------------------------------------
@@ -653,32 +481,25 @@ ON CREATE SET
 RETURN n.id AS id
 """
 
-BATCH_ATTACH_CLAIMS_TO_DOCUMENT = """
+BATCH_ATTACH_CLAIMS_TO_MEMORY = """
 UNWIND $rows AS r
-MATCH (d:Document {id: r.doc_id, silo_id: $silo_id})
+MATCH (m:Memory {id: r.doc_id, silo_id: $silo_id})
 MATCH (c:Claim {id: r.claim_id, silo_id: $silo_id})
-MERGE (d)<-[:EXTRACTED_FROM]-(c)
+MERGE (c)-[:DERIVED_FROM]->(m)
 RETURN count(*) AS attached
 """
 
-BATCH_UPSERT_ENTITY_MENTIONS = """
-UNWIND $rows AS r
-MERGE (e:Entity {id: r.entity_id, silo_id: $silo_id})
-ON CREATE SET
-    e.name = r.name,
-    e.entity_type = r.entity_type,
-    e.created_at = r.created_at
-WITH e, r
-MATCH (c:Claim {id: r.claim_id, silo_id: $silo_id})
-MERGE (c)-[:MENTIONS]->(e)
-RETURN count(*) AS upserted
-"""
+# Alias retained for callers that used the old name.
+BATCH_ATTACH_CLAIMS_TO_DOCUMENT = BATCH_ATTACH_CLAIMS_TO_MEMORY
+
+# DEPRECATED (CITE v2): :Entity nodes and MENTIONS edges removed.
+# BATCH_UPSERT_ENTITY_MENTIONS = ...  # removed
 
 BATCH_ATTACH_CLAIM_REFERENCES = """
 UNWIND $rows AS r
 MATCH (c:Claim {id: r.claim_id, silo_id: $silo_id})
-MATCH (d:Document {id: r.ref_doc_id, silo_id: $silo_id})
-MERGE (c)-[:REFERENCES]->(d)
+MATCH (m:Memory {id: r.ref_doc_id, silo_id: $silo_id})
+MERGE (c)-[:DERIVED_FROM]->(m)
 RETURN count(*) AS attached
 """
 
@@ -755,7 +576,7 @@ RETURN
 
 CREATE_REASONING_TRACE_EVENT = """
 MATCH (chain:ReasoningChain {id: $chain_id, silo_id: $silo_id})
-MERGE (e:Event {id: $event_id, silo_id: $silo_id})
+MERGE (e:Memory {id: $event_id, silo_id: $silo_id})
 ON CREATE SET
     e.event_type = "reasoning_trace",
     e.content = $content,
@@ -824,6 +645,9 @@ RETURN
     coalesce(size(coalesce(chain.steps, [])), 0) AS step_count
 """
 
+# NOTE: REFERENCES here is an IntelligenceLayer chain-to-chain edge,
+# not the deprecated CITE content edge REFERENCES -> DERIVED_FROM.
+# :ReasoningChain is also deprecated in v2 but kept for active chains.
 CREATE_CHAIN_REFERENCES_EDGE = """
 MATCH (from_chain:ReasoningChain {id: $from_chain_id, silo_id: $silo_id})
 MATCH (to_chain:ReasoningChain {id: $to_chain_id, silo_id: $silo_id})
@@ -840,24 +664,23 @@ RETURN from_chain.id AS from_id, to_chain.id AS to_id
 # Belief synthesis queries (Wisdom layer)
 # ---------------------------------------------------------------------------
 
-# Fetch all :Fact nodes that are members of a given cluster (via MEMBER_OF).
-# Returns fact_id, content, confidence, and valid_from for each fact so the
-# synthesis function can build the LLM prompt without a second round-trip.
-GET_FACTS_IN_CLUSTER = """
-MATCH (f:Fact)-[:MEMBER_OF]->(c:Cluster {id: $cluster_id, silo_id: $silo_id})
+# DEPRECATED (CITE v2): GET_FACTS_IN_CLUSTER and BATCH_GET_FACTS_BY_CLUSTERS
+# used MEMBER_OF to link Facts to Clusters. In v2 the synthesizer selects
+# Facts directly by semantic similarity / confidence without clustering.
+# Use GET_FACTS_FOR_SYNTHESIS below instead.
+# GET_FACTS_IN_CLUSTER      = ...  # removed
+# BATCH_GET_FACTS_BY_CLUSTERS = ... # removed
+
+# Fetch Facts in a silo for synthesis, ordered by confidence.
+GET_FACTS_FOR_SYNTHESIS = """
+MATCH (f:Fact {silo_id: $silo_id})
+WHERE f.tombstoned_at IS NULL
+  AND (f.synthesized_at IS NULL OR f.synthesized_at < $since)
 RETURN f.id AS fact_id, f.content AS content,
        coalesce(f.confidence, 1.0) AS confidence,
        f.valid_from AS valid_from
 ORDER BY coalesce(f.confidence, 1.0) DESC
-"""
-
-# Batch version of GET_FACTS_IN_CLUSTER for N+1 fix (P-01).
-BATCH_GET_FACTS_BY_CLUSTERS = """
-UNWIND $cluster_ids AS cid
-MATCH (f:Fact)-[:MEMBER_OF]->(c:Cluster {id: cid, silo_id: $silo_id})
-RETURN c.id AS cluster_id, f.id AS fact_id, f.content AS content,
-       coalesce(f.confidence, 1.0) AS confidence, f.valid_from AS valid_from
-ORDER BY c.id, coalesce(f.confidence, 1.0) DESC
+LIMIT $limit
 """
 
 # Batch version of GET_CHAINS_FOR_COMMITMENT for N+1 fix (P-02).
@@ -882,10 +705,10 @@ WHERE id(n) = u.node_id
 SET n.tags = u.tags, n.auto_tagged_at = u.now
 """
 
-# Batch mark documents as extracted for N+1 fix (P-04).
+# Batch mark Memory nodes as extracted (N+1 fix P-04).
 BATCH_MARK_DOCS_EXTRACTED = """
 UNWIND $doc_ids AS did
-MATCH (d:Document {id: did, silo_id: $silo_id})
+MATCH (d:Memory {id: did, silo_id: $silo_id})
 SET d.extracted_at = $extracted_at
 """
 
@@ -965,116 +788,18 @@ RETURN b.id AS belief_id
 """
 
 # ---------------------------------------------------------------------------
-# Pattern queries (Wisdom layer)
+# DEPRECATED (CITE v2): Pattern queries
+#
+# :Pattern nodes and OBSERVED_IN edges are removed in v2. Temporal correlation
+# and co-occurrence detection relied on :Cluster / MEMBER_OF which are also
+# gone. Causal chain detection (CAUSES edges) was speculative and unused.
+#
+# CREATE_PATTERN, UPDATE_PATTERN_FREQUENCY, GET_PATTERN_BY_TYPE_AND_SUBJECT,
+# DETECT_TEMPORAL_CORRELATIONS, DETECT_CO_OCCURRING_FACTS, DETECT_CAUSAL_CHAINS,
+# DECAY_STALE_PATTERNS, TOMBSTONE_LOW_CONFIDENCE_PATTERNS — all removed.
+#
+# Temporal correlation is replaced by bitemporal edges in the SAGE synthesizer.
 # ---------------------------------------------------------------------------
-
-# Create a :Pattern node and attach OBSERVED_IN edges to each observed node.
-# $observed_node_ids is a list of node id strings (Fact, Belief, or Event).
-CREATE_PATTERN = """
-MERGE (p:Pattern {id: $pattern_id, silo_id: $silo_id})
-ON CREATE SET
-    p.pattern_type = $pattern_type,
-    p.description = $description,
-    p.frequency = $frequency,
-    p.confidence = $confidence,
-    p.first_observed = $first_observed,
-    p.last_observed = $last_observed,
-    p.created_at = $created_at
-WITH p
-UNWIND $observed_node_ids AS nid
-MATCH (n {id: nid, silo_id: $silo_id})
-MERGE (p)-[:OBSERVED_IN]->(n)
-RETURN p.id AS pattern_id, count(n) AS edges_created
-"""
-
-# Increment frequency and update last_observed timestamp.
-UPDATE_PATTERN_FREQUENCY = """
-MATCH (p:Pattern {id: $pattern_id, silo_id: $silo_id})
-SET p.frequency = p.frequency + 1,
-    p.last_observed = $last_observed
-RETURN p.id AS pattern_id, p.frequency AS frequency
-"""
-
-# Look up an existing pattern by type and subject description substring.
-GET_PATTERN_BY_TYPE_AND_SUBJECT = """
-MATCH (p:Pattern {silo_id: $silo_id, pattern_type: $pattern_type})
-WHERE toLower(p.description) CONTAINS toLower($subject)
-  AND (p.valid_to IS NULL OR p.valid_to > $as_of)
-  AND p.tombstoned_at IS NULL
-RETURN p.id AS pattern_id, p.description AS description,
-       p.frequency AS frequency, p.confidence AS confidence,
-       p.first_observed AS first_observed, p.last_observed AS last_observed
-LIMIT 1
-"""
-
-# Detect temporal correlations: pairs of :Fact nodes in the same silo whose
-# valid_from timestamps fall within $window_seconds of each other.  Returns
-# up to $limit distinct unordered pairs so the caller can decide which to
-# materialise as a :Pattern.
-DETECT_TEMPORAL_CORRELATIONS = """
-MATCH (a:Fact {silo_id: $silo_id})
-WHERE a.valid_from IS NOT NULL
-WITH a
-MATCH (b:Fact {silo_id: $silo_id})
-WHERE b.valid_from IS NOT NULL
-  AND b.valid_from >= a.valid_from - duration({seconds: $window_seconds})
-  AND b.valid_from <= a.valid_from + duration({seconds: $window_seconds})
-  AND a.id < b.id
-RETURN a.id AS fact_id_a, b.id AS fact_id_b,
-       a.content AS content_a, b.content AS content_b,
-       a.valid_from AS valid_from_a, b.valid_from AS valid_from_b
-ORDER BY a.valid_from DESC
-LIMIT $limit
-"""
-
-# Detect co-occurring facts: pairs of :Fact nodes sharing the same Leiden cluster.
-# Returns up to $limit distinct unordered pairs along with the shared cluster id.
-DETECT_CO_OCCURRING_FACTS = """
-MATCH (a:Fact {silo_id: $silo_id})-[:MEMBER_OF]->(c:Cluster {silo_id: $silo_id})
-MATCH (b:Fact {silo_id: $silo_id})-[:MEMBER_OF]->(c)
-WHERE id(a) < id(b)
-RETURN a.id AS fact_id_a, b.id AS fact_id_b,
-       a.content AS content_a, b.content AS content_b,
-       c.id AS cluster_id
-ORDER BY c.id
-LIMIT $limit
-"""
-
-# Detect causal chains: paths of min_hops..max_hops nodes connected by :CAUSES edges.
-# min_hops and max_hops are substituted as literals (Cypher requires literal bounds).
-# Returns the first and last node of each distinct chain along with chain length.
-DETECT_CAUSAL_CHAINS = """
-MATCH path = (a)-[:CAUSES*{min_hops}..{max_hops}]->(z)
-WHERE a.silo_id = $silo_id
-  AND z.silo_id = $silo_id
-  AND a <> z
-  AND ALL(n IN nodes(path) WHERE n.silo_id = $silo_id)
-RETURN a.id AS chain_start, z.id AS chain_end,
-       [n IN nodes(path) | n.id] AS chain_node_ids,
-       length(path) AS chain_length
-ORDER BY chain_length DESC
-LIMIT $limit
-"""
-
-# Apply exponential confidence decay to stale :Pattern nodes.
-# Patterns not re-observed since $stale_before get their confidence multiplied by $decay_factor.
-DECAY_STALE_PATTERNS = """
-MATCH (p:Pattern {silo_id: $silo_id})
-WHERE p.last_observed < $stale_before
-  AND p.tombstoned_at IS NULL
-SET p.confidence = p.confidence * $decay_factor,
-    p.decayed_at = $now
-RETURN count(p) AS patterns_decayed
-"""
-
-# Tombstone patterns whose confidence has fallen below the minimum threshold.
-TOMBSTONE_LOW_CONFIDENCE_PATTERNS = """
-MATCH (p:Pattern {silo_id: $silo_id})
-WHERE p.confidence < $min_confidence
-  AND p.tombstoned_at IS NULL
-SET p.tombstoned_at = $now
-RETURN count(p) AS patterns_tombstoned
-"""
 
 # ---------------------------------------------------------------------------
 # Belief merging queries (v1.4 Phase 4a)
@@ -1189,7 +914,8 @@ RETURN s.id AS session_id
 """
 
 # Cross-chain REFERENCES edges within the same session.
-# Connects every chain in the session to every other chain (directed, oldest -> newest).
+# NOTE: REFERENCES here is an IntelligenceLayer chain-to-chain edge,
+# not the deprecated CITE content edge REFERENCES -> DERIVED_FROM.
 CREATE_CROSS_CHAIN_REFERENCES = """
 MATCH (a:ReasoningChain)-[:PART_OF_SESSION]->(s:ReasoningSession {id: $session_id, silo_id: $silo_id})
 MATCH (b:ReasoningChain)-[:PART_OF_SESSION]->(s)
@@ -1444,7 +1170,7 @@ LIMIT 10
 # Only sets tail_id on first supersession (first chain wins for multi-supersession).
 CRYSTALLIZE_TO_COMMITMENT = """
 MATCH (wb:WorkingHypothesis {id: $belief_id, silo_id: $silo_id})
-CREATE (cm:Node:Commitment {
+CREATE (cm:Commitment {
     id: $commitment_id,
     silo_id: $silo_id,
     layer: "wisdom",
@@ -1484,140 +1210,119 @@ RETURN cm.id AS commitment_id, cm.confidence AS confidence
 
 
 # ---------------------------------------------------------------------------
-# ProposedBelief queries (Wisdom layer, awaiting validation)
+# DEPRECATED (CITE v2): ProposedBelief queries
 #
-# ProposedBelief nodes represent weak synthesis from the Custodian that
-# require validation before becoming active Beliefs. Status transitions:
-# pending -> accepted (creates Belief) or rejected (tombstoned).
+# In v2 the separate :ProposedBelief node type is removed. SAGE synthesizes
+# directly to :Belief nodes with status='pending'. Agents use accept() /
+# dismiss() on :Belief nodes (not on a separate ProposedBelief).
+#
+# Replacement pattern:
+#   CREATE_PROPOSED_BELIEF   -> CREATE_BELIEF_FROM_FACTS (sets status='pending')
+#   GET_PROPOSED_BELIEFS_*   -> GET_PENDING_BELIEFS_FOR_SILO below
+#   ACCEPT_PROPOSED_BELIEF   -> ACCEPT_PENDING_BELIEF below
+#   REJECT_PROPOSED_BELIEF   -> REJECT_PENDING_BELIEF below
 # ---------------------------------------------------------------------------
 
-CREATE_PROPOSED_BELIEF = """
-CREATE (pb:ProposedBelief {
-    id: $id,
-    silo_id: $silo_id,
-    content: $content,
-    confidence: $confidence,
-    status: 'pending',
-    created_at: $created_at,
-    updated_at: $created_at,
-    expires_at: $expires_at
-})
-WITH pb
+# Create a pending :Belief (SAGE synthesis output awaiting agent acceptance).
+CREATE_PENDING_BELIEF = """
+MERGE (b:Belief {id: $id, silo_id: $silo_id})
+ON CREATE SET
+    b.content = $content,
+    b.confidence = $confidence,
+    b.status = 'pending',
+    b.layer = 'wisdom',
+    b.created_at = $created_at,
+    b.updated_at = $created_at,
+    b.valid_from = $created_at,
+    b.expires_at = $expires_at
+WITH b
 UNWIND $synthesized_from_ids AS fact_id
 MATCH (f:Fact {id: fact_id, silo_id: $silo_id})
-CREATE (pb)-[:SYNTHESIZED_FROM]->(f)
-RETURN pb.id AS proposed_belief_id
+CREATE (b)-[:SYNTHESIZED_FROM]->(f)
+RETURN b.id AS proposed_belief_id
 """
 
-GET_PROPOSED_BELIEFS_FOR_SILO = """
-MATCH (pb:ProposedBelief {silo_id: $silo_id, status: 'pending'})
-OPTIONAL MATCH (pb)-[:SYNTHESIZED_FROM]->(f:Fact)
-WITH pb, collect(f.id) AS source_fact_ids
-RETURN pb.id AS proposed_belief_id,
-       pb.content AS content,
-       pb.confidence AS confidence,
-       pb.created_at AS created_at,
+GET_PENDING_BELIEFS_FOR_SILO = """
+MATCH (b:Belief {silo_id: $silo_id, status: 'pending'})
+WHERE b.tombstoned_at IS NULL
+OPTIONAL MATCH (b)-[:SYNTHESIZED_FROM]->(f:Fact)
+WITH b, collect(f.id) AS source_fact_ids
+RETURN b.id AS proposed_belief_id,
+       b.content AS content,
+       b.confidence AS confidence,
+       b.created_at AS created_at,
        source_fact_ids
-ORDER BY pb.created_at DESC
+ORDER BY b.created_at DESC
 LIMIT $limit
 """
 
-GET_PROPOSED_BELIEF = """
-MATCH (pb:ProposedBelief {id: $proposed_belief_id, silo_id: $silo_id})
-OPTIONAL MATCH (pb)-[:SYNTHESIZED_FROM]->(f:Fact)
-WITH pb, collect(f.id) AS source_fact_ids
-RETURN pb.id AS proposed_belief_id,
-       pb.content AS content,
-       pb.confidence AS confidence,
-       pb.status AS status,
-       pb.created_at AS created_at,
-       pb.accepted_at AS accepted_at,
-       pb.rejected_at AS rejected_at,
-       pb.rejection_reason AS rejection_reason,
+GET_PENDING_BELIEF = """
+MATCH (b:Belief {id: $proposed_belief_id, silo_id: $silo_id})
+OPTIONAL MATCH (b)-[:SYNTHESIZED_FROM]->(f:Fact)
+WITH b, collect(f.id) AS source_fact_ids
+RETURN b.id AS proposed_belief_id,
+       b.content AS content,
+       b.confidence AS confidence,
+       b.status AS status,
+       b.created_at AS created_at,
+       b.accepted_at AS accepted_at,
+       b.rejected_at AS rejected_at,
+       b.rejection_reason AS rejection_reason,
        source_fact_ids
 """
 
-ACCEPT_PROPOSED_BELIEF = """
-MATCH (pb:ProposedBelief {id: $proposed_belief_id, silo_id: $silo_id})
-WHERE pb.status = 'pending'
-SET pb.status = 'accepted',
-    pb.accepted_at = $accepted_at,
-    pb.updated_at = $accepted_at
-WITH pb
-CREATE (b:Belief {
-    id: $belief_id,
-    silo_id: $silo_id,
-    layer: 'wisdom',
-    content: pb.content,
-    confidence: CASE WHEN $override_confidence IS NOT NULL THEN $override_confidence ELSE pb.confidence END,
-    created_at: $accepted_at,
-    valid_from: $accepted_at
-})
-CREATE (b)-[:PROMOTED_FROM]->(pb)
-WITH pb, b
-OPTIONAL MATCH (pb)-[:SYNTHESIZED_FROM]->(f)
-WITH b, collect(f) AS facts
-FOREACH (fact IN facts | CREATE (b)-[:SYNTHESIZED_FROM]->(fact))
+ACCEPT_PENDING_BELIEF = """
+MATCH (b:Belief {id: $proposed_belief_id, silo_id: $silo_id})
+WHERE b.status = 'pending'
+SET b.status = 'active',
+    b.accepted_at = $accepted_at,
+    b.updated_at = $accepted_at,
+    b.confidence = CASE WHEN $override_confidence IS NOT NULL THEN $override_confidence ELSE b.confidence END
 RETURN b.id AS belief_id, b.confidence AS confidence
 """
 
-REJECT_PROPOSED_BELIEF = """
-MATCH (pb:ProposedBelief {id: $proposed_belief_id, silo_id: $silo_id})
-WHERE pb.status = 'pending'
-SET pb.status = 'rejected',
-    pb.rejected_at = $rejected_at,
-    pb.rejection_reason = $reason,
-    pb.updated_at = $rejected_at
-RETURN pb.id AS proposed_belief_id, pb.status AS status
+REJECT_PENDING_BELIEF = """
+MATCH (b:Belief {id: $proposed_belief_id, silo_id: $silo_id})
+WHERE b.status = 'pending'
+SET b.status = 'rejected',
+    b.rejected_at = $rejected_at,
+    b.rejection_reason = $reason,
+    b.updated_at = $rejected_at,
+    b.tombstoned_at = $rejected_at
+RETURN b.id AS proposed_belief_id, b.status AS status
 """
 
-GET_PENDING_PROPOSAL_COUNT_FOR_SILO = """
-MATCH (pb:ProposedBelief {silo_id: $silo_id, status: 'pending'})
-RETURN count(pb) AS pending_count
+GET_PENDING_BELIEF_COUNT_FOR_SILO = """
+MATCH (b:Belief {silo_id: $silo_id, status: 'pending'})
+WHERE b.tombstoned_at IS NULL
+RETURN count(b) AS pending_count
 """
 
 DELETE_EXPIRED_PROPOSALS = """
-MATCH (pb:ProposedBelief {silo_id: $silo_id, status: 'pending'})
-WHERE pb.expires_at IS NOT NULL AND pb.expires_at < $now
-WITH pb
-WITH count(pb) AS deleted_count, collect(pb) AS to_delete
+MATCH (b:Belief {silo_id: $silo_id, status: 'pending'})
+WHERE b.expires_at IS NOT NULL AND b.expires_at < $now
+WITH b
+WITH count(b) AS deleted_count, collect(b) AS to_delete
 FOREACH (p IN to_delete | DETACH DELETE p)
 RETURN deleted_count
 """
 
-GET_RECENTLY_REJECTED_PROPOSAL_FOR_CLUSTER = """
-MATCH (pb:ProposedBelief {silo_id: $silo_id, status: 'rejected'})
-WHERE pb.rejected_at IS NOT NULL AND pb.rejected_at >= $cutoff
-WITH pb
-MATCH (pb)-[:SYNTHESIZED_FROM]->(f:Fact)-[:MEMBER_OF]->(c:Cluster {id: $cluster_id, silo_id: $silo_id})
-RETURN count(pb) AS rejected_count
-"""
-
-LIST_DENSE_CLUSTERS_WITHOUT_BELIEF_OR_PROPOSAL = """
-MATCH (f:Fact)-[:MEMBER_OF]->(c:Cluster {silo_id: $silo_id})
-WITH c, count(f) AS fact_count
-WHERE fact_count >= $min_facts
-OPTIONAL MATCH (c)<-[:SYNTHESIZED_FROM]-(b:Belief {silo_id: $silo_id})
-WITH c, fact_count, b
-WHERE b IS NULL
-OPTIONAL MATCH (c)<-[:SYNTHESIZED_FROM]-(pb:ProposedBelief {silo_id: $silo_id, status: 'pending'})
-WITH c, fact_count, pb
-WHERE pb IS NULL
-RETURN c.id AS cluster_id, fact_count
-ORDER BY fact_count DESC
-"""
-
-GET_PENDING_PROPOSED_BELIEFS_FOR_CLAIMS = """
-MATCH (pb:ProposedBelief {silo_id: $silo_id, status: 'pending'})-[r:SYNTHESIZED_FROM]->(f:Fact {silo_id: $silo_id})
-WHERE (pb.expires_at IS NULL OR pb.expires_at > datetime())
+GET_PENDING_BELIEFS_FOR_FACTS = """
+MATCH (b:Belief {silo_id: $silo_id, status: 'pending'})-[r:SYNTHESIZED_FROM]->(f:Fact {silo_id: $silo_id})
+WHERE (b.expires_at IS NULL OR b.expires_at > datetime())
+  AND b.tombstoned_at IS NULL
   AND f.id IN $about_ids
-RETURN DISTINCT pb.id AS id,
-       pb.content AS content,
-       pb.confidence AS confidence,
-       pb.status AS status,
-       pb.created_at AS created_at
-ORDER BY pb.created_at DESC
+RETURN DISTINCT b.id AS id,
+       b.content AS content,
+       b.confidence AS confidence,
+       b.status AS status,
+       b.created_at AS created_at
+ORDER BY b.created_at DESC
 """
+
+# Backward-compat aliases for callers still using old names.
+GET_PENDING_PROPOSAL_COUNT_FOR_SILO = GET_PENDING_BELIEF_COUNT_FOR_SILO
+GET_PENDING_PROPOSED_BELIEFS_FOR_CLAIMS = GET_PENDING_BELIEFS_FOR_FACTS
 
 
 # ---------------------------------------------------------------------------
@@ -1898,7 +1603,7 @@ RETURN n.id AS id, n.properties.state AS state
 """
 
 CREATE_COMMITMENT_WITH_ABOUT = """
-CREATE (c:Node:Commitment {
+CREATE (c:Commitment {
     id: $id,
     silo_id: $silo_id,
     content: $content,
@@ -1951,33 +1656,13 @@ RETURN commitment.id AS id
 
 # TX4 SYNTHESIZE and TX5 REVISE_BELIEF queries
 
-GET_CLUSTER_FOR_SYNTHESIS = """
-MATCH (c:Cluster {id: $cluster_id, silo_id: $silo_id})
-SET c.synthesis_in_progress = true
-RETURN c.state AS state,
-       c.current_belief_id AS current_belief_id,
-       c.synthesis_retry_count AS synthesis_retry_count
-"""
-
-RELEASE_CLUSTER_LOCK = """
-MATCH (c:Cluster {id: $cluster_id, silo_id: $silo_id})
-SET c.synthesis_in_progress = false,
-    c.state = $state
-RETURN c.id AS id
-"""
-
-UPDATE_CLUSTER_AFTER_SYNTHESIS = """
-MATCH (c:Cluster {id: $cluster_id, silo_id: $silo_id})
-SET c.synthesis_in_progress = false,
-    c.state = $state,
-    c.current_belief_id = $belief_id,
-    c.synthesized_at = $synthesized_at,
-    c.synthesis_retry_count = 0
-RETURN c.id AS id
-"""
+# DEPRECATED (CITE v2): Cluster-based synthesis locking removed with :Cluster.
+# Synthesis in v2 operates on Facts directly; no cluster lock needed.
+# GET_CLUSTER_FOR_SYNTHESIS, RELEASE_CLUSTER_LOCK, UPDATE_CLUSTER_AFTER_SYNTHESIS
+# — all removed
 
 CREATE_BELIEF_WITH_SYNTHESIZED_FROM = """
-CREATE (b:Node:Belief {
+CREATE (b:Belief {
     id: $id,
     silo_id: $silo_id,
     content: $content,

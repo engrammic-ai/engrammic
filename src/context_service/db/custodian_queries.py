@@ -401,25 +401,11 @@ RETURN c.id AS id
 # Pass lifecycle helpers
 # ---------------------------------------------------------------------------
 
-# Fetch clusters for a silo at a given level, with member counts. Clusters
-# carry silo_id; membership is also confirmed via :Node members with matching
-# silo_id.
+# DEPRECATED (CITE v2): :Cluster nodes and MEMBER_OF edges removed in v2.
+# The Custodian pass no longer iterates over clusters; it synthesizes
+# directly from Facts. FETCH_CLUSTERS_BY_LEVEL is dead code.
 #
-# Params:
-#   silo_id   (str)
-#   level     (int)
-FETCH_CLUSTERS_BY_LEVEL = f"""
-MATCH (c:Cluster {{silo_id: $silo_id}})
-WHERE c.level = $level
-MATCH (n)-[:MEMBER_OF]->(c)
-WHERE {content_union_predicate("n")} AND n.silo_id = $silo_id
-WITH c, count(n) AS member_count
-RETURN c.id AS cluster_id,
-       c.level AS level,
-       member_count,
-       c.summary AS naive_summary
-ORDER BY member_count DESC
-"""
+# FETCH_CLUSTERS_BY_LEVEL = ...  # removed
 
 # Fetch published/extraction child finding summaries for a parent cluster.
 # Applies the mandatory finding source filter from CLAUDE.md.
@@ -509,11 +495,9 @@ async def fetch_clusters_by_level(
     silo_id: str,
     level: int,
 ) -> list[dict[str, Any]]:
-    """Return clusters for a silo at a given level, with member counts."""
-    return await client.execute_query(
-        FETCH_CLUSTERS_BY_LEVEL,
-        {"silo_id": silo_id, "level": level},
-    )
+    """DEPRECATED (CITE v2): Clustering removed in v2. Returns empty list."""
+    # :Cluster nodes and MEMBER_OF edges are gone; no replacement.
+    return []
 
 
 async def fetch_child_finding_summaries(
@@ -594,15 +578,15 @@ RETURN f.id AS finding_id,
 ORDER BY f.quality_score DESC
 """
 
-# Top 20 entities by citation frequency across a silo. Used as fallback when
-# Silo.description is null.
+# Top 20 content nodes by citation frequency across a silo.
+# Used as fallback when Silo.description is null.
 #
 # Params:
 #   silo_id   (str)
 FETCH_TOP_ENTITIES_BY_CITATION = """
 MATCH (f:Finding {silo_id: $silo_id})-[:CITES]->(n)
 WHERE (f.source = 'extraction' OR f.status = 'published')
-  AND (n:Document OR n:Passage OR n:Claim)
+  AND (n:Memory OR n:Claim OR n:Fact)
 WITH n, count(f) AS cite_count
 ORDER BY cite_count DESC
 LIMIT 20

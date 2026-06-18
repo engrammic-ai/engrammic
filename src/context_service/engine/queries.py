@@ -6,16 +6,17 @@ and org_id filtering for Silo ownership queries.
 
 TIMESTAMP CONVENTION: all created_at/updated_at/last_accessed_at fields are
 stored as epoch-MICROSECONDS integers via Cypher timestamp() (Memgraph's
-timestamp() returns µs, not ms). The sweep query (SWEEP_ORPHAN_DOCUMENTS)
+timestamp() returns µs, not ms). The sweep query (SWEEP_ORPHAN_MEMORIES)
 compares against timestamp() arithmetic — writing localDateTime() would
 produce incompatible values and break the sweep threshold.
 _parse_dt() in memgraph_store.py handles epoch-µs integers and native datetimes.
 
-Phase-3 label scheme (O-30):
-  :Document  — top-level content node (one per source doc)
-  :Passage   — retrieval-granularity chunk, DERIVED_FROM Document
-  :Claim     — extracted triple, EXTRACTED_FROM Passage
-  :Entity    — named entity pivot
+CITE v2 label scheme (5 nodes, 6 edges):
+  :Memory    — raw observations (was: Document, Passage, Utterance, Event, Observation)
+  :Claim     — evidence-backed assertions written by agents
+  :Fact      — SAGE-promoted claims (system-created)
+  :Belief    — SAGE-synthesized (system-created, agent-accepted)
+  :Commitment — agent decisions
 Content-union reads use content_union_predicate() from context_service.db.schema.
 All retrieval-facing reads filter AND n.committed = true per O-75.
 """
@@ -45,23 +46,21 @@ from primitives.eag.queries.silo import (
 from primitives.eag.queries.silo import (
     UPDATE_SILO as UPDATE_SILO,
 )
-from primitives.schema.labels import IntelligenceLabel, KnowledgeLabel
+from primitives.schema.labels import IntelligenceLabel, WisdomLabel
 
 from context_service.db.schema import (
+    EDGE_ABOUT,
     EDGE_DERIVED_FROM,
-    EDGE_EXTRACTED_FROM,
-    EDGE_MENTIONS,
-    EDGE_REFERENCES,
+    EDGE_SUPERSEDES,
     LABEL_CLAIM,
-    LABEL_DOCUMENT,
-    LABEL_ENTITY,
-    LABEL_PASSAGE,
+    LABEL_COMMITMENT,
+    LABEL_MEMORY,
     cite_union_predicate,
     content_union_predicate,
 )
 
 _LABEL_REASONING_CHAIN = IntelligenceLabel.REASONING_CHAIN  # "ReasoningChain"
-_LABEL_COMMITMENT = KnowledgeLabel.COMMITMENT  # "Commitment"
+_LABEL_COMMITMENT = WisdomLabel.COMMITMENT  # "Commitment"
 
 # --- Node Queries ---
 # NOTE: CREATE_NODE / UPSERT_NODE_SINGLE_RTT / BATCH_UPSERT_NODES are ingest-time
@@ -70,7 +69,7 @@ _LABEL_COMMITMENT = KnowledgeLabel.COMMITMENT  # "Commitment"
 # and do NOT need the committed filter.
 
 CREATE_NODE = f"""
-CREATE (n:{LABEL_DOCUMENT} {{
+CREATE (n:{LABEL_MEMORY} {{
     id: $id,
     type: $type,
     content: $content,
@@ -146,12 +145,11 @@ SET n.content = $content,
 RETURN n
 """
 
-# Single-RTT upsert targets :Document (primary content node at ingest).
-# See phase-3 §3.2 for the Document+Passage two-step (UPSERT_DOCUMENT_AND_PASSAGES).
-# This constant is retained for legacy single-doc upserts via MemgraphStore.
+# Single-RTT upsert targets :Memory (primary content node at ingest).
+# This constant is retained for legacy single-node upserts via MemgraphStore.
 # Returns one row: action in {"created","noop","version","stale"}, stored_version, new_node_id.
 UPSERT_NODE_SINGLE_RTT = f"""
-MERGE (n:{LABEL_DOCUMENT} {{id: $id, silo_id: $silo_id}})
+MERGE (n:{LABEL_MEMORY} {{id: $id, silo_id: $silo_id}})
 ON CREATE SET
     n.type = $type,
     n.content = $content,
@@ -186,7 +184,7 @@ FOREACH (_ IN CASE WHEN action = 'version' AND n.valid_to IS NULL THEN [1] ELSE 
 )
 WITH n, action, stored_version
 FOREACH (_ IN CASE WHEN action = 'version' THEN [1] ELSE [] END |
-    CREATE (v:{LABEL_DOCUMENT} {{
+    CREATE (v:{LABEL_MEMORY} {{
         id: $new_id,
         type: $type,
         content: $content,
@@ -219,7 +217,7 @@ RETURN action,
 
 BATCH_UPSERT_NODES = f"""
 UNWIND $rows AS r
-MERGE (n:{LABEL_DOCUMENT} {{id: r.id, silo_id: r.silo_id}})
+MERGE (n:{LABEL_MEMORY} {{id: r.id, silo_id: r.silo_id}})
 ON CREATE SET
     n.type = r.type,
     n.content = r.content,
@@ -254,7 +252,7 @@ FOREACH (_ IN CASE WHEN action = 'version' AND n.valid_to IS NULL THEN [1] ELSE 
 )
 WITH r, n, action, stored_version
 FOREACH (_ IN CASE WHEN action = 'version' THEN [1] ELSE [] END |
-    CREATE (v:{LABEL_DOCUMENT} {{
+    CREATE (v:{LABEL_MEMORY} {{
         id: r.new_id,
         type: r.type,
         content: r.content,
@@ -300,7 +298,7 @@ RETURN r.id AS input_id, e.id AS edge_id
 """
 
 CREATE_VERSION = f"""
-CREATE (n:{LABEL_DOCUMENT} {{
+CREATE (n:{LABEL_MEMORY} {{
     id: $new_id,
     type: $type,
     content: $content,
@@ -324,7 +322,7 @@ CREATE (n:{LABEL_DOCUMENT} {{
     reclassified_at: null
 }})
 WITH n
-MATCH (old:{LABEL_DOCUMENT} {{id: $old_id, silo_id: $silo_id}})
+MATCH (old:{LABEL_MEMORY} {{id: $old_id, silo_id: $silo_id}})
 WHERE old.valid_to IS NULL
 SET old.valid_to = $valid_from
 CREATE (n)-[:SUPERSEDES {{reason: $reason}}]->(old)
@@ -565,34 +563,10 @@ SKIP $offset
 LIMIT $limit
 """
 
-# Entity-graph projection: find content nodes reachable from a source node
-# via the LLM-extracted entity graph.
-#
-# Edge direction (O-30):
-#   Claim -[:EXTRACTED_FROM]-> Passage   (Claim points TO the Passage it came from)
-#   Claim -[:MENTIONS]-> Entity           (Claim points TO the Entity it names)
-#
-# Traversal: content_a <- EXTRACTED_FROM - Claim - MENTIONS -> Entity
-#                      <- MENTIONS - Claim - EXTRACTED_FROM -> content_b
-#
-# This correctly pivots through the entity without confusing Claim and Entity
-# roles. Committed filter on the target node per O-75.
-GET_ENTITY_GRAPH_NEIGHBORS = f"""
-MATCH (a) WHERE {content_union_predicate("a")}
-  AND a.id = $node_id AND a.silo_id = $silo_id
-MATCH (a)<-[:{EDGE_EXTRACTED_FROM}]-(c1:Claim)-[:{EDGE_MENTIONS}]->(e1:{LABEL_ENTITY})
-MATCH (e1)-[r]-(e2:{LABEL_ENTITY})
-WHERE e1 <> e2
-MATCH (e2)<-[:{EDGE_MENTIONS}]-(c2:Claim)-[:{EDGE_EXTRACTED_FROM}]->(b)
-WHERE {content_union_predicate("b")}
-  AND b.silo_id = $silo_id
-  AND b.id <> $node_id
-  AND b.committed = true
-WITH b, count(DISTINCT r) AS shared_links, count(DISTINCT e2) AS bridge_entities
-RETURN b, shared_links, bridge_entities
-ORDER BY shared_links DESC, bridge_entities DESC
-LIMIT $limit
-"""
+# DEPRECATED (CITE v2): Entity graph queries relied on EXTRACTED_FROM / MENTIONS edges
+# and :Entity nodes — all removed in v2. The entity pivot is replaced by ABOUT edges
+# and the Claim-centric knowledge model. Mark dead; no replacement query needed.
+# GET_ENTITY_GRAPH_NEIGHBORS = ...  # removed
 
 DELETE_BINARY_EDGE = """
 MATCH ()-[e:EDGE {id: $id, silo_id: $silo_id}]->()
@@ -670,15 +644,14 @@ CREATE (n)<-[:PARTICIPANT {{role: p.role}}]-(he)
 # --- Graph Traversal Queries ---
 
 # NEIGHBORHOOD is retrieval-facing — committed filter on both start and other.
-# Walks typed RAG edges (DERIVED_FROM, EXTRACTED_FROM, MENTIONS, REFERENCES)
-# plus generic EDGE and PARTICIPANT. Falls back to wildcard for EDGE/PARTICIPANT
-# since those are the hypergraph mechanics; typed edges handle the RAG graph.
+# Walks typed CITE v2 edges (DERIVED_FROM, SYNTHESIZED_FROM, SUPPORTS, CONTRADICTS,
+# SUPERSEDES, ABOUT) plus generic EDGE and PARTICIPANT.
 NEIGHBORHOOD = f"""
 MATCH (start) WHERE {content_union_predicate("start")}
   AND start.id = $id AND start.silo_id = $silo_id AND start.committed = true
 CALL {{
     WITH start
-    MATCH path = (start)-[:{EDGE_DERIVED_FROM}|{EDGE_EXTRACTED_FROM}|{EDGE_MENTIONS}|{EDGE_REFERENCES}|EDGE|PARTICIPANT*1..%d]-(other)
+    MATCH path = (start)-[:{EDGE_DERIVED_FROM}|{EDGE_ABOUT}|{EDGE_SUPERSEDES}|EDGE|PARTICIPANT*1..%d]-(other)
     WHERE {content_union_predicate("other")}
       AND other.silo_id = $silo_id
       AND other.id <> start.id
@@ -705,7 +678,7 @@ LIMIT $limit
 SHORTEST_PATH = f"""
 MATCH (a) WHERE {content_union_predicate("a")} AND a.id = $source_id AND a.silo_id = $silo_id AND a.committed = true
 MATCH (b) WHERE {content_union_predicate("b")} AND b.id = $target_id AND b.silo_id = $silo_id AND b.committed = true
-MATCH path = shortestPath((a)-[:{EDGE_DERIVED_FROM}|{EDGE_EXTRACTED_FROM}|{EDGE_MENTIONS}|{EDGE_REFERENCES}|EDGE|PARTICIPANT*..%d]-(b))
+MATCH path = shortestPath((a)-[:{EDGE_DERIVED_FROM}|{EDGE_ABOUT}|{EDGE_SUPERSEDES}|EDGE|PARTICIPANT*..%d]-(b))
 WHERE ALL(n IN nodes(path) WHERE ({content_union_predicate("n")} AND n.silo_id = $silo_id) OR n:HyperEdge)
 RETURN nodes(path) AS path_nodes
 """
@@ -740,30 +713,13 @@ SKIP $offset
 LIMIT $limit
 """
 
-# --- Entity Export Queries (for visualization) ---
-
-EXPORT_ALL_ENTITIES = f"""
-MATCH (e:{LABEL_ENTITY} {{silo_id: $silo_id}})
-RETURN e.id AS id, e.name AS name, e.entity_type AS entity_type,
-       e.description AS description
-ORDER BY e.name
-SKIP $offset LIMIT $limit
-"""
-
-EXPORT_ENTITY_RELATIONSHIPS = f"""
-MATCH (a:{LABEL_ENTITY} {{silo_id: $silo_id}})-[r]->(b:{LABEL_ENTITY} {{silo_id: $silo_id}})
-RETURN a.id AS source_id, b.id AS target_id, type(r) AS rel_type
-LIMIT $limit
-"""
-
-# EXTRACTED_FROM edges now go Entity->Passage (or Entity->Document).
-# Retrieval-facing: filter committed on the target content node.
-EXPORT_EXTRACTED_FROM = f"""
-MATCH (e:{LABEL_ENTITY} {{silo_id: $silo_id}})-[r:{EDGE_EXTRACTED_FROM}]->(n)
-WHERE {content_union_predicate("n")} AND n.silo_id = $silo_id AND n.committed = true
-RETURN e.id AS entity_id, n.id AS node_id
-LIMIT $limit
-"""
+# --- Entity Export Queries ---
+# DEPRECATED (CITE v2): :Entity nodes, EXTRACTED_FROM edges, and entity-to-entity
+# relationships are removed in v2. The entity pivot is replaced by the Claim layer
+# and ABOUT edges. These queries are kept as dead code for migration reference.
+# EXPORT_ALL_ENTITIES = ...         # removed
+# EXPORT_ENTITY_RELATIONSHIPS = ... # removed
+# EXPORT_EXTRACTED_FROM = ...       # removed
 
 # --- Index Queries ---
 # Phase-3: engine layer owns HyperEdge, Silo, and EDGE indexes.
@@ -832,81 +788,71 @@ SET n.stale = true, n.version = $expected_version + 1, n.updated_at = timestamp(
 RETURN n
 """
 
-# --- Phase-3 §3.2: Document/Passage write queries (O-75, O-118) ---
-# All label/edge strings come from context_service.db.schema constants; these
-# constants embed the literal names intentionally — they are the single source
-# for call sites that import from here.
+# --- CITE v2 Memory write queries ---
+# In v2, Document+Passage two-step collapses to a single :Memory node write.
+# Ingest writes :Memory directly; no chunking layer at graph level.
 
-UPSERT_DOCUMENT_AND_PASSAGES = f"""
-MERGE (d:{LABEL_DOCUMENT} {{id: $doc_id, silo_id: $silo_id}})
-SET d.committed = false,
-    d.current_version = $next_version,
-    d.created_at = timestamp(),
-    d.updated_at = timestamp(),
-    d += $doc_props
-WITH d
-UNWIND $passages AS p
-  MERGE (ps:{LABEL_PASSAGE} {{id: p.id, silo_id: $silo_id}})
-  SET ps.committed = false,
-      ps.created_at = timestamp(),
-      ps.updated_at = timestamp(),
-      ps += p.props
-  MERGE (d)<-[:{EDGE_DERIVED_FROM}]-(ps)
-RETURN count(ps) AS passage_count
+UPSERT_MEMORY_NODE = f"""
+MERGE (m:{LABEL_MEMORY} {{id: $doc_id, silo_id: $silo_id}})
+SET m.committed = false,
+    m.current_version = $next_version,
+    m.created_at = timestamp(),
+    m.updated_at = timestamp(),
+    m += $doc_props
+RETURN m.id AS memory_id
 """
 
-FLIP_DOCUMENT_COMMITTED_VERSION_GATED = f"""
-MATCH (d:{LABEL_DOCUMENT} {{id: $doc_id, silo_id: $silo_id, current_version: $claim_version}})
-SET d.committed = true
-WITH d
-MATCH (d)<-[:{EDGE_DERIVED_FROM}]-(ps:{LABEL_PASSAGE})
-SET ps.committed = true
-RETURN count(ps) AS flipped_passages
+# Alias retained for callers that used the old name.
+UPSERT_DOCUMENT_AND_PASSAGES = UPSERT_MEMORY_NODE
+
+FLIP_MEMORY_COMMITTED_VERSION_GATED = f"""
+MATCH (m:{LABEL_MEMORY} {{id: $doc_id, silo_id: $silo_id, current_version: $claim_version}})
+SET m.committed = true
+RETURN count(m) AS flipped
 """
 
-RECLASSIFY_DOCUMENT = f"""
-MATCH (d:{LABEL_DOCUMENT} {{id: $doc_id, silo_id: $silo_id}})
-SET d.content_class = coalesce($content_class, d.content_class),
-    d.ingest_class = coalesce($ingest_class, d.ingest_class),
-    d.reclassified_at = timestamp()
-RETURN d.id AS doc_id,
-       d.content_class AS content_class,
-       d.ingest_class AS ingest_class,
-       d.raw_payload AS raw_payload,
-       d.raw_payload_truncated AS raw_payload_truncated,
-       d.uri AS uri,
-       d.mime AS mime,
-       d.content_hash AS content_hash
+# Alias retained for callers that used the old name.
+FLIP_DOCUMENT_COMMITTED_VERSION_GATED = FLIP_MEMORY_COMMITTED_VERSION_GATED
+
+RECLASSIFY_MEMORY = f"""
+MATCH (m:{LABEL_MEMORY} {{id: $doc_id, silo_id: $silo_id}})
+SET m.content_class = coalesce($content_class, m.content_class),
+    m.ingest_class = coalesce($ingest_class, m.ingest_class),
+    m.reclassified_at = timestamp()
+RETURN m.id AS doc_id,
+       m.content_class AS content_class,
+       m.ingest_class AS ingest_class,
+       m.raw_payload AS raw_payload,
+       m.raw_payload_truncated AS raw_payload_truncated,
+       m.uri AS uri,
+       m.mime AS mime,
+       m.content_hash AS content_hash
 """
 
-# O-77 tombstone cascade: hard delete Document + Passages + Findings.
-# `committed = false` flip would happen first in production via a separate
-# write so retrieval sees fewer results before vectors drop; the route
-# handler sequences (flip -> qdrant.delete_by_document -> this) per the
-# 4.4.5 plan's race-prevention discipline.
-TOMBSTONE_DOCUMENT = f"""
-MATCH (d:{LABEL_DOCUMENT} {{id: $doc_id, silo_id: $silo_id}})
-OPTIONAL MATCH (d)<-[:{EDGE_DERIVED_FROM}]-(ps:{LABEL_PASSAGE})
-WITH d, [p IN collect(DISTINCT ps) WHERE p IS NOT NULL] AS passages
-WITH d, passages, size(passages) AS deleted_passages
-OPTIONAL MATCH (ps_item:{LABEL_PASSAGE})<-[:HAS_CLAIM|SUPPORTS]-(f:Finding)
-WHERE ps_item IN passages
-WITH d, passages, deleted_passages, [x IN collect(DISTINCT f) WHERE x IS NOT NULL] AS findings
-WITH d, passages, deleted_passages, findings, size(findings) AS deleted_findings
-FOREACH (p IN passages | DETACH DELETE p)
-FOREACH (fn IN findings | DETACH DELETE fn)
-DETACH DELETE d
+# Alias retained for callers that used the old name.
+RECLASSIFY_DOCUMENT = RECLASSIFY_MEMORY
+
+# Tombstone cascade: hard delete :Memory node. In v2 there are no Passage child
+# nodes; Claims are independent nodes linked by DERIVED_FROM.
+TOMBSTONE_MEMORY = f"""
+MATCH (m:{LABEL_MEMORY} {{id: $doc_id, silo_id: $silo_id}})
+WITH m, 0 AS deleted_passages, 0 AS deleted_findings
+DETACH DELETE m
 RETURN 1 AS deleted_docs, deleted_passages, deleted_findings
 """
 
-SWEEP_ORPHAN_DOCUMENTS = f"""
-MATCH (d:{LABEL_DOCUMENT})
-WHERE d.committed = false AND d.created_at < timestamp() - $age_ms
-WITH d
-MATCH (d)<-[:{EDGE_DERIVED_FROM}]-(ps:{LABEL_PASSAGE})
-DETACH DELETE d, ps
-RETURN count(d) AS deleted_docs
+# Alias retained for callers that used the old name.
+TOMBSTONE_DOCUMENT = TOMBSTONE_MEMORY
+
+SWEEP_ORPHAN_MEMORIES = f"""
+MATCH (m:{LABEL_MEMORY})
+WHERE m.committed = false AND m.created_at < timestamp() - $age_ms
+DETACH DELETE m
+RETURN count(m) AS deleted_docs
 """
+
+# Alias retained for callers that used the old name.
+SWEEP_ORPHAN_DOCUMENTS = SWEEP_ORPHAN_MEMORIES
 
 # --- Inference storage queries (phase-8, spec R16) ---
 
@@ -941,7 +887,7 @@ RETURN count(c) AS flipped
 """
 
 UPSERT_COMMITMENT = f"""
-MERGE (c:{LABEL_CLAIM}:{_LABEL_COMMITMENT} {{id: $commitment_id}})
+MERGE (c:{LABEL_COMMITMENT} {{id: $commitment_id}})
 ON CREATE SET
     c.silo_id = $silo_id,
     c.subject = $subject,
@@ -966,7 +912,7 @@ RETURN c.id AS id, c.committed AS committed
 """
 
 FLIP_COMMITMENT_COMMITTED = f"""
-MATCH (c:{LABEL_CLAIM}:{_LABEL_COMMITMENT} {{id: $commitment_id, silo_id: $silo_id}})
+MATCH (c:{LABEL_COMMITMENT} {{id: $commitment_id, silo_id: $silo_id}})
 WHERE c.committed = false
 SET c.committed = true
 RETURN count(c) AS flipped
@@ -983,8 +929,8 @@ MERGE (chain)-[:CRYSTALLIZED_INTO]->(target)
 CREATE_DERIVED_FROM_EVIDENCE_EDGE = f"""
 MATCH (chain:{_LABEL_REASONING_CHAIN} {{id: $chain_id}})
 MATCH (evidence {{id: $evidence_id}})
-WHERE (evidence:{LABEL_DOCUMENT} OR evidence:{LABEL_PASSAGE} OR evidence:{LABEL_CLAIM}
-      OR evidence:Finding OR evidence:{_LABEL_COMMITMENT} OR evidence:{_LABEL_REASONING_CHAIN})
+WHERE (evidence:{LABEL_MEMORY} OR evidence:{LABEL_CLAIM}
+      OR evidence:Finding OR evidence:{LABEL_COMMITMENT} OR evidence:{_LABEL_REASONING_CHAIN})
   AND ({FILTER_FINDING_STATUS.format(var="evidence")})
 MERGE (chain)-[r:DERIVED_FROM_EVIDENCE]->(evidence)
 SET r.rank = $rank, r.relevance_score = $relevance_score
@@ -998,12 +944,15 @@ RETURN depth
 LIMIT 1
 """
 
-# Fetch all passage IDs under a document before tombstone deletes them.
-# Must run before TOMBSTONE_DOCUMENT so the cascade can walk DERIVED_FROM_EVIDENCE.
-GET_DOCUMENT_PASSAGE_IDS = f"""
-MATCH (d:{LABEL_DOCUMENT} {{id: $doc_id, silo_id: $silo_id}})<-[:{EDGE_DERIVED_FROM}]-(ps:{LABEL_PASSAGE})
-RETURN ps.id AS passage_id
+# In v2 :Memory nodes have no Passage children. Fetch Claims derived from a
+# Memory node before tombstone — needed to cascade DERIVED_FROM_EVIDENCE walks.
+GET_MEMORY_CLAIM_IDS = f"""
+MATCH (m:{LABEL_MEMORY} {{id: $doc_id, silo_id: $silo_id}})<-[:{EDGE_DERIVED_FROM}]-(c:{LABEL_CLAIM})
+RETURN c.id AS passage_id
 """
+
+# Alias retained for callers that used the old name.
+GET_DOCUMENT_PASSAGE_IDS = GET_MEMORY_CLAIM_IDS
 
 # --- Erasure cascade queries (phase-8, P-G) ---
 
@@ -1142,7 +1091,7 @@ RETURN c.id AS id
 # ---------------------------------------------------------------------------
 
 CREATE_FINDING_FROM_COMMITMENT = f"""
-MATCH (c:{LABEL_CLAIM}:{_LABEL_COMMITMENT} {{id: $commitment_id, silo_id: $silo_id}})
+MATCH (c:{LABEL_COMMITMENT} {{id: $commitment_id, silo_id: $silo_id}})
 MERGE (f:Finding {{id: $finding_id, silo_id: $silo_id}})
 ON CREATE SET
     f.subject = c.subject,
