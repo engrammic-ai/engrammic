@@ -28,7 +28,6 @@ from context_service.utils.json import dumps, loads
 if TYPE_CHECKING:
     from context_service.embeddings import EmbeddingService
     from context_service.embeddings.sparse import SparseEncoder
-    from context_service.engine.history import BeliefHistory
     from context_service.engine.protocols import HyperGraphStore
     from context_service.expansion.generator import ExpansionGenerator
     from context_service.services.auto_tagging import AutoTaggingService
@@ -1849,30 +1848,3 @@ class ContextService:
             edges_traversed=len(edges_out),
         )
 
-    async def belief_history(
-        self,
-        silo_id: str,
-        node_id: str,
-        limit: int = 20,
-    ) -> BeliefHistory:
-        """Return the supersession chain for a fact node.
-
-        Wraps ``engine.history.get_belief_history`` so callers use the service
-        protocol rather than accessing ``_memgraph`` directly.
-
-        Args:
-            silo_id: Silo UUID string for scoping.
-            node_id: Starting fact node ID.
-            limit: Maximum chain length to traverse.
-
-        Returns:
-            BeliefHistory dataclass.
-        """
-        from context_service.engine.history import get_belief_history
-
-        return await get_belief_history(
-            memgraph=self._memgraph,
-            silo_id=silo_id,
-            start_id=node_id,
-            limit=limit,
-        )

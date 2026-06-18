@@ -94,12 +94,6 @@ EXTRACTION_CLAIMS_TOTAL = Counter(
     registry=REGISTRY,
 )
 
-CUSTODIAN_PROMOTIONS_TOTAL = Counter(
-    "custodian_promotions_total",
-    "Total claims promoted to facts by the custodian",
-    registry=REGISTRY,
-)
-
 CUSTODIAN_REJECTIONS_TOTAL = Counter(
     "custodian_rejections_total",
     "Total claims rejected by the custodian",
@@ -173,7 +167,6 @@ __all__ = [
     "REGISTRY",
     "HTTP_REQUEST_LATENCY",
     "HTTP_REQUESTS_TOTAL",
-    "CUSTODIAN_PROMOTIONS_TOTAL",
     "CUSTODIAN_REJECTIONS_TOTAL",
     "record_edge_confidence",
     "record_belief_confidence",

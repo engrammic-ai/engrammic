@@ -144,13 +144,3 @@ class ProvenanceStep(BaseModel):
     confidence: float
 
 
-class HistoryEntry(BaseModel):
-    """An entry in belief history."""
-
-    node_id: str
-    content: str
-    valid_from: datetime
-    valid_to: datetime | None = None
-    superseded_by: str | None = None
-    supersession_reason: str | None = None
-    confidence: float

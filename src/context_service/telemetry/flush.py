@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import structlog
 
@@ -60,24 +59,3 @@ async def flush_metrics_to_db(pool: asyncpg.Pool, buffer: MetricsBuffer) -> None
     logger.debug("metrics_flushed", row_count=len(rows))
 
 
-async def record_error_to_db(
-    pool: asyncpg.Pool,
-    silo_id: str,
-    error_type: str,
-    error_message: str | None = None,
-    tool_name: str | None = None,
-    context: dict[str, Any] | None = None,
-) -> None:
-    """Record an individual error to service_errors table."""
-    async with pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO service_errors (silo_id, error_type, error_message, tool_name, context)
-            VALUES ($1, $2, $3, $4, $5)
-            """,
-            silo_id,
-            error_type,
-            error_message,
-            tool_name,
-            json.dumps(context) if context else None,
-        )
