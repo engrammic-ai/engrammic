@@ -1,6 +1,6 @@
 # Clustering Removal Cleanup
 
-**Status:** Planned  
+**Status:** Complete (commit 37a77a2b)  
 **Context:** CITE v2 schema removes clustering (Leiden, PageRank, `:Cluster` nodes, `:MEMBER_OF` edges)  
 **Blocker:** None — stubs in place, runtime safe
 
@@ -67,7 +67,7 @@ This is a separate design task — may warrant its own plan.
 
 ## Acceptance criteria
 
-- [ ] No references to `:Cluster`, `:MEMBER_OF`, Leiden, PageRank in codebase
-- [ ] `just check` passes
-- [ ] Tests pass (some tests may need deletion if they tested clustering)
-- [ ] v2 synthesis trigger designed and implemented
+- [x] No references to `:Cluster`, `:MEMBER_OF`, Leiden, PageRank in codebase
+- [x] `just check` passes
+- [x] Tests pass (some tests may need deletion if they tested clustering)
+- [ ] v2 synthesis trigger designed and implemented (separate plan)
