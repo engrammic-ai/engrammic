@@ -37,9 +37,18 @@ def load_tool_config() -> dict[str, Any]:
 
 
 def get_tool_description(tool_name: str) -> str:
-    """Get description for a tool from config."""
+    """Get description for a tool from config.
+
+    Checks active tools first, then deprecated_tools for backward compatibility.
+    """
     config = load_tool_config()
-    return str(config["tools"].get(tool_name, {}).get("description", ""))
+    active = config.get("tools", {}).get(tool_name)
+    if active:
+        return str(active.get("description", ""))
+    deprecated = config.get("deprecated_tools", {}).get(tool_name)
+    if deprecated:
+        return str(deprecated.get("description", ""))
+    return ""
 
 
 def get_mcp_instructions() -> str:
@@ -50,6 +59,10 @@ def get_mcp_instructions() -> str:
 
 def register_tools(mcp: FastMCP) -> None:
     """Register all MCP tools.
+
+    CITE v2 active surface: remember, learn, recall, trace, forget, tick.
+    Deprecated tools are still registered for backward compatibility but
+    agents should not use them for new work. See mcp_tools.yaml for details.
 
     Args:
         mcp: FastMCP server instance.
@@ -77,28 +90,43 @@ def register_tools(mcp: FastMCP) -> None:
         trace,
     )
 
-    tool_registers = {
+    # Active v2 tools
+    active_registers = {
         "remember": remember.register,
         "learn": learn.register,
-        "decide": decide.register,
-        "accept": accept.register,
         "recall": recall.register,
         "trace": trace.register,
-        "history": history.register,
-        "link": link.register,
-        "reason": reason.register,
-        "reflect": reflect.register,
+        "forget": forget.register,
+        "tick": tick.register,
+    }
+
+    # Deprecated tools kept for backward compatibility
+    deprecated_registers = {
+        "decide": decide.register,
+        "accept": accept.register,
+        "dismiss": dismiss.register,
         "hypothesize": hypothesize.register,
         "revise": revise.register,
         "commit": commit.register,
-        "dismiss": dismiss.register,
-        "tick": tick.register,
+        "reason": reason.register,
+        "reflect": reflect.register,
+        "link": link.register,
+        "history": history.register,
         "patterns": patterns.register,
-        "forget": forget.register,
     }
 
-    for name, register_fn in tool_registers.items():
+    for name, register_fn in active_registers.items():
         register_fn(mcp)
         logger.debug("mcp_tool_registered", tool=name)
 
-    logger.info("mcp_tools_registered", tool_count=len(tool_registers))
+    for name, register_fn in deprecated_registers.items():
+        register_fn(mcp)
+        logger.debug("mcp_tool_registered", tool=name, deprecated=True)
+
+    total = len(active_registers) + len(deprecated_registers)
+    logger.info(
+        "mcp_tools_registered",
+        tool_count=total,
+        active_count=len(active_registers),
+        deprecated_count=len(deprecated_registers),
+    )

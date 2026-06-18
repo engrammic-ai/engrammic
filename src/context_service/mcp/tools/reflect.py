@@ -1,5 +1,10 @@
 # src/context_service/mcp/tools/reflect.py
-"""MCP tool: reflect - Record a meta-observation."""
+"""MCP tool: reflect - Record a meta-observation.
+
+DEPRECATED (CITE v2): MetaObservation node type consolidated into Memory.
+Use remember() with tags=['meta', 'reflection'] or similar instead.
+This tool is kept for backward compatibility only.
+"""
 
 from __future__ import annotations
 

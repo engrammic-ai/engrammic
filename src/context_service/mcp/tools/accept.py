@@ -1,5 +1,10 @@
 # src/context_service/mcp/tools/accept.py
-"""MCP tool: accept - Accept a ProposedBelief, promoting it to Belief."""
+"""MCP tool: accept - Accept a ProposedBelief, promoting it to Belief.
+
+DEPRECATED (CITE v2): ProposedBelief has been consolidated into Belief with a
+status property. Wisdom promotion is now passive (system-synthesized by SAGE).
+This tool is kept for backward compatibility only.
+"""
 
 from __future__ import annotations
 

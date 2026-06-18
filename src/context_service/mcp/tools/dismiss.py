@@ -1,4 +1,9 @@
-"""MCP tool: dismiss - Dismiss a Contradiction/StaleCommitment marker or reject a ProposedBelief."""
+"""MCP tool: dismiss - Dismiss a Contradiction/StaleCommitment marker or reject a ProposedBelief.
+
+DEPRECATED (CITE v2): Marker dismissal flow and ProposedBelief type removed with Intelligence
+writes in CITE v2. This tool is kept for backward compatibility only. Use forget() for
+explicit deletion requests.
+"""
 
 from __future__ import annotations
 

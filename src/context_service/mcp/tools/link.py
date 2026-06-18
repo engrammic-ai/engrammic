@@ -1,5 +1,11 @@
 # src/context_service/mcp/tools/link.py
-"""MCP tool: link - Create a relationship between nodes."""
+"""MCP tool: link - Create a relationship between nodes.
+
+DEPRECATED (CITE v2): Explicit link creation folded into remember/learn.
+The v2 edge set (DERIVED_FROM, SUPERSEDES, SUPPORTS, CONTRADICTS, ABOUT) is
+managed by SAGE and the supersedes param. This tool is kept for backward
+compatibility only.
+"""
 
 from __future__ import annotations
 
@@ -60,7 +66,9 @@ def register(mcp: FastMCP) -> None:
         Args:
             from_node: Source node ID.
             to_node: Target node ID.
-            relationship: Type: SUPPORTS|CONTRADICTS|DERIVED_FROM|RELATED_TO|REFERENCES|CAUSES|CORROBORATES|PREVENTS|SUPERSEDES.
+            relationship: Type (CITE v2): DERIVED_FROM|SYNTHESIZED_FROM|SUPERSEDES|SUPPORTS|CONTRADICTS|ABOUT.
+                Legacy types (REFERENCES, CORROBORATES, CAUSES, PREVENTS, RELATED_TO) accepted
+                but mapped to v2 equivalents or ignored.
             weight: Strength 0.0-10.0 (default 1.0).
             note: Optional annotation.
 

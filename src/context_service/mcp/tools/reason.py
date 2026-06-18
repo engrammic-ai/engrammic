@@ -1,5 +1,10 @@
 # src/context_service/mcp/tools/reason.py
-"""MCP tool: reason - Record a reasoning chain."""
+"""MCP tool: reason - Record a reasoning chain.
+
+DEPRECATED (CITE v2): ReasoningChain node type removed. Intelligence writes
+killed. This tool is kept for backward compatibility only and has no
+replacement in v2.
+"""
 
 from __future__ import annotations
 

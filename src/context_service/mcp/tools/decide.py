@@ -1,5 +1,10 @@
 # src/context_service/mcp/tools/decide.py
-"""MCP tool: decide - Declare a decision/commitment directly."""
+"""MCP tool: decide - Declare a decision/commitment directly.
+
+DEPRECATED (CITE v2): Wisdom writes are now passive (system-synthesized).
+This tool is kept for backward compatibility only. Use learn() for new work;
+SAGE promotes Claims to Facts and synthesizes Beliefs/Commitments automatically.
+"""
 
 from __future__ import annotations
 

@@ -1,5 +1,10 @@
 # src/context_service/mcp/tools/hypothesize.py
-"""MCP tool: hypothesize - Form a tentative belief."""
+"""MCP tool: hypothesize - Form a tentative belief.
+
+DEPRECATED (CITE v2): Intelligence writes killed. WorkingHypothesis node type
+removed. This tool is kept for backward compatibility only. Use learn() for
+new work; SAGE handles synthesis automatically.
+"""
 
 from __future__ import annotations
 

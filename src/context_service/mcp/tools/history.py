@@ -1,5 +1,10 @@
 # src/context_service/mcp/tools/history.py
-"""MCP tool: history - Show how a belief evolved over time."""
+"""MCP tool: history - Show how a belief evolved over time.
+
+DEPRECATED (CITE v2): Folded into trace(). Use trace(node_id) to walk the
+full provenance chain including SUPERSEDES edges. This tool is kept for
+backward compatibility only.
+"""
 
 from __future__ import annotations
 

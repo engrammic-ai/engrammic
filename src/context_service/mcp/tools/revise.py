@@ -1,5 +1,10 @@
 # src/context_service/mcp/tools/revise.py
-"""MCP tool: revise - Update a tentative belief."""
+"""MCP tool: revise - Update a tentative belief.
+
+DEPRECATED (CITE v2): Intelligence writes killed. This tool is kept for
+backward compatibility only. Use learn() with supersedes param to update
+an existing claim.
+"""
 
 from __future__ import annotations
 

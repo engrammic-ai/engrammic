@@ -307,7 +307,8 @@ def register(mcp: FastMCP) -> None:
             depth: 0=flat, 1-3=graph traversal.
             layers: Filter: memory|knowledge|wisdom|intelligence.
             top_k: Max results for search (default 10, or preset value).
-            include_hypotheses: Include tentative beliefs from current session.
+            include_hypotheses: Deprecated (CITE v2). WorkingHypothesis node type removed.
+                Always returns an empty list. Ignored.
             bypass_cache: When True, skip the result cache and force a fresh
                 search. Only applies to query + depth=0 mode.
             max_age_seconds: Maximum acceptable cache age in seconds. If the

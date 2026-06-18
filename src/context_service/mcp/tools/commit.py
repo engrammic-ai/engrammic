@@ -1,5 +1,10 @@
 # src/context_service/mcp/tools/commit.py
-"""MCP tool: commit - Crystallize hypotheses to commitments."""
+"""MCP tool: commit - Crystallize hypotheses to commitments.
+
+DEPRECATED (CITE v2): The hypothesize/commit flow is killed with Intelligence
+writes in CITE v2. This tool is kept for backward compatibility only. Use
+learn() for claims; SAGE handles synthesis automatically.
+"""
 
 from __future__ import annotations
 

@@ -1,17 +1,17 @@
 # src/context_service/config/mcp_tools.yaml
 # MCP Tool Surface Configuration
+# Schema: CITE v2 (5 nodes: Memory, Claim, Fact, Belief, Commitment;
+#                   6 edges: DERIVED_FROM, SYNTHESIZED_FROM, SUPERSEDES, SUPPORTS, CONTRADICTS, ABOUT)
 
 mcp_instructions: |
   Engrammic: Epistemic memory for AI agents.
 
   Quick start:
-  - remember: store observations
-  - learn: record claims WITH evidence
-  - decide: declare decisions/commitments
+  - remember: store observations (writes Memory nodes)
+  - learn: record claims WITH evidence (writes Claim nodes)
   - recall: search your knowledge
-  - trace: understand why you believe something (provenance)
-  - history: see how a belief evolved over time (versioning)
-  - link: connect related knowledge
+  - trace: understand provenance (walks DERIVED_FROM / SYNTHESIZED_FROM chains)
+  - tick: lightweight engagement check
 
   Always recall before you store, and at the start of a task.
 
@@ -25,72 +25,44 @@ mcp_instructions: |
     3. learn("The API uses OAuth2 with PKCE", evidence=[...], supersedes="abc123")
 
   This creates a version chain - old node stays for history, new node becomes current.
-  Use history(node_id) to view the full chain. If you skip recall, duplicates may exist
-  (Custodian catches these later, but explicit is better).
+  Use trace(node_id) to walk the full provenance chain. If you skip recall, duplicates
+  may exist (Custodian catches these later, but explicit is better).
 
   Guidelines:
   - Always provide evidence when using learn
-  - Hint source_tier on learn when you know the source quality (authoritative for .gov/.edu, validated for curated data)
-  - Reference existing nodes when forming decisions
+  - Hint source_tier on learn when you know the source quality
+    (authoritative for .gov/.edu, validated for curated data)
   - Recall before storing to check for supersession opportunities
 
-  Reasoning flow (hypothesize/commit):
-  - hypothesize creates session-scoped tentative beliefs
-  - commit promotes them to permanent commitments WITHIN THE SAME SESSION
-  - If session ends without commit, hypotheses are garbage collected
-  - For direct decisions, use decide instead
-
-  Belief acceptance flow:
-  - SAGE synthesizes beliefs from corroborated facts
-  - ProposedBeliefs appear in recall results with status="pending"
-  - Use accept to promote to full Belief, or dismiss to reject
-
-  Onboarding:
-  - At session start, call patterns(action='get', name='onboarding') for your workflow guide
+  Wisdom nodes (Belief, Commitment) are system-synthesized or agent-declared;
+  agents do not write them directly via tool arguments.
 
 tools:
   remember:
     description: |
-      Store an observation to memory. Returns immediately; node becomes
-      searchable within ~500ms (async embedding). For immediate recall,
-      use the returned node_id with recall(node_ids=[...]). No evidence
-      required. Consider recall first - if updating existing knowledge,
-      pass supersedes:<node_id>.
-    maps_to: memory
+      Store an observation to memory. Writes a Memory node. Returns immediately;
+      node becomes searchable within ~500ms (async embedding). For immediate
+      recall, use the returned node_id with recall(node_ids=[...]). No evidence
+      required. Consider recall first - if updating existing knowledge, pass
+      supersedes:<node_id>.
+    maps_to: Memory
 
   learn:
     description: |
-      Record a claim with evidence. Returns immediately; node becomes
-      searchable within ~500ms (async embedding). For immediate recall,
-      use the returned node_id with recall(node_ids=[...]). Recall first
+      Record a claim with evidence. Writes a Claim node. Returns immediately;
+      node becomes searchable within ~500ms (async embedding). Recall first
       to check for existing claims - pass supersedes:<node_id> to update.
       Optionally hint source_tier.
-    maps_to: knowledge
-
-  decide:
-    description: |
-      Declare a decision or commitment. Use when you have decided something.
-      Requires 'about' nodes to reference. For tentative beliefs during
-      reasoning, use hypothesize + commit instead. Recall first - pass
-      supersedes:<node_id> if updating a prior decision.
-    maps_to: commitment
-
-  accept:
-    description: |
-      Accept a ProposedBelief, promoting it to a full Belief. ProposedBeliefs
-      are created by SAGE synthesis from corroborated facts. They appear in
-      recall results with status="pending". Use dismiss to reject instead.
-    maps_to: belief
+    maps_to: Claim
 
   recall:
     description: |
       Search or fetch knowledge. Call this at the START of any task and
       before storing anything (to supersede, not duplicate). Use query for
       semantic search, node_ids for direct fetch, query="*" to list all.
-      Low-confidence and unresolved-contradiction memories are withheld by
+      Low-confidence and unresolved-contradiction nodes are withheld by
       default and reported as a withheld count; pass include_withheld=true
       to see them. min_threshold overrides the relevance cutoff (0.0-1.0).
-      ProposedBeliefs appear with status="pending" for your review.
 
       Fusion mode: Set fusion_mode=true to run semantic and graph retrieval
       in parallel, fusing results with Reciprocal Rank Fusion (RRF). Requires
@@ -102,52 +74,116 @@ tools:
     maps_to: retrieve
 
   trace:
-    description: "Trace the provenance of a belief back to its sources."
+    description: |
+      Trace the provenance of a node back to its sources. Walks DERIVED_FROM
+      and SYNTHESIZED_FROM edges to find root Memory/Claim nodes. Use when
+      you need to understand where a Belief or Fact came from, or how a
+      version chain evolved (via SUPERSEDES edges).
     maps_to: provenance
+
+  forget:
+    description: |
+      Request deletion of a node. The node is tombstoned and enters a cancel
+      window before permanent deletion. Use for GDPR erasure or removing
+      incorrect data. Pass cascade=true to also tombstone downstream nodes
+      that reference this one.
+    maps_to: forget
+
+  tick:
+    description: |
+      Lightweight engagement check. Returns pending markers without a full
+      recall. Safe to call frequently; zero side effects. Optionally scope
+      to specific node IDs via about_hint.
+    maps_to: engagement
+
+# Deprecated tools: present for backward compatibility only.
+# These tools remain registered but agents should not use them for new work.
+# They will be removed in a future release.
+deprecated_tools:
+  decide:
+    description: |
+      DEPRECATED (CITE v2): Wisdom writes are now passive (system-synthesized).
+      Commitments are created automatically when the system has sufficient
+      corroborated evidence. This tool is a no-op stub kept for compatibility.
+    maps_to: Commitment
+    deprecated_since: "2026-06-18"
+    replacement: "Use learn() to assert claims; SAGE promotes to Facts and synthesizes Beliefs/Commitments."
+
+  accept:
+    description: |
+      DEPRECATED (CITE v2): ProposedBelief has been consolidated into Belief.
+      Wisdom promotion is now passive. This tool is a no-op stub.
+    maps_to: Belief
+    deprecated_since: "2026-06-18"
+    replacement: null
+
+  dismiss:
+    description: |
+      DEPRECATED (CITE v2): Marker dismissal flow removed with Intelligence writes.
+      This tool is a no-op stub kept for compatibility.
+    maps_to: marker
+    deprecated_since: "2026-06-18"
+    replacement: "Use forget() for explicit deletion requests."
+
+  hypothesize:
+    description: |
+      DEPRECATED (CITE v2): Intelligence writes killed. WorkingHypothesis node
+      type removed. This tool is a no-op stub.
+    maps_to: null
+    deprecated_since: "2026-06-18"
+    replacement: "Use learn() for claims; SAGE handles synthesis."
+
+  revise:
+    description: |
+      DEPRECATED (CITE v2): Intelligence writes killed. This tool is a no-op stub.
+    maps_to: null
+    deprecated_since: "2026-06-18"
+    replacement: "Use learn() with supersedes to update an existing claim."
+
+  commit:
+    description: |
+      DEPRECATED (CITE v2): hypothesize/commit flow killed with Intelligence writes.
+      This tool is a no-op stub.
+    maps_to: null
+    deprecated_since: "2026-06-18"
+    replacement: "Use learn() for claims; SAGE handles synthesis."
+
+  reason:
+    description: |
+      DEPRECATED (CITE v2): ReasoningChain node type removed. Intelligence writes
+      killed. This tool is a no-op stub.
+    maps_to: null
+    deprecated_since: "2026-06-18"
+    replacement: null
+
+  reflect:
+    description: |
+      DEPRECATED (CITE v2): MetaObservation consolidated into Memory.
+      Use remember() with appropriate tags instead.
+    maps_to: Memory
+    deprecated_since: "2026-06-18"
+    replacement: "Use remember() with tags=['meta', 'reflection'] or similar."
+
+  link:
+    description: |
+      DEPRECATED (CITE v2): Explicit link creation folded into remember/learn.
+      The v2 edge set (DERIVED_FROM, SUPERSEDES, SUPPORTS, CONTRADICTS, ABOUT)
+      is managed by SAGE and supersedes param. This tool is a no-op stub.
+    maps_to: null
+    deprecated_since: "2026-06-18"
+    replacement: "Use supersedes param on remember()/learn() for SUPERSEDES edges. SAGE creates SUPPORTS/CONTRADICTS."
 
   history:
     description: |
-      Show how a belief evolved over time. Returns the supersession chain
-      from oldest to newest. Use when you need to understand how knowledge
-      changed, not just what it is now.
-    maps_to: history
-
-  link:
-    description: "Create a typed relationship between nodes."
-    maps_to: link
-
-  reason:
-    description: "Record explicit reasoning steps for complex problems."
-    maps_to: intelligence
-
-  reflect:
-    description: "Record a meta-observation about your knowledge."
-    maps_to: meta
-
-  hypothesize:
-    description: "Form a tentative belief during reasoning. SESSION-SCOPED: must call commit within the same session to persist. For direct decisions, use decide instead."
-    maps_to: belief
-
-  revise:
-    description: "Update a tentative hypothesis when new information arrives. Only works within the session that created the hypothesis."
-    maps_to: update_belief
-
-  commit:
-    description: "Promote tentative hypotheses to permanent commitments. MUST be called in the same session as hypothesize - hypotheses do not survive session boundaries."
-    maps_to: crystallize
-
-  forget:
-    description: "Request deletion of a node. The node enters a cancel window before permanent deletion."
-    maps_to: forget
-
-  dismiss:
-    description: "Dismiss a marker or reject a ProposedBelief. Use for false positives, acknowledged issues, or beliefs you disagree with."
-    maps_to: marker
+      DEPRECATED (CITE v2): Folded into trace(). The trace tool now walks
+      SUPERSEDES chains as well as provenance edges.
+    maps_to: provenance
+    deprecated_since: "2026-06-18"
+    replacement: "Use trace(node_id) to walk the full chain including SUPERSEDES."
 
   patterns:
-    description: "Discover workflow templates for common tasks."
+    description: |
+      DEFERRED: Workflow template discovery deferred to a future release.
     maps_to: skills
-
-  tick:
-    description: "Lightweight engagement check. Returns pending markers without a full recall. Safe to call frequently; zero side effects. Optionally scope to specific node IDs via about_hint."
-    maps_to: engagement
+    deprecated_since: "2026-06-18"
+    replacement: null
