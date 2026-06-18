@@ -1,7 +1,7 @@
-"""Memgraph index DDL for the EAG schema.
+"""Memgraph index DDL for CITE v2 schema.
 
-Run these on startup (idempotent — Memgraph silently skips existing indexes).
-Grouped by persistence layer so the runner can apply subsets during migration.
+Run these on startup (idempotent - Memgraph silently skips existing indexes).
+Schema: 5 content nodes (Memory, Claim, Fact, Belief, Commitment), 6 edge types.
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import structlog
-from primitives.schema import (  # noqa: E402
+from primitives.schema import (
     AuditLabel,
     IntelligenceLabel,
     KnowledgeLabel,
@@ -23,46 +23,15 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
-# --- Cluster layer (not a schema enum label — bare string) ---
-
-CLUSTER_INDEX_QUERIES: tuple[str, ...] = (
-    "CREATE INDEX ON :Cluster(id);",
-    "CREATE INDEX ON :Cluster(level);",
-    "CREATE INDEX ON :Cluster(silo_id);",
-    "CREATE INDEX ON :Cluster(tier);",
-)
-
-# --- Heat cursor (signals phase 2) ---
-
-HEAT_CURSOR_INDEX_QUERIES: tuple[str, ...] = ("CREATE INDEX ON :HeatCursor(silo_id);",)
-
-# --- Weak links (speculative signal accumulation) ---
-
-WEAK_LINK_INDEX_QUERIES: tuple[str, ...] = (
-    "CREATE INDEX ON :WeakLink(id);",
-    "CREATE INDEX ON :WeakLink(silo_id);",
-    "CREATE INDEX ON :WeakLink(speculative);",
-)
-
-# --- Memory layer ---
+# --- Memory layer (single node type) ---
 
 MEMORY_INDEX_QUERIES: tuple[str, ...] = (
-    f"CREATE INDEX ON :{MemoryLabel.DOCUMENT}(id);",
-    f"CREATE INDEX ON :{MemoryLabel.DOCUMENT}(silo_id);",
-    f"CREATE INDEX ON :{MemoryLabel.DOCUMENT}(silo_id, committed);",
-    f"CREATE INDEX ON :{MemoryLabel.DOCUMENT}(source_uri);",
-    f"CREATE INDEX ON :{MemoryLabel.DOCUMENT}(embedded_at);",
-    f"CREATE INDEX ON :{MemoryLabel.PASSAGE}(id);",
-    f"CREATE INDEX ON :{MemoryLabel.PASSAGE}(silo_id);",
-    f"CREATE INDEX ON :{MemoryLabel.PASSAGE}(silo_id, committed);",
-    f"CREATE INDEX ON :{MemoryLabel.PASSAGE}(source_uri);",
-    f"CREATE INDEX ON :{MemoryLabel.PASSAGE}(embedded_at);",
-    f"CREATE INDEX ON :{MemoryLabel.UTTERANCE}(id);",
-    f"CREATE INDEX ON :{MemoryLabel.UTTERANCE}(silo_id);",
-    f"CREATE INDEX ON :{MemoryLabel.EVENT}(id);",
-    f"CREATE INDEX ON :{MemoryLabel.EVENT}(silo_id);",
-    f"CREATE INDEX ON :{MemoryLabel.EVENT}(event_type);",
-    f"CREATE INDEX ON :{MemoryLabel.EVENT}(source_chain_id);",
+    f"CREATE INDEX ON :{MemoryLabel.MEMORY}(id);",
+    f"CREATE INDEX ON :{MemoryLabel.MEMORY}(silo_id);",
+    f"CREATE INDEX ON :{MemoryLabel.MEMORY}(silo_id, committed);",
+    f"CREATE INDEX ON :{MemoryLabel.MEMORY}(memory_type);",
+    f"CREATE INDEX ON :{MemoryLabel.MEMORY}(embedded_at);",
+    f"CREATE INDEX ON :{MemoryLabel.MEMORY}(created_at);",
 )
 
 
@@ -71,17 +40,15 @@ MEMORY_INDEX_QUERIES: tuple[str, ...] = (
 KNOWLEDGE_INDEX_QUERIES: tuple[str, ...] = (
     f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(id);",
     f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(silo_id);",
-    f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(fingerprint);",
     f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(silo_id, committed);",
-    f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(silo_id, content_hash);",
+    f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(evidence_uri);",
     f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(embedded_at);",
-    # :Commitment is multi-label (:Claim:Commitment); Claim indexes already apply.
-    f"CREATE INDEX ON :{KnowledgeLabel.COMMITMENT}(predicate);",
-    f"CREATE INDEX ON :{KnowledgeLabel.COMMITMENT}(scope_type);",
+    f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(created_at);",
     f"CREATE INDEX ON :{KnowledgeLabel.FACT}(id);",
     f"CREATE INDEX ON :{KnowledgeLabel.FACT}(silo_id);",
     f"CREATE INDEX ON :{KnowledgeLabel.FACT}(silo_id, committed);",
     f"CREATE INDEX ON :{KnowledgeLabel.FACT}(valid_from);",
+    f"CREATE INDEX ON :{KnowledgeLabel.FACT}(promoted_from);",
 )
 
 
@@ -90,57 +57,34 @@ KNOWLEDGE_INDEX_QUERIES: tuple[str, ...] = (
 WISDOM_INDEX_QUERIES: tuple[str, ...] = (
     f"CREATE INDEX ON :{WisdomLabel.BELIEF}(id);",
     f"CREATE INDEX ON :{WisdomLabel.BELIEF}(silo_id);",
-    f"CREATE INDEX ON :{WisdomLabel.BELIEF}(tombstoned_at);",
-    f"CREATE INDEX ON :{WisdomLabel.PATTERN}(id);",
-    f"CREATE INDEX ON :{WisdomLabel.PATTERN}(silo_id);",
-    f"CREATE INDEX ON :{WisdomLabel.PATTERN}(pattern_type);",
-    f"CREATE INDEX ON :{WisdomLabel.PATTERN}(silo_id, pattern_type);",
-    f"CREATE INDEX ON :{WisdomLabel.PATTERN}(tombstoned_at);",
+    f"CREATE INDEX ON :{WisdomLabel.BELIEF}(confidence);",
+    f"CREATE INDEX ON :{WisdomLabel.BELIEF}(created_at);",
+    f"CREATE INDEX ON :{WisdomLabel.COMMITMENT}(id);",
+    f"CREATE INDEX ON :{WisdomLabel.COMMITMENT}(silo_id);",
+    f"CREATE INDEX ON :{WisdomLabel.COMMITMENT}(source);",
+    f"CREATE INDEX ON :{WisdomLabel.COMMITMENT}(stale);",
+    f"CREATE INDEX ON :{WisdomLabel.COMMITMENT}(created_at);",
 )
 
 
-# --- Intelligence layer ---
+# --- Intelligence layer (passive observation - Phase 2) ---
 
 INTELLIGENCE_INDEX_QUERIES: tuple[str, ...] = (
-    f"CREATE INDEX ON :{IntelligenceLabel.REASONING_CHAIN}(silo_id);",
-    f"CREATE INDEX ON :{IntelligenceLabel.REASONING_CHAIN}(status);",
-    f"CREATE INDEX ON :{IntelligenceLabel.REASONING_CHAIN}(tier);",
-    f"CREATE INDEX ON :{IntelligenceLabel.REASONING_CHAIN}(heat_score);",
-    f"CREATE INDEX ON :{IntelligenceLabel.REASONING_CHAIN}(produced_by_agent_id);",
-    f"CREATE INDEX ON :{IntelligenceLabel.REASONING_CHAIN}(compacted);",
-    f"CREATE INDEX ON :{IntelligenceLabel.QUERY_CONTEXT}(id);",
-    f"CREATE INDEX ON :{IntelligenceLabel.QUERY_CONTEXT}(silo_id);",
-)
-
-
-# --- Working hypothesis (intelligence layer, session-scoped) ---
-
-WORKING_HYPOTHESIS_INDEX_QUERIES: tuple[str, ...] = (
-    f"CREATE INDEX ON :{IntelligenceLabel.WORKING_HYPOTHESIS}(id);",
-    f"CREATE INDEX ON :{IntelligenceLabel.WORKING_HYPOTHESIS}(silo_id);",
-    f"CREATE INDEX ON :{IntelligenceLabel.WORKING_HYPOTHESIS}(session_id);",
-)
-
-
-# --- ProposedBelief (wisdom layer, awaiting validation) ---
-
-PROPOSED_BELIEF_INDEX_QUERIES: tuple[str, ...] = (
-    f"CREATE INDEX ON :{WisdomLabel.PROPOSED_BELIEF}(id);",
-    f"CREATE INDEX ON :{WisdomLabel.PROPOSED_BELIEF}(silo_id);",
-    f"CREATE INDEX ON :{WisdomLabel.PROPOSED_BELIEF}(status);",
+    f"CREATE INDEX ON :{IntelligenceLabel.EPISTEMIC_STATE}(id);",
+    f"CREATE INDEX ON :{IntelligenceLabel.EPISTEMIC_STATE}(silo_id);",
+    f"CREATE INDEX ON :{IntelligenceLabel.EPISTEMIC_STATE}(session_id);",
+    f"CREATE INDEX ON :{IntelligenceLabel.EPISTEMIC_STATE}(state_type);",
+    f"CREATE INDEX ON :{IntelligenceLabel.BREAKTHROUGH}(id);",
+    f"CREATE INDEX ON :{IntelligenceLabel.BREAKTHROUGH}(silo_id);",
+    f"CREATE INDEX ON :{IntelligenceLabel.BREAKTHROUGH}(session_id);",
 )
 
 
 # --- Registry layer ---
 
 REGISTRY_INDEX_QUERIES: tuple[str, ...] = (
-    # Entity is a pivot node; silo_id index mirrors the RAG-era :Entity index.
-    f"CREATE INDEX ON :{RegistryLabel.ENTITY}(id);",
-    f"CREATE INDEX ON :{RegistryLabel.ENTITY}(silo_id);",
-    f"CREATE INDEX ON :{RegistryLabel.ENTITY}(name);",
     f"CREATE INDEX ON :{RegistryLabel.AGENT}(agent_id);",
     f"CREATE INDEX ON :{RegistryLabel.AGENT}(agent_id, silo_id);",
-    f"CREATE INDEX ON :{RegistryLabel.PREDICATE}(id);",
 )
 
 
@@ -151,55 +95,30 @@ AUDIT_INDEX_QUERIES: tuple[str, ...] = (
     f"CREATE INDEX ON :{AuditLabel.ERASURE_EVENT}(created_at);",
     f"CREATE INDEX ON :{AuditLabel.CALIBRATION_EVENT}(silo_id);",
     f"CREATE INDEX ON :{AuditLabel.CALIBRATION_EVENT}(created_at);",
-    f"CREATE INDEX ON :{AuditLabel.BOOTSTRAP_STATE}(silo_id);",
 )
 
 
-# --- Meta-memory layer ---
-
-META_MEMORY_INDEX_QUERIES: tuple[str, ...] = (
-    "CREATE INDEX ON :MetaObservation(id);",
-    "CREATE INDEX ON :MetaObservation(silo_id);",
-    "CREATE INDEX ON :MetaObservation(created_at);",
-    "CREATE INDEX ON :MetaObservation(agent_id);",
-)
-
-
-# --- Marker nodes (SAGE-internal, bare string labels) ---
-#
-# Contradiction and StaleCommitment are validator marker types used by the
-# SAGE groundskeeper/validator to flag issues for agent engagement. They are
-# not primitives enum labels — bare strings are intentional.
+# --- Marker nodes (SAGE flags for agent engagement) ---
 
 MARKER_INDEX_QUERIES: tuple[str, ...] = (
-    "CREATE INDEX ON :Contradiction(id);",
-    "CREATE INDEX ON :Contradiction(silo_id);",
-    "CREATE INDEX ON :Contradiction(status);",
-    "CREATE INDEX ON :Contradiction(detected_at);",
-    "CREATE INDEX ON :Contradiction(expires_at);",
-    "CREATE INDEX ON :StaleCommitment(id);",
-    "CREATE INDEX ON :StaleCommitment(silo_id);",
-    "CREATE INDEX ON :StaleCommitment(status);",
-    "CREATE INDEX ON :StaleCommitment(detected_at);",
-    "CREATE INDEX ON :StaleCommitment(expires_at);",
+    "CREATE INDEX ON :ContradictionMarker(id);",
+    "CREATE INDEX ON :ContradictionMarker(silo_id);",
+    "CREATE INDEX ON :ContradictionMarker(status);",
+    "CREATE INDEX ON :StaleCommitmentMarker(id);",
+    "CREATE INDEX ON :StaleCommitmentMarker(silo_id);",
+    "CREATE INDEX ON :StaleCommitmentMarker(status);",
 )
 
 
 # --- Aggregate ---
 
 ALL_INDEX_QUERIES: tuple[str, ...] = (
-    *CLUSTER_INDEX_QUERIES,
-    *HEAT_CURSOR_INDEX_QUERIES,
-    *WEAK_LINK_INDEX_QUERIES,
     *MEMORY_INDEX_QUERIES,
     *KNOWLEDGE_INDEX_QUERIES,
     *WISDOM_INDEX_QUERIES,
     *INTELLIGENCE_INDEX_QUERIES,
-    *WORKING_HYPOTHESIS_INDEX_QUERIES,
-    *PROPOSED_BELIEF_INDEX_QUERIES,
     *REGISTRY_INDEX_QUERIES,
     *AUDIT_INDEX_QUERIES,
-    *META_MEMORY_INDEX_QUERIES,
     *MARKER_INDEX_QUERIES,
 )
 
