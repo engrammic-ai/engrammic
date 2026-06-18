@@ -8,6 +8,7 @@ by tier name.
 from __future__ import annotations
 
 import abc
+import asyncio
 from typing import Any
 
 from pydantic import BaseModel
@@ -57,7 +58,11 @@ class LLMEntityExtractor(EntityExtractor):
 
 
 class SpacyEntityExtractor(EntityExtractor):
-    """Entity extractor using spaCy ``en_core_web_sm``."""
+    """Entity extractor using spaCy ``en_core_web_sm``.
+
+    NER is CPU-bound, so extraction is offloaded to a thread pool
+    to avoid blocking the event loop.
+    """
 
     def __init__(self) -> None:
         self._nlp: Any = None
@@ -68,15 +73,18 @@ class SpacyEntityExtractor(EntityExtractor):
         except Exception:
             logger.warning("spacy_unavailable", reason="en_core_web_sm not installed; SpacyEntityExtractor will return empty results")
 
-    async def extract(self, text: str) -> list[Entity]:
-        if self._nlp is None:
-            return []
-
+    def _extract_sync(self, text: str) -> list[Entity]:
+        """Synchronous extraction for thread pool execution."""
         doc = self._nlp(text)
         return [
             Entity(name=ent.text, type=ent.label_, start=ent.start_char, end=ent.end_char)
             for ent in doc.ents
         ]
+
+    async def extract(self, text: str) -> list[Entity]:
+        if self._nlp is None:
+            return []
+        return await asyncio.to_thread(self._extract_sync, text)
 
 
 class DisabledEntityExtractor(EntityExtractor):

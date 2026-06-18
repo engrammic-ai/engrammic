@@ -11,11 +11,16 @@ import contextlib
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
+from itertools import combinations
 
 from context_service.config.logging import get_logger
 from context_service.config.settings import SynthesisSettings
 from context_service.engine.protocols import HyperGraphStore
-from context_service.synthesis.independence import FactMetadata, check_synthesis_threshold
+from context_service.synthesis.independence import (
+    FactMetadata,
+    calculate_independence,
+    check_synthesis_threshold,
+)
 
 logger = get_logger(__name__)
 
@@ -98,6 +103,7 @@ async def evaluate_synthesis_candidates(
     graph_store: HyperGraphStore,
     candidates: list[CorroborationCandidate],
     threshold: float,
+    silo_id: str,
 ) -> list[CorroborationCandidate]:
     """Filter candidates to those that meet the independence threshold.
 
@@ -109,6 +115,7 @@ async def evaluate_synthesis_candidates(
         graph_store: Graph storage backend.
         candidates: Candidates from find_corroborating_facts.
         threshold: Minimum independence score (passed to check_synthesis_threshold).
+        silo_id: Silo scope for defense-in-depth filtering.
 
     Returns:
         Subset of candidates that cleared the threshold.
@@ -121,16 +128,14 @@ async def evaluate_synthesis_candidates(
         {fid for c in candidates for fid in c.fact_ids}
     )
 
-    # Infer silo_id from graph_store context; fetch metadata without silo filter
-    # when no silo is available — callers already scope by silo upstream.
     rows = await graph_store.execute_query(
         """
-        MATCH (f:Fact)
+        MATCH (f:Fact {silo_id: $silo_id})
         WHERE f.id IN $fact_ids
         RETURN f.id AS fact_id, f.document_id AS document_id, f.agent_id AS agent_id,
                f.created_at AS created_at, f.source_tier AS source_tier
         """,
-        {"fact_ids": all_fact_ids},
+        {"fact_ids": all_fact_ids, "silo_id": silo_id},
     )
 
     metadata_by_id: dict[str, FactMetadata] = {}
@@ -167,11 +172,6 @@ async def evaluate_synthesis_candidates(
             continue
 
         passes = check_synthesis_threshold(facts, threshold)
-        # Compute pairwise sum for the candidate's independence_score field
-        from itertools import combinations
-
-        from context_service.synthesis.independence import calculate_independence
-
         score = sum(calculate_independence(a, b) for a, b in combinations(facts, 2))
         candidate.independence_score = score
 
@@ -227,6 +227,7 @@ async def trigger_synthesis(
         graph_store,
         candidates=candidates,
         threshold=settings.independence_threshold,
+        silo_id=silo_id,
     )
 
     request_ids: list[str] = []
