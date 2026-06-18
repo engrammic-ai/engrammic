@@ -114,61 +114,6 @@ async def record_touch(
     return count
 
 
-async def get_touch_count(
-    redis: Redis,
-    silo_id: str,
-    marker_id: str,
-    session_id: str,
-    *,
-    decay_window_ms: int = DEFAULT_DECAY_WINDOW_MS,
-) -> int:
-    """Get current cumulative touch count for this session+marker within the decay window.
-
-    Prunes stale entries, then counts all touches from this session that
-    remain within the window. Does not record a new touch; read-only aside
-    from pruning.
-
-    Parameters
-    ----------
-    redis:
-        Async Redis client.
-    silo_id:
-        Silo scope.
-    marker_id:
-        Marker to query.
-    session_id:
-        Session to check.
-    decay_window_ms:
-        Rolling window in milliseconds used to determine staleness.
-
-    Returns
-    -------
-    Number of touches from this session within the decay window.
-    """
-    key = _touches_key(silo_id, marker_id)
-    now = _now_ms()
-    cutoff = now - decay_window_ms
-    prefix = f"{session_id}:"
-
-    try:
-        pipe = redis.pipeline(transaction=False)
-        pipe.zremrangebyscore(key, "-inf", cutoff)
-        pipe.zrangebyscore(key, cutoff + 1, "+inf")
-        results = await pipe.execute()
-    except Exception as exc:
-        logger.warning(
-            "touch_counter_get_failed",
-            silo_id=silo_id,
-            marker_id=marker_id,
-            session_id=session_id,
-            error=str(exc),
-        )
-        return 0
-
-    members: list[bytes] | list[str] = results[1]
-    return sum(1 for m in members if (m.decode() if isinstance(m, bytes) else m).startswith(prefix))
-
-
 async def clear_touches(
     redis: Redis,
     silo_id: str,

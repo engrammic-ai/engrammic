@@ -335,25 +335,6 @@ class LLMResolver:
         )
 
 
-class LLMResolverStub:
-    """LLM resolver stub that always defers.
-
-    For testing without an LLM. Keeps the same interface as DeterministicResolver.
-    """
-
-    def resolve(
-        self,
-        node_a: ConflictSignals,  # noqa: ARG002
-        node_b: ConflictSignals,  # noqa: ARG002
-    ) -> ResolutionResult:
-        return ResolutionResult(
-            action=ResolutionAction.DEFER,
-            winner_id=None,
-            loser_id=None,
-            rationale="deferred to LLM resolver (stub mode)",
-        )
-
-
 class ConsolidationWorker:
     """Async worker that processes conflict events.
 
