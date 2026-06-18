@@ -3,9 +3,12 @@
 Exposes remember and recall over HTTP for benchmark harnesses and headless
 integrations that cannot use the MCP transport.
 
+Auth: Bearer token required (AUTH_ENABLED=true). Silo ID derived from
+verified org_id in token, ensuring tenant isolation.
+
 Headers:
-- X-Silo-ID: required for both endpoints; treated as org_id, silo UUID is derived
-- X-Session-ID: required for remember, optional for recall
+- Authorization: Bearer <token> (required when AUTH_ENABLED=true)
+- X-Session-ID: required for remember/learn, optional for recall/link
 """
 
 from __future__ import annotations
@@ -13,10 +16,10 @@ from __future__ import annotations
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from context_service.api.routes._auth import get_silo_context
+from context_service.api.routes._auth import get_authenticated_silo
 from context_service.config.models import load_models_config
 from context_service.config.settings import get_settings
 from context_service.mcp.server import get_context_service
@@ -105,16 +108,16 @@ class LinkResponse(BaseModel):
 async def remember(
     request_body: RememberRequest,
     request: Request,
-    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
-    x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
+    auth_context: tuple[str, str | None] = Depends(get_authenticated_silo),
 ) -> RememberResponse:
     """Store an observation to the memory layer.
 
-    The ``X-Silo-ID`` header is treated as the org ID; the actual silo UUID is
-    derived deterministically from it, matching how the MCP surface works.
-    ``X-Session-ID`` is used as the ``agent_id`` on the written node.
+    Silo ID is derived from the authenticated org_id, ensuring tenant isolation.
+    Session ID from X-Session-ID header is used as the ``agent_id`` on the written node.
     """
-    silo_id, session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
+    silo_id, session_id = auth_context
+    if not session_id:
+        raise HTTPException(status_code=400, detail="X-Session-ID header is required")
 
     if not hasattr(request.app.state, "memgraph"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
@@ -162,14 +165,13 @@ async def remember(
 async def recall(
     request_body: RecallRequest,
     request: Request,
-    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
+    auth_context: tuple[str, str | None] = Depends(get_authenticated_silo),
 ) -> RecallResponse:
     """Search for relevant observations and knowledge.
 
-    ``X-Session-ID`` is optional for recall; it is accepted but not used in the
-    query path.
+    Silo ID is derived from the authenticated org_id, ensuring tenant isolation.
     """
-    silo_id, _ = await get_silo_context(x_silo_id, require_session=False)
+    silo_id, _ = auth_context
 
     if not hasattr(request.app.state, "memgraph"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
@@ -179,7 +181,7 @@ async def recall(
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail="Context service not available") from exc
 
-    scope = ScopeContext(org_id=x_silo_id or silo_id, silo_id=UUID(silo_id))
+    scope = ScopeContext(org_id=silo_id, silo_id=UUID(silo_id))
 
     # Query expansion for hard queries (same logic as MCP recall)
     effective_query = request_body.query
@@ -281,14 +283,16 @@ async def recall(
 async def learn(
     request_body: LearnRequest,
     request: Request,
-    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
-    x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
+    auth_context: tuple[str, str | None] = Depends(get_authenticated_silo),
 ) -> LearnResponse:
     """Store a verifiable claim with evidence.
 
     Creates a Knowledge layer node (Claim) that can be verified by SAGE.
+    Silo ID is derived from the authenticated org_id, ensuring tenant isolation.
     """
-    silo_id, session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
+    silo_id, session_id = auth_context
+    if not session_id:
+        raise HTTPException(status_code=400, detail="X-Session-ID header is required")
 
     if not hasattr(request.app.state, "memgraph"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
@@ -334,11 +338,13 @@ async def learn(
 async def link(
     request_body: LinkRequest,
     request: Request,
-    x_silo_id: str | None = Header(default=None, alias="X-Silo-ID"),
-    x_session_id: str | None = Header(default=None, alias="X-Session-ID"),
+    auth_context: tuple[str, str | None] = Depends(get_authenticated_silo),
 ) -> LinkResponse:
-    """Create a typed relationship between two nodes."""
-    silo_id, session_id = await get_silo_context(x_silo_id, x_session_id, require_session=False)
+    """Create a typed relationship between two nodes.
+
+    Silo ID is derived from the authenticated org_id, ensuring tenant isolation.
+    """
+    silo_id, session_id = auth_context
 
     if not hasattr(request.app.state, "memgraph"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
