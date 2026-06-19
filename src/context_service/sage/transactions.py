@@ -2165,6 +2165,7 @@ async def check_corroboration(
     Returns:
         Tuple of (distinct_source_count, should_promote).
     """
+    # Count distinct evidence URIs from properties.evidence lists across matching claims
     cypher = """
     MATCH (new:Claim {id: $node_id, silo_id: $silo_id})
     OPTIONAL MATCH (c:Claim {silo_id: $silo_id})
@@ -2173,13 +2174,11 @@ async def check_corroboration(
       AND c.properties.object = new.properties.object
       AND c.properties.state = 'ACTIVE'
     WITH new, collect(c) AS claims
-    WITH new, claims,
-         CASE WHEN size(claims) = 0 THEN [null] ELSE claims END AS claims_or_null
-    UNWIND claims_or_null AS claim
-    OPTIONAL MATCH (claim)-[:DERIVED_FROM]->(evidence)
-    WITH new, claims, collect(DISTINCT evidence.id) AS all_evidence
-    WITH new, size([e IN all_evidence WHERE e IS NOT NULL]) AS source_count
-    RETURN source_count AS count, source_count >= $threshold AS should_promote
+    WITH new, CASE WHEN size(claims) = 0 THEN [new] ELSE claims END AS claims
+    UNWIND claims AS claim
+    UNWIND claim.properties.evidence AS ev
+    WITH new, collect(DISTINCT ev) AS all_evidence
+    RETURN size(all_evidence) AS count, size(all_evidence) >= $threshold AS should_promote
     """
 
     results = await store.execute_write(
