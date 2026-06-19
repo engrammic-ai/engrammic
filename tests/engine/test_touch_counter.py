@@ -8,7 +8,6 @@ import pytest
 
 from context_service.engine.touch_counter import (
     clear_touches,
-    get_touch_count,
     record_touch,
 )
 
@@ -194,121 +193,6 @@ class TestRecordTouch:
         members = list(member_map.keys())
         assert len(members) == 1
         assert members[0].startswith("session-a:")
-
-
-# ---------------------------------------------------------------------------
-# get_touch_count
-# ---------------------------------------------------------------------------
-
-
-class TestGetTouchCount:
-    @pytest.mark.asyncio
-    async def test_active_touch_returns_one(self, mock_redis):
-        """Session with one active member returns 1."""
-        now_ms = 10_000_000
-        mock_redis._mock_pipe.execute = AsyncMock(return_value=[0, [b"session-a:10000000000000"]])
-
-        with patch("context_service.engine.touch_counter._now_ms", return_value=now_ms):
-            result = await get_touch_count(mock_redis, "silo-1", "marker-1", "session-a")
-
-        assert result == 1
-
-    @pytest.mark.asyncio
-    async def test_multiple_active_touches_returns_correct_count(self, mock_redis):
-        """Session with multiple active members returns correct cumulative count."""
-        now_ms = 10_000_000
-        mock_redis._mock_pipe.execute = AsyncMock(
-            return_value=[
-                0,
-                [
-                    b"session-a:9000000000000",
-                    b"session-a:9500000000000",
-                    b"session-a:10000000000000",
-                ],
-            ]
-        )
-
-        with patch("context_service.engine.touch_counter._now_ms", return_value=now_ms):
-            result = await get_touch_count(mock_redis, "silo-1", "marker-1", "session-a")
-
-        assert result == 3
-
-    @pytest.mark.asyncio
-    async def test_no_touch_returns_zero(self, mock_redis):
-        """Session not in set returns 0."""
-        mock_redis._mock_pipe.execute = AsyncMock(return_value=[0, []])
-
-        result = await get_touch_count(mock_redis, "silo-1", "marker-1", "session-new")
-
-        assert result == 0
-
-    @pytest.mark.asyncio
-    async def test_other_session_members_not_counted(self, mock_redis):
-        """Members from other sessions are not counted."""
-        now_ms = 20_000_000
-        mock_redis._mock_pipe.execute = AsyncMock(
-            return_value=[
-                0,
-                [
-                    b"session-a:19000000000000",
-                    b"session-b:19500000000000",
-                    b"session-b:20000000000000",
-                ],
-            ]
-        )
-
-        with patch("context_service.engine.touch_counter._now_ms", return_value=now_ms):
-            result = await get_touch_count(mock_redis, "silo-1", "marker-1", "session-a")
-
-        assert result == 1
-
-    @pytest.mark.asyncio
-    async def test_after_decay_count_drops(self, mock_redis):
-        """After decay window, old touches are pruned and count drops."""
-        now_ms = 20_000_000
-        # Prune removed old entries; only one remains
-        mock_redis._mock_pipe.execute = AsyncMock(return_value=[2, [b"session-a:20000000000000"]])
-
-        with patch("context_service.engine.touch_counter._now_ms", return_value=now_ms):
-            result = await get_touch_count(
-                mock_redis,
-                "silo-1",
-                "marker-1",
-                "session-a",
-                decay_window_ms=1_000,
-            )
-
-        assert result == 1
-
-    @pytest.mark.asyncio
-    async def test_redis_error_returns_zero(self, mock_redis):
-        """Redis failure is swallowed and returns 0."""
-        mock_redis._mock_pipe.execute = AsyncMock(side_effect=ConnectionError("timeout"))
-
-        result = await get_touch_count(mock_redis, "silo-1", "marker-1", "session-a")
-
-        assert result == 0
-
-    @pytest.mark.asyncio
-    async def test_prune_called_on_read(self, mock_redis):
-        """get_touch_count calls zremrangebyscore to prune on reads."""
-        now_ms = 10_000_000
-        mock_redis._mock_pipe.execute = AsyncMock(return_value=[0, []])
-
-        pipe = mock_redis._mock_pipe
-        zremrange_calls: list[tuple[object, ...]] = []
-        original = pipe.zremrangebyscore
-
-        def capture(*args: object, **kwargs: object) -> object:
-            zremrange_calls.append(args)
-            return original(*args, **kwargs)
-
-        pipe.zremrangebyscore = MagicMock(side_effect=capture)
-
-        with patch("context_service.engine.touch_counter._now_ms", return_value=now_ms):
-            await get_touch_count(mock_redis, "silo-1", "marker-1", "session-a")
-
-        assert zremrange_calls, "zremrangebyscore was not called on read"
 
 
 # ---------------------------------------------------------------------------

@@ -37,7 +37,7 @@ LIMIT $batch_size
 @dg.asset(
     name="custodian_finalize",
     partitions_def=silo_partitions,
-    deps=["custodian_visit", "claim_to_fact_promotion"],
+    deps=["claim_to_fact_promotion"],
     description="Promote :Claim:Commitment nodes to :Finding via R2 consensus per silo.",
     retry_policy=dg.RetryPolicy(max_retries=3, delay=10.0, backoff=dg.Backoff.EXPONENTIAL),
     tags={"dagster/concurrency_key": "custodian_finalize"},

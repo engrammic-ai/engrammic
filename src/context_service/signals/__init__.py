@@ -14,7 +14,7 @@ from context_service.signals.access_events import (
     emit_access_event,
 )
 from context_service.signals.freshness import FRESHNESS_FLOOR, compute_freshness
-from context_service.signals.heat import DEFAULT_HEAT, get_heat
+from context_service.signals.heat import DEFAULT_HEAT
 from context_service.signals.priority import compute_consensus_priority
 
 __all__ = [
@@ -25,5 +25,4 @@ __all__ = [
     "compute_consensus_priority",
     "compute_freshness",
     "emit_access_event",
-    "get_heat",
 ]

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 
+from context_service.db.schema import LABEL_MEMORY
 from context_service.reactions.events import ReactionEvent, ReactionEventType, emit_reaction
 from context_service.sage.confidence import compute_credibility
 from context_service.sage.epistemology import propagate_incremental
@@ -715,7 +716,7 @@ async def store_memory(
     node_id = uuid.uuid4()
     created_at = datetime.now(UTC)
 
-    label = _CONTENT_TYPE_TO_LABEL.get(content_type, "Document")
+    label = _CONTENT_TYPE_TO_LABEL.get(content_type, LABEL_MEMORY)
 
     props: dict[str, Any] = {
         "layer": layer,
@@ -805,10 +806,10 @@ async def store_memory(
 
 
 _CONTENT_TYPE_TO_LABEL: dict[str, str] = {
-    "text": "Document",
-    "utterance": "Utterance",
-    "event": "Event",
-    "observation": "Observation",
+    "text": LABEL_MEMORY,
+    "utterance": LABEL_MEMORY,
+    "event": LABEL_MEMORY,
+    "observation": LABEL_MEMORY,
 }
 
 _EXTRACTION_THRESHOLD = 500

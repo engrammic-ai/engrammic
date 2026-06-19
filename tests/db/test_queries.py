@@ -35,7 +35,8 @@ def test_get_proposed_belief_returns_expected_columns() -> None:
 def test_get_proposed_belief_matches_by_id_and_silo() -> None:
     """GET_PROPOSED_BELIEF MATCH clause filters on both id and silo_id."""
     cypher = q.GET_PROPOSED_BELIEF
-    assert "ProposedBelief" in cypher
+    # CITE v2: uses :Belief with status field instead of :ProposedBelief
+    assert "Belief" in cypher
     assert "MATCH" in cypher
 
 

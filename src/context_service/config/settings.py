@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from dotenv import load_dotenv
@@ -418,24 +418,6 @@ class TiebreakConfig(BaseModel):
     score_boost: float = 0.02
 
 
-class EntityRetrievalConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="ignore")
-
-    enabled: bool = False
-    max_entities: int = 10
-    # Optional pre-fusion cap. None = no cap. Lever preserved; opinionated
-    # defaults reverted after 2026-04-26 post-mortem.
-    entity_pre_fusion_cap: int | None = None
-
-
-class ClusterRetrievalConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="ignore")
-
-    enabled: bool = False
-    level: int | None = 1
-    top_k: int = 5
-
-
 class FusionConfig(BaseModel):
     """Cross-channel RRF fusion settings."""
 
@@ -456,8 +438,6 @@ class SupersessionConfig(BaseModel):
 
     enabled: bool = False
     confidence_threshold: float = 0.75
-    cross_cluster_enabled: bool = False
-    cross_cluster_max_group_size: int = 20
 
 
 class RetrievalConfig(BaseModel):
@@ -465,14 +445,10 @@ class RetrievalConfig(BaseModel):
 
     walker: WalkerTuning = Field(default_factory=WalkerTuning)
     rrf_k: int = 60
-    # Per-channel RRF weights. Empty dict = unweighted RRF.
     rrf_channel_weights: dict[str, float] = Field(default_factory=dict)
-    hybrid_enabled: bool = True
     fresh_floor: float = 0.25
     staleness_weight: float = 0.15
     tiebreak: TiebreakConfig = Field(default_factory=TiebreakConfig)
-    entity: EntityRetrievalConfig = Field(default_factory=EntityRetrievalConfig)
-    cluster: ClusterRetrievalConfig = Field(default_factory=ClusterRetrievalConfig)
     supersession: SupersessionConfig = Field(default_factory=SupersessionConfig)
     fusion: FusionConfig = Field(default_factory=FusionConfig)
     temporal_channel: TemporalChannelConfig = Field(default_factory=TemporalChannelConfig)
@@ -486,26 +462,6 @@ class ServerConfig(BaseModel):
     reload: bool = False
     workers: int = 4
     request_timeout: int = 30
-
-
-class JinaConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="ignore")
-
-    api_key: SecretStr | None = None
-    model: str = ""
-    dimensions: int = 0
-    api_url: str = ""
-
-
-class VertexConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="ignore")
-
-    project: str | None = None
-    region: str = "us-central1"
-    location: str = "us-central1"
-    credentials_path: str = ""
-    model: str = ""
-    dimensions: int = 0
 
 
 class SpladeConfig(BaseModel):
@@ -548,9 +504,7 @@ class ModelRateLimitConfig(BaseModel):
 class EmbeddingConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
-    provider: str = "jina"
-    jina: JinaConfig = Field(default_factory=JinaConfig)
-    vertex: VertexConfig = Field(default_factory=VertexConfig)
+    provider: str = "tei"
     splade: SpladeConfig = Field(default_factory=SpladeConfig)
     rate_limit: ModelRateLimitConfig = Field(default_factory=ModelRateLimitConfig)
 
@@ -564,9 +518,6 @@ class ProviderConfig(BaseModel):
 class LLMConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
-    provider: str = ""
-    model: str = ""
-    api_url: str | None = None
     api_key: SecretStr | None = None
     default_timeout_seconds: float = Field(
         default=60.0,
@@ -782,13 +733,6 @@ class SimilarityCacheConfig(BaseModel):
     )
 
 
-class ClusteringConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="ignore")
-
-    auto_trigger_enabled: bool = False
-    post_ingest_threshold: int = 50
-
-
 class ConsensusConfig(BaseModel):
     """Configuration for TX6 CONSENSUS and TX7 TRACE handlers."""
 
@@ -914,18 +858,6 @@ class SecurityConfig(BaseModel):
     )
 
 
-class StripeConfig(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="ignore")
-
-    secret_key: SecretStr | None = None
-    webhook_secret: SecretStr | None = None
-    webhook_secret_rollover: SecretStr | None = None
-    price_id_team: str = ""
-    meter_event_name: str = "context_service_retrieval"
-    mock: bool = False
-    default_tier: str = "team"
-
-
 class PatternConfig(BaseModel):
     """Configuration for pattern detection (v1.3a/b)."""
 
@@ -1009,6 +941,32 @@ class ChainFeedbackConfig(BaseModel):
     min_subsequent_steps: int = Field(default=3, ge=1)
     max_wait_minutes: int = Field(default=30, ge=1)
     usefulness_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+
+
+class SynthesisSettings(BaseModel):
+    """Synthesis pipeline configuration."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    tier: Literal["full", "lite", "disabled"] = Field(
+        default="full",
+        description="Synthesis tier: full (LLM-based), lite (spaCy NLP), disabled (off)",
+    )
+    similarity_threshold: float = Field(
+        default=0.85,
+        ge=0.0,
+        le=1.0,
+        description="Cosine similarity threshold for claim clustering",
+    )
+    independence_threshold: float = Field(
+        default=2.0,
+        ge=0.0,
+        description="Minimum independence score required to emit a synthesis",
+    )
+    spacy_model: str = Field(
+        default="en_core_web_sm",
+        description="spaCy model name used by the lite tier",
+    )
 
 
 class WeakLinksSettings(BaseModel):
@@ -1099,16 +1057,15 @@ class Settings(BaseSettings):
     result_cache: ResultCacheConfig = Field(default_factory=ResultCacheConfig)
     similarity_cache: SimilarityCacheConfig = Field(default_factory=SimilarityCacheConfig)
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
-    clustering: ClusteringConfig = Field(default_factory=ClusteringConfig)
     extraction: ExtractionConfig = Field(default_factory=ExtractionConfig)
     security: SecurityConfig = Field(default_factory=SecurityConfig)
-    stripe: StripeConfig = Field(default_factory=StripeConfig)
     custodian: CustodianSettings = Field(default_factory=CustodianSettings)
     auto_reflect: AutoReflectConfig = Field(default_factory=AutoReflectConfig)
     consolidation: ConsolidationConfig = Field(default_factory=ConsolidationConfig)
     causal: CausalConfig = Field(default_factory=CausalConfig)
     pattern: PatternConfig = Field(default_factory=PatternConfig)
     weak_links: WeakLinksSettings = Field(default_factory=WeakLinksSettings)
+    synthesis: SynthesisSettings = Field(default_factory=SynthesisSettings)
     consensus: ConsensusConfig = Field(default_factory=ConsensusConfig)
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
     identities: IdentitiesConfig = Field(default_factory=_load_identities_config)
@@ -1208,25 +1165,12 @@ class Settings(BaseSettings):
         return f"http://{self.qdrant_host}:{self.qdrant_port}"
 
     # =========================================================================
-    # Jina Embedding Settings
-    # =========================================================================
-
-    jina_api_key: SecretStr | None = Field(default=None)
-    jina_model: str = Field(default="")
-    jina_dimensions: int = Field(default=0)
-    jina_api_url: str = Field(default="")
-
-    # =========================================================================
     # Embedding Settings (dimensions moved to models.yaml, provider via tier)
     # =========================================================================
 
     embedding_dimensions: int = Field(default=2048)
 
     hybrid_search_enabled: bool = Field(default=True)
-
-    entity_retrieval_enabled: bool = Field(default=False)
-    entity_retrieval_max_entities: int = Field(default=10)
-    entity_retrieval_pre_fusion_cap: int | None = Field(default=None)
 
     walker_entity_graph_mode: bool = Field(
         default=True,
@@ -1237,22 +1181,12 @@ class Settings(BaseSettings):
         ),
     )
 
-    cluster_retrieval_enabled: bool = Field(default=False)
-    cluster_retrieval_level: int | None = Field(default=1)
-    cluster_retrieval_top_k: int = Field(default=5)
-    commitment_retrieval_enabled: bool = Field(default=False)
-
     # =========================================================================
-    # VertexAI Embedding Settings
+    # Vertex AI Project Settings (for Vertex AI auth)
     # =========================================================================
 
     vertex_project: str | None = Field(default=None)
     vertex_project_id: str = Field(default="")
-    vertex_region: str = Field(default="us-central1")
-    vertex_location: str = Field(default="us-central1")
-    vertex_credentials_path: str = Field(default="")
-    vertex_model: str = Field(default="")
-    vertex_dimensions: int = Field(default=0)
 
     # =========================================================================
     # Google Application Credentials (flat shim for ADC / local dev)
@@ -1352,38 +1286,6 @@ class Settings(BaseSettings):
         return self
 
     # =========================================================================
-    # Stripe Billing Shims
-    # =========================================================================
-
-    @property
-    def stripe_secret_key(self) -> SecretStr | None:
-        return self.stripe.secret_key
-
-    @property
-    def stripe_webhook_secret(self) -> SecretStr | None:
-        return self.stripe.webhook_secret
-
-    @property
-    def stripe_webhook_secret_rollover(self) -> SecretStr | None:
-        return self.stripe.webhook_secret_rollover
-
-    @property
-    def stripe_price_id_team(self) -> str:
-        return self.stripe.price_id_team
-
-    @property
-    def stripe_meter_event_name(self) -> str:
-        return self.stripe.meter_event_name
-
-    @property
-    def billing_mock(self) -> bool:
-        return self.stripe.mock
-
-    @property
-    def billing_default_tier(self) -> str:
-        return self.stripe.default_tier
-
-    # =========================================================================
     # Prompt Preset Settings
     # =========================================================================
 
@@ -1430,15 +1332,7 @@ class Settings(BaseSettings):
     tiebreak_score_boost: float = Field(default=0.02, ge=0.0, le=0.5)
     supersession_enabled: bool = Field(default=False)
     supersession_confidence_threshold: float = Field(default=0.75, ge=0.0, le=1.0)
-    supersession_cross_cluster_enabled: bool = Field(default=False)
-    supersession_cross_cluster_max_group_size: int = Field(default=20, gt=1)
 
-    # =========================================================================
-    # Clustering Auto-Trigger Settings
-    # =========================================================================
-
-    clustering_auto_trigger_enabled: bool = Field(default=False)
-    clustering_post_ingest_threshold: int = Field(default=50, gt=0)
     extraction_batch_concurrency: int = Field(default=8, ge=1, le=32)
 
     # =========================================================================

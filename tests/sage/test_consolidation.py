@@ -13,7 +13,6 @@ from context_service.sage.consolidation import (
     ConsolidationWorker,
     DeterministicResolver,
     LLMResolver,
-    LLMResolverStub,
     ResolutionAction,
     ResolutionResult,
     _score,
@@ -49,6 +48,18 @@ def make_store() -> AsyncMock:
     store.execute_write = AsyncMock(return_value=[])
     store.execute_query = AsyncMock(return_value=[])
     return store
+
+
+class _DeferResolver:
+    """Test-only resolver that always defers."""
+
+    def resolve(self, _a: ConflictSignals, _b: ConflictSignals) -> ResolutionResult:
+        return ResolutionResult(
+            action=ResolutionAction.DEFER,
+            winner_id=None,
+            loser_id=None,
+            rationale="test defer",
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -300,27 +311,6 @@ class TestDeterministicResolver:
 
 
 # ---------------------------------------------------------------------------
-# LLMResolverStub
-# ---------------------------------------------------------------------------
-
-
-class TestLLMResolverStub:
-    def test_always_defers(self) -> None:
-        stub = LLMResolverStub()
-        a = make_signals(source_tier="authoritative")
-        b = make_signals(source_tier="unknown")
-        result = stub.resolve(a, b)
-        assert result.action == ResolutionAction.DEFER
-        assert result.winner_id is None
-        assert result.loser_id is None
-
-    def test_rationale_is_non_empty(self) -> None:
-        stub = LLMResolverStub()
-        result = stub.resolve(make_signals(), make_signals())
-        assert result.rationale
-
-
-# ---------------------------------------------------------------------------
 # LLMResolver prompt parsing
 # ---------------------------------------------------------------------------
 
@@ -513,7 +503,7 @@ class TestConsolidationWorker:
 
     @pytest.mark.asyncio
     async def test_accepts_custom_resolver(self) -> None:
-        stub = LLMResolverStub()
+        stub = _DeferResolver()
         worker = ConsolidationWorker(resolver=stub)
         assert worker._resolver is stub
 
@@ -558,7 +548,7 @@ class TestConsolidationWorker:
         with patch(
             "context_service.sage.consolidation.supersede", new_callable=AsyncMock
         ) as mock_tx3:
-            worker = ConsolidationWorker(resolver=LLMResolverStub())
+            worker = ConsolidationWorker(resolver=_DeferResolver())
             result = await worker.process_conflict(store, NODE_A, NODE_B, SILO)
 
         assert result.action == ResolutionAction.DEFER
@@ -569,7 +559,7 @@ class TestConsolidationWorker:
         store = _make_store_with_nodes(NODE_A, NODE_B, SILO)
 
         with patch("context_service.sage.consolidation.supersede", new_callable=AsyncMock):
-            worker = ConsolidationWorker(resolver=LLMResolverStub())
+            worker = ConsolidationWorker(resolver=_DeferResolver())
             await worker.process_conflict(store, NODE_A, NODE_B, SILO)
 
         # execute_write should NOT be called (no status update on defer)

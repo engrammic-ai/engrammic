@@ -1,16 +1,10 @@
-def test_license_settings_defaults() -> None:
+def test_license_settings_defaults(monkeypatch) -> None:
     """License settings have correct defaults."""
-    import os
-    from importlib import reload
+    # Clear relevant env vars using monkeypatch (safe for test isolation)
+    monkeypatch.delenv("ENGRAMMIC_LICENSE_KEY", raising=False)
 
-    # Clear relevant env vars
-    os.environ.pop("ENGRAMMIC_LICENSE_KEY", None)
+    from context_service.config.settings import Settings
 
-    # Reload to get fresh settings
-    import context_service.config.settings as settings_module
-
-    reload(settings_module)
-
-    settings = settings_module.Settings()
+    settings = Settings()
 
     assert settings.license_key is None

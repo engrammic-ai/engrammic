@@ -94,11 +94,11 @@ def test_combined_confidence_uses_primitives_formula() -> None:
     assert decision.should_promote is False
 
 
-def test_claim_to_fact_promotion_depends_on_custodian_visit() -> None:
-    """claim_to_fact_promotion must declare custodian_visit as a dependency."""
+def test_claim_to_fact_promotion_depends_on_extraction() -> None:
+    """claim_to_fact_promotion must declare extraction as a dependency."""
     from context_service.pipelines.assets.fact_promotion import claim_to_fact_promotion
 
     assert any(
-        "custodian_visit" in str(v)
+        "extraction" in str(v)
         for v in claim_to_fact_promotion.keys_by_input_name.values()  # type: ignore[attr-defined]
-    ), "claim_to_fact_promotion must depend on custodian_visit"
+    ), "claim_to_fact_promotion must depend on extraction"
