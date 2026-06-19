@@ -119,7 +119,7 @@ async def create_supersession(
             f"downstream of {supersedes_id} in the supersession chain"
         )
 
-    return await ctx_svc.graph_store.create_supersedes_edge(
+    success = await ctx_svc.graph_store.create_supersedes_edge(
         from_id=new_node_id,
         to_id=uuid.UUID(supersedes_id),
         silo_id=silo_id,
@@ -127,6 +127,21 @@ async def create_supersession(
         source="agent",
         reason=reason,
     )
+
+    # Remove superseded node from Qdrant so it won't be returned in searches
+    if success:
+        try:
+            await ctx_svc.vector_store.delete(uuid.UUID(supersedes_id), silo_id)
+        except Exception as e:
+            # Log but don't fail - the edge is already created
+            import structlog
+            structlog.get_logger(__name__).warning(
+                "supersession_qdrant_delete_failed",
+                supersedes_id=supersedes_id,
+                error=str(e),
+            )
+
+    return success
 
 
 async def embed(text: str) -> list[float]:
