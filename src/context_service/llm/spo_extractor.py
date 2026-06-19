@@ -20,9 +20,12 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 _EXTRACTION_PROMPT = """\
-Extract (subject, predicate, object) from the claim. Output ONLY valid JSON, no explanation.
+Extract (subject, predicate, object) from the claim. Convert passive to active voice.
+Output ONLY valid JSON.
 
-Example: "Caching improves performance" -> {{"subject":"caching","predicate":"improves","object":"performance"}}
+Examples:
+- "Caching improves performance" -> {{"subject":"caching","predicate":"improves","object":"performance"}}
+- "Bugs are caught by tests" -> {{"subject":"tests","predicate":"catch","object":"bugs"}}
 
 Claim: {claim}
 JSON:"""
