@@ -54,7 +54,7 @@ async def _extract_spo_once(
         llm.complete(
             messages,
             temperature=0.0,
-            max_tokens=150,  # SPO JSON is ~50 tokens; buffer for safety
+            max_tokens=300,  # Buffer for models that add preamble
         ),
         timeout=timeout,
     )
