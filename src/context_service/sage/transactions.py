@@ -965,7 +965,9 @@ async def store_claim(
     promotion_events: list[ReactionEvent] = []
     if should_promote:
         try:
-            _, promotion_events = await promote(store, str(node_id), silo_id, emit=False)
+            _, promotion_events = await promote(
+                store, str(node_id), silo_id, corroboration_count=corroboration_count, emit=False
+            )
             promoted = True
         except InvariantViolation as e:
             logger.warning(
@@ -2749,6 +2751,7 @@ async def promote(
     claim_id: str,
     silo_id: str,
     *,
+    corroboration_count: int | None = None,
     emit: bool = True,
 ) -> tuple[PromoteResult, list[ReactionEvent]]:
     """Promote Claim to Fact when corroboration threshold met (TX18).
@@ -2775,9 +2778,12 @@ async def promote(
     claim = claim_result[0]
     state = claim.get("state")
     claim_status = claim.get("claim_status")
-    raw_corroboration = claim.get("corroboration_count")
-    corroboration_count = int(raw_corroboration) if raw_corroboration is not None else 0
     current_confidence = claim.get("confidence", 0.8)
+
+    # Use passed corroboration_count if provided, otherwise try to read from DB
+    if corroboration_count is None:
+        raw_corroboration = claim.get("corroboration_count")
+        corroboration_count = int(raw_corroboration) if raw_corroboration is not None else 0
 
     if state != NodeState.ACTIVE.value:
         raise InvariantViolation("CLAIM_NOT_ACTIVE", f"Claim is not active (state: {state})")
