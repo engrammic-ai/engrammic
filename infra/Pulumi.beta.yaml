@@ -3,3 +3,4 @@ environment:
 config:
   engrammic-infra:use_tei: "true"
   engrammic-infra:tei_zone: europe-west1-b
+  engrammic-infra:cloudsql_tier: "db-g1-small"

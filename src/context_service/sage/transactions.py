@@ -2165,18 +2165,19 @@ async def check_corroboration(
     """
     cypher = """
     MATCH (new:Claim {id: $node_id, silo_id: $silo_id})
-    MATCH (c:Claim {silo_id: $silo_id})
+    OPTIONAL MATCH (c:Claim {silo_id: $silo_id})
     WHERE c.properties.subject = new.properties.subject
       AND c.properties.predicate = new.properties.predicate
       AND c.properties.object = new.properties.object
       AND c.properties.state = 'ACTIVE'
-    WITH collect(c) AS claims
-    UNWIND claims AS claim
+    WITH new, collect(c) AS claims
+    WITH new, claims,
+         CASE WHEN size(claims) = 0 THEN [null] ELSE claims END AS claims_or_null
+    UNWIND claims_or_null AS claim
     OPTIONAL MATCH (claim)-[:DERIVED_FROM]->(evidence)
-    WITH claims, collect(DISTINCT evidence.id) AS distinct_sources
-    UNWIND claims AS claim
-    SET claim.properties.corroboration_count = size(distinct_sources)
-    RETURN size(distinct_sources) AS count, size(distinct_sources) >= $threshold AS should_promote
+    WITH new, claims, collect(DISTINCT evidence.id) AS all_evidence
+    WITH new, size([e IN all_evidence WHERE e IS NOT NULL]) AS source_count
+    RETURN source_count AS count, source_count >= $threshold AS should_promote
     """
 
     results = await store.execute_write(
@@ -2774,7 +2775,8 @@ async def promote(
     claim = claim_result[0]
     state = claim.get("state")
     claim_status = claim.get("claim_status")
-    corroboration_count = claim.get("corroboration_count", 0)
+    raw_corroboration = claim.get("corroboration_count")
+    corroboration_count = int(raw_corroboration) if raw_corroboration is not None else 0
     current_confidence = claim.get("confidence", 0.8)
 
     if state != NodeState.ACTIVE.value:

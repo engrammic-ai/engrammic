@@ -20,21 +20,11 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 _EXTRACTION_PROMPT = """\
-Extract a semantic triple (subject, predicate, object) from this claim.
+Extract subject, predicate, object from this claim. Reply with raw JSON only, no markdown.
 
-Rules:
-- Subject: the main entity or concept the claim is about (noun phrase, lowercase)
-- Predicate: the relationship or action (verb phrase, snake_case)
-- Object: what the subject relates to (noun phrase, lowercase)
-- Keep each part concise (1-4 words)
-- Use snake_case for predicates (e.g., "improves", "should_own", "requires")
-- Normalize similar concepts (e.g., "database" not "databases", "service" not "services")
+Claim: {claim}
 
-Claim: "{claim}"
-
-Respond with JSON only:
-{{"subject": "...", "predicate": "...", "object": "..."}}
-"""
+JSON: {{"subject": "<entity>", "predicate": "<action>", "object": "<target>"}}"""
 
 
 @dataclass
@@ -53,7 +43,7 @@ class SPOTriple:
 async def extract_spo(
     llm: LLMProvider,
     claim: str,
-    timeout: float = 5.0,
+    timeout: float = 15.0,
 ) -> SPOTriple | None:
     """Extract SPO triple from a claim using LLM.
 
@@ -76,7 +66,7 @@ async def extract_spo(
             llm.complete(
                 messages,
                 temperature=0.0,
-                max_tokens=100,
+                max_tokens=200,
             ),
             timeout=timeout,
         )
@@ -85,7 +75,15 @@ async def extract_spo(
             logger.warning("spo_extraction_empty_response", claim_len=len(claim))
             return None
 
-        parsed = robust_json_loads(text)
+        # Strip markdown code blocks if present
+        clean_text = text.strip()
+        if clean_text.startswith("```"):
+            lines = clean_text.split("\n")
+            # Remove first line (```json) and last line (```)
+            lines = [l for l in lines if not l.strip().startswith("```")]
+            clean_text = "\n".join(lines).strip()
+
+        parsed = robust_json_loads(clean_text)
         if not isinstance(parsed, dict):
             logger.warning("spo_extraction_invalid_json", response=text[:100])
             return None
