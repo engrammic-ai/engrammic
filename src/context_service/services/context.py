@@ -1500,6 +1500,18 @@ class ContextService:
             if not include_superseded and props.get("superseded_by"):
                 continue
 
+            # Filter superseded nodes: valid_to in the past means node was superseded
+            if not include_superseded:
+                valid_to = props.get("valid_to")
+                if valid_to is not None:
+                    vt = (
+                        valid_to
+                        if isinstance(valid_to, datetime)
+                        else datetime.fromisoformat(str(valid_to))
+                    )
+                    if vt <= now:
+                        continue
+
             if as_of is not None:
                 valid_from = props.get("valid_from")
                 valid_to = props.get("valid_to")
