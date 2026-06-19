@@ -20,11 +20,12 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 _EXTRACTION_PROMPT = """\
-Extract subject, predicate, object from this claim. Reply with raw JSON only, no markdown.
+Extract (subject, predicate, object) from the claim. Output ONLY valid JSON, no explanation.
+
+Example: "Caching improves performance" -> {{"subject":"caching","predicate":"improves","object":"performance"}}
 
 Claim: {claim}
-
-JSON: {{"subject": "<entity>", "predicate": "<action>", "object": "<target>"}}"""
+JSON:"""
 
 
 @dataclass
@@ -53,7 +54,7 @@ async def _extract_spo_once(
         llm.complete(
             messages,
             temperature=0.0,
-            max_tokens=200,
+            max_tokens=150,  # SPO JSON is ~50 tokens; buffer for safety
         ),
         timeout=timeout,
     )

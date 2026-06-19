@@ -82,6 +82,7 @@ HIERARCHICAL_EDGE_TYPES = frozenset({LinkType.REFINES, LinkType.GENERALIZES, Lin
 PROMOTION_THRESHOLD = 3
 SYNTHESIS_THRESHOLD = 3
 SYNTHESIS_CONFIDENCE_THRESHOLD = 0.6
+SPO_SIMILARITY_THRESHOLD = 0.80  # Cosine similarity for semantic SPO matching
 MAX_CLUSTER_SIZE = 1000
 MAX_SYNTHESIS_RETRIES = 3
 CANCEL_WINDOW_DURATION_SECONDS = 3600  # 60 minutes
@@ -2203,7 +2204,7 @@ async def check_semantic_corroboration(
     silo_id: str,
     embedding_service: EmbeddingService,
     threshold: int = PROMOTION_THRESHOLD,
-    similarity_threshold: float = 0.85,
+    similarity_threshold: float = SPO_SIMILARITY_THRESHOLD,
 ) -> tuple[int, bool]:
     """Semantic corroboration check using embedding similarity.
 

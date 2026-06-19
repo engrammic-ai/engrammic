@@ -15,6 +15,7 @@ from context_service.pipelines.jobs import (
     orphan_recovery_schedule,
     reembed_migration,
     sage_validator_job,
+    spo_backfill_job,
     usage_retention_job,
     usage_retention_schedule,
 )
@@ -42,6 +43,7 @@ defs = dg.Definitions(
         orphan_chain_recovery_job,
         reembed_migration,
         sage_validator_job,
+        spo_backfill_job,
         telemetry_gauges_job,
         telemetry_prune_job,
         usage_retention_job,
