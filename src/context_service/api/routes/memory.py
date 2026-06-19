@@ -345,6 +345,14 @@ async def learn(
         except Exception as exc:
             logger.warning("rest_learn_spo_extraction_failed", error=str(exc))
 
+    # Get embedding service for semantic corroboration
+    embedding_service = None
+    try:
+        ctx_svc = get_context_service()
+        embedding_service = ctx_svc.embedding_client
+    except RuntimeError:
+        pass  # Context service not available, fall back to exact matching
+
     try:
         result_tx, _events = await store_claim(
             store=store,
@@ -357,6 +365,7 @@ async def learn(
             object_value=object_value,
             confidence=0.8,
             tags=request_body.tags or None,
+            embedding_service=embedding_service,
         )
     except Exception as exc:
         logger.error(
