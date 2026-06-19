@@ -26,6 +26,7 @@ from context_service.retrieval.fusion import FusionRetriever
 from context_service.sage.transactions import LinkType, store_claim, store_memory
 from context_service.sage.transactions import link as brain_link
 from context_service.services.models import ScopeContext
+from context_service.signals import emit_access_event
 
 logger = structlog.get_logger(__name__)
 
@@ -262,6 +263,23 @@ async def recall(
             error=str(exc),
         )
         raise HTTPException(status_code=500, detail="Failed to execute recall query") from exc
+
+    # Emit access events for SAGE heat tracking
+    redis = getattr(request.app.state, "redis", None)
+    if redis and items:
+        import asyncio
+
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(
+                    *(emit_access_event(redis, silo_id, item.node_id) for item in items)
+                ),
+                timeout=2.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("rest_access_event_emit_timeout", silo_id=silo_id)
+        except Exception as exc:
+            logger.warning("rest_access_event_emit_failed", silo_id=silo_id, error=str(exc))
 
     logger.info(
         "rest_recall_ok",
