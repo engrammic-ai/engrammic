@@ -29,6 +29,7 @@ from context_service.retrieval.fusion import FusionRetriever
 from context_service.sage.transactions import LinkType, store_claim, store_memory
 from context_service.sage.transactions import link as brain_link
 from context_service.services.models import ScopeContext
+from context_service.signals import emit_access_event
 
 logger = structlog.get_logger(__name__)
 
@@ -265,6 +266,23 @@ async def recall(
         )
         raise HTTPException(status_code=500, detail="Failed to execute recall query") from exc
 
+    # Emit access events for SAGE heat tracking
+    redis = getattr(request.app.state, "redis", None)
+    if redis and items:
+        import asyncio
+
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(
+                    *(emit_access_event(redis, silo_id, item.node_id) for item in items)
+                ),
+                timeout=2.0,
+            )
+        except TimeoutError:
+            logger.warning("rest_access_event_emit_timeout", silo_id=silo_id)
+        except Exception as exc:
+            logger.warning("rest_access_event_emit_failed", silo_id=silo_id, error=str(exc))
+
     logger.info(
         "rest_recall_ok",
         silo_id=silo_id,
@@ -288,6 +306,7 @@ async def learn(
     """Store a verifiable claim with evidence.
 
     Creates a Knowledge layer node (Claim) that can be verified by SAGE.
+    Automatically extracts SPO (subject-predicate-object) triple for corroboration.
     Silo ID is derived from the authenticated org_id, ensuring tenant isolation.
     """
     silo_id, session_id = auth_context
@@ -299,6 +318,45 @@ async def learn(
 
     store = request.app.state.memgraph
 
+    # Extract SPO triple for corroboration matching
+    subject: str | None = None
+    predicate: str | None = None
+    object_value: str | None = None
+
+    models_config = load_models_config()
+    extractor_model = models_config.litellm_expander_model
+    if extractor_model:
+        try:
+            from context_service.llm.litellm_provider import LiteLLMProvider
+            from context_service.llm.spo_extractor import extract_spo
+
+            llm = LiteLLMProvider(
+                model=extractor_model,
+                vertex_project=models_config.vertex_project or None,
+                vertex_location=models_config.vertex_location or None,
+            )
+            triple = await extract_spo(llm, request_body.claim)
+            if triple:
+                subject = triple.subject
+                predicate = triple.predicate
+                object_value = triple.object
+                logger.debug(
+                    "rest_learn_spo_extracted",
+                    subject=subject,
+                    predicate=predicate,
+                    object=object_value,
+                )
+        except Exception as exc:
+            logger.warning("rest_learn_spo_extraction_failed", error=str(exc))
+
+    # Get embedding service for semantic corroboration
+    embedding_service = None
+    try:
+        ctx_svc = get_context_service()
+        embedding_service = ctx_svc.embedding_client
+    except RuntimeError:
+        pass  # Context service not available, fall back to exact matching
+
     try:
         result_tx, _events = await store_claim(
             store=store,
@@ -306,8 +364,12 @@ async def learn(
             evidence_refs=request_body.evidence,
             silo_id=silo_id,
             agent_id=session_id or "",
+            subject=subject,
+            predicate=predicate,
+            object_value=object_value,
             confidence=0.8,
             tags=request_body.tags or None,
+            embedding_service=embedding_service,
         )
     except Exception as exc:
         logger.error(
@@ -321,6 +383,8 @@ async def learn(
         "rest_learn_ok",
         node_id=str(result_tx.node_id),
         silo_id=silo_id,
+        promoted=result_tx.promoted,
+        corroboration_count=result_tx.corroboration_count,
     )
 
     return LearnResponse(

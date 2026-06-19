@@ -831,6 +831,7 @@ async def store_claim(
     metadata: dict[str, Any] | None = None,
     tags: list[str] | None = None,
     emit: bool = True,
+    embedding_service: EmbeddingService | None = None,
 ) -> tuple[StoreClaimResult, list[ReactionEvent]]:
     """Store a claim to Knowledge layer with evidence (TX2).
 
@@ -959,14 +960,18 @@ async def store_claim(
         )
         superseded_id = uuid.UUID(supersedes)
 
-    corroboration_count, should_promote = await _check_corroboration(store, str(node_id), silo_id)
+    corroboration_count, should_promote = await _check_corroboration(
+        store, str(node_id), silo_id, embedding_service
+    )
 
     # TX18 PROMOTE: convert Claim to Fact when corroboration threshold met
     promoted = False
     promotion_events: list[ReactionEvent] = []
     if should_promote:
         try:
-            _, promotion_events = await promote(store, str(node_id), silo_id, emit=False)
+            _, promotion_events = await promote(
+                store, str(node_id), silo_id, corroboration_count=corroboration_count, emit=False
+            )
             promoted = True
         except InvariantViolation as e:
             logger.warning(
@@ -2164,20 +2169,20 @@ async def check_corroboration(
     Returns:
         Tuple of (distinct_source_count, should_promote).
     """
+    # Count distinct evidence URIs from properties.evidence lists across matching claims
     cypher = """
     MATCH (new:Claim {id: $node_id, silo_id: $silo_id})
-    MATCH (c:Claim {silo_id: $silo_id})
+    OPTIONAL MATCH (c:Claim {silo_id: $silo_id})
     WHERE c.properties.subject = new.properties.subject
       AND c.properties.predicate = new.properties.predicate
       AND c.properties.object = new.properties.object
       AND c.properties.state = 'ACTIVE'
-    WITH collect(c) AS claims
+    WITH new, collect(c) AS claims
+    WITH new, CASE WHEN size(claims) = 0 THEN [new] ELSE claims END AS claims
     UNWIND claims AS claim
-    OPTIONAL MATCH (claim)-[:DERIVED_FROM]->(evidence)
-    WITH claims, collect(DISTINCT evidence.id) AS distinct_sources
-    UNWIND claims AS claim
-    SET claim.properties.corroboration_count = size(distinct_sources)
-    RETURN size(distinct_sources) AS count, size(distinct_sources) >= $threshold AS should_promote
+    UNWIND claim.properties.evidence AS ev
+    WITH new, collect(DISTINCT ev) AS all_evidence
+    RETURN size(all_evidence) AS count, size(all_evidence) >= $threshold AS should_promote
     """
 
     results = await store.execute_write(
@@ -2192,15 +2197,135 @@ async def check_corroboration(
     return row.get("count", 1), row.get("should_promote", False)
 
 
+async def check_semantic_corroboration(
+    store: HyperGraphStore,
+    node_id: str,
+    silo_id: str,
+    embedding_service: EmbeddingService,
+    threshold: int = PROMOTION_THRESHOLD,
+    similarity_threshold: float = 0.85,
+) -> tuple[int, bool]:
+    """Semantic corroboration check using embedding similarity.
+
+    Instead of exact SPO string matching, this computes cosine similarity
+    between SPO embeddings to find semantically equivalent claims.
+
+    Args:
+        store: Graph store instance.
+        node_id: The claim node to check.
+        silo_id: Tenant isolation ID.
+        embedding_service: Service for computing embeddings.
+        threshold: Promotion threshold (default: 3).
+        similarity_threshold: Cosine similarity threshold for SPO matching.
+
+    Returns:
+        Tuple of (distinct_source_count, should_promote).
+    """
+    import numpy as np
+
+    # Get the new claim's SPO
+    new_claim_query = """
+    MATCH (c:Claim {id: $node_id, silo_id: $silo_id})
+    RETURN c.properties.subject AS subject,
+           c.properties.predicate AS predicate,
+           c.properties.object AS object,
+           c.properties.evidence AS evidence
+    """
+    new_result = await store.execute_query(
+        new_claim_query, {"node_id": node_id, "silo_id": silo_id}
+    )
+    if not new_result:
+        return 1, False
+
+    new_claim = new_result[0]
+    new_subject = new_claim.get("subject")
+    new_predicate = new_claim.get("predicate")
+    new_object = new_claim.get("object")
+    new_evidence = new_claim.get("evidence") or []
+
+    # If no SPO, fall back to just counting own evidence
+    if not all([new_subject, new_predicate, new_object]):
+        return len(new_evidence), len(new_evidence) >= threshold
+
+    # Compute embedding for new claim's SPO
+    new_spo_text = f"{new_subject} {new_predicate} {new_object}"
+    new_embedding = await embedding_service.embed_single(new_spo_text)
+    new_vec = np.array(new_embedding)
+    new_norm = np.linalg.norm(new_vec)
+    if new_norm > 0:
+        new_vec = new_vec / new_norm
+
+    # Fetch all active claims with SPO in the silo
+    candidates_query = """
+    MATCH (c:Claim {silo_id: $silo_id})
+    WHERE c.properties.state = 'ACTIVE'
+      AND c.properties.subject IS NOT NULL
+      AND c.properties.predicate IS NOT NULL
+      AND c.properties.object IS NOT NULL
+    RETURN c.id AS id,
+           c.properties.subject AS subject,
+           c.properties.predicate AS predicate,
+           c.properties.object AS object,
+           c.properties.evidence AS evidence
+    """
+    candidates = await store.execute_query(candidates_query, {"silo_id": silo_id})
+
+    if not candidates:
+        return len(new_evidence), len(new_evidence) >= threshold
+
+    # Batch embed all candidate SPO texts
+    spo_texts = [
+        f"{c.get('subject')} {c.get('predicate')} {c.get('object')}"
+        for c in candidates
+    ]
+    candidate_embeddings = await embedding_service.embed(spo_texts)
+
+    # Find semantically similar claims
+    evidence_set: set[str] = set()
+    for i, c in enumerate(candidates):
+        cand_vec = np.array(candidate_embeddings[i])
+        cand_norm = np.linalg.norm(cand_vec)
+        if cand_norm > 0:
+            cand_vec = cand_vec / cand_norm
+
+        similarity = float(np.dot(new_vec, cand_vec))
+        if similarity >= similarity_threshold:
+            # Include this claim's evidence
+            cand_evidence = c.get("evidence") or []
+            evidence_set.update(cand_evidence)
+
+    corroboration_count = len(evidence_set)
+    should_promote = corroboration_count >= threshold
+
+    logger.debug(
+        "semantic_corroboration_check",
+        node_id=node_id,
+        candidates_checked=len(candidates),
+        matches_found=len(evidence_set),
+        corroboration_count=corroboration_count,
+        should_promote=should_promote,
+    )
+
+    return corroboration_count, should_promote
+
+
 async def _check_corroboration(
     store: HyperGraphStore,
     node_id: str,
     silo_id: str,
+    embedding_service: EmbeddingService | None = None,
 ) -> tuple[int, bool]:
     """Check corroboration count and whether promotion threshold is met (TX18).
 
+    If embedding_service is provided, uses semantic SPO matching.
+    Otherwise falls back to exact string matching.
+
     Returns (corroboration_count, should_promote).
     """
+    if embedding_service is not None:
+        return await check_semantic_corroboration(
+            store, node_id, silo_id, embedding_service
+        )
     return await check_corroboration(store, node_id, silo_id)
 
 
@@ -2749,6 +2874,7 @@ async def promote(
     claim_id: str,
     silo_id: str,
     *,
+    corroboration_count: int | None = None,
     emit: bool = True,
 ) -> tuple[PromoteResult, list[ReactionEvent]]:
     """Promote Claim to Fact when corroboration threshold met (TX18).
@@ -2775,8 +2901,12 @@ async def promote(
     claim = claim_result[0]
     state = claim.get("state")
     claim_status = claim.get("claim_status")
-    corroboration_count = claim.get("corroboration_count", 0)
     current_confidence = claim.get("confidence", 0.8)
+
+    # Use passed corroboration_count if provided, otherwise try to read from DB
+    if corroboration_count is None:
+        raw_corroboration = claim.get("corroboration_count")
+        corroboration_count = int(raw_corroboration) if raw_corroboration is not None else 0
 
     if state != NodeState.ACTIVE.value:
         raise InvariantViolation("CLAIM_NOT_ACTIVE", f"Claim is not active (state: {state})")
