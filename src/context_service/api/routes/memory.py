@@ -276,7 +276,7 @@ async def recall(
                 ),
                 timeout=2.0,
             )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning("rest_access_event_emit_timeout", silo_id=silo_id)
         except Exception as exc:
             logger.warning("rest_access_event_emit_failed", silo_id=silo_id, error=str(exc))
@@ -305,6 +305,7 @@ async def learn(
     """Store a verifiable claim with evidence.
 
     Creates a Knowledge layer node (Claim) that can be verified by SAGE.
+    Automatically extracts SPO (subject-predicate-object) triple for corroboration.
     """
     silo_id, session_id = await get_silo_context(x_silo_id, x_session_id, require_session=True)
 
@@ -313,6 +314,37 @@ async def learn(
 
     store = request.app.state.memgraph
 
+    # Extract SPO triple for corroboration matching
+    subject: str | None = None
+    predicate: str | None = None
+    object_value: str | None = None
+
+    models_config = load_models_config()
+    extractor_model = models_config.litellm_expander_model
+    if extractor_model:
+        try:
+            from context_service.llm.litellm_provider import LiteLLMProvider
+            from context_service.llm.spo_extractor import extract_spo
+
+            llm = LiteLLMProvider(
+                model=extractor_model,
+                vertex_project=models_config.vertex_project or None,
+                vertex_location=models_config.vertex_location or None,
+            )
+            triple = await extract_spo(llm, request_body.claim)
+            if triple:
+                subject = triple.subject
+                predicate = triple.predicate
+                object_value = triple.object
+                logger.debug(
+                    "rest_learn_spo_extracted",
+                    subject=subject,
+                    predicate=predicate,
+                    object=object_value,
+                )
+        except Exception as exc:
+            logger.warning("rest_learn_spo_extraction_failed", error=str(exc))
+
     try:
         result_tx, _events = await store_claim(
             store=store,
@@ -320,6 +352,9 @@ async def learn(
             evidence_refs=request_body.evidence,
             silo_id=silo_id,
             agent_id=session_id or "",
+            subject=subject,
+            predicate=predicate,
+            object_value=object_value,
             confidence=0.8,
             tags=request_body.tags or None,
         )
@@ -335,6 +370,8 @@ async def learn(
         "rest_learn_ok",
         node_id=str(result_tx.node_id),
         silo_id=silo_id,
+        promoted=result_tx.promoted,
+        corroboration_count=result_tx.corroboration_count,
     )
 
     return LearnResponse(
