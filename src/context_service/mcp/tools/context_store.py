@@ -322,6 +322,22 @@ async def _context_remember(
                 "Use a different claim text or omit supersedes.",
             }
 
+    try:
+        vector = await embed(content)
+        await ctx_svc.vector_store.upsert(
+            node_id=str(node_id),
+            vector=vector,
+            payload={"type": "Document", "layer": "memory"},
+            silo_id=str(validated_silo_id),
+        )
+    except Exception:
+        logger.warning(
+            "sync_embedding_failed",
+            exc_info=True,
+            node_id=str(node_id),
+            layer="memory",
+        )
+
     result: dict[str, Any] = {
         "node_id": str(node_id),
         "layer": "memory",
@@ -454,6 +470,22 @@ async def _context_assert(
 
     record_store_latency(time.perf_counter() - _start, silo_id=expected_silo_id, layer="knowledge")
     node_id = result.node_id
+
+    try:
+        vector = await embed(claim_text)
+        await ctx_svc.vector_store.upsert(
+            node_id=str(node_id),
+            vector=vector,
+            payload={"type": "Claim", "layer": "knowledge"},
+            silo_id=str(expected_silo_id),
+        )
+    except Exception:
+        logger.warning(
+            "sync_embedding_failed",
+            exc_info=True,
+            node_id=str(node_id),
+            layer="knowledge",
+        )
 
     promoted = False
     promoted_error: str | None = None
