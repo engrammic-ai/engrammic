@@ -1531,6 +1531,21 @@ class Settings(BaseSettings):
     )
 
     # =========================================================================
+    # Write-Gate Embedding
+    # =========================================================================
+
+    batch_embed_threshold: int = Field(
+        default=10,
+        ge=1,
+        le=1000,
+        description=(
+            "Number of nodes above which writes skip sync embedding and set "
+            "embedding_pending=true for batch processing. Single writes (<= threshold) "
+            "embed synchronously at write time."
+        ),
+    )
+
+    # =========================================================================
     # tick() engagement
     # =========================================================================
 
