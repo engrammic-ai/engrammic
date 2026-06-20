@@ -34,6 +34,7 @@ from context_service.reranking.epistemic_fusion import (
     EpistemicAdjustment,
     apply_epistemic_fusion,
 )
+from context_service.retrieval.coherence import filter_dominated_contradictions
 from context_service.retrieval.epistemic import (
     EpistemicOptions,
     apply_epistemic_pipeline,
@@ -428,12 +429,22 @@ async def _context_query(
         rd["derived_from"] = edges.get("derived_from", [])
         rd["contradicts"] = edges.get("contradicts", [])
 
-    # Count filtered nodes for coherence-layer-v2 response
+    # Coherence filtering: remove dominated contradictions
+    # When A contradicts B, keep only the winner (higher layer or confidence)
+    settings = get_settings()
+    if settings.coherence_filter_enabled:
+        raw_result_dicts, filtered_contradictions = filter_dominated_contradictions(
+            raw_result_dicts
+        )
+    else:
+        # Legacy behavior: just count, don't filter
+        filtered_contradictions = sum(
+            1 for rd in raw_result_dicts
+            if rd.get("conflict_status") == "unresolved" and rd.get("contradicts")
+        )
+
+    # Count superseded nodes (already filtered by retriever if include_superseded=False)
     filtered_superseded = sum(1 for r in results if r.superseded_by is not None)
-    filtered_contradictions = sum(
-        1 for rd in raw_result_dicts
-        if rd.get("conflict_status") == "unresolved" and rd.get("contradicts")
-    )
 
     # Per-silo threshold overrides stored in silo metadata under
     # "retrieval_thresholds": {"memory": 0.2, "knowledge": 0.6, ...}

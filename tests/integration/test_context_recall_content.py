@@ -512,3 +512,137 @@ def test_tier_policy_keeps_hot_strips_cold_for_search_results() -> None:
     # COLD is stripped to its summary
     assert "content" not in by_id["cold"]
     assert by_id["cold"]["summary"] == "cold summary"
+
+
+# ---------------------------------------------------------------------------
+# coherent parameter for graph traversal
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_coherent_false_preserves_contradictions_in_graph() -> None:
+    """Default coherent=False keeps all nodes including contradicted ones."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from context_service.mcp.tools.context_recall import _context_recall
+
+    silo_id = str(uuid4())
+    # Node A (wisdom) contradicts Node B (knowledge) - A dominates B
+    node_a = {"node_id": "a", "layer": "wisdom", "confidence": 0.9, "content": "A"}
+    node_b = {"node_id": "b", "layer": "knowledge", "confidence": 0.8, "content": "B"}
+
+    with patch("context_service.mcp.tools.context_recall._context_graph") as mock_graph:
+        mock_graph.return_value = {
+            "nodes": [node_a, node_b],
+            "edges": [{"from_node": "a", "to_node": "b", "relationship": "CONTRADICTS"}],
+            "traversal_stats": {"depth_reached": 1},
+            "metadata": {},
+        }
+
+        result = await _context_recall(
+            silo_id=silo_id,
+            node_ids=["a"],
+            depth=1,
+            coherent=False,  # default
+        )
+
+        # Both nodes preserved
+        assert len(result["nodes"]) == 2
+        node_ids = {n["node_id"] for n in result["nodes"]}
+        assert "a" in node_ids
+        assert "b" in node_ids
+        # No filtered_contradictions key when coherent=False
+        assert "filtered_contradictions" not in result
+
+
+@pytest.mark.asyncio
+async def test_coherent_true_filters_dominated_contradiction() -> None:
+    """coherent=True filters out dominated contradictions in graph traversal."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from context_service.mcp.tools.context_recall import _context_recall
+
+    silo_id = str(uuid4())
+    # Node A (wisdom) contradicts Node B (knowledge) - A dominates B
+    node_a = {"node_id": "a", "layer": "wisdom", "confidence": 0.9, "content": "A"}
+    node_b = {"node_id": "b", "layer": "knowledge", "confidence": 0.8, "content": "B"}
+
+    ctx_svc_mock = MagicMock()
+    ctx_svc_mock.graph_store.get_epistemic_edges_for_nodes = AsyncMock(
+        return_value={
+            "a": {"contradicts": ["b"], "supports": [], "derived_from": []},
+            "b": {"contradicts": ["a"], "supports": [], "derived_from": []},
+        }
+    )
+
+    with (
+        patch("context_service.mcp.tools.context_recall._context_graph") as mock_graph,
+        patch(
+            "context_service.mcp.server.get_context_service",
+            return_value=ctx_svc_mock,
+        ),
+    ):
+        mock_graph.return_value = {
+            "nodes": [node_a, node_b],
+            "edges": [{"from_node": "a", "to_node": "b", "relationship": "CONTRADICTS"}],
+            "traversal_stats": {"depth_reached": 1},
+            "metadata": {},
+        }
+
+        result = await _context_recall(
+            silo_id=silo_id,
+            node_ids=["a"],
+            depth=1,
+            coherent=True,
+        )
+
+        # B is filtered out (dominated by A)
+        assert len(result["nodes"]) == 1
+        assert result["nodes"][0]["node_id"] == "a"
+        assert result["filtered_contradictions"] == 1
+
+
+@pytest.mark.asyncio
+async def test_coherent_true_keeps_both_on_tie() -> None:
+    """coherent=True keeps both nodes when neither dominates (same layer/confidence)."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from context_service.mcp.tools.context_recall import _context_recall
+
+    silo_id = str(uuid4())
+    # Both nodes same layer and confidence - tie
+    node_a = {"node_id": "a", "layer": "knowledge", "confidence": 0.8, "content": "A"}
+    node_b = {"node_id": "b", "layer": "knowledge", "confidence": 0.8, "content": "B"}
+
+    ctx_svc_mock = MagicMock()
+    ctx_svc_mock.graph_store.get_epistemic_edges_for_nodes = AsyncMock(
+        return_value={
+            "a": {"contradicts": ["b"], "supports": [], "derived_from": []},
+            "b": {"contradicts": ["a"], "supports": [], "derived_from": []},
+        }
+    )
+
+    with (
+        patch("context_service.mcp.tools.context_recall._context_graph") as mock_graph,
+        patch(
+            "context_service.mcp.server.get_context_service",
+            return_value=ctx_svc_mock,
+        ),
+    ):
+        mock_graph.return_value = {
+            "nodes": [node_a, node_b],
+            "edges": [{"from_node": "a", "to_node": "b", "relationship": "CONTRADICTS"}],
+            "traversal_stats": {"depth_reached": 1},
+            "metadata": {},
+        }
+
+        result = await _context_recall(
+            silo_id=silo_id,
+            node_ids=["a"],
+            depth=1,
+            coherent=True,
+        )
+
+        # Both nodes kept (tie)
+        assert len(result["nodes"]) == 2
+        assert result["filtered_contradictions"] == 0

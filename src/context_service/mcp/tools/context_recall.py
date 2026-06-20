@@ -11,6 +11,7 @@ from context_service.mcp.server import get_mcp_auth_context
 from context_service.mcp.tools.context_get import _context_get
 from context_service.mcp.tools.context_graph import _context_graph
 from context_service.mcp.tools.context_query import _context_query
+from context_service.retrieval.coherence import filter_dominated_contradictions
 from context_service.retrieval.fusion import FusionRetriever, _filter_temporal, _parse_relative_time
 from context_service.services.models import ScopeContext, derive_silo_id
 from context_service.telemetry.metrics import record_context_recall_size, record_mcp_tool
@@ -174,6 +175,7 @@ async def _context_recall(
     until: str | None = None,
     graph_depth: int | None = None,
     include_hints: bool = False,
+    coherent: bool = False,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     if not query and not node_ids:
@@ -272,7 +274,29 @@ async def _context_recall(
                     node["rrf_score"] = rrf_scores[nid]
                     node["channel_contributions"] = channel_contribs.get(nid, {})
 
+        # Fetch epistemic edges and apply coherence filtering
+        filtered_contradictions = 0
+        if isinstance(response.get("nodes"), list) and response["nodes"]:
+            node_ids_for_edges = [n["node_id"] for n in response["nodes"] if "node_id" in n]
+            edges_by_node = await ctx_svc.graph_store.get_epistemic_edges_for_nodes(
+                node_ids_for_edges, silo_id
+            )
+            for node in response["nodes"]:
+                nid = node.get("node_id")
+                if nid:
+                    edges = edges_by_node.get(nid, {})
+                    node["supports"] = edges.get("supports", [])
+                    node["derived_from"] = edges.get("derived_from", [])
+                    node["contradicts"] = edges.get("contradicts", [])
+
+            # Apply coherence filter
+            if settings.coherence_filter_enabled:
+                response["nodes"], filtered_contradictions = filter_dominated_contradictions(
+                    response["nodes"]
+                )
+
         response["fusion_meta"] = fusion_meta
+        response["filtered_contradictions"] = filtered_contradictions
 
         response = _apply_tier_content_policy(response, include_content)
         if include_proposals:
@@ -314,6 +338,28 @@ async def _context_recall(
             max_depth=depth,
             layers=layers,
         )
+
+        # Apply coherence filtering if requested
+        filtered_contradictions = 0
+        if coherent and isinstance(response.get("nodes"), list) and response["nodes"]:
+            from context_service.mcp.server import get_context_service
+
+            ctx_svc = get_context_service()
+            node_ids_for_edges = [n["node_id"] for n in response["nodes"] if "node_id" in n]
+            edges_by_node = await ctx_svc.graph_store.get_epistemic_edges_for_nodes(
+                node_ids_for_edges, silo_id
+            )
+            for node in response["nodes"]:
+                nid = node.get("node_id")
+                if nid:
+                    edges = edges_by_node.get(nid, {})
+                    node["contradicts"] = edges.get("contradicts", [])
+
+            response["nodes"], filtered_contradictions = filter_dominated_contradictions(
+                response["nodes"]
+            )
+            response["filtered_contradictions"] = filtered_contradictions
+
         response = _apply_tier_content_policy(response, include_content)
         if include_proposals:
             response["pending_proposals"] = await _fetch_pending_proposals(silo_id)
@@ -386,6 +432,7 @@ def register(mcp: FastMCP) -> None:
         since: str | None = None,
         until: str | None = None,
         graph_depth: int | None = None,
+        coherent: bool = False,
     ) -> dict[str, Any]:
         """Unified read across Memory, Knowledge, Wisdom, and Intelligence layers.
 
@@ -431,6 +478,9 @@ def register(mcp: FastMCP) -> None:
                 format as since.
             graph_depth: BFS depth for graph channel in fusion_mode. Defaults to
                 config value (2). Overrides depth when fusion_mode=True.
+            coherent: When True and using graph traversal (node_ids + depth > 0),
+                filter out dominated contradictions to return a coherent view.
+                Default False preserves full graph structure including contradictions.
 
         Returns:
             Depends on mode:
@@ -464,6 +514,7 @@ def register(mcp: FastMCP) -> None:
                 since=since,
                 until=until,
                 graph_depth=graph_depth,
+                coherent=coherent,
             )
             node_count = len(result.get("results", result.get("nodes", [])))
             avg_node_bytes = 500 if include_content else 100

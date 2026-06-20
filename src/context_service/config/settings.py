@@ -1521,6 +1521,15 @@ class Settings(BaseSettings):
         description="Enable recall hints for wisdom/intelligence layer suggestions",
     )
 
+    coherence_filter_enabled: bool = Field(
+        default=True,
+        description=(
+            "Enable coherence filtering in recall. When A contradicts B, "
+            "filter out the dominated node (lower layer or lower confidence) "
+            "to return a coherent worldview."
+        ),
+    )
+
     # =========================================================================
     # tick() engagement
     # =========================================================================

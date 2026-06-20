@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.server import get_mcp_auth_context, track_tool_usage
@@ -14,12 +14,74 @@ from context_service.telemetry.metrics import record_mcp_tool
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
+# Engagement type heat multipliers (higher = more engagement signal)
+_ENGAGEMENT_HEAT: dict[str, float] = {
+    "viewed": 0.5,
+    "used": 1.0,
+    "confirmed": 2.0,
+}
+
+
+async def _update_node_access(
+    store: Any,
+    silo_id: str,
+    node_ids: list[str],
+    engagement_type: str,
+) -> int:
+    """Update last_accessed_at and heat for nodes to prevent decay.
+
+    Returns the number of nodes updated.
+    """
+    from datetime import UTC, datetime
+
+    import structlog
+
+    log = structlog.get_logger(__name__)
+
+    if not node_ids:
+        return 0
+
+    heat_delta = _ENGAGEMENT_HEAT.get(engagement_type, 0.5)
+    now = datetime.now(UTC).isoformat()
+
+    query = """
+    UNWIND $node_ids AS nid
+    MATCH (n {id: nid, silo_id: $silo_id})
+    SET n.last_accessed_at = $now,
+        n.heat_score = coalesce(n.heat_score, 0.0) + $heat_delta
+    RETURN count(n) AS updated
+    """
+
+    try:
+        rows = await store.execute_write(
+            query,
+            {
+                "node_ids": node_ids,
+                "silo_id": silo_id,
+                "now": now,
+                "heat_delta": heat_delta,
+            },
+        )
+        updated = rows[0]["updated"] if rows else 0
+        log.debug(
+            "tick_node_access_updated",
+            silo_id=silo_id,
+            node_count=len(node_ids),
+            updated=updated,
+            engagement_type=engagement_type,
+        )
+        return int(updated)
+    except Exception as e:
+        log.warning("tick_node_access_failed", error=str(e), silo_id=silo_id)
+        return 0
+
 
 async def _tick(
     about_hint: list[str] | None,
     silo_id: str,
     session_id: str | None = None,
     recent_context: str | None = None,  # noqa: ARG001 - reserved for embedding search (future)
+    engagement_type: Literal["viewed", "used", "confirmed"] = "viewed",
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     from context_service.config.settings import get_settings
@@ -58,6 +120,13 @@ async def _tick(
     # Get or create session and increment turn counter
     session = await get_or_create_session(redis, session_id, silo_id)
     session = await increment_turn(redis, session, silo_id)
+
+    # Update last_accessed_at for provided nodes (decay prevention)
+    nodes_updated = 0
+    if about_hint:
+        nodes_updated = await _update_node_access(
+            store, silo_id, about_hint, engagement_type
+        )
 
     # Define parallel checks
     async def check_markers() -> dict[str, Any] | None:
@@ -131,6 +200,8 @@ async def _tick(
             "checks_completed": completed,
             "checks_skipped": skipped,
             "latency_ms": latency_ms,
+            "nodes_updated": nodes_updated,
+            "engagement_type": engagement_type,
         },
     }
 
@@ -148,16 +219,17 @@ def register(mcp: FastMCP) -> None:
         silo_id: str | None = None,
         session_id: str | None = None,
         recent_context: str | None = None,
+        engagement_type: Literal["viewed", "used", "confirmed"] = "viewed",
     ) -> dict[str, Any]:
-        """Check for pending engagement markers without a full recall operation.
+        """Check for pending engagement markers and acknowledge node access.
 
-        Safe to call frequently; reads the precomputed marker index only and
-        has near-zero side effects (session state update only). Returns
-        engagement markers, contextual nudges, and session state.
+        Safe to call frequently. When about_hint (node IDs) is provided,
+        updates last_accessed_at to prevent decay and increments heat scores.
 
         Args:
             about_hint: Optional list of node IDs to scope the check. When
-                provided, only markers touching those nodes are returned.
+                provided, only markers touching those nodes are returned,
+                AND those nodes' last_accessed_at is updated (decay prevention).
                 When omitted, all pending silo-level markers are returned.
             silo_id: UUID of the silo. Optional; defaults to the org's primary
                 silo derived from auth.
@@ -166,6 +238,10 @@ def register(mcp: FastMCP) -> None:
                 When omitted, a new session is created and its ID is returned.
             recent_context: Brief description of what the agent is currently
                 working on. Used for future context-aware nudge matching.
+            engagement_type: Type of engagement with the nodes:
+                - "viewed": Agent saw the node (heat +0.5)
+                - "used": Agent used the node in reasoning (heat +1.0)
+                - "confirmed": Agent verified/confirmed the node (heat +2.0)
 
         Returns:
             Dict with status, session_id, engagement, markers, nudges, and meta.
@@ -192,6 +268,7 @@ def register(mcp: FastMCP) -> None:
                 silo_id=resolved_silo_id,
                 session_id=resolved_session_id,
                 recent_context=recent_context,
+                engagement_type=engagement_type,
             )
             if "error" in result:
                 success = False
