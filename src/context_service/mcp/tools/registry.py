@@ -54,7 +54,17 @@ def get_mcp_instructions() -> str:
 def register_tools(mcp: FastMCP) -> None:
     """Register MCP tools.
 
-    CITE v2 surface: remember, learn, recall, trace, forget, tick.
+    CITE v2 minimal surface (6 tools):
+        remember, learn, recall, trace, forget, tick
+
+    Extended tools (not exposed by default, enable via config):
+        decide, accept, hypothesize, revise, commit, dismiss,
+        link, reason, reflect, history, patterns
+
+    The minimal surface compensates by enhancing recall/trace output:
+        - recall: includes hints, provenance metadata, conflict status
+        - trace: walks full provenance chains with layer info
+    See context/specs/2026-06-18-coherence-layer-v2.md for details.
 
     Args:
         mcp: FastMCP server instance.

@@ -14,9 +14,13 @@ Configuration options (via --config or Pulumi.benchmark.yaml):
     benchmark:gpu_tier        - t4 (16GB), l4 (24GB), a100-40 (40GB)
     benchmark:embedding_model - bge-m3, nomic
     benchmark:reranker_model  - bge-reranker-base, bge-reranker-v2-m3
-    benchmark:llm_model       - qwen-7b, qwen-14b, qwen-32b, deepseek-7b
+    benchmark:llm_model       - gemini-3.5-flash (via Vertex AI, uses SA auth)
     benchmark:use_spot        - true/false (spot instances are cheaper but can be preempted)
     benchmark:tailscale       - true/false (enable Tailscale for SSH access)
+
+LLM access:
+    Uses Vertex AI with service account auth (no local vLLM).
+    Endpoint: https://aiplatform.googleapis.com/v1/projects/PROJECT/locations/global/publishers/google/models/MODEL:generateContent
 
 After deployment:
     # SSH to dev-box
@@ -40,6 +44,6 @@ pulumi.export("gpu_ip", benchmark.gpu.internal_ip)
 pulumi.export("devbox_ip", benchmark.devbox.internal_ip)
 pulumi.export("tei_embeddings_url", pulumi.Output.concat("http://", benchmark.gpu.internal_ip, ":8080"))
 pulumi.export("tei_reranker_url", pulumi.Output.concat("http://", benchmark.gpu.internal_ip, ":8081"))
-pulumi.export("vllm_url", pulumi.Output.concat("http://", benchmark.gpu.internal_ip, ":8000"))
+pulumi.export("llm_endpoint", "https://aiplatform.googleapis.com/v1/projects/engrammic/locations/global/publishers/google/models/gemini-3.5-flash:generateContent")
 pulumi.export("engrammic_url", pulumi.Output.concat("http://", benchmark.devbox.internal_ip, ":8000"))
 pulumi.export("dagster_url", pulumi.Output.concat("http://", benchmark.devbox.internal_ip, ":3002"))
