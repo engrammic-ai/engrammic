@@ -85,6 +85,7 @@ class EvidenceRef(BaseModel):
             self.ref.startswith("http://")
             or self.ref.startswith("https://")
             or self.ref.startswith("file://")
+            or self.ref.startswith("urn:")
         )
 
     @property
@@ -101,9 +102,10 @@ class EvidenceRef(BaseModel):
             or v.startswith("http://")
             or v.startswith("https://")
             or v.startswith("file://")
+            or v.startswith("urn:")
         ):
             raise ValueError(
-                "Evidence ref must be node:<uuid> or a URI (http://, https://, file://)"
+                "Evidence ref must be node:<uuid> or a URI (http://, https://, file://, urn:)"
             )
         return v
 

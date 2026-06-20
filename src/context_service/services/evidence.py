@@ -86,16 +86,30 @@ class EvidenceValidator:
         elif ref.startswith("http://") or ref.startswith("https://"):
             return await self._validate_uri(ref, silo_id)
         elif ref.startswith("file://"):
+            node_id = await self._upsert_stub_for_local_ref(ref, silo_id, "file")
+            if node_id is None:
+                return EvidenceResult(
+                    status="invalid",
+                    reason="Failed to create stub node for file URI",
+                )
             return EvidenceResult(
                 status="valid",
+                node_id=node_id,
                 confidence=0.9,
-                reason="File URI accepted (local validation skipped)",
+                reason="File URI accepted (stub created, local validation skipped)",
             )
         elif ref.startswith("urn:"):
+            node_id = await self._upsert_stub_for_local_ref(ref, silo_id, "urn")
+            if node_id is None:
+                return EvidenceResult(
+                    status="invalid",
+                    reason="Failed to create stub node for URN",
+                )
             return EvidenceResult(
                 status="valid",
+                node_id=node_id,
                 confidence=0.85,
-                reason="URN accepted (external validation skipped)",
+                reason="URN accepted (stub created, external validation skipped)",
             )
         else:
             return EvidenceResult(
@@ -195,6 +209,38 @@ class EvidenceValidator:
             status="invalid",
             reason=f"URI unreachable after retries: {last_error}",
         )
+
+    async def _upsert_stub_for_local_ref(
+        self, uri: str, silo_id: str, ref_type: str
+    ) -> str | None:
+        """Create or find a stub Document node for a local/external reference.
+
+        silo_id is included in the hash so two silos citing the same URI get
+        distinct nodes (MERGE key is (id, silo_id), so without this the UUID
+        would collide across silos and the ON CREATE branch would never fire
+        for the second silo).
+        """
+        from uuid import NAMESPACE_URL, uuid5
+
+        doc_id = str(uuid5(NAMESPACE_URL, f"{silo_id}:{uri}"))
+        query = """
+        MERGE (d:Node:Document {id: $doc_id, silo_id: $silo_id})
+        ON CREATE SET
+            d.uri = $uri,
+            d.stub = true,
+            d.ref_type = $ref_type,
+            d.created_at = datetime()
+        RETURN d.id AS id
+        """
+        try:
+            await self._store.execute_query(
+                query,
+                {"doc_id": doc_id, "silo_id": silo_id, "uri": uri, "ref_type": ref_type},
+            )
+        except Exception:
+            logger.exception("evidence_stub_upsert_failed", uri=uri, silo_id=silo_id)
+            return None
+        return doc_id
 
     async def _upsert_document_for_uri(self, uri: str, silo_id: str) -> str:
         """Find or create a Document node for the given URI."""
