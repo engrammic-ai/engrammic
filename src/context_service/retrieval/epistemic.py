@@ -205,7 +205,7 @@ def apply_layer_scoring(results: list[FusedResult]) -> list[FusedResult]:
                 freshness = compute_freshness(
                     r.created_at,
                     now,
-                    sigma_days=settings.memory_decay_sigma,
+                    sigma_days=int(settings.memory_decay_sigma),
                 )
                 weight = settings.freshness_weight
                 r.rrf_score = r.rrf_score * ((1.0 - weight) + weight * freshness)
@@ -241,7 +241,11 @@ async def maybe_trigger_synthesis(
     Does NOT block on synthesis completion.
     """
     from context_service.db import queries as q
-    from context_service.sage.transactions import EVIDENCE_THRESHOLD, SYNTHESIS_THRESHOLD, synthesize_from_facts
+    from context_service.sage.transactions import (
+        EVIDENCE_THRESHOLD,
+        SYNTHESIS_THRESHOLD,
+        synthesize_from_facts,
+    )
 
     # Filter to Facts only (Knowledge layer)
     fact_ids = [
