@@ -1,9 +1,7 @@
-"""Dagster asset: batch synthesise :Belief nodes from dense fact clusters.
+"""Dagster asset: batch synthesise :Belief nodes from corroborating facts (v2).
 
-DEPRECATED (CITE v2): Clustering removed. This asset returns immediately with
-zero results. Retained for Dagster job compatibility until pipeline is updated.
-
-TODO: Remove asset after v2 synthesis pipeline is implemented.
+CITE v2: No clustering. Finds fact groups by (subject, predicate) with sufficient
+evidence sources, then calls synthesize_from_facts().
 """
 
 import asyncio
@@ -14,14 +12,10 @@ from typing import Any
 import dagster as dg
 from dagster import AssetExecutionContext
 
-from context_service.engine.synthesis import _get_min_facts_for_belief
 from context_service.pipelines.partitions import silo_partitions
 from context_service.pipelines.resources import LLMResource, MemgraphResource
 
-# Stub query returns no clusters (v2: clustering removed)
-_LIST_PENDING_CLUSTERS = "RETURN null AS cluster_id, null AS fact_count LIMIT 0"
-
-_MAX_CLUSTERS_PER_RUN = 50
+_MAX_CANDIDATES_PER_RUN = 50
 
 
 def _run_async(coro: Any) -> Any:
@@ -37,10 +31,11 @@ def _run_async(coro: Any) -> Any:
 @dg.asset(
     name="belief_synthesis",
     partitions_def=silo_partitions,
-    deps=["llm_pattern_detection"],
+    deps=["claim_to_fact_promotion"],
     description=(
-        "Batch synthesise :Belief nodes from qualifying fact clusters. "
-        "Processes up to 50 pending clusters per run."
+        "Batch synthesise :Belief nodes from corroborating fact groups (v2). "
+        "Finds facts sharing (subject, predicate) with sufficient evidence, "
+        "then creates ProposedBelief via synthesize_from_facts()."
     ),
     retry_policy=dg.RetryPolicy(max_retries=1, delay=10.0),
     tags={"dagster/concurrency_key": "belief_synthesis"},
@@ -50,59 +45,82 @@ def belief_synthesis_asset(
     memgraph: MemgraphResource,
     llm: LLMResource,
 ) -> dg.Output[dict[str, Any]]:
-    """Batch synthesise beliefs for all pending clusters in a silo."""
+    """Batch synthesise beliefs from corroborating fact groups."""
     silo_id: str = context.partition_key
     t0 = time.monotonic()
 
     async def _run() -> dict[str, Any]:
-        from context_service.engine.synthesis import synthesize_belief
-        from context_service.stores import MemgraphClient
+        from context_service.db import queries as q
+        from context_service.sage.transactions import (
+            SYNTHESIS_THRESHOLD,
+            synthesize_from_facts,
+        )
 
-        driver = await memgraph.driver()
-        client = MemgraphClient(driver)
         store = await memgraph.store()
         llm_client = llm.get_client()
 
-        rows = await client.execute_query(
-            _LIST_PENDING_CLUSTERS,
+        # Find synthesis candidates using v2 query
+        candidates = await store.execute_query(
+            q.GET_SYNTHESIS_CANDIDATES,
             {
                 "silo_id": silo_id,
-                "min_facts": _get_min_facts_for_belief(),
-                "max_clusters": _MAX_CLUSTERS_PER_RUN,
+                "fact_threshold": SYNTHESIS_THRESHOLD,
+                "evidence_threshold": 3,
+                "limit": _MAX_CANDIDATES_PER_RUN,
             },
         )
 
-        clusters = [
-            {"cluster_id": str(r["cluster_id"]), "fact_count": int(r["fact_count"])} for r in rows
-        ]
-
-        if not clusters:
-            context.log.info(f"belief_synthesis: no pending clusters for silo={silo_id}")
+        if not candidates:
+            context.log.info(f"belief_synthesis: no candidates for silo={silo_id}")
             return {"succeeded": 0, "failed": 0, "total": 0, "belief_ids": []}
 
         context.log.info(
-            f"belief_synthesis: processing {len(clusters)} clusters for silo={silo_id}"
+            f"belief_synthesis: processing {len(candidates)} candidates for silo={silo_id}"
         )
 
         succeeded = 0
         failed = 0
         belief_ids: list[str] = []
 
-        for cluster in clusters:
-            cluster_id = str(cluster["cluster_id"])
+        for candidate in candidates:
+            fact_ids = candidate.get("fact_ids", [])
+            predicate = candidate.get("predicate", "unknown")
+
+            if len(fact_ids) < SYNTHESIS_THRESHOLD:
+                continue
+
             try:
-                belief_id = await synthesize_belief(store, cluster_id, silo_id, llm_client)
-                belief_ids.append(belief_id)
-                succeeded += 1
-                context.log.info(f"belief_synthesised cluster={cluster_id} belief={belief_id}")
+                result, _events = await synthesize_from_facts(
+                    store,
+                    fact_ids,
+                    silo_id,
+                    llm_client,
+                    mode="async",
+                )
+
+                if result.belief_id:
+                    belief_ids.append(result.belief_id)
+                    succeeded += 1
+                    context.log.info(
+                        f"belief_synthesised predicate={predicate} "
+                        f"belief={result.belief_id} facts={len(fact_ids)}"
+                    )
+                else:
+                    context.log.debug(
+                        f"synthesis_skipped predicate={predicate} "
+                        f"timed_out={result.timed_out}"
+                    )
+
             except Exception as e:
                 failed += 1
-                context.log.error(f"belief_synthesis failed cluster={cluster_id} error={e}")
+                context.log.error(
+                    f"belief_synthesis failed predicate={predicate} error={e}"
+                )
 
         return {
             "succeeded": succeeded,
             "failed": failed,
-            "total": len(clusters),
+            "total": len(candidates),
             "belief_ids": belief_ids,
         }
 
