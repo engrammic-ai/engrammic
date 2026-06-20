@@ -3,7 +3,7 @@ config:
   gcp:region: us-west1
   gcp:zone: us-west1-b
   benchmark:environment: benchmark
-  benchmark:gpu_tier: t4
+  benchmark:gpu_tier: a100-40
   benchmark:embedding_model: bge-m3
   benchmark:reranker_model: bge-reranker-base
   benchmark:llm_model: qwen-7b
