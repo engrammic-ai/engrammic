@@ -50,6 +50,7 @@ async def _recall_impl(
     since: str | None = None,
     until: str | None = None,
     graph_depth: int | None = None,
+    include_hints: bool = False,
 ) -> dict[str, Any]:
     """Implementation for recall tool."""
     auth = await get_mcp_auth_context()
@@ -89,6 +90,7 @@ async def _recall_impl(
         since=since,
         until=until,
         graph_depth=graph_depth,
+        include_hints=include_hints,
     )
     duration_ms = (time.perf_counter() - start) * 1000
 
@@ -298,6 +300,7 @@ def register(mcp: FastMCP) -> None:
         since: str | None = None,
         until: str | None = None,
         graph_depth: int | None = None,
+        include_hints: bool = False,
     ) -> dict[str, Any]:
         """Retrieve knowledge.
 
@@ -326,6 +329,8 @@ def register(mcp: FastMCP) -> None:
             until: Filter to nodes created at/before this time. Same format as since.
             graph_depth: BFS depth for graph channel when fusion_mode=True.
                 Defaults to config value (2). Overrides depth when fusion_mode=True.
+            include_hints: When True, receive belief candidate suggestions when
+                corroborating facts are detected.
 
         Returns:
             {results|nodes, hypotheses?, ...}
@@ -349,6 +354,7 @@ def register(mcp: FastMCP) -> None:
                 since=since,
                 until=until,
                 graph_depth=graph_depth,
+                include_hints=include_hints,
             )
         except Exception:
             success = False
