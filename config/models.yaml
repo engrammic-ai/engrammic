@@ -108,6 +108,67 @@ tiers:
       provider: vertex_ai
       model: gemini-2.5-flash
 
+  # Benchmark: fully self-hosted for BEAM/LongMemEval runs
+  # Zero network latency, all inference on local GPU (T4/L4/A100)
+  # Requires: BenchmarkEnvironment Pulumi stack (GPU VM + dev-box)
+  benchmark:
+    embeddings:
+      provider: tei
+      model: BAAI/bge-m3
+      dimensions: 1024
+    reasoning:
+      provider: vllm
+      model: Qwen/Qwen2.5-7B-Instruct  # 131K context, fits T4
+    fast:
+      provider: vllm
+      model: Qwen/Qwen2.5-7B-Instruct
+    reranker:
+      provider: tei
+      model: BAAI/bge-reranker-base
+    query_expander:
+      provider: vllm
+      model: Qwen/Qwen2.5-7B-Instruct
+
+  # Benchmark L4: larger models for higher quality benchmarks
+  # Requires: L4 GPU (24GB VRAM)
+  benchmark_l4:
+    embeddings:
+      provider: tei
+      model: BAAI/bge-m3
+      dimensions: 1024
+    reasoning:
+      provider: vllm
+      model: Qwen/Qwen2.5-14B-Instruct
+    fast:
+      provider: vllm
+      model: Qwen/Qwen2.5-7B-Instruct
+    reranker:
+      provider: tei
+      model: BAAI/bge-reranker-base
+    query_expander:
+      provider: vllm
+      model: Qwen/Qwen2.5-7B-Instruct
+
+  # Benchmark DeepSeek: alternative with DeepSeek-R1-Distill
+  # Good for reasoning-heavy benchmarks
+  benchmark_deepseek:
+    embeddings:
+      provider: tei
+      model: BAAI/bge-m3
+      dimensions: 1024
+    reasoning:
+      provider: vllm
+      model: deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+    fast:
+      provider: vllm
+      model: deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+    reranker:
+      provider: tei
+      model: BAAI/bge-reranker-base
+    query_expander:
+      provider: vllm
+      model: deepseek-ai/DeepSeek-R1-Distill-Qwen-7B
+
   # Hybrid: self-hosted embeddings + Vertex LLMs
   # Best of both: fast local embeddings, GC credits for LLMs
   hybrid:
