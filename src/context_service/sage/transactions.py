@@ -236,11 +236,15 @@ class SynthesizeResult:
 
     Note: belief_id is a ProposedBelief ID. Agent must call accept_proposal
     to promote it to a full Belief.
+
+    .. deprecated::
+        cluster_id and cluster_state are deprecated. Use SynthesizeFromFactsResult
+        for v2 synthesis.
     """
 
     belief_id: uuid.UUID | None
-    cluster_id: str
-    cluster_state: ClusterState
+    cluster_id: str  # Deprecated: v2 synthesis uses SynthesizeFromFactsResult
+    cluster_state: ClusterState  # Deprecated
     fact_count: int
     confidence: float | None
     timed_out: bool = False
@@ -419,7 +423,18 @@ async def synthesize(
     Per brain-transactions-pseudocode.md:
     - Modes: ASYNC (30s timeout), SYNC (2s timeout for query-time)
     - Enforces INV3: Every Belief has >= N SYNTHESIZED_FROM to ACTIVE Facts
+
+    .. deprecated::
+        Use synthesize_from_facts() instead. Cluster-based synthesis is
+        deprecated in CITE v2.
     """
+    import warnings
+
+    warnings.warn(
+        "synthesize() is deprecated. Use synthesize_from_facts() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     from context_service.db import queries as q
 
     effective_timeout = 2.0 if mode == "sync" else timeout_seconds
