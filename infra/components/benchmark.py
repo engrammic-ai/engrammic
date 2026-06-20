@@ -33,26 +33,37 @@ GPU_CONFIGS = {
     },
 }
 
-# LLM models by size (vLLM compatible)
-# VRAM estimates account for vLLM optimization (KV cache sharing, paged attention)
+# LLM models - local (vLLM) or API (Vertex AI)
 LLM_MODELS = {
+    # Vertex AI (no local GPU needed)
+    "gemini-3.5-flash": {
+        "model_id": "gemini-3.5-flash",
+        "provider": "vertex_ai",
+        "vram_required": 0,
+        "context_length": 1048576,
+    },
+    # Local vLLM models (require GPU)
     "deepseek-7b": {
         "model_id": "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
-        "vram_required": 12,  # ~12GB with vLLM optimizations
+        "provider": "vllm",
+        "vram_required": 12,
         "context_length": 32768,
     },
     "qwen-7b": {
         "model_id": "Qwen/Qwen2.5-7B-Instruct",
-        "vram_required": 12,  # ~12GB with vLLM optimizations
+        "provider": "vllm",
+        "vram_required": 12,
         "context_length": 131072,
     },
     "qwen-14b": {
         "model_id": "Qwen/Qwen2.5-14B-Instruct",
+        "provider": "vllm",
         "vram_required": 22,
         "context_length": 131072,
     },
     "qwen-32b": {
         "model_id": "Qwen/Qwen2.5-32B-Instruct",
+        "provider": "vllm",
         "vram_required": 50,
         "context_length": 131072,
     },
@@ -104,7 +115,9 @@ services:
       - MODELS__TIER=benchmark
       - TEI_URL=http://${GPU_HOST}:8080
       - RERANKER_URL=http://${GPU_HOST}:8081
-      - VLLM_URL=http://${GPU_HOST}:8000
+      - VERTEX_PROJECT=engrammic
+      - VERTEX_LOCATION=global
+      - DEFAULT_LLM_MODEL=gemini-3.5-flash
       - OTEL_ENABLED=false
       - HF_HOME=/app/.cache/huggingface
       - FASTEMBED_CACHE_PATH=/app/.cache/fastembed
@@ -177,7 +190,9 @@ services:
       - MODELS__TIER=benchmark
       - TEI_URL=http://${GPU_HOST}:8080
       - RERANKER_URL=http://${GPU_HOST}:8081
-      - VLLM_URL=http://${GPU_HOST}:8000
+      - VERTEX_PROJECT=engrammic
+      - VERTEX_LOCATION=global
+      - DEFAULT_LLM_MODEL=gemini-3.5-flash
     command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "workspace.yaml"]
     depends_on:
       - postgres
@@ -271,8 +286,8 @@ if ! docker info 2>/dev/null | grep -q nvidia; then
 fi
 
 # Create cache directories
-mkdir -p /opt/tei-cache /opt/reranker-cache /opt/vllm-cache
-chmod 777 /opt/tei-cache /opt/reranker-cache /opt/vllm-cache
+mkdir -p /opt/tei-cache /opt/reranker-cache
+chmod 777 /opt/tei-cache /opt/reranker-cache
 
 # Docker network for inter-container communication
 docker network create benchmark-net 2>/dev/null || true
@@ -305,30 +320,16 @@ docker run -d --name tei-rerank \\
   ghcr.io/huggingface/text-embeddings-inference:turing-1.7 \\
   --model-id {rerank_config['model_id']}
 
-# ===== vLLM (port 8000) =====
-echo "Starting vLLM..."
-docker run -d --name vllm \\
-  --network benchmark-net \\
-  --runtime=nvidia -e NVIDIA_VISIBLE_DEVICES=all \\
-  -p 8000:8000 \\
-  -v /opt/vllm-cache:/root/.cache \\
-  -e HF_HUB_ENABLE_HF_TRANSFER=1 \\
-  -e CUDA_VISIBLE_DEVICES=0 \\
-  --restart unless-stopped \\
-  --ipc=host \\
-  vllm/vllm-openai:latest \\
-  --model {llm_config['model_id']} \\
-  --max-model-len {min(llm_config['context_length'], 32768)} \\
-  --trust-remote-code \\
-  --dtype auto \\
-  --gpu-memory-utilization 0.85
+# ===== LLM =====
+# Using Gemini API instead of local vLLM (set GOOGLE_API_KEY env var)
+echo "LLM: Using Gemini 3.5 Flash via API (no local container)"
 
 # Wait for services to be ready
 echo "Waiting for services to start..."
 sleep 30
 
 # Health check
-for port in 8080 8081 8000; do
+for port in 8080 8081; do
     for i in {{1..30}}; do
         if curl -s http://localhost:$port/health > /dev/null 2>&1; then
             echo "Port $port ready"
@@ -388,7 +389,7 @@ echo "vLLM: http://$(hostname -I | awk '{{print $1}}'):8000"
                 scopes=["cloud-platform"],
             ),
             metadata_startup_script=startup_script,
-            tags=["benchmark-gpu", "tei-server", "vllm-server"],
+            tags=["benchmark-gpu", "tei-server"],
             allow_stopping_for_update=True,
             opts=pulumi.ResourceOptions(parent=self),
         )
@@ -838,7 +839,7 @@ class BenchmarkEnvironment(pulumi.ComponentResource):
                 "devbox_instance_ip": self.devbox.internal_ip,
                 "tei_embeddings_url": pulumi.Output.concat("http://", self.gpu.internal_ip, ":8080"),
                 "tei_reranker_url": pulumi.Output.concat("http://", self.gpu.internal_ip, ":8081"),
-                "vllm_url": pulumi.Output.concat("http://", self.gpu.internal_ip, ":8000"),
+                "llm_provider": "vertex_ai/gemini-3.5-flash",  # Via Vertex AI (SA auth)
                 "engrammic_url": pulumi.Output.concat("http://", self.devbox.internal_ip, ":8000"),
             }
         )

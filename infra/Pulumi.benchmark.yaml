@@ -3,10 +3,10 @@ config:
   gcp:region: us-west1
   gcp:zone: us-west1-b
   benchmark:environment: benchmark
-  benchmark:gpu_tier: a100-40
+  benchmark:gpu_tier: t4
   benchmark:embedding_model: bge-m3
   benchmark:reranker_model: bge-reranker-base
-  benchmark:llm_model: qwen-7b
+  benchmark:llm_model: gemini-3.5-flash  # via GOOGLE_API_KEY, no local vLLM
   benchmark:use_spot: "true"
   benchmark:tailscale: "true"
   benchmark:benchmark_gpu_zone: us-west1-b
