@@ -304,7 +304,8 @@ async def _context_query(
                     1 for r in cached_results if r.get("superseded_by") is not None
                 )
                 cached_filtered_contradictions = sum(
-                    1 for r in cached_results
+                    1
+                    for r in cached_results
                     if r.get("conflict_status") == "unresolved" and r.get("contradicts")
                 )
                 return {
@@ -439,7 +440,8 @@ async def _context_query(
     else:
         # Legacy behavior: just count, don't filter
         filtered_contradictions = sum(
-            1 for rd in raw_result_dicts
+            1
+            for rd in raw_result_dicts
             if rd.get("conflict_status") == "unresolved" and rd.get("contradicts")
         )
 
@@ -546,6 +548,8 @@ async def _context_query(
                 "suggested_action": h.suggested_action,
             }
             for h in epistemic_result.hints
-        ] if include_hints and epistemic_result.hints else [],
+        ]
+        if include_hints and epistemic_result.hints
+        else [],
         "synthesis_pending": epistemic_result.synthesis_pending,
     }

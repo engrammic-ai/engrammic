@@ -249,9 +249,7 @@ async def maybe_trigger_synthesis(
 
     # Filter to Facts only (Knowledge layer)
     fact_ids = [
-        r.node_id
-        for r in results
-        if r.layer and r.layer.upper() == Layer.KNOWLEDGE.value.upper()
+        r.node_id for r in results if r.layer and r.layer.upper() == Layer.KNOWLEDGE.value.upper()
     ]
 
     if len(fact_ids) < SYNTHESIS_THRESHOLD:
@@ -277,9 +275,7 @@ async def maybe_trigger_synthesis(
     for candidate in candidates:
         candidate_fact_ids = candidate.get("fact_ids", [])
         if len(candidate_fact_ids) >= SYNTHESIS_THRESHOLD:
-            _fire_and_forget(
-                synthesize_from_facts(store, candidate_fact_ids, silo_id, llm)
-            )
+            _fire_and_forget(synthesize_from_facts(store, candidate_fact_ids, silo_id, llm))
             synthesis_pending = True
             logger.info(
                 "synthesis_triggered",
@@ -323,9 +319,7 @@ async def _detect_belief_candidates(
     from context_service.sage.transactions import EVIDENCE_THRESHOLD, SYNTHESIS_THRESHOLD
 
     fact_ids = [
-        r.node_id
-        for r in results
-        if r.layer and r.layer.upper() == Layer.KNOWLEDGE.value.upper()
+        r.node_id for r in results if r.layer and r.layer.upper() == Layer.KNOWLEDGE.value.upper()
     ]
 
     if len(fact_ids) < SYNTHESIS_THRESHOLD:

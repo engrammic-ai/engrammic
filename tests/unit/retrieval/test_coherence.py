@@ -1,6 +1,5 @@
 """Tests for coherence filtering."""
 
-
 from context_service.retrieval.coherence import (
     _dominates,
     _get_layer_rank,

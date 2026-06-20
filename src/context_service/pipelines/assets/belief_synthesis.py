@@ -108,15 +108,12 @@ def belief_synthesis_asset(
                     )
                 else:
                     context.log.debug(
-                        f"synthesis_skipped predicate={predicate} "
-                        f"timed_out={result.timed_out}"
+                        f"synthesis_skipped predicate={predicate} timed_out={result.timed_out}"
                     )
 
             except Exception as e:
                 failed += 1
-                context.log.error(
-                    f"belief_synthesis failed predicate={predicate} error={e}"
-                )
+                context.log.error(f"belief_synthesis failed predicate={predicate} error={e}")
 
         return {
             "succeeded": succeeded,

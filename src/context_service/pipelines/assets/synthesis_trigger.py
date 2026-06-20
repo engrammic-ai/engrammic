@@ -53,9 +53,7 @@ def synthesis_trigger(
     duration_s = time.monotonic() - t0
     count = len(request_ids)
 
-    context.log.info(
-        f"silo={silo_id} synthesis_requests={count} duration={duration_s:.2f}s"
-    )
+    context.log.info(f"silo={silo_id} synthesis_requests={count} duration={duration_s:.2f}s")
 
     return dg.Output(
         value={

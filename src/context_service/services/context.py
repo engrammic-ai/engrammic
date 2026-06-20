@@ -821,7 +821,11 @@ class ContextService:
         # Filter by edge_types if specified
         if edge_types:
             edge_set = set(edge_types)
-            chain_rows = [r for r in chain_rows if r.get("relationship") in edge_set or r.get("relationship") is None]
+            chain_rows = [
+                r
+                for r in chain_rows
+                if r.get("relationship") in edge_set or r.get("relationship") is None
+            ]
 
         chain = [
             ProvenanceStep(
@@ -1884,4 +1888,3 @@ class ContextService:
             nodes_visited=len(nodes_out),
             edges_traversed=len(edges_out),
         )
-

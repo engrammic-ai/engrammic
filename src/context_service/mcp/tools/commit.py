@@ -83,7 +83,9 @@ async def _commit_impl(
                         silo_id=silo_id,
                     )
                 except Exception:
-                    logger.warning("sync_embed_failed", node_id=str(result.commitment_id), exc_info=True)
+                    logger.warning(
+                        "sync_embed_failed", node_id=str(result.commitment_id), exc_info=True
+                    )
         except InvariantViolation as e:
             errors.append(
                 {

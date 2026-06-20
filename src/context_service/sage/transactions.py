@@ -2420,10 +2420,7 @@ async def check_semantic_corroboration(
         return len(new_evidence), len(new_evidence) >= threshold
 
     # Batch embed all candidate SPO texts
-    spo_texts = [
-        f"{c.get('subject')} {c.get('predicate')} {c.get('object')}"
-        for c in candidates
-    ]
+    spo_texts = [f"{c.get('subject')} {c.get('predicate')} {c.get('object')}" for c in candidates]
     candidate_embeddings = await embedding_service.embed(spo_texts)
 
     # Find semantically similar claims
@@ -2469,9 +2466,7 @@ async def _check_corroboration(
     Returns (corroboration_count, should_promote).
     """
     if embedding_service is not None:
-        return await check_semantic_corroboration(
-            store, node_id, silo_id, embedding_service
-        )
+        return await check_semantic_corroboration(store, node_id, silo_id, embedding_service)
     return await check_corroboration(store, node_id, silo_id)
 
 

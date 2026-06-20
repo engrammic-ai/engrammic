@@ -87,9 +87,7 @@ def legacy_embed_migration_op(context) -> dict[str, Any]:
                     context.log.info(f"legacy_embed_migration: silo={silo_id} no unembedded nodes")
                     continue
 
-                context.log.info(
-                    f"legacy_embed_migration: silo={silo_id} unembedded={silo_total}"
-                )
+                context.log.info(f"legacy_embed_migration: silo={silo_id} unembedded={silo_total}")
 
                 offset = 0
                 while True:

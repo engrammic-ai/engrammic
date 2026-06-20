@@ -71,7 +71,10 @@ class SpacyEntityExtractor(EntityExtractor):
 
             self._nlp = spacy.load("en_core_web_sm")
         except Exception:
-            logger.warning("spacy_unavailable", reason="en_core_web_sm not installed; SpacyEntityExtractor will return empty results")
+            logger.warning(
+                "spacy_unavailable",
+                reason="en_core_web_sm not installed; SpacyEntityExtractor will return empty results",
+            )
 
     def _extract_sync(self, text: str) -> list[Entity]:
         """Synchronous extraction for thread pool execution."""

@@ -125,8 +125,5 @@ def check_synthesis_threshold(
     if len(facts) < 2:
         return False
 
-    total = sum(
-        calculate_independence(a, b)
-        for a, b in combinations(facts, 2)
-    )
+    total = sum(calculate_independence(a, b) for a, b in combinations(facts, 2))
     return total >= threshold

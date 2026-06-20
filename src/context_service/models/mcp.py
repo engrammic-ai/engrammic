@@ -144,5 +144,3 @@ class ProvenanceStep(BaseModel):
     layer: Layer
     relationship: str
     confidence: float
-
-

@@ -137,7 +137,7 @@ async def extract_spo(
             last_error = str(e)
 
         if attempt < max_retries - 1:
-            delay = base_delay * (2 ** attempt)
+            delay = base_delay * (2**attempt)
             logger.debug(
                 "spo_extraction_retry",
                 attempt=attempt + 1,

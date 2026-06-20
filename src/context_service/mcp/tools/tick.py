@@ -124,9 +124,7 @@ async def _tick(
     # Update last_accessed_at for provided nodes (decay prevention)
     nodes_updated = 0
     if about_hint:
-        nodes_updated = await _update_node_access(
-            store, silo_id, about_hint, engagement_type
-        )
+        nodes_updated = await _update_node_access(store, silo_id, about_hint, engagement_type)
 
     # Define parallel checks
     async def check_markers() -> dict[str, Any] | None:

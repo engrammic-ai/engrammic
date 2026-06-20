@@ -375,9 +375,7 @@ def register_tasks(broker: ListQueueBroker) -> None:
         log.info("update_heat_task_done", heat_score=updated)
 
     @broker.task(task_name=ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP, timeout=_TIMEOUT_SIMPLE)
-    async def update_cluster_membership_task(
-        node_id: str, silo_id: str, **_payload: Any
-    ) -> None:
+    async def update_cluster_membership_task(node_id: str, silo_id: str, **_payload: Any) -> None:
         """DEPRECATED (CITE v2): Clustering removed. No-op stub.
 
         TODO: Remove task after all event emitters are updated to v2 APIs.
@@ -964,7 +962,10 @@ Return only valid JSON, no other text."""
                     try:
                         _entities = await _extractor.extract(claim_content)
                     except Exception:
-                        log.warning("extract_claims_entity_extraction_error", claim_id=str(claim_result.node_id))
+                        log.warning(
+                            "extract_claims_entity_extraction_error",
+                            claim_id=str(claim_result.node_id),
+                        )
                         _entities = []
 
                     import datetime as _datetime_mod

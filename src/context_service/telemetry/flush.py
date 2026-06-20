@@ -57,5 +57,3 @@ async def flush_metrics_to_db(pool: asyncpg.Pool, buffer: MetricsBuffer) -> None
 
     buffer.clear()
     logger.debug("metrics_flushed", row_count=len(rows))
-
-

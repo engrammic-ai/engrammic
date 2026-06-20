@@ -122,7 +122,9 @@ def backfill_spo_op(context) -> dict[str, Any]:
                 processed += 1
 
             offset += len(batch)
-            context.log.info(f"Progress: {processed}/{total} processed, {updated} updated, {failed} failed")
+            context.log.info(
+                f"Progress: {processed}/{total} processed, {updated} updated, {failed} failed"
+            )
 
         return {
             "total": total,

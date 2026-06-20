@@ -466,8 +466,7 @@ class MemgraphStore(EAGKnowledgeStore):
         )
 
         result: dict[str, dict[str, list[str]]] = {
-            nid: {"supports": [], "derived_from": [], "contradicts": []}
-            for nid in node_ids
+            nid: {"supports": [], "derived_from": [], "contradicts": []} for nid in node_ids
         }
 
         if not records:
