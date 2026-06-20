@@ -2,6 +2,9 @@
 
 from context_service.pipelines.jobs.beacon_sender import beacon_sender_job
 from context_service.pipelines.jobs.groundskeeper_job import groundskeeper_nightly
+from context_service.pipelines.jobs.legacy_embed_migration_job import (
+    sage_legacy_embed_migration_job,
+)
 from context_service.pipelines.jobs.orphan_recovery import (
     orphan_chain_recovery_job,
     orphan_recovery_schedule,
@@ -20,6 +23,7 @@ __all__ = [
     "orphan_chain_recovery_job",
     "orphan_recovery_schedule",
     "reembed_migration",
+    "sage_legacy_embed_migration_job",
     "sage_validator_job",
     "spo_backfill_job",
     "usage_retention_job",
