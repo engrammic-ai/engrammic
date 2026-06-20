@@ -440,6 +440,26 @@ class QdrantClient:
             finally:
                 record_db_query("qdrant.upsert", (time.perf_counter() - start) * 1000)
 
+    async def exists(self, node_id: str, _silo_id: str | None = None) -> bool:
+        """Return True if a point with ``node_id`` exists in Qdrant.
+
+        Args:
+            node_id: String UUID of the node to check.
+            _silo_id: Unused (collection is not sharded by silo in this store),
+                kept for API symmetry with upsert.
+        """
+        client = await self._get_client()
+        try:
+            result = await client.retrieve(
+                collection_name=self._collection_name,
+                ids=[node_id],
+                with_vectors=False,
+                with_payload=False,
+            )
+            return len(result) > 0
+        except Exception:
+            return False
+
     async def search(
         self,
         vector: list[float],

@@ -118,6 +118,10 @@ class TestComputeEmbeddingTask:
         node = _make_node(node_id, content="some content to embed")
         mock_graph_store.get_node = AsyncMock(return_value=node)
 
+        mock_vector_store = AsyncMock()
+        mock_vector_store.exists = AsyncMock(return_value=False)
+        mock_context_service.vector_store = mock_vector_store
+
         embedder = MagicMock()
         embedder.embed_single = AsyncMock(return_value=[0.1, 0.2, 0.3])
         task = in_memory_broker.find_task(ReactionEventType.COMPUTE_EMBEDDING)
@@ -147,6 +151,7 @@ class TestComputeEmbeddingTask:
         mock_graph_store.get_node = AsyncMock(return_value=node)
 
         mock_vector_store = AsyncMock()
+        mock_vector_store.exists = AsyncMock(return_value=False)
         mock_context_service.vector_store = mock_vector_store
 
         vector = [0.1] * 768
@@ -171,6 +176,67 @@ class TestComputeEmbeddingTask:
             payload={"type": "Memory"},
             silo_id="s1",
         )
+
+    @pytest.mark.asyncio
+    async def test_skips_embedding_when_already_embedded(
+        self,
+        in_memory_broker: InMemoryBroker,
+        mock_context_service: MagicMock,
+        mock_graph_store: AsyncMock,
+    ) -> None:
+        """compute_embedding_task returns early if the vector already exists in Qdrant."""
+        node_id = str(uuid.uuid4())
+        node = _make_node(node_id, content="some content")
+        mock_graph_store.get_node = AsyncMock(return_value=node)
+
+        mock_vector_store = AsyncMock()
+        mock_vector_store.exists = AsyncMock(return_value=True)
+        mock_context_service.vector_store = mock_vector_store
+
+        embedder = AsyncMock()
+        task = in_memory_broker.find_task(ReactionEventType.COMPUTE_EMBEDDING)
+        assert task is not None
+
+        with (
+            _patch_ctx_svc(mock_context_service),
+            patch("context_service.embeddings.build_embedding_service", return_value=embedder),
+        ):
+            await task.kiq(node_id=node_id, silo_id="s1")
+
+        embedder.embed_single.assert_not_awaited()
+        mock_vector_store.upsert.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_proceeds_when_not_yet_embedded(
+        self,
+        in_memory_broker: InMemoryBroker,
+        mock_context_service: MagicMock,
+        mock_graph_store: AsyncMock,
+    ) -> None:
+        """compute_embedding_task embeds and upserts when no existing vector is found."""
+        node_id = str(uuid.uuid4())
+        node = _make_node(node_id, content="content to embed")
+        mock_graph_store.get_node = AsyncMock(return_value=node)
+
+        mock_vector_store = AsyncMock()
+        mock_vector_store.exists = AsyncMock(return_value=False)
+        mock_context_service.vector_store = mock_vector_store
+
+        vector = [0.5] * 768
+        embedder = MagicMock()
+        embedder.embed_single = AsyncMock(return_value=vector)
+
+        task = in_memory_broker.find_task(ReactionEventType.COMPUTE_EMBEDDING)
+        assert task is not None
+
+        with (
+            _patch_ctx_svc(mock_context_service),
+            patch("context_service.embeddings.build_embedding_service", return_value=embedder),
+        ):
+            await task.kiq(node_id=node_id, silo_id="s1")
+
+        embedder.embed_single.assert_awaited_once_with("content to embed")
+        mock_vector_store.upsert.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

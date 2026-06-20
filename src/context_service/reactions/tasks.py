@@ -232,6 +232,11 @@ def register_tasks(broker: ListQueueBroker) -> None:
             log.debug("compute_embedding_no_content_skip")
             return
 
+        # Skip nodes already embedded at write-gate time
+        if await ctx_svc.vector_store.exists(node_id, silo_id):
+            log.debug("compute_embedding_already_embedded_skip", node_id=node_id)
+            return
+
         embedder = build_embedding_service()
         vector = await embedder.embed_single(content)
 
