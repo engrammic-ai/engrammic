@@ -78,10 +78,11 @@ tools:
 
   trace:
     description: |
-      Trace the provenance of a node back to its sources. Walks DERIVED_FROM
-      and SYNTHESIZED_FROM edges to find root Memory/Claim nodes. Use when
-      you need to understand where a Belief or Fact came from, or how a
-      version chain evolved (via SUPERSEDES edges).
+      Trace provenance or impact of a node. direction="up" (default) walks
+      backward to sources (why I believe this). direction="down" walks forward
+      to derived nodes (what depends on this). max_depth controls traversal
+      depth (default 5). edge_types filters to specific edges: DERIVED_FROM,
+      PROMOTED_FROM, SYNTHESIZED_FROM, REFERENCES.
     maps_to: provenance
 
   forget:

@@ -445,6 +445,58 @@ class MemgraphStore(EAGKnowledgeStore):
                 result[input_id] = valid_id
         return result
 
+    async def get_epistemic_edges_for_nodes(
+        self,
+        node_ids: list[str],
+        silo_id: str,
+    ) -> dict[str, dict[str, list[str]]]:
+        """Fetch SUPPORTS, DERIVED_FROM, and CONTRADICTS edges for a batch of nodes.
+
+        Returns a dict keyed by node_id, each containing:
+          - supports: list of node IDs that support this node
+          - derived_from: list of node IDs this node was derived from
+          - contradicts: list of node IDs this node contradicts or is contradicted by
+        """
+        if not node_ids:
+            return {}
+
+        records = await self._client.execute_query(
+            db_queries.BATCH_GET_EPISTEMIC_EDGES_FOR_NODES,
+            {"node_ids": node_ids, "silo_id": silo_id},
+        )
+
+        result: dict[str, dict[str, list[str]]] = {
+            nid: {"supports": [], "derived_from": [], "contradicts": []}
+            for nid in node_ids
+        }
+
+        if not records:
+            return result
+
+        rec = records[0]
+
+        for edge in rec.get("support_edges") or []:
+            target = edge.get("target")
+            source = edge.get("source")
+            if target and source and target in result:
+                result[target]["supports"].append(source)
+
+        for edge in rec.get("derived_edges") or []:
+            source = edge.get("source")
+            target = edge.get("target")
+            if source and target and source in result:
+                result[source]["derived_from"].append(target)
+
+        for edge in rec.get("contradiction_edges") or []:
+            a = edge.get("source")
+            b = edge.get("target")
+            if a and a in result:
+                result[a]["contradicts"].append(b)
+            if b and b in result:
+                result[b]["contradicts"].append(a)
+
+        return result
+
     async def _acquire_supersession_lock(self, predecessor_id: str) -> bool:
         """Acquire a Redis lock before superseding a node.
 

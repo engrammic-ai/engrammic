@@ -550,6 +550,115 @@ class TestTickEnhanced:
         assert isinstance(result["meta"]["latency_ms"], (int, float))
 
 
+class TestTickDecayPrevention:
+    """Tests for tick decay-prevention (last_accessed_at update)."""
+
+    @pytest.mark.asyncio
+    async def test_tick_with_about_hint_updates_node_access(
+        self, mock_context_service, mock_redis_client
+    ):
+        """When about_hint is provided, last_accessed_at should be updated."""
+        mock_context_service.graph_store.execute_write = AsyncMock(
+            return_value=[{"updated": 2}]
+        )
+
+        with (
+            patch(
+                "context_service.mcp.server.get_context_service",
+                return_value=mock_context_service,
+            ),
+            patch(
+                "context_service.mcp.server.get_redis",
+                return_value=mock_redis_client,
+            ),
+            patch(
+                "context_service.engine.engagement.get_engagement_for_about_set",
+                new=AsyncMock(return_value=None),
+            ),
+        ):
+            from context_service.mcp.tools.tick import _tick
+
+            result = await _tick(
+                about_hint=["node-1", "node-2"],
+                silo_id="silo-1",
+                engagement_type="used",
+            )
+
+        # Verify execute_write was called for node access update
+        mock_context_service.graph_store.execute_write.assert_called_once()
+        call_args = mock_context_service.graph_store.execute_write.call_args
+        params = call_args[0][1]
+        assert params["node_ids"] == ["node-1", "node-2"]
+        assert params["heat_delta"] == 1.0  # "used" heat
+
+        # Verify response includes metadata
+        assert result["meta"]["nodes_updated"] == 2
+        assert result["meta"]["engagement_type"] == "used"
+
+    @pytest.mark.asyncio
+    async def test_tick_engagement_type_heat_values(
+        self, mock_context_service, mock_redis_client
+    ):
+        """Different engagement types should have different heat deltas."""
+        mock_context_service.graph_store.execute_write = AsyncMock(
+            return_value=[{"updated": 1}]
+        )
+
+        with (
+            patch(
+                "context_service.mcp.server.get_context_service",
+                return_value=mock_context_service,
+            ),
+            patch(
+                "context_service.mcp.server.get_redis",
+                return_value=mock_redis_client,
+            ),
+            patch(
+                "context_service.engine.engagement.get_engagement_for_about_set",
+                new=AsyncMock(return_value=None),
+            ),
+        ):
+            from context_service.mcp.tools.tick import _tick
+
+            # Test "confirmed" engagement type
+            await _tick(
+                about_hint=["node-1"],
+                silo_id="silo-1",
+                engagement_type="confirmed",
+            )
+
+        call_args = mock_context_service.graph_store.execute_write.call_args
+        params = call_args[0][1]
+        assert params["heat_delta"] == 2.0  # "confirmed" heat
+
+    @pytest.mark.asyncio
+    async def test_tick_no_about_hint_skips_access_update(
+        self, mock_context_service, mock_redis_client
+    ):
+        """When about_hint is None, no access update should happen."""
+        with (
+            patch(
+                "context_service.mcp.server.get_context_service",
+                return_value=mock_context_service,
+            ),
+            patch(
+                "context_service.mcp.server.get_redis",
+                return_value=mock_redis_client,
+            ),
+            patch(
+                "context_service.engine.engagement.get_engagement_for_silo",
+                new=AsyncMock(return_value=None),
+            ),
+        ):
+            from context_service.mcp.tools.tick import _tick
+
+            result = await _tick(about_hint=None, silo_id="silo-1")
+
+        # No execute_write call for access update
+        mock_context_service.graph_store.execute_write.assert_not_called()
+        assert result["meta"]["nodes_updated"] == 0
+
+
 class TestTickToolRegistration:
     """Tests for tool registration."""
 

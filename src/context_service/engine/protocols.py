@@ -82,6 +82,20 @@ class HyperGraphStore(Protocol):
         """
         ...
 
+    async def get_epistemic_edges_for_nodes(
+        self,
+        node_ids: list[str],
+        silo_id: str,
+    ) -> dict[str, dict[str, list[str]]]:
+        """Fetch epistemic edges (SUPPORTS, DERIVED_FROM, CONTRADICTS) for nodes.
+
+        Returns a dict keyed by node_id, each containing:
+          - supports: list of node IDs that support this node
+          - derived_from: list of node IDs this node was derived from
+          - contradicts: list of node IDs this node contradicts or is contradicted by
+        """
+        ...
+
     async def resolve_current_head(
         self,
         node_id: uuid.UUID,

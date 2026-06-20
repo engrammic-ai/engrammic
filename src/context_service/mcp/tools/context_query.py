@@ -34,6 +34,7 @@ from context_service.reranking.epistemic_fusion import (
     EpistemicAdjustment,
     apply_epistemic_fusion,
 )
+from context_service.retrieval.coherence import filter_dominated_contradictions
 from context_service.retrieval.epistemic import (
     EpistemicOptions,
     apply_epistemic_pipeline,
@@ -54,7 +55,7 @@ tracer = trace.get_tracer(__name__)
 
 _VALID_SEARCH_MODES = frozenset({"hybrid", "dense", "sparse"})
 
-CACHE_VERSION = "v2"
+CACHE_VERSION = "v3"
 
 
 def _search_mode_to_channels(mode: str) -> dict[str, bool]:
@@ -299,6 +300,13 @@ async def _context_query(
                     "layer_ttls": layer_ttls,
                     "knowledge_version": kv_for_cache,
                 }
+                cached_filtered_superseded = sum(
+                    1 for r in cached_results if r.get("superseded_by") is not None
+                )
+                cached_filtered_contradictions = sum(
+                    1 for r in cached_results
+                    if r.get("conflict_status") == "unresolved" and r.get("contradicts")
+                )
                 return {
                     "results": cached_results,
                     "total_candidates": len(cached_results),
@@ -306,6 +314,8 @@ async def _context_query(
                     "search_mode": search_mode,
                     "reflection_suggested": compute_reflection_suggested(cached_results),
                     "cache_meta": cache_meta,
+                    "filtered_superseded": cached_filtered_superseded,
+                    "filtered_contradictions": cached_filtered_contradictions,
                 }
 
     channel_config = _search_mode_to_channels(search_mode)
@@ -407,6 +417,35 @@ async def _context_query(
         for r in results
     ]
 
+    # Fetch epistemic edges (supports/derived_from/contradicts) for result nodes
+    node_ids_for_edges = [str(r.node_id) for r in results]
+    edges_by_node = await ctx_svc.graph_store.get_epistemic_edges_for_nodes(
+        node_ids_for_edges, silo_id
+    )
+    for rd in raw_result_dicts:
+        nid = str(rd["node_id"])
+        edges = edges_by_node.get(nid, {})
+        rd["supports"] = edges.get("supports", [])
+        rd["derived_from"] = edges.get("derived_from", [])
+        rd["contradicts"] = edges.get("contradicts", [])
+
+    # Coherence filtering: remove dominated contradictions
+    # When A contradicts B, keep only the winner (higher layer or confidence)
+    settings = get_settings()
+    if settings.coherence_filter_enabled:
+        raw_result_dicts, filtered_contradictions = filter_dominated_contradictions(
+            raw_result_dicts
+        )
+    else:
+        # Legacy behavior: just count, don't filter
+        filtered_contradictions = sum(
+            1 for rd in raw_result_dicts
+            if rd.get("conflict_status") == "unresolved" and rd.get("contradicts")
+        )
+
+    # Count superseded nodes (already filtered by retriever if include_superseded=False)
+    filtered_superseded = sum(1 for r in results if r.superseded_by is not None)
+
     # Per-silo threshold overrides stored in silo metadata under
     # "retrieval_thresholds": {"memory": 0.2, "knowledge": 0.6, ...}
     threshold_overrides: dict[str, float] | None = None
@@ -497,6 +536,8 @@ async def _context_query(
         "suggestion": suggestion,
         "metadata": metadata,
         "cache_meta": cache_meta,
+        "filtered_superseded": filtered_superseded,
+        "filtered_contradictions": filtered_contradictions,
         "hints": [
             {
                 "hint_type": h.hint_type,

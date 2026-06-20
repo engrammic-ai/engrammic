@@ -131,10 +131,11 @@ async def create_supersession(
     # Remove superseded node from Qdrant so it won't be returned in searches
     if success:
         try:
-            await ctx_svc.vector_store.delete(uuid.UUID(supersedes_id), silo_id)
+            await ctx_svc.vector_store.delete(supersedes_id)
         except Exception as e:
             # Log but don't fail - the edge is already created
             import structlog
+
             structlog.get_logger(__name__).warning(
                 "supersession_qdrant_delete_failed",
                 supersedes_id=supersedes_id,
@@ -322,6 +323,22 @@ async def _context_remember(
                 "Use a different claim text or omit supersedes.",
             }
 
+    try:
+        vector = await embed(content)
+        await ctx_svc.vector_store.upsert(
+            node_id=str(node_id),
+            vector=vector,
+            payload={"type": "Document", "layer": "memory"},
+            silo_id=str(validated_silo_id),
+        )
+    except Exception:
+        logger.warning(
+            "sync_embedding_failed",
+            exc_info=True,
+            node_id=str(node_id),
+            layer="memory",
+        )
+
     result: dict[str, Any] = {
         "node_id": str(node_id),
         "layer": "memory",
@@ -454,6 +471,22 @@ async def _context_assert(
 
     record_store_latency(time.perf_counter() - _start, silo_id=expected_silo_id, layer="knowledge")
     node_id = result.node_id
+
+    try:
+        vector = await embed(claim_text)
+        await ctx_svc.vector_store.upsert(
+            node_id=str(node_id),
+            vector=vector,
+            payload={"type": "Claim", "layer": "knowledge"},
+            silo_id=str(expected_silo_id),
+        )
+    except Exception:
+        logger.warning(
+            "sync_embedding_failed",
+            exc_info=True,
+            node_id=str(node_id),
+            layer="knowledge",
+        )
 
     promoted = False
     promoted_error: str | None = None
@@ -706,6 +739,22 @@ async def _context_reflect(
         await emit_reaction(event)
 
     record_store_latency(time.perf_counter() - _start, silo_id=expected_silo_id, layer="meta")
+
+    try:
+        vector = await embed(observation)
+        await ctx_svc.vector_store.upsert(
+            node_id=str(result.node_id),
+            vector=vector,
+            payload={"type": "MetaObservation", "layer": "meta"},
+            silo_id=str(expected_silo_id),
+        )
+    except Exception:
+        logger.warning(
+            "sync_embedding_failed",
+            exc_info=True,
+            node_id=str(result.node_id),
+            layer="meta",
+        )
 
     return {
         "node_id": str(result.node_id),
@@ -992,6 +1041,23 @@ async def _context_store_belief(
         {"new_belief_id": belief_id, "silo_id": silo_id},
     )
     conflict_ids = [row["conflict_id"] for row in conflict_rows]
+
+    try:
+        vector = await embed(content)
+        ctx_svc = get_context_service()
+        await ctx_svc.vector_store.upsert(
+            node_id=belief_id,
+            vector=vector,
+            payload={"type": "WorkingHypothesis", "layer": "belief"},
+            silo_id=silo_id,
+        )
+    except Exception:
+        logger.warning(
+            "sync_embedding_failed",
+            exc_info=True,
+            node_id=belief_id,
+            layer="belief",
+        )
 
     result: dict[str, Any] = {
         "belief_id": belief_id,

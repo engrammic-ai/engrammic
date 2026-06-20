@@ -1521,6 +1521,30 @@ class Settings(BaseSettings):
         description="Enable recall hints for wisdom/intelligence layer suggestions",
     )
 
+    coherence_filter_enabled: bool = Field(
+        default=True,
+        description=(
+            "Enable coherence filtering in recall. When A contradicts B, "
+            "filter out the dominated node (lower layer or lower confidence) "
+            "to return a coherent worldview."
+        ),
+    )
+
+    # =========================================================================
+    # Write-Gate Embedding
+    # =========================================================================
+
+    batch_embed_threshold: int = Field(
+        default=10,
+        ge=1,
+        le=1000,
+        description=(
+            "Number of nodes above which writes skip sync embedding and set "
+            "embedding_pending=true for batch processing. Single writes (<= threshold) "
+            "embed synchronously at write time."
+        ),
+    )
+
     # =========================================================================
     # tick() engagement
     # =========================================================================

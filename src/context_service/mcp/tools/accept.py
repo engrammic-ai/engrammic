@@ -11,6 +11,8 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
+import structlog
+
 from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.rate_limit import rate_limited
 from context_service.mcp.server import get_context_service, get_mcp_auth_context, track_tool_usage
@@ -19,6 +21,8 @@ from context_service.reactions.events import emit_reaction
 from context_service.sage.transactions import InvariantViolation, accept_proposal
 from context_service.services.models import derive_silo_id
 from context_service.telemetry.metrics import record_mcp_tool
+
+logger = structlog.get_logger()
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -37,6 +41,19 @@ async def _accept_impl(
     ctx_svc = get_context_service()
     agent_id = auth.agent_id or auth.org_id
 
+    from context_service.db import queries as q
+    from context_service.mcp.tools.context_store import embed
+
+    proposal_content: str | None = None
+    try:
+        proposal_rows = await ctx_svc.graph_store.execute_query(
+            q.GET_PROPOSED_BELIEF,
+            {"proposed_belief_id": proposal_id, "silo_id": silo_id},
+        )
+        proposal_content = proposal_rows[0].get("content") if proposal_rows else None
+    except Exception:
+        pass  # Content lookup failed; skip sync embedding, custodian will handle
+
     try:
         result, events = await accept_proposal(
             store=ctx_svc.graph_store,
@@ -49,6 +66,18 @@ async def _accept_impl(
 
         for event in events:
             await emit_reaction(event)
+
+        if proposal_content and result.accepted:
+            try:
+                vector = await embed(proposal_content)
+                await ctx_svc.vector_store.upsert(
+                    node_id=str(result.belief_id),
+                    vector=vector,
+                    payload={"type": "Belief", "layer": "wisdom"},
+                    silo_id=silo_id,
+                )
+            except Exception:
+                logger.warning("sync_embed_failed", node_id=str(result.belief_id), exc_info=True)
 
         return {
             "belief_id": str(result.belief_id),

@@ -868,6 +868,7 @@ async def store_memory(
         "content_type": content_type,
         "decay_class": decay_class,
         "created_by": agent_id,
+        "embedding_pending": False,
         **(metadata or {}),
     }
     if tags:
@@ -1051,6 +1052,7 @@ async def store_claim(
         "source_tier": source_tier or "unknown",
         "created_by": agent_id,
         "evidence": evidence_refs,
+        "embedding_pending": False,
         **(metadata or {}),
     }
     if tags:
