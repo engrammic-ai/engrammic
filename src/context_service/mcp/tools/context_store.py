@@ -131,10 +131,11 @@ async def create_supersession(
     # Remove superseded node from Qdrant so it won't be returned in searches
     if success:
         try:
-            await ctx_svc.vector_store.delete(uuid.UUID(supersedes_id), silo_id)
+            await ctx_svc.vector_store.delete(supersedes_id)
         except Exception as e:
             # Log but don't fail - the edge is already created
             import structlog
+
             structlog.get_logger(__name__).warning(
                 "supersession_qdrant_delete_failed",
                 supersedes_id=supersedes_id,
