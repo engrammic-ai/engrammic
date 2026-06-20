@@ -99,3 +99,56 @@ logs-api env="beta":
 [group('ops')]
 logs-api-tail env="beta":
     gcloud alpha run services logs tail engrammic-{{env}}-api --region={{region}} --project={{project}}
+
+# =============================================================================
+# Benchmark Environment
+# =============================================================================
+
+# Deploy benchmark environment (GPU VM + dev-box with local models)
+[group('benchmark')]
+benchmark-up gpu_tier="t4" llm="qwen-7b":
+    cd infra && uv run pulumi stack select benchmark 2>/dev/null || uv run pulumi stack init benchmark
+    cd infra && uv run pulumi up --config benchmark:environment=benchmark \
+        --config benchmark:gpu_tier={{gpu_tier}} \
+        --config benchmark:llm_model={{llm}} \
+        --yes
+
+# Destroy benchmark environment
+[group('benchmark')]
+benchmark-down:
+    cd infra && uv run pulumi stack select benchmark && uv run pulumi destroy --yes
+
+# SSH to benchmark dev-box (via Tailscale)
+[group('benchmark')]
+benchmark-ssh:
+    tailscale ssh benchmark-dev-box
+
+# SSH to benchmark GPU VM (via IAP)
+[group('benchmark')]
+benchmark-gpu-ssh:
+    gcloud compute ssh engrammic-benchmark-benchmark-gpu --zone=europe-west1-b --project={{project}} --tunnel-through-iap
+
+# Show benchmark environment status
+[group('benchmark')]
+benchmark-status:
+    cd infra && uv run pulumi stack select benchmark && uv run pulumi stack output --json
+
+# Run BEAM benchmark against benchmark environment
+[group('benchmark')]
+beam scale="1M" category="" parallel="8":
+    cd ../somnus && uv run somnus bench run beam \
+        --engrammic-url http://benchmark-dev-box:8000 \
+        --dagster-url http://benchmark-dev-box:3002 \
+        --parallel --max-concurrent {{parallel}} \
+        {{ if category != "" { "--category " + category } else { "" } }} \
+        -o results/beam-{{scale}}-$(date +%Y%m%d-%H%M%S).json
+
+# Run LongMemEval benchmark against benchmark environment
+[group('benchmark')]
+longmemeval category="knowledge-update" limit="100":
+    cd ../somnus && uv run somnus bench run longmemeval \
+        --engrammic-url http://benchmark-dev-box:8000 \
+        --dagster-url http://benchmark-dev-box:3002 \
+        --parallel --max-concurrent 8 \
+        -c {{category}} -n {{limit}} \
+        -o results/longmemeval-{{category}}-$(date +%Y%m%d-%H%M%S).json

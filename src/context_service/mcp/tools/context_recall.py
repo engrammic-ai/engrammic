@@ -173,6 +173,7 @@ async def _context_recall(
     since: str | None = None,
     until: str | None = None,
     graph_depth: int | None = None,
+    include_hints: bool = False,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     if not query and not node_ids:
@@ -330,6 +331,7 @@ async def _context_recall(
             max_age_seconds=max_age_seconds,
             min_threshold=min_threshold,
             bypass_threshold=is_wildcard,
+            include_hints=include_hints,
         )
         response = _apply_tier_content_policy(response, include_content)
         if include_proposals:

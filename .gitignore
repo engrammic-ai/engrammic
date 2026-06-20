@@ -105,3 +105,4 @@ logs/
 CLAUDE.md
 evals-output.json
 
+.veil/

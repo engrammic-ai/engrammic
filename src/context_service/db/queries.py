@@ -1927,3 +1927,84 @@ RETURN nodes,
        supports,
        collect({source: s2.id, target: t2.id, weight: coalesce(con.weight, 1.0)}) AS contradictions
 """
+
+# ---------------------------------------------------------------------------
+# V2 Synthesis queries (fact-to-belief without clusters)
+# ---------------------------------------------------------------------------
+
+GET_SYNTHESIS_CANDIDATES = """
+MATCH (f:Fact {silo_id: $silo_id})
+WHERE f.state = 'ACTIVE'
+  AND NOT EXISTS {
+    MATCH (f)<-[:SYNTHESIZED_FROM]-(b:Belief)
+    WHERE b.state = 'ACTIVE'
+  }
+WITH f.subject AS subject, f.predicate AS predicate, collect(f) AS facts
+WHERE size(facts) >= $fact_threshold
+
+UNWIND facts AS fact
+WITH subject, predicate, facts, fact.evidence AS ev
+UNWIND ev AS single_ev
+WITH subject, predicate, facts, collect(DISTINCT single_ev) AS all_evidence
+WHERE size(all_evidence) >= $evidence_threshold
+
+RETURN subject, predicate,
+       [f IN facts | f.id] AS fact_ids,
+       size(facts) AS fact_count,
+       size(all_evidence) AS evidence_count
+ORDER BY evidence_count DESC
+LIMIT $limit
+"""
+
+GET_SYNTHESIS_CANDIDATES_FOR_NODES = """
+MATCH (f:Fact {silo_id: $silo_id})
+WHERE f.id IN $node_ids
+  AND f.state = 'ACTIVE'
+  AND NOT EXISTS {
+    MATCH (f)<-[:SYNTHESIZED_FROM]-(b:Belief)
+    WHERE b.state = 'ACTIVE'
+  }
+WITH f.subject AS subject, f.predicate AS predicate, collect(f) AS facts
+WHERE size(facts) >= $fact_threshold
+
+UNWIND facts AS fact
+WITH subject, predicate, facts, fact.evidence AS ev
+UNWIND ev AS single_ev
+WITH subject, predicate, facts, collect(DISTINCT single_ev) AS all_evidence
+WHERE size(all_evidence) >= $evidence_threshold
+
+RETURN subject, predicate,
+       [f IN facts | f.id] AS fact_ids,
+       size(facts) AS fact_count,
+       size(all_evidence) AS evidence_count
+"""
+
+GET_FACTS_BY_IDS = """
+MATCH (f:Fact {silo_id: $silo_id})
+WHERE f.id IN $fact_ids
+  AND f.state = 'ACTIVE'
+RETURN f.id AS fact_id,
+       f.content AS content,
+       f.confidence AS confidence,
+       f.subject AS subject,
+       f.predicate AS predicate,
+       f.object AS object
+"""
+
+CREATE_PROPOSED_BELIEF_V2 = """
+CREATE (pb:Node:ProposedBelief {
+    id: $id,
+    silo_id: $silo_id,
+    content: $content,
+    confidence: $confidence,
+    status: 'pending',
+    state: 'PENDING',
+    created_at: datetime($created_at),
+    expires_at: datetime($expires_at)
+})
+WITH pb
+UNWIND $fact_ids AS fid
+MATCH (f:Fact {id: fid, silo_id: $silo_id})
+CREATE (pb)-[:SYNTHESIZED_FROM]->(f)
+RETURN pb.id AS id
+"""

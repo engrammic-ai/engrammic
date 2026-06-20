@@ -81,6 +81,7 @@ HIERARCHICAL_EDGE_TYPES = frozenset({LinkType.REFINES, LinkType.GENERALIZES, Lin
 
 PROMOTION_THRESHOLD = 3
 SYNTHESIS_THRESHOLD = 3
+EVIDENCE_THRESHOLD = 3
 SYNTHESIS_CONFIDENCE_THRESHOLD = 0.6
 SPO_SIMILARITY_THRESHOLD = 0.80  # Cosine similarity for semantic SPO matching
 MAX_CLUSTER_SIZE = 1000
@@ -236,11 +237,29 @@ class SynthesizeResult:
 
     Note: belief_id is a ProposedBelief ID. Agent must call accept_proposal
     to promote it to a full Belief.
+
+    .. deprecated::
+        cluster_id and cluster_state are deprecated. Use SynthesizeFromFactsResult
+        for v2 synthesis.
     """
 
     belief_id: uuid.UUID | None
-    cluster_id: str
-    cluster_state: ClusterState
+    cluster_id: str  # Deprecated: v2 synthesis uses SynthesizeFromFactsResult
+    cluster_state: ClusterState  # Deprecated
+    fact_count: int
+    confidence: float | None
+    timed_out: bool = False
+
+
+@dataclass
+class SynthesizeFromFactsResult:
+    """Result of v2 SYNTHESIZE_FROM_FACTS.
+
+    Note: belief_id is a ProposedBelief ID. Agent must call accept_proposal
+    to promote it to a full Belief.
+    """
+
+    belief_id: str | None
     fact_count: int
     confidence: float | None
     timed_out: bool = False
@@ -405,7 +424,18 @@ async def synthesize(
     Per brain-transactions-pseudocode.md:
     - Modes: ASYNC (30s timeout), SYNC (2s timeout for query-time)
     - Enforces INV3: Every Belief has >= N SYNTHESIZED_FROM to ACTIVE Facts
+
+    .. deprecated::
+        Use synthesize_from_facts() instead. Cluster-based synthesis is
+        deprecated in CITE v2.
     """
+    import warnings
+
+    warnings.warn(
+        "synthesize() is deprecated. Use synthesize_from_facts() instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     from context_service.db import queries as q
 
     effective_timeout = 2.0 if mode == "sync" else timeout_seconds
@@ -582,6 +612,119 @@ async def synthesize(
             },
         )
         raise
+
+
+async def synthesize_from_facts(
+    store: HyperGraphStore,
+    fact_ids: list[str],
+    silo_id: str,
+    llm: LLMProvider,
+    *,
+    mode: Literal["async", "sync"] = "async",
+    timeout_seconds: float = 30.0,
+) -> tuple[SynthesizeFromFactsResult, list[ReactionEvent]]:
+    """Create ProposedBelief from corroborating facts (v2).
+
+    Unlike v1 synthesize(), this takes fact_ids directly instead of cluster_id.
+    Enforces INV3: Every Belief has >= N SYNTHESIZED_FROM to ACTIVE Facts.
+
+    Args:
+        store: Graph store for queries.
+        fact_ids: List of Fact node IDs to synthesize from.
+        silo_id: Tenant isolation ID.
+        llm: LLM provider for synthesis.
+        mode: "async" (30s timeout) or "sync" (2s for query-time).
+        timeout_seconds: Override timeout for async mode.
+
+    Returns:
+        SynthesizeFromFactsResult with belief_id if successful.
+    """
+    from context_service.db import queries as q
+
+    effective_timeout = 2.0 if mode == "sync" else timeout_seconds
+
+    # Validate minimum facts
+    if len(fact_ids) < SYNTHESIS_THRESHOLD:
+        return SynthesizeFromFactsResult(
+            belief_id=None,
+            fact_count=len(fact_ids),
+            confidence=None,
+        ), []
+
+    # Fetch fact content
+    facts_result = await store.execute_query(
+        q.GET_FACTS_BY_IDS,
+        {"fact_ids": fact_ids, "silo_id": silo_id},
+    )
+    facts = list(facts_result) if facts_result else []
+
+    if len(facts) < SYNTHESIS_THRESHOLD:
+        return SynthesizeFromFactsResult(
+            belief_id=None,
+            fact_count=len(facts),
+            confidence=None,
+        ), []
+
+    # Aggregate confidence
+    confidences = [float(f.get("confidence", 0.8)) for f in facts]
+    aggregate_confidence = noisy_or_aggregate(confidences)
+
+    if aggregate_confidence < SYNTHESIS_CONFIDENCE_THRESHOLD:
+        return SynthesizeFromFactsResult(
+            belief_id=None,
+            fact_count=len(facts),
+            confidence=aggregate_confidence,
+        ), []
+
+    # Call LLM
+    synthesis_result = await llm_synthesize(llm, facts, effective_timeout)
+
+    if synthesis_result.timed_out or not synthesis_result.success:
+        return SynthesizeFromFactsResult(
+            belief_id=None,
+            fact_count=len(facts),
+            confidence=aggregate_confidence,
+            timed_out=synthesis_result.timed_out,
+        ), []
+
+    # Create ProposedBelief with SYNTHESIZED_FROM edges
+    belief_id = uuid.uuid4()
+    created_at = datetime.now(UTC)
+    expires_at = created_at + timedelta(days=7)
+
+    await store.execute_write(
+        q.CREATE_PROPOSED_BELIEF_V2,
+        {
+            "id": str(belief_id),
+            "silo_id": silo_id,
+            "content": synthesis_result.content,
+            "confidence": aggregate_confidence,
+            "created_at": created_at.isoformat(),
+            "expires_at": expires_at.isoformat(),
+            "fact_ids": fact_ids,
+        },
+    )
+
+    events = [
+        ReactionEvent(
+            event_type=ReactionEventType.COMPUTE_EMBEDDING,
+            node_id=str(belief_id),
+            silo_id=silo_id,
+        ),
+    ]
+
+    logger.info(
+        "synthesize_from_facts_complete",
+        belief_id=str(belief_id),
+        fact_count=len(facts),
+        confidence=aggregate_confidence,
+    )
+
+    return SynthesizeFromFactsResult(
+        belief_id=str(belief_id),
+        fact_count=len(facts),
+        confidence=aggregate_confidence,
+    ), events
 
 
 async def _sync_to_postgres(
