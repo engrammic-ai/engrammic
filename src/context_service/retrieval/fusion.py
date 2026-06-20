@@ -63,6 +63,7 @@ class FusedResult:
         conflict_status: Conflict status of the node (populated when fetch_content=True).
         created_at: Node creation timestamp (populated when fetch_content=True).
         tags: List of tags associated with the node (populated when fetch_content=True).
+        properties: Arbitrary node metadata (valid_to, corroboration_count, synthesis_state).
     """
 
     node_id: str
@@ -74,6 +75,7 @@ class FusedResult:
     conflict_status: str | None = None
     created_at: datetime | None = None
     tags: list[str] | None = None
+    properties: dict[str, Any] = field(default_factory=dict)
 
 
 class FusionRetriever:
@@ -231,6 +233,11 @@ class FusionRetriever:
                     f.conflict_status = node.properties.get("conflict_status", "none")
                     f.created_at = node.created_at
                     f.tags = list(node.properties.get("tags", []))
+                    f.properties = {
+                        "valid_to": node.properties.get("valid_to"),
+                        "corroboration_count": node.properties.get("corroboration_count", 0),
+                        "synthesis_state": node.properties.get("synthesis_state"),
+                    }
 
         # Log per-channel hit counts for diagnostics
         channel_counts = {

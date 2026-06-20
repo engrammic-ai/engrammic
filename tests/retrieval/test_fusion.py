@@ -99,6 +99,17 @@ def test_fusion_graceful_degradation() -> None:
     assert "graph" not in fused[0].channel_contributions
 
 
+def test_fused_result_properties_default() -> None:
+    """FusedResult.properties defaults to empty dict and can be set."""
+    from context_service.retrieval.fusion import FusedResult
+
+    result = FusedResult(node_id="node_a", rrf_score=0.5)
+    assert result.properties == {}
+
+    result.properties = {"valid_to": None, "corroboration_count": 3, "synthesis_state": "accepted"}
+    assert result.properties["corroboration_count"] == 3
+
+
 def test_parse_relative_time() -> None:
     """Verify relative time parsing."""
     from datetime import UTC, datetime, timedelta

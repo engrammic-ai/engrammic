@@ -1449,6 +1449,17 @@ class Settings(BaseSettings):
         ge=1,
         description="Minimum observation frequency for a pattern to be retained",
     )
+    memory_decay_sigma: float = Field(
+        default=90.0,
+        ge=1.0,
+        description="Days for memory layer decay half-life (sigma for Gaussian decay)",
+    )
+    max_graph_depth: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Maximum depth for graph traversal in epistemic pipeline",
+    )
 
     # =========================================================================
     # Proposal Worker Thresholds
