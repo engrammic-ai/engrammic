@@ -34,6 +34,10 @@ from context_service.reranking.epistemic_fusion import (
     EpistemicAdjustment,
     apply_epistemic_fusion,
 )
+from context_service.retrieval.epistemic import (
+    EpistemicOptions,
+    apply_epistemic_pipeline,
+)
 from context_service.retrieval.fusion import FusionRetriever
 from context_service.services.models import QueryResult, ScopeContext, derive_silo_id
 from context_service.services.silo import validate_silo_ownership
@@ -182,6 +186,7 @@ async def _context_query(
     max_age_seconds: int | None = None,
     min_threshold: float | None = None,
     bypass_threshold: bool = False,
+    include_hints: bool = False,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
 
@@ -315,6 +320,20 @@ async def _context_query(
         filters=parsed_filters,
         fetch_content=True,
     )
+
+    # Apply epistemic post-processing (layer scoring, synthesis triggers, hints)
+    epistemic_opts = EpistemicOptions(
+        include_synthesis=True,
+        include_hints=include_hints,
+    )
+    epistemic_result = await apply_epistemic_pipeline(
+        fused_results,
+        silo_id,
+        ctx_svc.graph_store,
+        options=epistemic_opts,
+        llm=None,  # LLM for synthesis is optional
+    )
+    fused_results = epistemic_result.results
 
     results = [
         QueryResult(
@@ -478,4 +497,14 @@ async def _context_query(
         "suggestion": suggestion,
         "metadata": metadata,
         "cache_meta": cache_meta,
+        "hints": [
+            {
+                "hint_type": h.hint_type,
+                "message": h.message,
+                "node_ids": h.node_ids,
+                "suggested_action": h.suggested_action,
+            }
+            for h in epistemic_result.hints
+        ] if include_hints and epistemic_result.hints else [],
+        "synthesis_pending": epistemic_result.synthesis_pending,
     }
