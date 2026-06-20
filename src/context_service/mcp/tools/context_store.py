@@ -739,6 +739,22 @@ async def _context_reflect(
 
     record_store_latency(time.perf_counter() - _start, silo_id=expected_silo_id, layer="meta")
 
+    try:
+        vector = await embed(observation)
+        await ctx_svc.vector_store.upsert(
+            node_id=str(result.node_id),
+            vector=vector,
+            payload={"type": "MetaObservation", "layer": "meta"},
+            silo_id=str(expected_silo_id),
+        )
+    except Exception:
+        logger.warning(
+            "sync_embedding_failed",
+            exc_info=True,
+            node_id=str(result.node_id),
+            layer="meta",
+        )
+
     return {
         "node_id": str(result.node_id),
         "observation_type": observation_type,
@@ -1024,6 +1040,23 @@ async def _context_store_belief(
         {"new_belief_id": belief_id, "silo_id": silo_id},
     )
     conflict_ids = [row["conflict_id"] for row in conflict_rows]
+
+    try:
+        vector = await embed(content)
+        ctx_svc = get_context_service()
+        await ctx_svc.vector_store.upsert(
+            node_id=belief_id,
+            vector=vector,
+            payload={"type": "WorkingHypothesis", "layer": "belief"},
+            silo_id=silo_id,
+        )
+    except Exception:
+        logger.warning(
+            "sync_embedding_failed",
+            exc_info=True,
+            node_id=belief_id,
+            layer="belief",
+        )
 
     result: dict[str, Any] = {
         "belief_id": belief_id,

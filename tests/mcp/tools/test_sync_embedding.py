@@ -1,5 +1,5 @@
 # tests/mcp/tools/test_sync_embedding.py
-"""Tests: sync embedding wired into remember/learn write paths."""
+"""Tests: sync embedding wired into remember/learn/reflect/hypothesize/decide/commit/accept paths."""
 
 from __future__ import annotations
 
@@ -8,7 +8,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from context_service.mcp.tools.context_store import _context_assert, _context_remember
+from context_service.mcp.tools.context_store import (
+    _context_assert,
+    _context_remember,
+)
 
 DUMMY_EMBEDDING = [0.1] * 768
 NODE_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")

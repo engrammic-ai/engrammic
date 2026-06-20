@@ -11,6 +11,8 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
+import structlog
+
 from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.rate_limit import rate_limited
 from context_service.mcp.server import get_context_service, get_mcp_auth_context, track_tool_usage
@@ -20,6 +22,8 @@ from context_service.reactions.events import emit_reaction
 from context_service.sage.transactions import InvariantViolation, crystallize
 from context_service.services.models import derive_silo_id
 from context_service.telemetry.metrics import record_belief_confidence, record_mcp_tool
+
+logger = structlog.get_logger()
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
@@ -43,8 +47,21 @@ async def _commit_impl(
 
     agent_id = auth.agent_id or auth.org_id
 
+    from context_service.db import queries as q
+    from context_service.mcp.tools.context_store import embed
+
     for belief_id in belief_ids:
         try:
+            hypothesis_content: str | None = None
+            try:
+                hypothesis_rows = await ctx_svc.graph_store.execute_query(
+                    q.GET_HYPOTHESIS_BY_ID,
+                    {"hypothesis_id": belief_id, "silo_id": silo_id},
+                )
+                hypothesis_content = hypothesis_rows[0].get("content") if hypothesis_rows else None
+            except Exception:
+                pass  # Content lookup failed; skip sync embedding
+
             result, events = await crystallize(
                 store=ctx_svc.graph_store,
                 hypothesis_id=belief_id,
@@ -55,6 +72,18 @@ async def _commit_impl(
             committed.append(str(result.commitment_id))
             confidences.append(result.confidence)
             all_events.extend(events)
+
+            if hypothesis_content:
+                try:
+                    vector = await embed(hypothesis_content)
+                    await ctx_svc.vector_store.upsert(
+                        node_id=str(result.commitment_id),
+                        vector=vector,
+                        payload={"type": "Commitment", "layer": "wisdom"},
+                        silo_id=silo_id,
+                    )
+                except Exception:
+                    logger.warning("sync_embed_failed", node_id=str(result.commitment_id), exc_info=True)
         except InvariantViolation as e:
             errors.append(
                 {

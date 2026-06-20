@@ -87,6 +87,19 @@ async def _decide_impl(
 
         record_belief_confidence(confidence, silo_id=silo_id)
 
+        from context_service.mcp.tools.context_store import embed
+
+        try:
+            commitment_embedding = await embed(decision)
+            await ctx_svc.vector_store.upsert(
+                node_id=str(result.commitment_id),
+                vector=commitment_embedding,
+                payload={"type": "Commitment", "layer": "wisdom"},
+                silo_id=silo_id,
+            )
+        except Exception:
+            logger.warning("sync_embed_failed", node_id=str(result.commitment_id), exc_info=True)
+
         # Auto-create ReasoningChain when reasoning is provided (supplementary).
         # Commitment is always the primary artifact - chain failure does not block.
         chain_id: uuid.UUID | None = None

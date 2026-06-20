@@ -1,6 +1,5 @@
 """Tests for coherence filtering."""
 
-import pytest
 
 from context_service.retrieval.coherence import (
     _dominates,

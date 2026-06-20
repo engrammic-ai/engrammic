@@ -522,7 +522,6 @@ def test_tier_policy_keeps_hot_strips_cold_for_search_results() -> None:
 @pytest.mark.asyncio
 async def test_coherent_false_preserves_contradictions_in_graph() -> None:
     """Default coherent=False keeps all nodes including contradicted ones."""
-    from unittest.mock import AsyncMock, MagicMock
 
     from context_service.mcp.tools.context_recall import _context_recall
 
