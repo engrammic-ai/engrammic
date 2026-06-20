@@ -315,6 +315,7 @@ HEALTH_CHECK = "RETURN 1 as health"
 # Meta-memory: provenance chain query
 # Traverses DERIVED_FROM / PROMOTED_FROM / SYNTHESIZED_FROM edges from a
 # given node back to its Memory-layer sources (leaves with no outbound edges).
+# max_depth is parameterized via separate query variants.
 PROVENANCE_CHAIN = """
 MATCH path = (start {id: $node_id, silo_id: $silo_id})-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM|REFERENCES*1..10]->(source)
 WITH path, nodes(path) AS ns, relationships(path) AS rs
@@ -330,6 +331,40 @@ RETURN DISTINCT node_id, layer, relationship, confidence, stub
 ORDER BY depth
 """
 
+
+def build_provenance_chain_query(max_depth: int = 10) -> str:
+    """Build provenance chain query with configurable max_depth."""
+    return f"""
+MATCH path = (start {{id: $node_id, silo_id: $silo_id}})-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM|REFERENCES*1..{max_depth}]->(source)
+WITH path, nodes(path) AS ns, relationships(path) AS rs
+UNWIND range(0, size(ns) - 1) AS i
+WITH
+    ns[i].id AS node_id,
+    coalesce(ns[i].type, labels(ns[i])[0]) AS layer,
+    CASE WHEN i < size(rs) THEN type(rs[i]) ELSE null END AS relationship,
+    coalesce(ns[i].confidence, 1.0) AS confidence,
+    coalesce(ns[i].stub, false) AS stub,
+    length(path) AS depth
+RETURN DISTINCT node_id, layer, relationship, confidence, stub
+ORDER BY depth
+"""
+
+
+def build_provenance_root_sources_query(max_depth: int = 10) -> str:
+    """Build root sources query with configurable max_depth."""
+    return f"""
+MATCH path = (start {{id: $node_id, silo_id: $silo_id}})-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM|REFERENCES*1..{max_depth}]->(source)
+OPTIONAL MATCH (source)-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM|REFERENCES]->(downstream)
+WITH source, downstream
+WHERE downstream IS NULL
+RETURN DISTINCT
+    source.id AS node_id,
+    coalesce(source.type, labels(source)[0]) AS layer,
+    source.content AS content,
+    coalesce(source.confidence, 1.0) AS confidence
+"""
+
+
 # Leaf sources: nodes in the provenance chain with no further outbound edges
 PROVENANCE_ROOT_SOURCES = """
 MATCH path = (start {id: $node_id, silo_id: $silo_id})-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM|REFERENCES*1..10]->(source)
@@ -342,6 +377,42 @@ RETURN DISTINCT
     source.content AS content,
     coalesce(source.confidence, 1.0) AS confidence
 """
+
+
+# Meta-memory: impact chain query (down direction)
+# Traverses edges in reverse to find what was derived FROM this node.
+def build_impact_chain_query(max_depth: int = 5) -> str:
+    """Build impact chain query - nodes derived from this one."""
+    return f"""
+MATCH path = (start {{id: $node_id, silo_id: $silo_id}})<-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM|REFERENCES*1..{max_depth}]-(derived)
+WITH path, nodes(path) AS ns, relationships(path) AS rs
+UNWIND range(0, size(ns) - 1) AS i
+WITH
+    ns[i].id AS node_id,
+    coalesce(ns[i].type, labels(ns[i])[0]) AS layer,
+    CASE WHEN i < size(rs) THEN type(rs[i]) ELSE null END AS relationship,
+    coalesce(ns[i].confidence, 1.0) AS confidence,
+    coalesce(ns[i].stub, false) AS stub,
+    length(path) AS depth
+RETURN DISTINCT node_id, layer, relationship, confidence, stub
+ORDER BY depth
+"""
+
+
+def build_impact_leaf_nodes_query(max_depth: int = 5) -> str:
+    """Build leaf nodes query for impact direction - terminal derived nodes."""
+    return f"""
+MATCH path = (start {{id: $node_id, silo_id: $silo_id}})<-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM|REFERENCES*1..{max_depth}]-(derived)
+OPTIONAL MATCH (upstream)<-[:DERIVED_FROM|PROMOTED_FROM|SYNTHESIZED_FROM|REFERENCES]-(derived)
+WITH derived, upstream
+WHERE upstream IS NULL
+RETURN DISTINCT
+    derived.id AS node_id,
+    coalesce(derived.type, labels(derived)[0]) AS layer,
+    derived.content AS content,
+    coalesce(derived.confidence, 1.0) AS confidence
+"""
+
 
 # Meta-memory: belief history via SUPERSEDES chain
 # Walks backward through SUPERSEDES edges to reconstruct the evolution of a belief.
@@ -1926,6 +1997,27 @@ WHERE s2.id IN [node IN nodes | node.id] AND t2.id IN [node IN nodes | node.id]
 RETURN nodes,
        supports,
        collect({source: s2.id, target: t2.id, weight: coalesce(con.weight, 1.0)}) AS contradictions
+"""
+
+# ---------------------------------------------------------------------------
+# Recall output edge fetching (coherence-layer-v2)
+# ---------------------------------------------------------------------------
+
+BATCH_GET_EPISTEMIC_EDGES_FOR_NODES = """
+WITH $node_ids AS target_ids
+OPTIONAL MATCH (supporter {silo_id: $silo_id})-[:SUPPORTS]->(target {silo_id: $silo_id})
+WHERE target.id IN target_ids AND supporter.properties.state = 'ACTIVE'
+WITH target_ids, collect({target: target.id, source: supporter.id}) AS support_edges
+
+OPTIONAL MATCH (source {silo_id: $silo_id})-[:DERIVED_FROM]->(target {silo_id: $silo_id})
+WHERE source.id IN target_ids AND target.properties.state = 'ACTIVE'
+WITH target_ids, support_edges, collect({source: source.id, target: target.id}) AS derived_edges
+
+OPTIONAL MATCH (a {silo_id: $silo_id})-[:CONTRADICTS]->(b {silo_id: $silo_id})
+WHERE (a.id IN target_ids OR b.id IN target_ids)
+  AND a.properties.state = 'ACTIVE' AND b.properties.state = 'ACTIVE'
+RETURN support_edges, derived_edges,
+       collect({source: a.id, target: b.id}) AS contradiction_edges
 """
 
 # ---------------------------------------------------------------------------

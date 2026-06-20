@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.rate_limit import rate_limited
@@ -16,21 +16,45 @@ from context_service.telemetry.metrics import record_mcp_tool
 if TYPE_CHECKING:
     from fastmcp import FastMCP
 
+VALID_EDGE_TYPES = frozenset({"DERIVED_FROM", "PROMOTED_FROM", "SYNTHESIZED_FROM", "REFERENCES"})
+
 
 @rate_limited("trace")
-async def _trace_impl(node_id: str) -> dict[str, Any]:
+async def _trace_impl(
+    node_id: str,
+    direction: Literal["up", "down"] = "up",
+    max_depth: int = 5,
+    edge_types: list[str] | None = None,
+) -> dict[str, Any]:
     """Implementation for trace tool."""
     if not node_id:
         return {"error": "missing_node_id", "message": "node_id is required"}
+
+    if edge_types:
+        invalid = set(edge_types) - VALID_EDGE_TYPES
+        if invalid:
+            return {
+                "error": "invalid_edge_types",
+                "message": f"Invalid edge types: {invalid}",
+                "valid": list(VALID_EDGE_TYPES),
+            }
 
     auth = await get_mcp_auth_context()
     await track_tool_usage(auth, "trace")
     silo_id = str(derive_silo_id(auth.org_id))
     ctx_svc = get_context_service()
 
-    result = await ctx_svc.provenance(silo_id, node_id)
+    result = await ctx_svc.provenance(
+        silo_id,
+        node_id,
+        max_depth=max_depth,
+        direction=direction,
+        edge_types=edge_types,
+    )
 
-    return {
+    response: dict[str, Any] = {
+        "direction": direction,
+        "max_depth": max_depth,
         "chain": [
             {
                 "node_id": step.node_id,
@@ -41,8 +65,14 @@ async def _trace_impl(node_id: str) -> dict[str, Any]:
             }
             for step in result.chain
         ],
-        "root_sources": result.root_sources,
     }
+
+    if direction == "up":
+        response["root_sources"] = result.root_sources
+    else:
+        response["leaf_nodes"] = result.root_sources
+
+    return response
 
 
 def register(mcp: FastMCP) -> None:
@@ -53,19 +83,29 @@ def register(mcp: FastMCP) -> None:
         description=get_tool_description("trace"),
     )
     @mcp_error_boundary
-    async def trace(node_id: str) -> dict[str, Any]:
-        """Trace provenance of a belief back to its sources.
+    async def trace(
+        node_id: str,
+        direction: Literal["up", "down"] = "up",
+        max_depth: int = 5,
+        edge_types: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Trace provenance or impact of a node.
 
         Args:
             node_id: Node to trace.
+            direction: "up" traces to sources (why I believe this),
+                "down" traces to derived nodes (what depends on this).
+            max_depth: Maximum traversal depth (default 5).
+            edge_types: Filter to specific edge types. Valid values:
+                DERIVED_FROM, PROMOTED_FROM, SYNTHESIZED_FROM, REFERENCES.
 
         Returns:
-            {chain: [...], root_sources: [...]}
+            {direction, max_depth, chain: [...], root_sources|leaf_nodes: [...]}
         """
         start = time.perf_counter()
         success = True
         try:
-            return await _trace_impl(node_id)
+            return await _trace_impl(node_id, direction, max_depth, edge_types)
         except Exception:
             success = False
             raise

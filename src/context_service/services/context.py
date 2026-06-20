@@ -781,22 +781,47 @@ class ContextService:
         self,
         silo_id: str,
         node_id: str,
-        max_depth: int = 10,  # noqa: ARG002 - Cypher path length hardcoded to 10 in query
+        max_depth: int = 5,
+        direction: Literal["up", "down"] = "up",
+        edge_types: list[str] | None = None,
     ) -> ProvenanceResult:
-        """Trace citation chain from node_id back to Memory-layer sources."""
+        """Trace citation chain from node_id.
+
+        Args:
+            silo_id: Silo scope.
+            node_id: Node to trace.
+            max_depth: Maximum traversal depth (default 5).
+            direction: "up" traces to sources (provenance), "down" traces to
+                derived nodes (impact analysis).
+            edge_types: Filter to specific edge types. Valid values:
+                DERIVED_FROM, PROMOTED_FROM, SYNTHESIZED_FROM, REFERENCES.
+                None means all edge types.
+        """
         from context_service.db import queries as q
         from context_service.services.context_meta import ProvenanceResult, ProvenanceStep
 
-        chain_rows, root_rows = await asyncio.gather(
+        if direction == "up":
+            chain_query = q.build_provenance_chain_query(max_depth)
+            leaf_query = q.build_provenance_root_sources_query(max_depth)
+        else:
+            chain_query = q.build_impact_chain_query(max_depth)
+            leaf_query = q.build_impact_leaf_nodes_query(max_depth)
+
+        chain_rows, leaf_rows = await asyncio.gather(
             self._memgraph.execute_query(
-                q.PROVENANCE_CHAIN,
+                chain_query,
                 {"node_id": node_id, "silo_id": silo_id},
             ),
             self._memgraph.execute_query(
-                q.PROVENANCE_ROOT_SOURCES,
+                leaf_query,
                 {"node_id": node_id, "silo_id": silo_id},
             ),
         )
+
+        # Filter by edge_types if specified
+        if edge_types:
+            edge_set = set(edge_types)
+            chain_rows = [r for r in chain_rows if r.get("relationship") in edge_set or r.get("relationship") is None]
 
         chain = [
             ProvenanceStep(
@@ -808,17 +833,17 @@ class ContextService:
             )
             for r in chain_rows
         ]
-        root_sources = [
+        leaf_nodes = [
             {
                 "node_id": r["node_id"],
                 "layer": r.get("layer") or "unknown",
                 "content": r.get("content") or "",
                 "confidence": effective_confidence(r),
             }
-            for r in root_rows
+            for r in leaf_rows
         ]
 
-        return ProvenanceResult(chain=chain, root_sources=root_sources)
+        return ProvenanceResult(chain=chain, root_sources=leaf_nodes)
 
     async def history(
         self,
