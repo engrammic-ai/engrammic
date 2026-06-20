@@ -6,15 +6,6 @@ Provides dataclasses, options, and scoring constants for retrieval.
 
 from __future__ import annotations
 
-import warnings
-
-warnings.warn(
-    "sage.recall is deprecated. Use retrieval.epistemic for epistemic post-processing. "
-    "This module will be removed in a future release.",
-    DeprecationWarning,
-    stacklevel=2,
-)
-
 import math
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta

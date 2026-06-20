@@ -68,6 +68,13 @@ def _fire_and_forget(coro: Any) -> None:
     _synthesis_tasks.add(task)
     task.add_done_callback(_synthesis_tasks.discard)
 
+    def _log_exception(t: asyncio.Task[Any]) -> None:
+        exc = t.exception() if not t.cancelled() else None
+        if exc is not None:
+            logger.error("fire_and_forget_task_failed", error=str(exc), exc_info=exc)
+
+    task.add_done_callback(_log_exception)
+
 
 async def apply_epistemic_pipeline(
     results: list[FusedResult],
@@ -86,6 +93,9 @@ async def apply_epistemic_pipeline(
     4. Lazy synthesis trigger (fire-and-forget)
     5. Hint detection (if options.include_hints)
     """
+    from context_service.db import queries as q
+    from context_service.sage.transactions import EVIDENCE_THRESHOLD, SYNTHESIS_THRESHOLD
+
     if options is None:
         options = EpistemicOptions()
 
@@ -100,15 +110,39 @@ async def apply_epistemic_pipeline(
     # 3. Layer scoring adjustment
     results = apply_layer_scoring(results)
 
+    # Pre-fetch synthesis candidates once; reused by synthesis and hint detection
+    synthesis_candidates: list[dict[str, Any]] | None = None
+    needs_candidates = (options.include_synthesis and llm is not None) or options.include_hints
+    if needs_candidates:
+        fact_ids = [
+            r.node_id
+            for r in results
+            if r.layer and r.layer.upper() == Layer.KNOWLEDGE.value.upper()
+        ]
+        if len(fact_ids) >= SYNTHESIS_THRESHOLD:
+            synthesis_candidates = await store.execute_query(
+                q.GET_SYNTHESIS_CANDIDATES_FOR_NODES,
+                {
+                    "silo_id": silo_id,
+                    "node_ids": fact_ids,
+                    "fact_threshold": SYNTHESIS_THRESHOLD,
+                    "evidence_threshold": EVIDENCE_THRESHOLD,
+                },
+            )
+
     # 4. Lazy synthesis (fire-and-forget)
     synthesis_pending = False
     if options.include_synthesis and llm is not None:
-        synthesis_pending = await maybe_trigger_synthesis(results, silo_id, store, llm)
+        synthesis_pending = await maybe_trigger_synthesis(
+            results, silo_id, store, llm, prefetched_candidates=synthesis_candidates
+        )
 
     # 5. Hints
     hints: list[RecallHint] = []
     if options.include_hints:
-        hints = await detect_hints(results, silo_id, store)
+        hints = await detect_hints(
+            results, silo_id, store, prefetched_candidates=synthesis_candidates
+        )
 
     return EpistemicResult(
         results=results,
@@ -199,6 +233,7 @@ async def maybe_trigger_synthesis(
     silo_id: str,
     store: HyperGraphStore,
     llm: LLMProvider,
+    prefetched_candidates: list[dict[str, Any]] | None = None,
 ) -> bool:
     """Fire-and-forget synthesis for corroborating fact groups (v2).
 
@@ -206,7 +241,7 @@ async def maybe_trigger_synthesis(
     Does NOT block on synthesis completion.
     """
     from context_service.db import queries as q
-    from context_service.sage.transactions import SYNTHESIS_THRESHOLD, synthesize_from_facts
+    from context_service.sage.transactions import EVIDENCE_THRESHOLD, SYNTHESIS_THRESHOLD, synthesize_from_facts
 
     # Filter to Facts only (Knowledge layer)
     fact_ids = [
@@ -218,16 +253,18 @@ async def maybe_trigger_synthesis(
     if len(fact_ids) < SYNTHESIS_THRESHOLD:
         return False
 
-    # Find synthesis candidates among these facts
-    candidates = await store.execute_query(
-        q.GET_SYNTHESIS_CANDIDATES_FOR_NODES,
-        {
-            "silo_id": silo_id,
-            "node_ids": fact_ids,
-            "fact_threshold": SYNTHESIS_THRESHOLD,
-            "evidence_threshold": 3,
-        },
-    )
+    if prefetched_candidates is not None:
+        candidates = prefetched_candidates
+    else:
+        candidates = await store.execute_query(
+            q.GET_SYNTHESIS_CANDIDATES_FOR_NODES,
+            {
+                "silo_id": silo_id,
+                "node_ids": fact_ids,
+                "fact_threshold": SYNTHESIS_THRESHOLD,
+                "evidence_threshold": EVIDENCE_THRESHOLD,
+            },
+        )
 
     if not candidates:
         return False
@@ -253,6 +290,7 @@ async def detect_hints(
     results: list[FusedResult],
     silo_id: str,
     store: HyperGraphStore,
+    prefetched_candidates: list[dict[str, Any]] | None = None,
 ) -> list[RecallHint]:
     """Detect belief candidates (v2).
 
@@ -261,7 +299,11 @@ async def detect_hints(
     hints: list[RecallHint] = []
 
     # Belief candidate hints
-    hints.extend(await _detect_belief_candidates(store, results, silo_id))
+    hints.extend(
+        await _detect_belief_candidates(
+            store, results, silo_id, prefetched_candidates=prefetched_candidates
+        )
+    )
 
     return hints
 
@@ -270,10 +312,11 @@ async def _detect_belief_candidates(
     store: HyperGraphStore,
     results: list[FusedResult],
     silo_id: str,
+    prefetched_candidates: list[dict[str, Any]] | None = None,
 ) -> list[RecallHint]:
     """Detect when recalled facts could form a belief (v2)."""
     from context_service.db import queries as q
-    from context_service.sage.transactions import SYNTHESIS_THRESHOLD
+    from context_service.sage.transactions import EVIDENCE_THRESHOLD, SYNTHESIS_THRESHOLD
 
     fact_ids = [
         r.node_id
@@ -284,16 +327,18 @@ async def _detect_belief_candidates(
     if len(fact_ids) < SYNTHESIS_THRESHOLD:
         return []
 
-    # Find corroborating groups
-    candidates = await store.execute_query(
-        q.GET_SYNTHESIS_CANDIDATES_FOR_NODES,
-        {
-            "silo_id": silo_id,
-            "node_ids": fact_ids,
-            "fact_threshold": SYNTHESIS_THRESHOLD,
-            "evidence_threshold": 3,
-        },
-    )
+    if prefetched_candidates is not None:
+        candidates = prefetched_candidates
+    else:
+        candidates = await store.execute_query(
+            q.GET_SYNTHESIS_CANDIDATES_FOR_NODES,
+            {
+                "silo_id": silo_id,
+                "node_ids": fact_ids,
+                "fact_threshold": SYNTHESIS_THRESHOLD,
+                "evidence_threshold": EVIDENCE_THRESHOLD,
+            },
+        )
 
     if not candidates:
         return []

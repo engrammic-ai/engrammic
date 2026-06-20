@@ -52,6 +52,7 @@ def belief_synthesis_asset(
     async def _run() -> dict[str, Any]:
         from context_service.db import queries as q
         from context_service.sage.transactions import (
+            EVIDENCE_THRESHOLD,
             SYNTHESIS_THRESHOLD,
             synthesize_from_facts,
         )
@@ -65,7 +66,7 @@ def belief_synthesis_asset(
             {
                 "silo_id": silo_id,
                 "fact_threshold": SYNTHESIS_THRESHOLD,
-                "evidence_threshold": 3,
+                "evidence_threshold": EVIDENCE_THRESHOLD,
                 "limit": _MAX_CANDIDATES_PER_RUN,
             },
         )

@@ -1998,6 +1998,7 @@ CREATE (pb:Node:ProposedBelief {
     content: $content,
     confidence: $confidence,
     status: 'pending',
+    state: 'PENDING',
     created_at: datetime($created_at),
     expires_at: datetime($expires_at)
 })
