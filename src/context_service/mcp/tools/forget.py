@@ -33,6 +33,7 @@ async def _forget_impl(
     agent_id = auth.agent_id or auth.org_id
 
     ctx_svc = get_context_service()
+    qdrant_store = getattr(ctx_svc, "_qdrant", None)
 
     try:
         result, events = await brain_forget(
@@ -42,6 +43,7 @@ async def _forget_impl(
             agent_id=agent_id,
             reason=reason,
             cascade=cascade,
+            qdrant_store=qdrant_store,
         )
     except InvariantViolation as exc:
         if exc.code == "NODE_NOT_FOUND":

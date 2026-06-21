@@ -3105,6 +3105,7 @@ async def forget(
     reason: str | None = None,
     cascade: bool = False,
     emit: bool = True,
+    qdrant_store: Any | None = None,
 ) -> tuple[ForgetResult, list[ReactionEvent]]:
     """Soft-delete a node with cancel window (TX15).
 
@@ -3112,6 +3113,7 @@ async def forget(
     - Preconditions: node exists, state is ACTIVE or SUPERSEDED
     - Sets state to TOMBSTONED, records cancel_window_expires
     - Optional cascade triggers CASCADE_STALENESS on dependents
+    - If qdrant_store provided, deletes vector (with retry + dead letter)
     """
     from context_service.db import queries as q
 
@@ -3186,6 +3188,28 @@ async def forget(
     if emit:
         for event in events:
             await emit_reaction(event)
+
+    # Delete from Qdrant if store provided (with retry + dead letter)
+    if qdrant_store is not None:
+        from context_service.retention.dead_letter import enqueue_failed_delete
+
+        last_error = ""
+        for attempt in range(3):
+            try:
+                await qdrant_store.delete(node_id=uuid.UUID(node_id), silo_id=silo_id)
+                last_error = ""
+                break
+            except Exception as exc:
+                last_error = str(exc)
+                logger.warning(
+                    "forget_qdrant_delete_retry",
+                    node_id=node_id,
+                    attempt=attempt + 1,
+                    error=last_error,
+                )
+        if last_error:
+            await enqueue_failed_delete(silo_id, node_id, last_error)
+            logger.warning("forget_qdrant_delete_failed", node_id=node_id, error=last_error)
 
     result = ForgetResult(
         node_id=uuid.UUID(node_id),
