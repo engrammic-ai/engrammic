@@ -1947,25 +1947,6 @@ WHERE n.properties.state IS NULL
 SET n.properties.state = 'ACTIVE'
 """
 
-# Batched version of GET_NODES_FOR_RECALL_BATCH that only returns active nodes.
-# Used by recall when include_inactive=False (the default).
-GET_ACTIVE_NODES_FOR_RECALL_BATCH = """
-MATCH (n {silo_id: $silo_id})
-WHERE n.id IN $node_ids
-  AND (n.properties.state IS NULL OR n.properties.state = 'ACTIVE')
-RETURN n.id AS id,
-       n.properties.content AS content,
-       n.properties.layer AS layer,
-       n.properties.state AS state,
-       n.properties.confidence AS confidence,
-       n.properties.corroboration_count AS corroboration_count,
-       n.properties.synthesis_state AS synthesis_state,
-       n.properties.created_at AS created_at,
-       n.properties.valid_to AS valid_to,
-       coalesce(n.heat_score, 0.0) AS heat_score,
-       n.properties AS properties
-"""
-
 # --- Epistemology: confidence propagation queries ---
 
 GET_SUPPORT_EDGES = """

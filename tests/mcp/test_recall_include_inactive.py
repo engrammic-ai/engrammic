@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -200,12 +200,3 @@ def test_backfill_active_state_targets_null_state():
     assert "ACTIVE" in BACKFILL_ACTIVE_STATE
     assert "IS NULL" in BACKFILL_ACTIVE_STATE
 
-
-def test_get_active_nodes_for_recall_batch_filters_state():
-    from context_service.db.queries import GET_ACTIVE_NODES_FOR_RECALL_BATCH
-
-    assert "state" in GET_ACTIVE_NODES_FOR_RECALL_BATCH.lower()
-    assert "ACTIVE" in GET_ACTIVE_NODES_FOR_RECALL_BATCH
-    # Must not return SUPERSEDED/TOMBSTONED unless caller opts in
-    assert "SUPERSEDED" not in GET_ACTIVE_NODES_FOR_RECALL_BATCH
-    assert "TOMBSTONED" not in GET_ACTIVE_NODES_FOR_RECALL_BATCH

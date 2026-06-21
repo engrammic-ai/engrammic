@@ -73,6 +73,11 @@ async def _search_candidates(
         if not rows:
             continue
 
+        node_labels: list[str] = rows[0].get("_labels", [])
+        if "Claim" not in node_labels:
+            log.debug("update_search_skipped_non_claim", node_id=sr.node_id, labels=node_labels)
+            continue
+
         node_data = rows[0].get("n", {})
         content = node_data.get("content", "")
         created_at = node_data.get("created_at", "")
@@ -118,6 +123,7 @@ async def _update_impl(
         if err is not None:
             if err.get("error") == "already_superseded":
                 return {
+                    "status": "error",
                     "error": "already_superseded",
                     "message": "Cannot update already-superseded node. Use its successor.",
                     "head_id": err.get("head_id"),

@@ -159,6 +159,7 @@ async def test_target_already_superseded_returns_error(
         evidence=["node:123e4567-e89b-12d3-a456-426614174000"],
         target=_TARGET_ID,
     )
+    assert result["status"] == "error"
     assert result["error"] == "already_superseded"
     assert "successor" in result["message"]
     assert result["head_id"] == head_id
@@ -211,7 +212,7 @@ async def test_query_multiple_matches_returns_ambiguous(
     ]
     mock_context_service_with_graph.vector_store.search = AsyncMock(return_value=matches)
     mock_context_service_with_graph.graph_store.execute_query = AsyncMock(
-        return_value=[{"n": {"content": "Some content here", "created_at": "2026-01-01"}}]
+        return_value=[{"n": {"content": "Some content here", "created_at": "2026-01-01"}, "_labels": ["Claim"]}]
     )
 
     with patch(
@@ -273,7 +274,7 @@ async def test_candidates_snippet_truncated_at_200_chars(
     ]
     mock_context_service_with_graph.vector_store.search = AsyncMock(return_value=matches)
     mock_context_service_with_graph.graph_store.execute_query = AsyncMock(
-        return_value=[{"n": {"content": long_content, "created_at": "2026-01-01"}}]
+        return_value=[{"n": {"content": long_content, "created_at": "2026-01-01"}, "_labels": ["Claim"]}]
     )
 
     with patch(
