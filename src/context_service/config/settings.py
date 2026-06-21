@@ -1511,6 +1511,10 @@ class Settings(BaseSettings):
         default=False,
         description="Reject writes that contradict existing claims (GAP-001 enforcement)",
     )
+    ncb_enforcement_enabled: bool = Field(
+        default=False,
+        description="Reject wisdom-layer writes that contradict their source nodes (GAP-012 NCB)",
+    )
     affinity_computation_enabled: bool = Field(
         default=True,
         description="Enable inline affinity edge computation after Knowledge node writes",

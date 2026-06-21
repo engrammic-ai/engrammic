@@ -1475,6 +1475,13 @@ async def commit(
             **{k: v for k, v in validation.items() if k not in ("error", "message")},
         )
 
+    # GAP-012: NCB (Neighborhood Consistency) check
+    settings = get_settings()
+    if settings.ncb_enforcement_enabled:
+        ncb_conflicts = await check_ncb_before_write(store, content, about_refs, silo_id)
+        if ncb_conflicts:
+            raise NeighborhoodInconsistent(ncb_conflicts)
+
     commitment_id = uuid.uuid4()
     created_at = datetime.now(UTC)
 
@@ -1778,6 +1785,16 @@ async def accept_proposal(
             f"ProposedBelief has {derivation_count} SYNTHESIZED_FROM edges, "
             f"requires {SYNTHESIS_THRESHOLD} (EAG Table 2 derivation chain)",
         )
+
+    # GAP-012: NCB (Neighborhood Consistency) check
+    settings = get_settings()
+    proposal_content = row.get("content", "")
+    if settings.ncb_enforcement_enabled and source_fact_ids:
+        ncb_conflicts = await check_ncb_before_write(
+            store, proposal_content, source_fact_ids, silo_id
+        )
+        if ncb_conflicts:
+            raise NeighborhoodInconsistent(ncb_conflicts)
 
     now = datetime.now(UTC)
     belief_id = uuid.uuid4()
@@ -2826,6 +2843,51 @@ async def check_contradiction_before_write(
             "predicate": predicate,
             "object": object_value,
         },
+    )
+
+    return [c["id"] for c in conflicts]
+
+
+class NeighborhoodInconsistent(BrainError):
+    """Raised when a wisdom-layer write contradicts its source nodes (GAP-012 NCB)."""
+
+    def __init__(self, conflicting_node_ids: list[str]) -> None:
+        super().__init__(
+            "NEIGHBORHOOD_INCONSISTENT",
+            "Write rejected: contradicts source/about nodes",
+            conflicting_node_ids=conflicting_node_ids,
+        )
+        self.conflicting_node_ids = conflicting_node_ids
+
+
+async def check_ncb_before_write(
+    store: HyperGraphStore,
+    content: str,
+    about_ids: list[str],
+    silo_id: str,
+) -> list[str]:
+    """Pre-write NCB (Neighborhood Consistency) check for GAP-012 enforcement.
+
+    Checks that the new wisdom-layer node's content doesn't semantically
+    contradict any of its about/source nodes. Uses embedding similarity
+    with CONTRADICTS edges to detect inconsistencies.
+
+    Returns list of conflicting node IDs. Empty list means no conflicts.
+    """
+    if not about_ids:
+        return []
+
+    # Check if any about_ids have CONTRADICTS edges with content-similar nodes
+    cypher = """
+    UNWIND $about_ids AS aid
+    MATCH (a {id: aid, silo_id: $silo_id})-[:CONTRADICTS]-(c)
+    WHERE c.properties.state = 'ACTIVE'
+    RETURN DISTINCT c.id AS id, c.properties.content AS content
+    """
+
+    conflicts = await store.execute_query(
+        cypher,
+        {"about_ids": about_ids, "silo_id": silo_id},
     )
 
     return [c["id"] for c in conflicts]

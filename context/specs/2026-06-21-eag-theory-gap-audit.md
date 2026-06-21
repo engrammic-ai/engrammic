@@ -188,9 +188,13 @@ Context-service fetches edges from graph DB and passes to pure functions.
 
 **Spec:** EAG Table 4 — Wisdom layer requires NCB check before write.
 
-**Implementation:** `_run_incremental_propagation` is confidence update, not consistency gate. `neighborhood_inconsistent` is not a rejection reason.
+**Implementation:** ~~`_run_incremental_propagation` is confidence update, not consistency gate. `neighborhood_inconsistent` is not a rejection reason.~~
 
-**Fix:** Implement NCB check in WriteQualityGate.
+**Status:** FIXED (2026-06-21). Added NCB (Neighborhood Consistency) check:
+- New setting `ncb_enforcement_enabled` (default False, opt-in like contradiction enforcement)
+- `check_ncb_before_write()` function queries CONTRADICTS edges from about/source nodes
+- Integrated into `commit()` (Commitments) and `accept_proposal()` (Beliefs)
+- Raises `NeighborhoodInconsistent` error when conflicts detected
 
 **Priority:** P2
 **Tracking:** [GAP-012]
