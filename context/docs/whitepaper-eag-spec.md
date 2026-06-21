@@ -222,6 +222,65 @@ Our revision operation satisfies:
 - CORROBORATES requires independence check
 - SUPPORTS requires target existence
 
+#### 3.6 Transition Catalogue
+
+The layers define what exists; the **transitions** define what moves. An EAG implementation is the sum of its transition workers.
+
+**Definition 11 (Transition):**
+A transition T = (source_layer, target_layer, trigger, execution, provenance) where:
+- source_layer, target_layer in {Memory, Knowledge, Wisdom, Intelligence, tombstone}
+- trigger: predicate that fires the transition
+- execution: eager (synchronous) | signal-driven (async, priority-ranked) | lazy (batched)
+- provenance: edge type(s) created
+
+**Transition Table:**
+
+| # | Transition | Trigger | Execution | Provenance |
+|---|---|---|---|---|
+| T1 | Memory -> Knowledge (extract) | passage is hot OR source-changed | signal-driven | `(:Claim)-[:DERIVED_FROM]->(:Passage)` |
+| T2 | Knowledge -> Knowledge (supersede) | (s, p, o) conflicts with existing | eager | `(:Fact_new)-[:SUPERSEDES]->(:Fact_old)` |
+| T3 | Knowledge -> Wisdom (synthesize) | cluster density >= N | signal-driven | `(:Belief)-[:SYNTHESIZED_FROM]->(:Fact)+` |
+| T4 | Wisdom -> Wisdom (revise) | evidence shift >= M% | signal-driven | new Belief SUPERSEDES old |
+| T5 | Intelligence -> Knowledge (consensus) | K chains from J agents agree | lazy | `(:Fact)-[:PROMOTED_FROM]->(:ReasoningChain)+` |
+| T6 | Intelligence -> Memory (trace) | reasoning chain completes | batched | `(:ReasoningChain)-[:TRACED_FROM]->(:Document)+` |
+| T7 | Intelligence -> Wisdom (commit) | agent declares stance | eager | `(:Commitment)-[:DECLARED_BY]->(:Agent)` |
+| T8 | Memory -> null (decay) | time-based weight decay | query-time | N/A |
+| T9 | Any -> deleted (hard-delete) | age > threshold OR GDPR | scheduled | N/A |
+| T10 | Knowledge -> Wisdom (propose) | synthesis confidence in weak range | signal-driven | `(:ProposedBelief)-[:SYNTHESIZED_FROM]->(:Fact)+` |
+| T11 | ProposedBelief -> Belief (accept) | validator accepts | eager | `(:Belief)-[:PROMOTED_FROM]->(:ProposedBelief)` |
+| T12 | ProposedBelief -> tombstone (reject) | validator rejects | eager | status='rejected' |
+| T13 | Intelligence -> Wisdom (crystallize) | agent crystallizes hypothesis | eager | `(:Commitment)-[:CRYSTALLIZED_INTO]->(:WorkingHypothesis)` |
+| T14 | Any -> tombstone (forget) | agent calls forget | eager | tombstoned_at timestamp |
+| T15 | tombstone -> restored (cancel_forget) | cancel within window | eager | timestamps cleared |
+
+**Execution semantics:**
+- **Eager**: correctness-critical (T2 supersede, T7 commit, T14 forget)
+- **Signal-driven + heat-ranked**: optimization transitions (T1 extract, T3 synthesize, T4 revise)
+- **Batched/lazy/scheduled**: housekeeping (T5 consensus, T6 trace, T8/T9 decay)
+
+**Why transitions are the architecture:**
+If you know the four layers but not the transitions, you cannot build EAG. The layers define *what exists*; the transitions define *what moves*. An EAG implementation is largely the sum of its transition workers.
+
+#### 3.7 System Invariants
+
+EAG maintains eight invariants that define store coherence:
+
+| ID | Invariant | Enforced by | Timing |
+|----|-----------|-------------|--------|
+| INV1 | No contradicting ACTIVE claims (same silo, s, p, different o) | T2 + write-gate | Write-time |
+| INV2 | Every Fact has >= 1 DERIVED_FROM to Memory OR PROMOTED_FROM to ReasoningChain | T1, T5 | Write-time |
+| INV3 | Every Belief has >= N SYNTHESIZED_FROM to ACTIVE Facts | T3 | Synthesis-time |
+| INV4 | SUPERSEDES edges are acyclic | T2 | Write-time |
+| INV5 | No cross-silo edges | All edge-creating transitions | Write-time |
+| INV6 | Tombstoned nodes invisible to recall | Query layer | Query-time |
+| INV7 | Every Commitment has DECLARED_BY edge to agent | T7, T13 | Write-time |
+| INV8 | Cancel window is time-bounded | T15 | Cancel attempt |
+
+**Theorem 4 (Invariant Preservation):**
+Every transition preserves all invariants: if S satisfies INV1-INV8 before transition T, then T(S) satisfies INV1-INV8.
+
+*Proof sketch:* Each transition checks relevant invariants before mutation. Write-gate rejects violations. Cascades propagate changes to maintain dependent invariants.
+
 ### 4. CITE Architecture (2.5 pages)
 
 #### 4.1 Layer Architecture

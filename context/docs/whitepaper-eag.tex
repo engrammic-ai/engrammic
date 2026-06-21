@@ -449,6 +449,69 @@ PROMOTED\_FROM & Fact & Claim & Corroboration upgrade \\
 
 Constraints: DERIVED\_FROM forms a DAG (no cycles); SUPERSEDES forms a linked list per node; CORROBORATES requires independence check.
 
+\subsection{Transition Catalogue}
+
+The layers define what exists; the \textbf{transitions} define what moves. An EAG implementation is the sum of its transition workers.
+
+\begin{table}[H]
+\centering
+\caption{EAG transitions between epistemic layers.}
+\label{tab:transitions}
+\begin{tabular}{@{}clllp{3.8cm}@{}}
+\toprule
+\textbf{\#} & \textbf{Transition} & \textbf{Trigger} & \textbf{Execution} & \textbf{Provenance} \\
+\midrule
+T1 & Mem $\to$ Know (extract) & passage hot & signal & \texttt{DERIVED\_FROM} \\
+T2 & Know $\to$ Know (supersede) & (s,p,o) conflict & eager & \texttt{SUPERSEDES} \\
+T3 & Know $\to$ Wis (synthesize) & cluster density $\geq N$ & signal & \texttt{SYNTHESIZED\_FROM} \\
+T4 & Wis $\to$ Wis (revise) & evidence shift $\geq M\%$ & signal & new \texttt{SUPERSEDES} old \\
+T5 & Int $\to$ Know (consensus) & $K$ chains, $J$ agents & lazy & \texttt{PROMOTED\_FROM} \\
+T6 & Int $\to$ Mem (trace) & chain completes & batched & \texttt{TRACED\_FROM} \\
+T7 & Int $\to$ Wis (commit) & agent declares & eager & \texttt{DECLARED\_BY} \\
+T8 & Mem $\to \bot$ (decay) & time-based & query-time & N/A \\
+T9 & Any $\to$ deleted & age $>$ threshold & scheduled & N/A \\
+T13 & Int $\to$ Wis (crystallize) & agent crystallizes & eager & \texttt{CRYSTALLIZED\_INTO} \\
+T14 & Any $\to$ tombstone & agent forgets & eager & timestamp \\
+T15 & tomb $\to$ restored & cancel in window & eager & cleared \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Execution semantics:}
+\begin{itemize}[noitemsep]
+    \item \textbf{Eager}: correctness-critical (T2 supersede, T7 commit, T14 forget)
+    \item \textbf{Signal-driven}: optimization, heat-ranked (T1 extract, T3 synthesize)
+    \item \textbf{Lazy/batched}: housekeeping (T5 consensus, T6 trace, T8/T9 decay)
+\end{itemize}
+
+The transitions are the architecture: if you know the four layers but not the transitions, you cannot build EAG.
+
+\subsection{System Invariants}
+
+EAG maintains eight invariants that define store coherence:
+
+\begin{table}[H]
+\centering
+\caption{System invariants enforced by CITE.}
+\label{tab:invariants}
+\begin{tabular}{@{}clll@{}}
+\toprule
+\textbf{ID} & \textbf{Invariant} & \textbf{Enforced by} & \textbf{Timing} \\
+\midrule
+INV1 & No contradicting active claims & T2 + write-gate & write \\
+INV2 & Facts have provenance & T1, T5 & write \\
+INV3 & Beliefs have $\geq N$ fact sources & T3 & synthesis \\
+INV4 & SUPERSEDES acyclic & T2 & write \\
+INV5 & No cross-silo edges & all & write \\
+INV6 & Tombstoned invisible to recall & query layer & query \\
+INV7 & Commitments have DECLARED\_BY & T7, T13 & write \\
+INV8 & Cancel window bounded & T15 & cancel \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Every transition preserves all invariants: if $S$ satisfies INV1--INV8 before transition $T$, then $T(S)$ satisfies INV1--INV8.
+
 % ------------------------------------------------------------
 % 5. EVALUATION
 % ------------------------------------------------------------
