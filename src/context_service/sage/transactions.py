@@ -1136,11 +1136,6 @@ async def store_claim(
             silo_id=silo_id,
             payload={"access_type": "WRITE"},
         ),
-        ReactionEvent(
-            event_type=ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP,
-            node_id=str(node_id),
-            silo_id=silo_id,
-        ),
     ]
 
     if supersedes:
@@ -3077,13 +3072,7 @@ async def promote(
         corroboration_count=corroboration_count,
     )
 
-    events: list[ReactionEvent] = [
-        ReactionEvent(
-            event_type=ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP,
-            node_id=claim_id,
-            silo_id=silo_id,
-        ),
-    ]
+    events: list[ReactionEvent] = []
 
     if emit:
         for event in events:
@@ -3191,11 +3180,6 @@ async def demote(
             node_id=fact_id,
             silo_id=silo_id,
             payload={"depth": 1},
-        ),
-        ReactionEvent(
-            event_type=ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP,
-            node_id=fact_id,
-            silo_id=silo_id,
         ),
     ]
 

@@ -28,7 +28,6 @@ from context_service.sage.transactions import (
     StoreMemoryResult,
     SupersedeResult,
     SynthesisState,
-    SynthesizeResult,
     cancel_forget,
     cascade_staleness,
     check_corroboration,
@@ -44,7 +43,6 @@ from context_service.sage.transactions import (
     store_claim,
     store_memory,
     supersede,
-    synthesize,
     would_create_cycle,
 )
 
@@ -56,7 +54,6 @@ __all__ = [
     "LinkResult",
     "CommitResult",
     "CrystallizeResult",
-    "SynthesizeResult",
     "ReviseBeliefResult",
     "ForgetResult",
     "CancelForgetResult",
@@ -75,7 +72,6 @@ __all__ = [
     "store_memory",
     "store_claim",
     "supersede",
-    "synthesize",
     "revise_belief",
     "commit",
     "hard_delete",
