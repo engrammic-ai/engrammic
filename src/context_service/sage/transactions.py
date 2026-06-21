@@ -3180,6 +3180,7 @@ async def promote(
     - Preconditions: corroboration_count >= PROMOTION_THRESHOLD
     - Idempotent: already promoted returns success without modification
     """
+    _ = emit  # Unused; kept for API compatibility, events always empty
     from context_service.db import queries as q
 
     # Fetch claim
