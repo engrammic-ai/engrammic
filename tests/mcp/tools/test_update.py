@@ -94,7 +94,7 @@ def mock_context_service_with_graph():
     svc = MagicMock()
     svc.graph_store = MagicMock()
     svc.graph_store.execute_query = AsyncMock(
-        return_value=[{"n": {"content": "Old content about the topic", "created_at": "2026-01-01T00:00:00"}}]
+        return_value=[{"n": {"content": "Old content about the topic", "created_at": "2026-01-01T00:00:00"}, "_labels": ["Claim"]}]
     )
     svc.vector_store = MagicMock()
     with patch(
@@ -178,7 +178,7 @@ async def test_query_single_match_auto_supersedes(
     mock_context_service_with_graph.vector_store.search = AsyncMock(return_value=[single_match])
 
     with patch(
-        "context_service.mcp.tools.context_store.embed",
+        "context_service.mcp.tools.update.embed",
         new=AsyncMock(return_value=[0.1] * 128),
     ):
         result = await _update_impl(
@@ -215,7 +215,7 @@ async def test_query_multiple_matches_returns_ambiguous(
     )
 
     with patch(
-        "context_service.mcp.tools.context_store.embed",
+        "context_service.mcp.tools.update.embed",
         new=AsyncMock(return_value=[0.1] * 128),
     ):
         result = await _update_impl(
@@ -241,7 +241,7 @@ async def test_query_no_matches_returns_not_found(
     mock_context_service_with_graph.vector_store.search = AsyncMock(return_value=[])
 
     with patch(
-        "context_service.mcp.tools.context_store.embed",
+        "context_service.mcp.tools.update.embed",
         new=AsyncMock(return_value=[0.1] * 128),
     ):
         result = await _update_impl(
@@ -277,7 +277,7 @@ async def test_candidates_snippet_truncated_at_200_chars(
     )
 
     with patch(
-        "context_service.mcp.tools.context_store.embed",
+        "context_service.mcp.tools.update.embed",
         new=AsyncMock(return_value=[0.1] * 128),
     ):
         result = await _update_impl(
@@ -309,6 +309,79 @@ async def test_context_assert_error_propagates(
         )
 
     assert result["error"] == "invalid_evidence"
+
+
+@pytest.mark.asyncio
+async def test_neither_query_nor_target_has_status_key(mock_mcp_context):
+    """The error response for missing target includes a status key."""
+    result = await _update_impl(
+        content="Updated claim",
+        evidence=["node:123e4567-e89b-12d3-a456-426614174000"],
+    )
+    assert result["status"] == "error"
+    assert result["error"] == "missing_target"
+
+
+@pytest.mark.asyncio
+async def test_target_non_claim_node_rejected(
+    mock_mcp_context,
+    mock_validate_target_valid,
+):
+    """When target node is not a Claim, return a wrong_layer error."""
+    svc = MagicMock()
+    svc.graph_store = MagicMock()
+    # Simulate a Memory node (not a Claim)
+    svc.graph_store.execute_query = AsyncMock(
+        return_value=[{"n": {"content": "some memory", "created_at": "2026-01-01"}, "_labels": ["Memory"]}]
+    )
+    svc.vector_store = MagicMock()
+
+    with patch(
+        "context_service.mcp.tools.update.get_context_service",
+        return_value=svc,
+    ):
+        result = await _update_impl(
+            content="Updated claim",
+            evidence=["node:123e4567-e89b-12d3-a456-426614174000"],
+            target=_TARGET_ID,
+        )
+
+    assert result["status"] == "error"
+    assert result["error"] == "wrong_layer"
+    assert result["actual_label"] == "Memory"
+    assert "Knowledge-layer only" in result["message"]
+
+
+@pytest.mark.asyncio
+async def test_target_claim_node_proceeds(
+    mock_mcp_context,
+    mock_validate_target_valid,
+    mock_assert_success,
+    mock_supersession_metric,
+):
+    """When target node is a Claim, layer check passes and supersession proceeds."""
+    svc = MagicMock()
+    svc.graph_store = MagicMock()
+    # First call: layer check (GET_NODE_INTERNAL), second call: fetch superseded content
+    svc.graph_store.execute_query = AsyncMock(
+        return_value=[
+            {"n": {"content": "existing claim", "created_at": "2026-01-01"}, "_labels": ["Claim"]}
+        ]
+    )
+    svc.vector_store = MagicMock()
+
+    with patch(
+        "context_service.mcp.tools.update.get_context_service",
+        return_value=svc,
+    ):
+        result = await _update_impl(
+            content="Updated claim",
+            evidence=["node:123e4567-e89b-12d3-a456-426614174000"],
+            target=_TARGET_ID,
+        )
+
+    assert result["status"] == "updated"
+    assert result["node_id"] == _NEW_NODE_ID
 
 
 @pytest.mark.asyncio

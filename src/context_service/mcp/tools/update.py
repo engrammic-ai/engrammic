@@ -11,7 +11,11 @@ import structlog
 from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.rate_limit import rate_limited
 from context_service.mcp.server import get_context_service, get_mcp_auth_context, track_tool_usage
-from context_service.mcp.tools.context_store import _context_assert, validate_supersession_target
+from context_service.mcp.tools.context_store import (
+    _context_assert,
+    embed,
+    validate_supersession_target,
+)
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.services.models import derive_silo_id
 from context_service.telemetry.metrics import record_mcp_tool, record_supersession_used
@@ -37,8 +41,6 @@ async def _search_candidates(
     Returns a list of candidate dicts with id, content, similarity, created_at.
     Only includes results above the threshold, ordered by similarity descending.
     """
-    from context_service.mcp.tools.context_store import embed
-
     ctx_svc = get_context_service()
     vector = await embed(query)
 
@@ -99,6 +101,7 @@ async def _update_impl(
     """Implementation for update tool."""
     if query is None and target is None:
         return {
+            "status": "error",
             "error": "missing_target",
             "message": "must provide query or target",
         }
@@ -120,6 +123,38 @@ async def _update_impl(
                     "head_id": err.get("head_id"),
                 }
             return err
+
+        # Enforce Knowledge-layer only: target must be a Claim
+        from context_service.engine import queries as q
+
+        ctx_svc = get_context_service()
+        try:
+            rows = await ctx_svc.graph_store.execute_query(
+                q.GET_NODE_INTERNAL,
+                {"id": target, "silo_id": silo_id},
+            )
+        except Exception:
+            log.warning("update_layer_check_failed", target=target)
+            rows = []
+
+        if rows:
+            node_labels: list[str] = rows[0].get("_labels", [])
+            if "Claim" not in node_labels:
+                actual = next(
+                    (lbl for lbl in node_labels if lbl not in ("KnowledgeNode",)),
+                    node_labels[0] if node_labels else "unknown",
+                )
+                return {
+                    "status": "error",
+                    "error": "wrong_layer",
+                    "message": (
+                        f"update is Knowledge-layer only (Claims). "
+                        f"Target {target!r} is a {actual!r} node. "
+                        "Use the appropriate tool for this layer."
+                    ),
+                    "actual_label": actual,
+                }
+
         supersedes_id = target
     else:
         # query path: semantic search
