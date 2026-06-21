@@ -2990,14 +2990,38 @@ async def cascade_staleness(
         layer = dep.get("layer")
 
         if layer == "wisdom":
-            # Mark belief stale
-            await store.execute_write(
-                q.MARK_BELIEF_STALE_FOR_CASCADE,
-                {
-                    "node_id": dep_id,
-                    "silo_id": silo_id,
-                },
+            # GAP-015: Check if belief still has enough source facts
+            count_result = await store.execute_query(
+                q.COUNT_ACTIVE_SOURCE_FACTS,
+                {"belief_id": dep_id, "silo_id": silo_id},
             )
+            active_count = count_result[0]["active_count"] if count_result else 0
+
+            if active_count < SYNTHESIS_THRESHOLD:
+                # Below threshold: tombstone the orphaned belief (INV3)
+                await store.execute_write(
+                    q.TOMBSTONE_ORPHANED_BELIEF,
+                    {
+                        "node_id": dep_id,
+                        "silo_id": silo_id,
+                        "tombstoned_at": datetime.now(UTC).isoformat(),
+                    },
+                )
+                logger.info(
+                    "orphaned_belief_tombstoned",
+                    belief_id=dep_id,
+                    remaining_facts=active_count,
+                    threshold=SYNTHESIS_THRESHOLD,
+                )
+            else:
+                # Still has enough facts: mark stale for re-synthesis check
+                await store.execute_write(
+                    q.MARK_BELIEF_STALE_FOR_CASCADE,
+                    {
+                        "node_id": dep_id,
+                        "silo_id": silo_id,
+                    },
+                )
             cascade_count += 1
         else:
             # Recurse into non-wisdom dependents

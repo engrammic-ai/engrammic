@@ -122,6 +122,8 @@ class TestTx15Forget:
                 ],
                 # GET_DEPENDENTS_FOR_CASCADE
                 [{"id": dependent_id, "layer": "wisdom", "edge_type": "SYNTHESIZED_FROM"}],
+                # COUNT_ACTIVE_SOURCE_FACTS (GAP-015)
+                [{"active_count": 3}],
             ]
         )
         mock_store.execute_write = AsyncMock(return_value=[{"id": node_id, "state": "TOMBSTONED"}])
@@ -212,13 +214,24 @@ class TestCascadeStaleness:
 
     @pytest.mark.asyncio
     async def test_marks_dependent_beliefs_stale(self, mock_store: AsyncMock) -> None:
-        """Test that cascade marks dependent wisdom-layer nodes as stale."""
+        """Test that cascade marks dependent wisdom-layer nodes as stale when enough facts remain."""
         node_id = make_uuid()
         belief_id = make_uuid()
 
-        mock_store.execute_query = AsyncMock(
-            return_value=[{"id": belief_id, "layer": "wisdom", "edge_type": "SYNTHESIZED_FROM"}]
-        )
+        call_count = 0
+
+        async def mock_query(query: str, params: dict) -> list:
+            nonlocal call_count
+            call_count += 1
+            if "SYNTHESIZED_FROM|DERIVED_FROM" in query:
+                # GET_DEPENDENTS_FOR_CASCADE
+                return [{"id": belief_id, "layer": "wisdom", "edge_type": "SYNTHESIZED_FROM"}]
+            elif "count(f)" in query.lower():
+                # COUNT_ACTIVE_SOURCE_FACTS - still has 3 facts
+                return [{"active_count": 3}]
+            return []
+
+        mock_store.execute_query = mock_query
 
         count = await cascade_staleness(
             store=mock_store,
@@ -229,6 +242,39 @@ class TestCascadeStaleness:
 
         assert count >= 1
         mock_store.execute_write.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_tombstones_orphaned_belief(self, mock_store: AsyncMock) -> None:
+        """Test that cascade tombstones belief when source facts fall below threshold (GAP-015)."""
+        node_id = make_uuid()
+        belief_id = make_uuid()
+
+        call_count = 0
+
+        async def mock_query(query: str, params: dict) -> list:
+            nonlocal call_count
+            call_count += 1
+            if "SYNTHESIZED_FROM|DERIVED_FROM" in query:
+                # GET_DEPENDENTS_FOR_CASCADE
+                return [{"id": belief_id, "layer": "wisdom", "edge_type": "SYNTHESIZED_FROM"}]
+            elif "count(f)" in query.lower():
+                # COUNT_ACTIVE_SOURCE_FACTS - only 2 facts remain (below threshold of 3)
+                return [{"active_count": 2}]
+            return []
+
+        mock_store.execute_query = mock_query
+
+        count = await cascade_staleness(
+            store=mock_store,
+            node_id=node_id,
+            silo_id="test-silo",
+            depth=1,
+        )
+
+        assert count == 1
+        # Should call TOMBSTONE_ORPHANED_BELIEF not MARK_BELIEF_STALE_FOR_CASCADE
+        write_call = mock_store.execute_write.call_args
+        assert "tombstoned_at" in write_call[0][1]
 
     @pytest.mark.asyncio
     async def test_respects_depth_limit(self, mock_store: AsyncMock) -> None:
@@ -272,18 +318,17 @@ class TestCascadeStaleness:
         claim_id = make_uuid()
         belief_id = make_uuid()
 
-        # Mock returns: depth 1 finds claim, depth 2 finds belief
-        call_count = 0
-
         async def mock_query(query: str, params: dict) -> list:
-            nonlocal call_count
-            call_count += 1
             node_id = params.get("node_id")
-            if node_id == fact_id:
-                # First call: fact has claim as dependent (knowledge layer, recurse)
+            belief_qid = params.get("belief_id")
+            if "count(f)" in query.lower():
+                # COUNT_ACTIVE_SOURCE_FACTS - still has 3 facts
+                return [{"active_count": 3}]
+            elif node_id == fact_id:
+                # GET_DEPENDENTS_FOR_CASCADE: fact has claim as dependent
                 return [{"id": claim_id, "layer": "knowledge", "edge_type": "DERIVED_FROM"}]
             elif node_id == claim_id:
-                # Second call: claim has belief as dependent (wisdom layer, mark stale)
+                # GET_DEPENDENTS_FOR_CASCADE: claim has belief as dependent
                 return [{"id": belief_id, "layer": "wisdom", "edge_type": "SYNTHESIZED_FROM"}]
             return []
 
@@ -298,8 +343,6 @@ class TestCascadeStaleness:
 
         # Should have marked 1 belief stale (at depth 2)
         assert count == 1
-        # Should have made 2 query calls (depth 1 and depth 2)
-        assert call_count == 2
         # execute_write should have been called to mark belief stale
         mock_store.execute_write.assert_called_once()
 

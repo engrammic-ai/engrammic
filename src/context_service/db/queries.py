@@ -1847,6 +1847,22 @@ SET b.properties.synthesis_state = 'STALE'
 RETURN b.id AS id
 """
 
+COUNT_ACTIVE_SOURCE_FACTS = """
+MATCH (b {id: $belief_id, silo_id: $silo_id})-[:SYNTHESIZED_FROM]->(f:Fact)
+WHERE f.properties.state = 'ACTIVE'
+  AND f.tombstoned_at IS NULL
+RETURN count(f) AS active_count
+"""
+
+TOMBSTONE_ORPHANED_BELIEF = """
+MATCH (b {id: $node_id, silo_id: $silo_id})
+WHERE b.properties.layer = 'wisdom'
+SET b.properties.state = 'TOMBSTONED',
+    b.tombstoned_at = $tombstoned_at,
+    b.tombstone_reason = 'source_fact_below_threshold'
+RETURN b.id AS id
+"""
+
 GET_TOMBSTONED_FOR_GC = """
 MATCH (n {silo_id: $silo_id})
 WHERE n.properties.state = 'TOMBSTONED'

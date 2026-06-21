@@ -231,9 +231,13 @@ Flagging is always on by default. Enforcement is opt-in for backward compatibili
 
 **Spec:** EAG Table 7 — Beliefs have >= N fact sources.
 
-**Implementation:** Enforced at synthesis time but not after. If source facts are tombstoned, Belief can fall below N-fact floor without re-validation.
+**Implementation:** ~~Enforced at synthesis time but not after. If source facts are tombstoned, Belief can fall below N-fact floor without re-validation.~~
 
-**Fix:** Add post-tombstone cascade that re-validates or tombstones orphaned Beliefs.
+**Status:** FIXED (2026-06-21). Extended `cascade_staleness` to re-validate INV3:
+- When a dependent Belief is found, query `COUNT_ACTIVE_SOURCE_FACTS`
+- If active count < SYNTHESIS_THRESHOLD (3), tombstone the orphaned belief
+- If still >= 3, mark stale for re-synthesis check
+- Added `TOMBSTONE_ORPHANED_BELIEF` query with `tombstone_reason = 'source_fact_below_threshold'`
 
 **Priority:** P2
 **Tracking:** [GAP-015]
