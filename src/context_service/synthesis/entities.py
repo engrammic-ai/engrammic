@@ -102,10 +102,9 @@ def get_entity_extractor(tier: str) -> EntityExtractor:
     - ``"spacy"`` — spaCy en_core_web_sm
     - ``"disabled"`` (or any unknown value) — no-op
     """
-    match tier:
-        case "llm":
-            return LLMEntityExtractor()
-        case "spacy":
-            return SpacyEntityExtractor()
-        case _:
-            return DisabledEntityExtractor()
+    if tier == "llm":
+        return LLMEntityExtractor()
+    elif tier == "spacy":
+        return SpacyEntityExtractor()
+    else:
+        return DisabledEntityExtractor()
