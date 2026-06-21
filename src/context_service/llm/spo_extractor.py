@@ -20,12 +20,20 @@ if TYPE_CHECKING:
 logger = structlog.get_logger(__name__)
 
 _EXTRACTION_PROMPT = """\
-Extract (subject, predicate, object) from the claim. Convert passive to active voice.
-Output ONLY valid JSON.
+Extract (subject, predicate, object) from the claim. Output ONLY valid JSON.
+
+Rules:
+- Convert passive to active voice
+- For "X is Y" statements, use predicate "is" or "equals"
+- For "X has Y" statements, use predicate "has"
+- For settings/config, subject is the setting name, predicate is "equals", object is the value
 
 Examples:
 - "Caching improves performance" -> {{"subject":"caching","predicate":"improves","object":"performance"}}
 - "Bugs are caught by tests" -> {{"subject":"tests","predicate":"catch","object":"bugs"}}
+- "Rate limiting is set to 100 req/min" -> {{"subject":"rate_limiting","predicate":"equals","object":"100_req_per_min"}}
+- "The API uses OAuth2" -> {{"subject":"api","predicate":"uses","object":"oauth2"}}
+- "Authentication is required" -> {{"subject":"authentication","predicate":"is","object":"required"}}
 
 Claim: {claim}
 JSON:"""
@@ -146,6 +154,30 @@ async def extract_spo(
                 error=last_error,
             )
             await asyncio.sleep(delay)
+
+    # Fallback: create a generic triple from the claim text
+    # Use first significant word as subject, "relates_to" as predicate, rest as object
+    words = claim.strip().split()
+    if len(words) >= 2:
+        # Extract first noun-like word as subject (skip articles/prepositions)
+        skip_words = {"the", "a", "an", "this", "that", "is", "are", "was", "were"}
+        subject_words = [w for w in words[:3] if w.lower() not in skip_words]
+        subject = subject_words[0].lower() if subject_words else words[0].lower()
+        # Use remaining words as object (simplified)
+        obj = "_".join(words[-2:]).lower() if len(words) > 2 else words[-1].lower()
+        fallback = SPOTriple(
+            subject=subject.replace(" ", "_"),
+            predicate="relates_to",
+            object=obj.replace(" ", "_"),
+        )
+        logger.info(
+            "spo_extraction_fallback",
+            claim_len=len(claim),
+            attempts=max_retries,
+            last_error=last_error,
+            fallback_subject=fallback.subject,
+        )
+        return fallback
 
     logger.warning(
         "spo_extraction_failed",

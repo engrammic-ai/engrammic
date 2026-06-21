@@ -5,16 +5,15 @@ potential contradictions for batch validator confirmation.
 
 The flow:
 1. Write new Claim/Belief node with embedding
-2. check_contradiction_candidates() finds similar existing nodes
-3. flag_contradiction_candidate() sets flags on the new node
+2. check_contradiction_candidates() uses Qdrant to find similar existing nodes
+3. flag_contradiction_candidate() sets flags on the new node in Memgraph
 4. sage.validator batch job confirms via LLM and writes Contradiction markers
 """
 
 from __future__ import annotations
 
-import math
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
@@ -25,29 +24,6 @@ if TYPE_CHECKING:
 
 logger = structlog.get_logger(__name__)
 
-
-def _cosine_similarity(a: list[float], b: list[float]) -> float:
-    """Return cosine similarity for two equal-length vectors."""
-    if len(a) != len(b) or not a:
-        return 0.0
-    dot = sum(x * y for x, y in zip(a, b, strict=False))
-    norm_a = math.sqrt(sum(x * x for x in a))
-    norm_b = math.sqrt(sum(x * x for x in b))
-    if norm_a == 0.0 or norm_b == 0.0:
-        return 0.0
-    return dot / (norm_a * norm_b)
-
-
-# Query to get recent claims/beliefs with embeddings for similarity check
-_GET_RECENT_EMBEDDED_NODES = """
-MATCH (n {silo_id: $silo_id})
-WHERE (n:Claim OR n:Belief OR n:Fact)
-  AND n.id <> $exclude_id
-  AND n.embedding IS NOT NULL
-  AND n.created_at > $cutoff
-RETURN n.id AS id, n.content AS content, n.embedding AS embedding
-LIMIT $limit
-"""
 
 # Query to set contradiction candidate flags
 _FLAG_CONTRADICTION_CANDIDATE = """
@@ -71,68 +47,77 @@ async def check_contradiction_candidates(
     silo_id: str,
     node_id: str,
     embedding: list[float],
+    qdrant_client: Any | None = None,
     threshold: float | None = None,
-    lookback_days: int = 30,
-    max_candidates: int = 100,
+    max_candidates: int = 20,
 ) -> list[str]:
     """Find existing nodes with embeddings similar enough to be contradiction candidates.
 
+    Uses Qdrant vector search to find similar nodes efficiently, then filters
+    to exclude the current node.
+
     Args:
-        store: Graph store connection
+        store: Graph store connection (unused but kept for API compat)
         silo_id: Silo to search within
         node_id: ID of the new node (excluded from results)
         embedding: Embedding vector of the new node
+        qdrant_client: Qdrant client for vector search
         threshold: Cosine similarity threshold (default from config)
-        lookback_days: Only check nodes created within this window
-        max_candidates: Maximum nodes to check
+        max_candidates: Maximum candidates to return
 
     Returns:
         List of node IDs that are candidates for contradiction (similarity >= threshold)
     """
+    _ = store  # Unused; kept for API compatibility
+
     if threshold is None:
         threshold = get_settings().contradiction_candidate_threshold
 
-    if not embedding:
+    if not embedding or qdrant_client is None:
         return []
 
-    cutoff = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    cutoff = (
-        cutoff.replace(day=cutoff.day - lookback_days)
-        if cutoff.day > lookback_days
-        else cutoff.replace(month=cutoff.month - 1, day=1)
-    )
-    cutoff_str = cutoff.isoformat()
+    collection_name = f"ctx_{silo_id}"
 
     try:
-        result = await store.execute_query(
-            _GET_RECENT_EMBEDDED_NODES,
-            {
-                "silo_id": silo_id,
-                "exclude_id": node_id,
-                "cutoff": cutoff_str,
-                "limit": max_candidates,
-            },
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+        # Search for similar vectors, fetch extra to allow for filtering
+        search_result = await qdrant_client.search(
+            collection_name=collection_name,
+            query_vector=embedding,
+            limit=max_candidates + 5,  # Extra buffer for self-exclusion
+            score_threshold=threshold,
+            query_filter=Filter(
+                must_not=[
+                    FieldCondition(key="node_id", match=MatchValue(value=node_id)),
+                ]
+            ),
         )
+
+        candidates: list[str] = []
+        for hit in search_result:
+            candidate_id = hit.payload.get("node_id") if hit.payload else None
+            if candidate_id and candidate_id != node_id:
+                candidates.append(candidate_id)
+                logger.debug(
+                    "contradiction_candidate_found",
+                    node_id=node_id,
+                    candidate_id=candidate_id,
+                    similarity=round(hit.score, 3),
+                )
+                if len(candidates) >= max_candidates:
+                    break
+
+        return candidates
+
     except Exception as exc:
-        logger.warning("contradiction_check_failed", error=str(exc), silo_id=silo_id)
+        logger.warning(
+            "contradiction_check_failed",
+            error=str(exc),
+            silo_id=silo_id,
+            node_id=node_id,
+        )
         return []
-
-    candidates: list[str] = []
-    for row in result:
-        stored_embedding = row.get("embedding")
-        if not stored_embedding:
-            continue
-        similarity = _cosine_similarity(embedding, stored_embedding)
-        if similarity >= threshold:
-            candidates.append(row["id"])
-            logger.debug(
-                "contradiction_candidate_found",
-                node_id=node_id,
-                candidate_id=row["id"],
-                similarity=round(similarity, 3),
-            )
-
-    return candidates
 
 
 async def flag_contradiction_candidate(
@@ -208,10 +193,19 @@ async def maybe_flag_contradiction(
     silo_id: str,
     node_id: str,
     embedding: list[float],
+    qdrant_client: Any | None = None,
 ) -> list[str]:
     """Convenience function: check and flag in one call.
 
-    Returns list of candidate IDs if flagged, empty list otherwise.
+    Args:
+        store: Graph store for flagging
+        silo_id: Silo to search within
+        node_id: New node ID
+        embedding: Embedding vector for similarity search
+        qdrant_client: Qdrant client for vector search
+
+    Returns:
+        List of candidate IDs if flagged, empty list otherwise.
     """
     settings = get_settings()
     if not settings.contradiction_flagging_enabled:
@@ -222,6 +216,7 @@ async def maybe_flag_contradiction(
         silo_id=silo_id,
         node_id=node_id,
         embedding=embedding,
+        qdrant_client=qdrant_client,
     )
 
     if candidates:

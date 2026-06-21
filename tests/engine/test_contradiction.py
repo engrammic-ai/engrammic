@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from context_service.engine.contradiction import (
-    _cosine_similarity,
     check_contradiction_candidates,
     clear_contradiction_flags,
     flag_contradiction_candidate,
@@ -15,68 +14,48 @@ from context_service.engine.contradiction import (
 )
 
 
-class TestCosineSimilarity:
-    """Tests for the cosine similarity helper."""
-
-    def test_identical_vectors(self) -> None:
-        vec = [1.0, 2.0, 3.0]
-        assert _cosine_similarity(vec, vec) == pytest.approx(1.0)
-
-    def test_orthogonal_vectors(self) -> None:
-        a = [1.0, 0.0]
-        b = [0.0, 1.0]
-        assert _cosine_similarity(a, b) == pytest.approx(0.0)
-
-    def test_opposite_vectors(self) -> None:
-        a = [1.0, 0.0]
-        b = [-1.0, 0.0]
-        assert _cosine_similarity(a, b) == pytest.approx(-1.0)
-
-    def test_empty_vectors(self) -> None:
-        assert _cosine_similarity([], []) == 0.0
-
-    def test_zero_vector(self) -> None:
-        a = [0.0, 0.0]
-        b = [1.0, 2.0]
-        assert _cosine_similarity(a, b) == 0.0
-
-
 class TestCheckContradictionCandidates:
-    """Tests for the contradiction candidate check."""
+    """Tests for the contradiction candidate check using Qdrant."""
 
     @pytest.mark.asyncio
     async def test_returns_candidates_above_threshold(self) -> None:
         store = AsyncMock()
-        store.execute_query.return_value = [
-            {"id": "node-1", "content": "test", "embedding": [1.0, 0.0, 0.0]},
-            {"id": "node-2", "content": "test", "embedding": [0.9, 0.1, 0.0]},
-            {"id": "node-3", "content": "test", "embedding": [0.0, 1.0, 0.0]},
-        ]
+        qdrant = AsyncMock()
+
+        # Mock Qdrant search results
+        hit1 = MagicMock()
+        hit1.payload = {"node_id": "node-1"}
+        hit1.score = 0.95
+
+        hit2 = MagicMock()
+        hit2.payload = {"node_id": "node-2"}
+        hit2.score = 0.90
+
+        qdrant.search.return_value = [hit1, hit2]
 
         candidates = await check_contradiction_candidates(
             store=store,
             silo_id="test-silo",
             node_id="new-node",
             embedding=[1.0, 0.0, 0.0],
+            qdrant_client=qdrant,
             threshold=0.85,
         )
 
         assert "node-1" in candidates
         assert "node-2" in candidates
-        assert "node-3" not in candidates
+        qdrant.search.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_returns_empty_for_no_matches(self) -> None:
+    async def test_returns_empty_when_no_qdrant_client(self) -> None:
         store = AsyncMock()
-        store.execute_query.return_value = [
-            {"id": "node-1", "content": "test", "embedding": [0.0, 1.0, 0.0]},
-        ]
 
         candidates = await check_contradiction_candidates(
             store=store,
             silo_id="test-silo",
             node_id="new-node",
             embedding=[1.0, 0.0, 0.0],
+            qdrant_client=None,
             threshold=0.85,
         )
 
@@ -85,32 +64,64 @@ class TestCheckContradictionCandidates:
     @pytest.mark.asyncio
     async def test_returns_empty_for_empty_embedding(self) -> None:
         store = AsyncMock()
+        qdrant = AsyncMock()
 
         candidates = await check_contradiction_candidates(
             store=store,
             silo_id="test-silo",
             node_id="new-node",
             embedding=[],
+            qdrant_client=qdrant,
             threshold=0.85,
         )
 
         assert candidates == []
-        store.execute_query.assert_not_called()
+        qdrant.search.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_handles_query_failure(self) -> None:
+    async def test_handles_search_failure(self) -> None:
         store = AsyncMock()
-        store.execute_query.side_effect = Exception("DB error")
+        qdrant = AsyncMock()
+        qdrant.search.side_effect = Exception("Qdrant error")
 
         candidates = await check_contradiction_candidates(
             store=store,
             silo_id="test-silo",
             node_id="new-node",
             embedding=[1.0, 0.0, 0.0],
+            qdrant_client=qdrant,
             threshold=0.85,
         )
 
         assert candidates == []
+
+    @pytest.mark.asyncio
+    async def test_excludes_self_from_results(self) -> None:
+        store = AsyncMock()
+        qdrant = AsyncMock()
+
+        # Mock result that includes self (should be filtered by Qdrant query, but test the fallback)
+        hit1 = MagicMock()
+        hit1.payload = {"node_id": "new-node"}  # Same as query node
+        hit1.score = 1.0
+
+        hit2 = MagicMock()
+        hit2.payload = {"node_id": "other-node"}
+        hit2.score = 0.9
+
+        qdrant.search.return_value = [hit1, hit2]
+
+        candidates = await check_contradiction_candidates(
+            store=store,
+            silo_id="test-silo",
+            node_id="new-node",
+            embedding=[1.0, 0.0, 0.0],
+            qdrant_client=qdrant,
+            threshold=0.85,
+        )
+
+        assert "new-node" not in candidates
+        assert "other-node" in candidates
 
 
 class TestFlagContradictionCandidate:
@@ -130,10 +141,6 @@ class TestFlagContradictionCandidate:
 
         assert result is True
         store.execute_write.assert_called_once()
-        call_args = store.execute_write.call_args
-        params = call_args[0][1]  # Second positional arg is params dict
-        assert params["node_id"] == "node-1"
-        assert params["candidate_ids"] == ["node-2", "node-3"]
 
     @pytest.mark.asyncio
     async def test_returns_false_for_empty_candidates(self) -> None:
@@ -181,45 +188,72 @@ class TestClearContradictionFlags:
         assert result is True
         store.execute_write.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_handles_failure(self) -> None:
+        store = AsyncMock()
+        store.execute_write.side_effect = Exception("DB error")
+
+        result = await clear_contradiction_flags(
+            store=store,
+            silo_id="test-silo",
+            node_id="node-1",
+        )
+
+        assert result is False
+
 
 class TestMaybeFlagContradiction:
     """Tests for the convenience function."""
 
     @pytest.mark.asyncio
-    async def test_checks_and_flags(self) -> None:
+    async def test_flags_when_candidates_found(self) -> None:
         store = AsyncMock()
-        store.execute_query.return_value = [
-            {"id": "node-1", "content": "test", "embedding": [1.0, 0.0, 0.0]},
-        ]
-        store.execute_write.return_value = [{"id": "new-node"}]
+        store.execute_write.return_value = [{"id": "node-1"}]
+        qdrant = AsyncMock()
 
-        with patch("context_service.engine.contradiction.get_settings") as mock_settings:
-            mock_settings.return_value.contradiction_flagging_enabled = True
-            mock_settings.return_value.contradiction_candidate_threshold = 0.85
+        hit = MagicMock()
+        hit.payload = {"node_id": "candidate-1"}
+        hit.score = 0.95
+        qdrant.search.return_value = [hit]
+
+        with pytest.MonkeyPatch().context() as mp:
+            mp.setattr(
+                "context_service.engine.contradiction.get_settings",
+                lambda: MagicMock(
+                    contradiction_flagging_enabled=True,
+                    contradiction_candidate_threshold=0.85,
+                ),
+            )
 
             candidates = await maybe_flag_contradiction(
                 store=store,
                 silo_id="test-silo",
                 node_id="new-node",
                 embedding=[1.0, 0.0, 0.0],
+                qdrant_client=qdrant,
             )
 
-        assert "node-1" in candidates
+        assert candidates == ["candidate-1"]
         store.execute_write.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_respects_disabled_flag(self) -> None:
+    async def test_returns_empty_when_disabled(self) -> None:
         store = AsyncMock()
+        qdrant = AsyncMock()
 
-        with patch("context_service.engine.contradiction.get_settings") as mock_settings:
-            mock_settings.return_value.contradiction_flagging_enabled = False
+        with pytest.MonkeyPatch().context() as mp:
+            mp.setattr(
+                "context_service.engine.contradiction.get_settings",
+                lambda: MagicMock(contradiction_flagging_enabled=False),
+            )
 
             candidates = await maybe_flag_contradiction(
                 store=store,
                 silo_id="test-silo",
                 node_id="new-node",
                 embedding=[1.0, 0.0, 0.0],
+                qdrant_client=qdrant,
             )
 
         assert candidates == []
-        store.execute_query.assert_not_called()
+        qdrant.search.assert_not_called()

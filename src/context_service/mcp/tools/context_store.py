@@ -504,11 +504,13 @@ async def _context_assert(
         try:
             from context_service.engine.contradiction import maybe_flag_contradiction
 
+            raw_qdrant = await ctx_svc._qdrant._get_client()
             contradiction_candidates = await maybe_flag_contradiction(
                 store=ctx_svc.graph_store,
                 silo_id=str(expected_silo_id),
                 node_id=str(node_id),
                 embedding=node_embedding,
+                qdrant_client=raw_qdrant,
             )
         except Exception as exc:
             logger.debug("contradiction_check_skipped", error=str(exc))
@@ -664,11 +666,13 @@ async def _context_commit(
                 {"node_id": str(commit_result.commitment_id), "silo_id": str(expected_silo_id)},
             )
             if emb_result and emb_result[0].get("embedding"):
+                raw_qdrant = await ctx_svc._qdrant._get_client()
                 contradiction_candidates = await maybe_flag_contradiction(
                     store=ctx_svc.graph_store,
                     silo_id=str(expected_silo_id),
                     node_id=str(commit_result.commitment_id),
                     embedding=emb_result[0]["embedding"],
+                    qdrant_client=raw_qdrant,
                 )
                 if contradiction_candidates:
                     result["contradiction_candidates"] = contradiction_candidates
