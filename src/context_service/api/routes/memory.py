@@ -120,10 +120,10 @@ async def remember(
     if not session_id:
         raise HTTPException(status_code=400, detail="X-Session-ID header is required")
 
-    if not hasattr(request.app.state, "memgraph"):
+    if not hasattr(request.app.state, "memgraph_store"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
 
-    store = request.app.state.memgraph
+    store = request.app.state.memgraph_store
 
     try:
         result_tx, _events = await store_memory(
@@ -174,7 +174,7 @@ async def recall(
     """
     silo_id, _ = auth_context
 
-    if not hasattr(request.app.state, "memgraph"):
+    if not hasattr(request.app.state, "memgraph_store"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
 
     try:
@@ -313,10 +313,10 @@ async def learn(
     if not session_id:
         raise HTTPException(status_code=400, detail="X-Session-ID header is required")
 
-    if not hasattr(request.app.state, "memgraph"):
+    if not hasattr(request.app.state, "memgraph_store"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
 
-    store = request.app.state.memgraph
+    store = request.app.state.memgraph_store
 
     # Extract SPO triple for corroboration matching
     subject: str | None = None
@@ -410,10 +410,10 @@ async def link(
     """
     silo_id, session_id = auth_context
 
-    if not hasattr(request.app.state, "memgraph"):
+    if not hasattr(request.app.state, "memgraph_store"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
 
-    store = request.app.state.memgraph
+    store = request.app.state.memgraph_store
     agent_id = session_id or silo_id
 
     # Map relation string to LinkType

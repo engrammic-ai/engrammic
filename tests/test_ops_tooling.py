@@ -335,6 +335,7 @@ class TestAdminTombstoneRoute:
         mock_client = MagicMock()
         mock_client.execute_write = AsyncMock(return_value=None)
         app.state.memgraph = mock_client
+        app.state.memgraph_store = mock_client
 
         with patch(
             "context_service.engine.tombstone.run_tombstone",

@@ -161,7 +161,7 @@ PROMOTE_CLAIM_TO_FACT = """
 MATCH (c:Claim {id: $claim_id, silo_id: $silo_id})
 OPTIONAL MATCH (c)<-[:PROMOTED_FROM]-(existing:Fact)
 WITH c WHERE existing IS NULL
-CREATE (f:Fact {
+CREATE (f:Node:Fact {
     id: $fact_id,
     silo_id: c.silo_id,
     content: c.content,
@@ -1696,7 +1696,7 @@ RETURN n.id AS id, n.properties.state AS state
 """
 
 CREATE_COMMITMENT_WITH_ABOUT = """
-CREATE (c:Commitment {
+CREATE (c:Node:Commitment {
     id: $id,
     silo_id: $silo_id,
     content: $content,
@@ -1755,7 +1755,7 @@ RETURN commitment.id AS id
 # — all removed
 
 CREATE_BELIEF_WITH_SYNTHESIZED_FROM = """
-CREATE (b:Belief {
+CREATE (b:Node:Belief {
     id: $id,
     silo_id: $silo_id,
     content: $content,

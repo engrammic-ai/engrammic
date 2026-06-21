@@ -142,10 +142,10 @@ async def list_nodes(
 ) -> list[GraphNodeResponse]:
     silo_id, _ = auth_context
 
-    if not hasattr(request.app.state, "memgraph"):
+    if not hasattr(request.app.state, "memgraph_store"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
 
-    store = request.app.state.memgraph
+    store = request.app.state.memgraph_store
     silo_uuid = uuid.UUID(silo_id)
 
     try:
@@ -186,10 +186,10 @@ async def list_edges(
 ) -> list[GraphEdgeResponse]:
     silo_id, _ = auth_context
 
-    if not hasattr(request.app.state, "memgraph"):
+    if not hasattr(request.app.state, "memgraph_store"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
 
-    store = request.app.state.memgraph
+    store = request.app.state.memgraph_store
     silo_uuid = uuid.UUID(silo_id)
     ids = [id.strip() for id in node_ids.split(",") if id.strip()]
 
@@ -242,10 +242,10 @@ async def get_neighborhood(
 ) -> NeighborhoodResponse:
     silo_id, _ = auth_context
 
-    if not hasattr(request.app.state, "memgraph"):
+    if not hasattr(request.app.state, "memgraph_store"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
 
-    store = request.app.state.memgraph
+    store = request.app.state.memgraph_store
     silo_uuid = uuid.UUID(silo_id)
 
     try:
@@ -291,10 +291,10 @@ async def get_metrics(
 ) -> MetricsResponse:
     silo_id, _ = auth_context
 
-    if not hasattr(request.app.state, "memgraph"):
+    if not hasattr(request.app.state, "memgraph_store"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
 
-    store = request.app.state.memgraph
+    store = request.app.state.memgraph_store
     silo_uuid = uuid.UUID(silo_id)
 
     try:

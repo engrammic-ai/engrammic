@@ -328,10 +328,10 @@ async def forget(
     """
     silo_id, session_id = auth_context
 
-    if not hasattr(request.app.state, "memgraph"):
+    if not hasattr(request.app.state, "memgraph_store"):
         raise HTTPException(status_code=503, detail="Memgraph not available")
 
-    store = request.app.state.memgraph
+    store = request.app.state.memgraph_store
 
     from context_service.sage.transactions import InvariantViolation
     from context_service.sage.transactions import forget as brain_forget

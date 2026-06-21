@@ -75,7 +75,7 @@ async def erase_nodes(
     if not request_body.node_ids:
         raise HTTPException(status_code=400, detail="node_ids must not be empty")
 
-    store = request.app.state.memgraph
+    store = request.app.state.memgraph_store
 
     qdrant_client = getattr(request.app.state, "qdrant", None)
     qdrant_store = EngineQdrantStore(qdrant_client) if qdrant_client is not None else None

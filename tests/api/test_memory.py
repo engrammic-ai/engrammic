@@ -23,7 +23,9 @@ def _make_app(*, memgraph_store: object | None = None, silo_id: str = "test-silo
 
     app = FastAPI()
     app.include_router(router)
-    app.state.memgraph = memgraph_store or MagicMock()
+    store_mock = memgraph_store or MagicMock()
+    app.state.memgraph = store_mock
+    app.state.memgraph_store = store_mock
 
     # Override auth to return test silo
     async def mock_auth() -> tuple[str, str | None]:

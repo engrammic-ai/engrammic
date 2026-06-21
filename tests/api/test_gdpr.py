@@ -28,7 +28,9 @@ def _make_app(
     app.include_router(router)
 
     # Attach state so the endpoint can access stores
-    app.state.memgraph = memgraph_store or MagicMock()
+    store_mock = memgraph_store or MagicMock()
+    app.state.memgraph = store_mock
+    app.state.memgraph_store = store_mock
     if qdrant_client is not None:
         app.state.qdrant = qdrant_client
 

@@ -19,6 +19,7 @@ def _make_app(*, license_info: object | None = None) -> FastAPI:
     mock_store = MagicMock()
     mock_store.health_check = AsyncMock(return_value=True)
     app.state.memgraph = mock_store
+    app.state.memgraph_store = mock_store
     app.state.redis = mock_store
     app.state.qdrant = mock_store
 

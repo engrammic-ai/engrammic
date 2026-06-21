@@ -16,7 +16,7 @@ _bearer_security = HTTPBearer()
 
 def get_memgraph(request: Request) -> HyperGraphStore:
     """Get graph store from app state, vended as the HyperGraphStore protocol."""
-    store: HyperGraphStore = request.app.state.memgraph
+    store: HyperGraphStore = request.app.state.memgraph_store
     return store
 
 

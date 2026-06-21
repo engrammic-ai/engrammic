@@ -227,6 +227,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         from context_service.services.auto_tagging import AutoTaggingService
 
         memgraph_store = MemgraphStore(memgraph_client)
+        app.state.memgraph_store = memgraph_store
 
         auto_tagging: AutoTaggingService | None = None
         if embedding_service is not None:
