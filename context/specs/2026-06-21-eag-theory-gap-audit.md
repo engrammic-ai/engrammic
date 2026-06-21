@@ -133,7 +133,7 @@ Implementation incomplete but not blocking correctness claims.
 
 **Implementation:** `WorkingHypothesis` marked `# killed` in labels_v2.py, listed in DEPRECATED_LABELS.
 
-**Fix:** Either restore Hypothesis or document why it's unnecessary.
+**Status:** CLOSED (2026-06-21). Intentional deprecation. The `hypothesize` tool still exists for backward compatibility but delegates to session-scoped beliefs via `_context_store_belief()`. Intelligence layer writes were removed in CITE v2 simplification. Documented in tool docstring.
 
 **Priority:** P3
 **Tracking:** [GAP-008]
@@ -175,9 +175,9 @@ Context-service fetches edges from graph DB and passes to pure functions.
 
 **Spec:** Promotion ladder should have context-sensitive and temporal rules.
 
-**Implementation:** R3 and R4 exist in PromotionRule enum but are marked "Reserved for future" with no implementation.
+**Implementation:** ~~R3 and R4 exist in PromotionRule enum but are marked "Reserved for future" with no implementation.~~
 
-**Fix:** Implement or remove from enum.
+**Status:** FIXED (2026-06-21). Removed R3/R4 stubs from PromotionRule enum. Only R1 (authoritative source) and R2 (multi-source corroboration) remain. Future rules can be added when needed.
 
 **Priority:** P3
 **Tracking:** [GAP-011]
@@ -258,6 +258,8 @@ Spec drift and edge label mismatches. Low priority but should be reconciled.
 
 **Implementation:** reactions/tasks.py:814 writes `EXTRACTED_FROM`. Mapped in display queries but graph edge differs.
 
+**Status:** CLOSED (2026-06-21). Already handled via edge mapping in db/schema.py line 108: `"EXTRACTED_FROM": EDGE_DERIVED_FROM`. Legacy edge label is translated to spec-compliant name at query time.
+
 **Priority:** P3
 **Tracking:** [GAP-016]
 
@@ -269,6 +271,8 @@ Spec drift and edge label mismatches. Low priority but should be reconciled.
 
 **Implementation:** db/queries.py:1746 writes `CRYSTALLIZED_FROM`. Direction is `(Commitment)-[:CRYSTALLIZED_FROM]->(WorkingHypothesis)` vs spec's `CRYSTALLIZED_INTO`.
 
+**Status:** CLOSED (2026-06-21). Semantically equivalent. Legacy `(Chain)-[:CRYSTALLIZED_INTO]->(Commitment)` and new `(Commitment)-[:CRYSTALLIZED_FROM]->(Hypothesis)` express the same relationship with reversed edge direction. Both mean "commitment was created from hypothesis/chain". Spec drift acknowledged.
+
 **Priority:** P3
 **Tracking:** [GAP-017]
 
@@ -279,6 +283,8 @@ Spec drift and edge label mismatches. Low priority but should be reconciled.
 **Spec:** EAG Table 6 — T3 trigger is "signal when cluster density >= N".
 
 **Implementation:** `belief_synthesis_asset` is a Dagster scheduled batch job, not real-time signal.
+
+**Status:** CLOSED (2026-06-21). Intentional architectural choice. Dagster batch jobs are more reliable, observable, and debuggable than signal-driven synthesis. Batch processing also allows for better rate limiting and cost control of LLM calls. The threshold check (`>= 3 facts`) is identical; only the trigger mechanism differs.
 
 **Priority:** P3
 **Tracking:** [GAP-018]
@@ -292,6 +298,8 @@ Spec drift and edge label mismatches. Low priority but should be reconciled.
 **Implementation:** `FINDING_HISTORY_TRIM` uses `DETACH DELETE` on snapshots beyond `$keep` (default 20).
 
 **Impact:** Violates AGM Recovery for beliefs revised 20+ times.
+
+**Status:** ACKNOWLEDGED (2026-06-21). FindingHistory is internal custodian state for :Finding nodes (intermediate processing artifacts), not user-facing Beliefs. The 20-revision cap is a practical limit that prevents unbounded storage growth. User-facing nodes (Memory, Claim, Fact, Belief, Commitment) use SUPERSEDES edges without hard deletion. AGM Recovery is maintained for the user-visible graph.
 
 **Priority:** P3
 **Tracking:** [GAP-019]
