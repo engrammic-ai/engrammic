@@ -2311,7 +2311,7 @@ async def check_corroboration(
     RETURN size(all_evidence) AS count, size(all_evidence) >= $threshold AS should_promote
     """
 
-    results = await store.execute_write(
+    results = await store.execute_query(
         cypher,
         {"node_id": node_id, "silo_id": silo_id, "threshold": threshold},
     )
