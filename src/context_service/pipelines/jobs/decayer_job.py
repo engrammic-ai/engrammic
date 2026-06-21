@@ -47,7 +47,7 @@ SET m.properties.confidence = $new_confidence,
 
 
 def decay_confidence(confidence: float, decay_rate: float, hours_since_access: float) -> float:
-    return confidence * (decay_rate ** hours_since_access)
+    return float(confidence * (decay_rate ** hours_since_access))
 
 
 async def find_decay_candidates(
@@ -91,7 +91,7 @@ async def apply_decay(
 
         try:
             if isinstance(raw_last_accessed, str):
-                from dateutil.parser import parse as parse_dt
+                from dateutil.parser import parse as parse_dt  # type: ignore[import-untyped]
 
                 last_accessed = parse_dt(raw_last_accessed)
                 if last_accessed.tzinfo is None:

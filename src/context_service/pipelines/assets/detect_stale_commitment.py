@@ -5,7 +5,7 @@ added since last run. Those edge types do not exist in the current schema. This 
 shared-ABOUT relationship as a proxy: any active Commitment whose ABOUT targets also have
 recently-created Claim, Fact, or Belief nodes sharing those targets is a staleness candidate.
 
-The watermark (Redis key: validator:stale_commitment:watermark:{silo_id}) tracks the ISO
+The watermark (Redis key: detector:stale_commitment:watermark:{silo_id}) tracks the ISO
 timestamp of the last successful run. On first run, defaults to now - 1h so historical
 commitments are not all processed at once.
 
@@ -37,7 +37,7 @@ _MAX_COMMITMENTS_PER_RUN = 50
 _DEFAULT_LOOKBACK_SECONDS = 3600  # 1 hour
 
 # Redis watermark key pattern.
-_WATERMARK_KEY = "validator:stale_commitment:watermark:{silo_id}"
+_WATERMARK_KEY = "detector:stale_commitment:watermark:{silo_id}"
 
 # Cypher: find active Commitments that share ABOUT targets with recently-created evidence nodes.
 # Plan B spec uses SUPPORTED_BY/CONTRADICTED_BY; those don't exist yet so shared-ABOUT is used.
@@ -100,16 +100,16 @@ def _watermark_key(silo_id: str) -> str:
 
 
 @dg.asset(
-    name="validator_stale_commitment",
+    name="detect_stale_commitment",
     partitions_def=silo_partitions,
     description=(
         "Detect Commitments undermined by new evidence and write StaleCommitment markers. "
         "Uses a Redis watermark to process only evidence added since last run."
     ),
     retry_policy=dg.RetryPolicy(max_retries=2, delay=10.0),
-    tags={"dagster/concurrency_key": "validator_stale_commitment"},
+    tags={"dagster/concurrency_key": "detect_stale_commitment"},
 )
-def validator_stale_commitment_asset(
+def detect_stale_commitment_asset(
     context: AssetExecutionContext,
     memgraph: MemgraphResource,
     llm: LLMResource,
@@ -147,7 +147,7 @@ def validator_stale_commitment_asset(
         )
 
         if not rows:
-            context.log.info(f"validator_stale_commitment: no candidates silo={silo_id}")
+            context.log.info(f"detect_stale_commitment: no candidates silo={silo_id}")
             new_watermark = datetime.now(UTC).isoformat()
             await redis_client.set(wm_key, new_watermark)
             return {
@@ -158,7 +158,7 @@ def validator_stale_commitment_asset(
             }
 
         context.log.info(
-            f"validator_stale_commitment: checking {len(rows)} commitments silo={silo_id}"
+            f"detect_stale_commitment: checking {len(rows)} commitments silo={silo_id}"
         )
 
         commitments_checked = 0
@@ -215,19 +215,19 @@ def validator_stale_commitment_asset(
                         )
                         stale_detected += 1
                         context.log.info(
-                            f"validator_stale_commitment: stale detected "
+                            f"detect_stale_commitment: stale detected "
                             f"commitment={commitment_id} confidence={confidence:.3f} silo={silo_id}"
                         )
                     except Exception as exc:  # noqa: BLE001
                         errors += 1
                         context.log.warning(
-                            f"validator_stale_commitment: failed to create stale marker "
+                            f"detect_stale_commitment: failed to create stale marker "
                             f"commitment={commitment_id}: {exc!r}"
                         )
                 else:
                     false_positives += 1
                     context.log.debug(
-                        f"validator_stale_commitment: not stale "
+                        f"detect_stale_commitment: not stale "
                         f"commitment={commitment_id} undermines={undermines} "
                         f"confidence={confidence:.3f}"
                     )
@@ -237,7 +237,7 @@ def validator_stale_commitment_asset(
             except Exception as exc:  # noqa: BLE001
                 errors += 1
                 context.log.warning(
-                    f"validator_stale_commitment: error commitment={commitment_id} error={exc!r}"
+                    f"detect_stale_commitment: error commitment={commitment_id} error={exc!r}"
                 )
 
         # Advance watermark after processing the batch.
@@ -257,11 +257,11 @@ def validator_stale_commitment_asset(
 
     if skipped_no_work:
         context.log.info(
-            f"validator_stale_commitment silo={silo_id} skipped_no_work duration={duration_s:.2f}s"
+            f"detect_stale_commitment silo={silo_id} skipped_no_work duration={duration_s:.2f}s"
         )
     else:
         context.log.info(
-            f"validator_stale_commitment silo={silo_id} "
+            f"detect_stale_commitment silo={silo_id} "
             f"commitments_checked={counts['commitments_checked']} "
             f"stale_detected={counts['stale_detected']} "
             f"false_positives={counts['false_positives']} "

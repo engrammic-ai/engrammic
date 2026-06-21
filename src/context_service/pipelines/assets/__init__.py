@@ -15,6 +15,11 @@ from context_service.pipelines.assets.custodian_finalize import custodian_finali
 from context_service.pipelines.assets.dead_letter_reconciliation import (
     dead_letter_reconciliation,
 )
+from context_service.pipelines.assets.detect_contradicts import detect_contradicts_asset
+from context_service.pipelines.assets.detect_stale_commitment import (
+    detect_stale_commitment_asset,
+)
+from context_service.pipelines.assets.detect_supports import detect_supports_asset
 from context_service.pipelines.assets.edge_heat import edge_heat_asset
 from context_service.pipelines.assets.embedding import embedding_asset as embedding
 from context_service.pipelines.assets.extraction import extraction
@@ -34,12 +39,6 @@ from context_service.pipelines.assets.step_embedding import (
 )
 from context_service.pipelines.assets.synthesis_trigger import synthesis_trigger
 from context_service.pipelines.assets.tag_maintenance import tag_maintenance
-from context_service.pipelines.assets.validator_contradiction import (
-    validator_contradiction_asset,
-)
-from context_service.pipelines.assets.validator_stale_commitment import (
-    validator_stale_commitment_asset,
-)
 from context_service.pipelines.assets.weak_link_creation import (
     create_weak_links_for_node as create_weak_links_for_node,
 )
@@ -75,6 +74,7 @@ all_assets: list[Any] = [
     step_embedding_backfill,
     session_step_embedding,
     prewarm_sweep_asset,
-    validator_contradiction_asset,
-    validator_stale_commitment_asset,
+    detect_contradicts_asset,
+    detect_stale_commitment_asset,
+    detect_supports_asset,
 ]

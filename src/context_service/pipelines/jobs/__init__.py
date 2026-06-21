@@ -2,6 +2,7 @@
 
 from context_service.pipelines.jobs.beacon_sender import beacon_sender_job
 from context_service.pipelines.jobs.decayer_job import sage_decayer_job, sage_decayer_schedule
+from context_service.pipelines.jobs.detector_job import sage_detector_job
 from context_service.pipelines.jobs.groundskeeper_job import groundskeeper_nightly
 from context_service.pipelines.jobs.legacy_embed_migration_job import (
     sage_legacy_embed_migration_job,
@@ -17,11 +18,11 @@ from context_service.pipelines.jobs.synthesizer_job import (
     sage_synthesizer_job,
     sage_synthesizer_schedule,
 )
-from context_service.pipelines.jobs.detector_job import sage_detector_job
 from context_service.pipelines.jobs.usage_retention import (
     usage_retention_job,
     usage_retention_schedule,
 )
+
 __all__ = [
     "beacon_sender_job",
     "groundskeeper_nightly",

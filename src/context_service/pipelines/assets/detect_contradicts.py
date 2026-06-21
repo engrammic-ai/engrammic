@@ -70,16 +70,16 @@ def _build_contradiction_prompt(content_a: str, content_b: str) -> list[dict[str
 
 
 @dg.asset(
-    name="validator_contradiction",
+    name="detect_contradicts",
     partitions_def=silo_partitions,
     description=(
         "Confirm flagged contradiction candidates via LLM and write :Contradiction markers. "
         "Processes candidates within a 1-hour TTL window. Clears flags regardless of outcome."
     ),
     retry_policy=dg.RetryPolicy(max_retries=2, delay=10.0),
-    tags={"dagster/concurrency_key": "validator_contradiction"},
+    tags={"dagster/concurrency_key": "detect_contradicts"},
 )
-def validator_contradiction_asset(
+def detect_contradicts_asset(
     context: AssetExecutionContext,
     memgraph: MemgraphResource,
     llm: LLMResource,
@@ -113,7 +113,7 @@ def validator_contradiction_asset(
         )
 
         if not rows:
-            context.log.info(f"validator_contradiction: no flagged candidates silo={silo_id}")
+            context.log.info(f"detect_contradicts: no flagged candidates silo={silo_id}")
             return {
                 "candidates_processed": 0,
                 "contradictions_confirmed": 0,
@@ -122,7 +122,7 @@ def validator_contradiction_asset(
             }
 
         context.log.info(
-            f"validator_contradiction: processing {len(rows)} candidates silo={silo_id}"
+            f"detect_contradicts: processing {len(rows)} candidates silo={silo_id}"
         )
 
         candidates_processed = 0
@@ -138,7 +138,7 @@ def validator_contradiction_asset(
             if not candidate_with_ids:
                 # Flag is malformed — clear it and move on.
                 context.log.warning(
-                    f"validator_contradiction: malformed flag (empty candidate_with_ids) for node={node_a_id}"
+                    f"detect_contradicts: malformed flag (empty candidate_with_ids) for node={node_a_id}"
                 )
                 errors += 1
                 try:
@@ -200,14 +200,14 @@ def validator_contradiction_asset(
                             )
                             contradictions_confirmed += 1
                             context.log.info(
-                                f"validator_contradiction: confirmed "
+                                f"detect_contradicts: confirmed "
                                 f"node_a={node_a_id} node_b={node_b_id} "
                                 f"confidence={confidence:.3f} silo={silo_id}"
                             )
                         else:
                             false_positives += 1
                             context.log.debug(
-                                f"validator_contradiction: not confirmed "
+                                f"detect_contradicts: not confirmed "
                                 f"node_a={node_a_id} node_b={node_b_id} "
                                 f"contradicts={contradicts} confidence={confidence:.3f}"
                             )
@@ -215,7 +215,7 @@ def validator_contradiction_asset(
                     except Exception as pair_exc:  # noqa: BLE001
                         errors += 1
                         context.log.warning(
-                            f"validator_contradiction: pair error "
+                            f"detect_contradicts: pair error "
                             f"node_a={node_a_id} node_b={node_b_id} error={pair_exc!r}"
                         )
 
@@ -242,11 +242,11 @@ def validator_contradiction_asset(
 
     if skipped_no_work:
         context.log.info(
-            f"validator_contradiction silo={silo_id} skipped_no_work duration={duration_s:.2f}s"
+            f"detect_contradicts silo={silo_id} skipped_no_work duration={duration_s:.2f}s"
         )
     else:
         context.log.info(
-            f"validator_contradiction silo={silo_id} "
+            f"detect_contradicts silo={silo_id} "
             f"candidates_processed={counts['candidates_processed']} "
             f"contradictions_confirmed={counts['contradictions_confirmed']} "
             f"false_positives={counts['false_positives']} "

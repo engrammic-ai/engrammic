@@ -1,4 +1,4 @@
-"""Tests for the validator_stale_commitment Dagster asset."""
+"""Tests for the detect_stale_commitment Dagster asset."""
 
 import pytest
 
@@ -7,41 +7,41 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-def test_validator_stale_commitment_asset_exists():
-    from context_service.pipelines.assets.validator_stale_commitment import (
-        validator_stale_commitment_asset,
+def test_detect_stale_commitment_asset_exists():
+    from context_service.pipelines.assets.detect_stale_commitment import (
+        detect_stale_commitment_asset,
     )
 
-    assert validator_stale_commitment_asset is not None
+    assert detect_stale_commitment_asset is not None
 
 
-def test_validator_stale_commitment_asset_name():
-    from context_service.pipelines.assets.validator_stale_commitment import (
-        validator_stale_commitment_asset,
+def test_detect_stale_commitment_asset_name():
+    from context_service.pipelines.assets.detect_stale_commitment import (
+        detect_stale_commitment_asset,
     )
 
-    keys = list(validator_stale_commitment_asset.keys)
+    keys = list(detect_stale_commitment_asset.keys)
     assert len(keys) == 1
-    assert keys[0].path[-1] == "validator_stale_commitment"
+    assert keys[0].path[-1] == "detect_stale_commitment"
 
 
-def test_validator_stale_commitment_has_retry_policy():
-    from context_service.pipelines.assets.validator_stale_commitment import (
-        validator_stale_commitment_asset,
+def test_detect_stale_commitment_has_retry_policy():
+    from context_service.pipelines.assets.detect_stale_commitment import (
+        detect_stale_commitment_asset,
     )
 
-    policy = validator_stale_commitment_asset.op.retry_policy
+    policy = detect_stale_commitment_asset.op.retry_policy
     assert policy is not None
     assert policy.max_retries == 2
 
 
-def test_validator_stale_commitment_in_all_assets():
+def test_detect_stale_commitment_in_all_assets():
     from context_service.pipelines.assets import all_assets
-    from context_service.pipelines.assets.validator_stale_commitment import (
-        validator_stale_commitment_asset,
+    from context_service.pipelines.assets.detect_stale_commitment import (
+        detect_stale_commitment_asset,
     )
 
-    assert validator_stale_commitment_asset in all_assets
+    assert detect_stale_commitment_asset in all_assets
 
 
 # ---------------------------------------------------------------------------
@@ -50,7 +50,7 @@ def test_validator_stale_commitment_in_all_assets():
 
 
 def test_get_commitments_query_filters_active():
-    from context_service.pipelines.assets.validator_stale_commitment import (
+    from context_service.pipelines.assets.detect_stale_commitment import (
         _GET_COMMITMENTS_WITH_NEW_EVIDENCE,
     )
 
@@ -61,7 +61,7 @@ def test_get_commitments_query_filters_active():
 
 
 def test_watermark_key_includes_silo_id():
-    from context_service.pipelines.assets.validator_stale_commitment import _watermark_key
+    from context_service.pipelines.assets.detect_stale_commitment import _watermark_key
 
     key = _watermark_key("silo-abc")
     assert "silo-abc" in key
@@ -74,7 +74,7 @@ def test_watermark_key_includes_silo_id():
 
 
 def test_build_stale_prompt_includes_commitment():
-    from context_service.pipelines.assets.validator_stale_commitment import _build_stale_prompt
+    from context_service.pipelines.assets.detect_stale_commitment import _build_stale_prompt
 
     evidence = [{"id": "e1", "content": "New data contradicts prior assumption."}]
     messages = _build_stale_prompt("The system is stable.", evidence)
@@ -82,7 +82,7 @@ def test_build_stale_prompt_includes_commitment():
 
 
 def test_build_stale_prompt_includes_evidence():
-    from context_service.pipelines.assets.validator_stale_commitment import _build_stale_prompt
+    from context_service.pipelines.assets.detect_stale_commitment import _build_stale_prompt
 
     evidence = [{"id": "e1", "content": "System crashed twice this week."}]
     messages = _build_stale_prompt("The system is stable.", evidence)
@@ -90,7 +90,7 @@ def test_build_stale_prompt_includes_evidence():
 
 
 def test_build_stale_prompt_has_system_and_user():
-    from context_service.pipelines.assets.validator_stale_commitment import _build_stale_prompt
+    from context_service.pipelines.assets.detect_stale_commitment import _build_stale_prompt
 
     messages = _build_stale_prompt("Commitment text.", [{"id": "e1", "content": "Evidence."}])
     roles = [m["role"] for m in messages]
@@ -104,7 +104,7 @@ def test_build_stale_prompt_has_system_and_user():
 
 
 def test_stale_schema_has_required_fields():
-    from context_service.pipelines.assets.validator_stale_commitment import _STALE_SCHEMA
+    from context_service.pipelines.assets.detect_stale_commitment import _STALE_SCHEMA
 
     required = set(_STALE_SCHEMA["required"])
     assert "undermines" in required
@@ -118,7 +118,7 @@ def test_stale_schema_has_required_fields():
 
 
 def test_stale_detected_when_confidence_meets_threshold():
-    from context_service.pipelines.assets.validator_stale_commitment import (
+    from context_service.pipelines.assets.detect_stale_commitment import (
         _STALE_CONFIDENCE_THRESHOLD,
     )
 
@@ -129,7 +129,7 @@ def test_stale_detected_when_confidence_meets_threshold():
 
 
 def test_false_positive_when_confidence_below_threshold():
-    from context_service.pipelines.assets.validator_stale_commitment import (
+    from context_service.pipelines.assets.detect_stale_commitment import (
         _STALE_CONFIDENCE_THRESHOLD,
     )
 
@@ -140,7 +140,7 @@ def test_false_positive_when_confidence_below_threshold():
 
 
 def test_false_positive_when_undermines_false():
-    from context_service.pipelines.assets.validator_stale_commitment import (
+    from context_service.pipelines.assets.detect_stale_commitment import (
         _STALE_CONFIDENCE_THRESHOLD,
     )
 
@@ -156,7 +156,7 @@ def test_false_positive_when_undermines_false():
 
 
 def test_default_lookback_is_one_hour():
-    from context_service.pipelines.assets.validator_stale_commitment import (
+    from context_service.pipelines.assets.detect_stale_commitment import (
         _DEFAULT_LOOKBACK_SECONDS,
     )
 
@@ -171,7 +171,7 @@ def test_default_lookback_is_one_hour():
 @pytest.mark.asyncio
 async def test_stale_confirmed_logic():
     """LLM returns undermines=true, confidence=0.9 -> stale_detected increments."""
-    from context_service.pipelines.assets.validator_stale_commitment import (
+    from context_service.pipelines.assets.detect_stale_commitment import (
         _STALE_CONFIDENCE_THRESHOLD,
         _build_stale_prompt,
     )
@@ -192,7 +192,7 @@ async def test_stale_confirmed_logic():
 @pytest.mark.asyncio
 async def test_not_stale_when_confidence_low():
     """LLM returns undermines=true but confidence=0.4 -> not flagged as stale."""
-    from context_service.pipelines.assets.validator_stale_commitment import (
+    from context_service.pipelines.assets.detect_stale_commitment import (
         _STALE_CONFIDENCE_THRESHOLD,
     )
 
