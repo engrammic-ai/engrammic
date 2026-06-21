@@ -244,10 +244,6 @@ def _layer_to_label(layer: str) -> str:
     return _LAYER_TO_LABEL.get(layer, "Document")
 
 
-# Minimum evidence count for R1 promotion. Per T5 spec, consensus requires
-# multiple sources - single evidence should not auto-promote to Fact.
-_R1_THRESHOLD = 3
-
 _VALID_SOURCE_TIERS = ("authoritative", "validated", "community", "unknown")
 
 
@@ -488,26 +484,6 @@ async def _context_assert(
             layer="knowledge",
         )
 
-    promoted = False
-    promoted_error: str | None = None
-    if len(evidence_list) >= _R1_THRESHOLD:
-        try:
-            promotion_result = await ctx_svc.promote_claim_to_fact(
-                silo_id=str(expected_silo_id),
-                claim_id=str(node_id),
-                evidence_count=len(evidence_list),
-            )
-            if promotion_result is not None:
-                promoted = True
-        except Exception as exc:
-            promoted_error = str(exc)
-            logger.warning(
-                "claim_assert_promotion_failed",
-                exc_info=True,
-                claim_id=str(node_id),
-                silo_id=str(expected_silo_id),
-            )
-
     # Fetch embedding once for both contradiction and affinity checks
     settings = get_settings()
     node_embedding: list[float] | None = None
@@ -572,11 +548,8 @@ async def _context_assert(
         "claim_type": claim_type,
         "evidence_status": "verified" if evidence_mode == "sync" else "pending",
         "evidence_nodes": evidence_nodes,
-        "promoted_to_fact": promoted,
         "created_at": datetime.now(UTC).isoformat(),
     }
-    if promoted_error is not None:
-        response["promoted_error"] = promoted_error
     if supersedes is not None:
         response["supersedes"] = supersedes
     if contradiction_candidates:
