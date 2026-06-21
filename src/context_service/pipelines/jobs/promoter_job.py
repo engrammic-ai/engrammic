@@ -17,7 +17,6 @@ from context_service.pipelines.resources import MemgraphResource
 from context_service.sage.transactions import (
     PROMOTION_THRESHOLD,
     InvariantViolation,
-    check_corroboration,
     promote,
 )
 
@@ -31,9 +30,11 @@ _LIST_UNPROMOTED_CLAIMS = """
 MATCH (c:Claim {silo_id: $silo_id})
 WHERE c.properties.state = 'ACTIVE'
   AND c.properties.claim_status = 'UNPROMOTED'
+  AND c.properties.corroboration_count >= $threshold
 RETURN c.id AS claim_id,
        c.properties.confidence AS confidence,
        c.properties.corroboration_count AS corroboration_count
+LIMIT $batch_size
 """
 
 
@@ -49,26 +50,26 @@ async def find_promotion_candidates(store: Any, log: Any) -> list[dict[str, Any]
     candidates: list[dict[str, Any]] = []
 
     for silo_id in silos:
-        rows = await store.execute_query(_LIST_UNPROMOTED_CLAIMS, {"silo_id": silo_id})
+        rows = await store.execute_query(
+            _LIST_UNPROMOTED_CLAIMS,
+            {"silo_id": silo_id, "threshold": PROMOTION_THRESHOLD, "batch_size": 100},
+        )
         log.info(f"promoter_op: silo={silo_id} unpromoted_claims={len(rows)}")
 
         for row in rows:
             claim_id: str = row["claim_id"]
-            corroboration_count, should_promote = await check_corroboration(
-                store, claim_id, silo_id, threshold=PROMOTION_THRESHOLD
+            corroboration_count: int = row["corroboration_count"]
+            candidates.append(
+                {
+                    "claim_id": claim_id,
+                    "silo_id": silo_id,
+                    "corroboration_count": corroboration_count,
+                }
             )
-            if should_promote:
-                candidates.append(
-                    {
-                        "claim_id": claim_id,
-                        "silo_id": silo_id,
-                        "corroboration_count": corroboration_count,
-                    }
-                )
-                log.info(
-                    f"promoter_op: candidate claim_id={claim_id} silo={silo_id}"
-                    f" corroboration={corroboration_count}"
-                )
+            log.info(
+                f"promoter_op: candidate claim_id={claim_id} silo={silo_id}"
+                f" corroboration={corroboration_count}"
+            )
 
     return candidates
 
@@ -77,6 +78,7 @@ async def promote_candidates(store: Any, candidates: list[dict[str, Any]], log: 
     """Call promote() for each candidate; skip on InvariantViolation (race condition)."""
     promoted = 0
     skipped = 0
+    errors = 0
 
     for candidate in candidates:
         claim_id: str = candidate["claim_id"]
@@ -112,8 +114,19 @@ async def promote_candidates(store: Any, candidates: list[dict[str, Any]], log: 
             log.info(
                 f"promoter_op: skipped claim_id={claim_id} silo={silo_id} reason={code}"
             )
+        except Exception as exc:
+            errors += 1
+            logger.error(
+                "promoter.error",
+                claim_id=claim_id,
+                silo_id=silo_id,
+                error=str(exc),
+            )
+            log.info(
+                f"promoter_op: error claim_id={claim_id} silo={silo_id} error={exc}"
+            )
 
-    return {"promoted": promoted, "skipped": skipped}
+    return {"promoted": promoted, "skipped": skipped, "errors": errors}
 
 
 @dg.op(required_resource_keys={"memgraph"})
@@ -129,7 +142,7 @@ def promoter_op(context) -> dict[str, int]:
 
     result = asyncio.run(_run())
     context.log.info(
-        f"promoter_op: done promoted={result['promoted']} skipped={result['skipped']}"
+        f"promoter_op: done promoted={result['promoted']} skipped={result['skipped']} errors={result['errors']}"
     )
     return result
 
