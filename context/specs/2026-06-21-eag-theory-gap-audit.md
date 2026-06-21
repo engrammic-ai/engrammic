@@ -23,11 +23,9 @@ These affect correctness and should block claims of AGM compliance or write-gate
 
 **Spec:** EAG Table 4 — Knowledge layer requires semantic contradiction check; contradictions should be rejected with `rejection_reason: "contradiction"`.
 
-**Implementation:** `detect_spo_conflict` runs AFTER `store.execute_write` commits the node (sage/transactions.py:1081 commits, :1114 detects). Contradicting claims land as `ACTIVE` with `CONTRADICTS` edges and `conflict_status=unresolved`. Resolution is async via ConsolidationWorker.
+**Implementation:** ~~`detect_spo_conflict` runs AFTER `store.execute_write` commits the node. Contradicting claims land as `ACTIVE` with `CONTRADICTS` edges and `conflict_status=unresolved`.~~
 
-**Impact:** The whitepaper claims 95% contradiction detection at write time. Implementation detects but does not reject — contradictions accumulate and are resolved asynchronously.
-
-**Fix:** Implement the WriteQualityGate (spec exists at 2026-06-06-write-quality-gate.md but module never built). Move contradiction detection before commit, return rejection on conflict.
+**Status:** FIXED (2026-06-21). Added pre-write contradiction check via `check_contradiction_before_write()`. When `contradiction_enforcement_enabled=True`, writes are rejected with `ContradictionRejected` error before commit. Setting defaults to `False` for backward compatibility.
 
 **Priority:** P0
 **Owner:** TBD
@@ -39,16 +37,9 @@ These affect correctness and should block claims of AGM compliance or write-gate
 
 **Spec:** EAG Section 3.4 — supersession should "propagate through dependency graph deps(n)". Definition A.8 defines deps(n) as transitive closure.
 
-**Implementation:** `cascade_staleness` in sage/transactions.py has `MAX_CASCADE_DEPTH = 10` but the recursion guard at line 2927 exits after depth 1:
-```python
-if depth == 1:
-    cascade_count += await cascade_staleness(..., depth + 1, ...)
-```
-Nodes 2+ hops downstream are never visited.
+**Implementation:** ~~`cascade_staleness` in sage/transactions.py has `MAX_CASCADE_DEPTH = 10` but the recursion guard at line 2927 exits after depth 1.~~
 
-**Impact:** A Fact supersession only marks immediate dependents stale. Beliefs derived from derived Beliefs are missed. Silent correctness cliff.
-
-**Fix:** Change condition to `if depth < MAX_CASCADE_DEPTH` and verify recursion behavior.
+**Status:** FIXED (2026-06-21). Removed the erroneous `if depth == 1:` guard. Recursion now proceeds up to MAX_CASCADE_DEPTH.
 
 **Priority:** P0
 **Owner:** TBD
@@ -96,11 +87,9 @@ credibility = source_tier × corroboration_factor × method_weight × raw_confid
 corroboration_factor = 1 - exp(-0.5 × n)
 ```
 
-**Implementation:** `sage/confidence.py::compute_credibility` uses only `source_tier × method_weight × raw_confidence`. The corroboration factor is absent.
+**Implementation:** ~~`sage/confidence.py::compute_credibility` uses only `source_tier × method_weight × raw_confidence`. The corroboration factor is absent.~~
 
-**Impact:** Corroborated facts don't get multiplicative confidence boost at write time. The warrant function w(n) is incomplete.
-
-**Fix:** Wire corroboration_factor into compute_credibility. Pass source count from evidence validation.
+**Status:** FIXED (2026-06-21). Added `corroboration_count` parameter and `corroboration_factor` computation to `compute_credibility`. Defaults to n=1 for backward compatibility.
 
 **Priority:** P1
 **Owner:** TBD
@@ -316,11 +305,11 @@ These components align with EAG theory:
 
 ## Recommended Priority Order
 
-1. **GAP-001** — Write-gate contradiction rejection (blocks 95% claim)
-2. **GAP-002** — cascade_staleness depth fix (silent correctness bug)
+1. ~~**GAP-001** — Write-gate contradiction rejection~~ FIXED 2026-06-21
+2. ~~**GAP-002** — cascade_staleness depth fix~~ FIXED 2026-06-21
 3. **GAP-010** — deps(n) traversal (required for proper propagation)
-4. **GAP-004** — status=superseded marking (AGM Recovery)
-5. **GAP-005** — corroboration_factor in credibility (warrant function)
+4. ~~**GAP-004** — status=superseded marking~~ FIXED 2026-06-21 (earlier session)
+5. ~~**GAP-005** — corroboration_factor in credibility~~ FIXED 2026-06-21
 6. **GAP-003** — SYSTEM_CREATED_LABELS enforcement (layer discipline)
 
 ---

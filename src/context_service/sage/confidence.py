@@ -5,6 +5,7 @@ Computes static credibility score at write time with full breakdown for transpar
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -29,6 +30,8 @@ class CredibilityBreakdown:
 
     source_tier: str
     source_tier_weight: float
+    corroboration_count: int
+    corroboration_factor: float
     method: str
     method_weight: float
     raw_confidence: float
@@ -39,6 +42,8 @@ class CredibilityBreakdown:
         return {
             "source_tier": self.source_tier,
             "source_tier_weight": self.source_tier_weight,
+            "corroboration_count": self.corroboration_count,
+            "corroboration_factor": self.corroboration_factor,
             "method": self.method,
             "method_weight": self.method_weight,
             "raw_confidence": self.raw_confidence,
@@ -50,15 +55,18 @@ def compute_credibility(
     source_tier: str | None,
     method: str | None,
     raw_confidence: float,
+    corroboration_count: int = 1,
 ) -> CredibilityBreakdown:
     """Compute static credibility score with full breakdown.
 
-    Formula: credibility = source_tier_weight * method_weight * raw_confidence
+    Formula: credibility = source_tier_weight * corroboration_factor * method_weight * raw_confidence
+    Where: corroboration_factor = 1 - exp(-0.5 * n), n = distinct corroborating sources
 
     Args:
         source_tier: Source quality tier (authoritative, validated, community, unknown).
         method: Extraction method (direct, validated_extractor, standard_extractor, experimental).
         raw_confidence: Raw confidence score from source (0.0-1.0).
+        corroboration_count: Number of distinct corroborating sources (default 1).
 
     Returns:
         CredibilityBreakdown with all factors and final score.
@@ -71,11 +79,16 @@ def compute_credibility(
 
     clamped_confidence = max(0.0, min(1.0, raw_confidence))
 
-    credibility = tier_weight * meth_weight * clamped_confidence
+    n = max(1, corroboration_count)
+    corroboration_factor = 1.0 - math.exp(-0.5 * n)
+
+    credibility = tier_weight * corroboration_factor * meth_weight * clamped_confidence
 
     return CredibilityBreakdown(
         source_tier=tier,
         source_tier_weight=tier_weight,
+        corroboration_count=n,
+        corroboration_factor=corroboration_factor,
         method=meth,
         method_weight=meth_weight,
         raw_confidence=clamped_confidence,

@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 
+from context_service.config.settings import get_settings
 from context_service.db.schema import LABEL_MEMORY
 from context_service.reactions.events import ReactionEvent, ReactionEventType, emit_reaction
 from context_service.sage.confidence import compute_credibility
@@ -129,6 +130,18 @@ class ConflictError(BrainError):
     def __init__(self, winner_id: str, message: str = "Conflict detected") -> None:
         super().__init__("CONFLICT_DETECTED", message, winner_id=winner_id)
         self.winner_id = winner_id
+
+
+class ContradictionRejected(BrainError):
+    """Raised when a write is rejected due to contradiction (GAP-001)."""
+
+    def __init__(self, conflicting_node_ids: list[str]) -> None:
+        super().__init__(
+            "CONTRADICTION_REJECTED",
+            "Write rejected: contradicts existing claims",
+            conflicting_node_ids=conflicting_node_ids,
+        )
+        self.conflicting_node_ids = conflicting_node_ids
 
 
 class CrossSiloViolation(InvariantViolation):
@@ -1032,6 +1045,14 @@ async def store_claim(
                 "NO_MEMORY_EVIDENCE",
                 "At least one evidence ref must be from Memory layer (INV2)",
             )
+
+    # GAP-001: Pre-write contradiction check (INV1 enforcement)
+    if get_settings().contradiction_enforcement_enabled:
+        conflicting_ids = await check_contradiction_before_write(
+            store, subject, predicate, object_value, silo_id
+        )
+        if conflicting_ids:
+            raise ContradictionRejected(conflicting_ids)
 
     node_id = uuid.uuid4()
     created_at = datetime.now(UTC)
@@ -2754,6 +2775,43 @@ async def detect_spo_conflict(
     return events
 
 
+async def check_contradiction_before_write(
+    store: HyperGraphStore,
+    subject: str | None,
+    predicate: str | None,
+    object_value: str | None,
+    silo_id: str,
+) -> list[str]:
+    """Pre-write contradiction check for GAP-001 enforcement.
+
+    Returns list of conflicting node IDs. Empty list means no conflicts.
+    Call BEFORE writing to reject contradicting claims at write time.
+    """
+    if not all([subject, predicate, object_value]):
+        return []
+
+    cypher = """
+    MATCH (c:Claim {silo_id: $silo_id})
+    WHERE c.properties.subject = $subject
+      AND c.properties.predicate = $predicate
+      AND c.properties.object <> $object
+      AND c.properties.state = 'ACTIVE'
+    RETURN c.id AS id
+    """
+
+    conflicts = await store.execute_query(
+        cypher,
+        {
+            "silo_id": silo_id,
+            "subject": subject,
+            "predicate": predicate,
+            "object": object_value,
+        },
+    )
+
+    return [c["id"] for c in conflicts]
+
+
 async def _create_bidirectional_contradicts(
     store: HyperGraphStore,
     node_a: str,
@@ -2923,9 +2981,8 @@ async def cascade_staleness(
             )
             cascade_count += 1
         else:
-            # Recurse into non-wisdom dependents (sync for depth 1, would be async for deeper in production)
-            if depth == 1:
-                cascade_count += await cascade_staleness(store, dep_id, silo_id, depth + 1, visited)
+            # Recurse into non-wisdom dependents
+            cascade_count += await cascade_staleness(store, dep_id, silo_id, depth + 1, visited)
 
     logger.debug(
         "cascade_staleness_complete", node_id=node_id, cascade_count=cascade_count, depth=depth

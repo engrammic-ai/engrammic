@@ -15,6 +15,7 @@ from context_service.sage.consolidation import (
 )
 from context_service.sage.transactions import (
     ConflictStatus,
+    ContradictionRejected,
     store_claim,
 )
 
@@ -63,15 +64,17 @@ class TestConflictFlow:
 
         # execute_query calls during store_claim for first claim:
         #   [0] evidence validation -> returns the memory node
-        #   [1] conflict detection  -> returns [] (no conflicts yet)
+        #   [1] corroboration check -> returns count/should_promote
+        #   [2] conflict detection  -> returns [] (no conflicts yet)
         store_first.execute_query = AsyncMock(
             side_effect=[
                 [_evidence_row(evidence_id_1)],
+                [{"count": 1, "should_promote": False}],  # corroboration check
                 [],  # No conflicting claims
             ]
         )
-        # execute_write calls: CREATE claim, DERIVED_FROM edges, corroboration check
-        store_first.execute_write = AsyncMock(return_value=[{"count": 1, "should_promote": False}])
+        # execute_write calls: CREATE claim, DERIVED_FROM edges
+        store_first.execute_write = AsyncMock(return_value=[])
 
         result_first, events_first = await store_claim(
             store=store_first,
@@ -99,14 +102,16 @@ class TestConflictFlow:
 
         # execute_query calls during store_claim for second claim:
         #   [0] evidence validation -> returns the memory node
-        #   [1] conflict detection  -> returns first_claim_id (conflict!)
+        #   [1] corroboration check -> returns count/should_promote
+        #   [2] conflict detection  -> returns first_claim_id (conflict!)
         store_second.execute_query = AsyncMock(
             side_effect=[
                 [_evidence_row(evidence_id_2)],
+                [{"count": 1, "should_promote": False}],  # corroboration check
                 [{"id": first_claim_id}],  # Existing claim with different object
             ]
         )
-        store_second.execute_write = AsyncMock(return_value=[{"count": 1, "should_promote": False}])
+        store_second.execute_write = AsyncMock(return_value=[])
 
         result_second, events_second = await store_claim(
             store=store_second,
@@ -205,3 +210,123 @@ class TestConflictFlow:
         assert call_kwargs["winner_id"] == first_claim_id
         assert call_kwargs["loser_id"] == second_claim_id
         assert call_kwargs["silo_id"] == SILO
+
+
+class TestContradictionEnforcement:
+    """Tests for GAP-001 write-time contradiction rejection."""
+
+    @pytest.mark.asyncio
+    async def test_contradiction_rejected_when_enforcement_enabled(self) -> None:
+        """Second claim rejected at write time if it contradicts existing claim."""
+        evidence_id_1 = make_evidence_id()
+        evidence_id_2 = make_evidence_id()
+        first_claim_id = make_node_id()
+
+        # --- Step 1: Store first claim (no conflicts) ---
+        store_first = AsyncMock()
+        # Query calls: evidence validation, pre-write check, corroboration, post-write detect
+        store_first.execute_query = AsyncMock(
+            side_effect=[
+                [_evidence_row(evidence_id_1)],  # evidence validation
+                [],  # pre-write contradiction check (none)
+                [{"count": 1, "should_promote": False}],  # corroboration check
+                [],  # post-write conflict detection (none)
+            ]
+        )
+        store_first.execute_write = AsyncMock(return_value=[])
+
+        with patch(
+            "context_service.sage.transactions.get_settings"
+        ) as mock_settings:
+            settings_instance = MagicMock()
+            settings_instance.contradiction_enforcement_enabled = True
+            mock_settings.return_value = settings_instance
+
+            result_first, _ = await store_claim(
+                store=store_first,
+                content="python-version is 3.11",
+                evidence_refs=[f"node:{evidence_id_1}"],
+                silo_id=SILO,
+                agent_id="agent-alpha",
+                subject=SUBJECT,
+                predicate=PREDICATE,
+                object_value="3.11",
+                source_tier="authoritative",
+                confidence=0.9,
+            )
+
+        # --- Step 2: Try to store conflicting claim with enforcement on ---
+        store_second = AsyncMock()
+        # Query calls: evidence validation, pre-write check (finds conflict - REJECTED)
+        store_second.execute_query = AsyncMock(
+            side_effect=[
+                [_evidence_row(evidence_id_2)],  # evidence validation
+                [{"id": first_claim_id}],  # pre-write check finds conflict!
+            ]
+        )
+
+        with patch(
+            "context_service.sage.transactions.get_settings"
+        ) as mock_settings:
+            settings_instance = MagicMock()
+            settings_instance.contradiction_enforcement_enabled = True
+            mock_settings.return_value = settings_instance
+
+            with pytest.raises(ContradictionRejected) as exc_info:
+                await store_claim(
+                    store=store_second,
+                    content="python-version is 3.12",
+                    evidence_refs=[f"node:{evidence_id_2}"],
+                    silo_id=SILO,
+                    agent_id="agent-beta",
+                    subject=SUBJECT,
+                    predicate=PREDICATE,
+                    object_value="3.12",
+                    source_tier="unknown",
+                    confidence=0.5,
+                )
+
+        assert first_claim_id in exc_info.value.conflicting_node_ids
+        assert exc_info.value.code == "CONTRADICTION_REJECTED"
+
+    @pytest.mark.asyncio
+    async def test_no_rejection_when_enforcement_disabled(self) -> None:
+        """Conflicting claim allowed when enforcement is disabled (default)."""
+        evidence_id_2 = make_evidence_id()
+        first_claim_id = make_node_id()
+
+        store_second = AsyncMock()
+        # Query calls: evidence validation, corroboration, post-write conflict detection
+        # No pre-write check when enforcement is disabled
+        store_second.execute_query = AsyncMock(
+            side_effect=[
+                [_evidence_row(evidence_id_2)],  # evidence validation
+                [{"count": 1, "should_promote": False}],  # corroboration check
+                [{"id": first_claim_id}],  # post-write conflict detection finds conflict
+            ]
+        )
+        store_second.execute_write = AsyncMock(return_value=[])
+
+        with patch(
+            "context_service.sage.transactions.get_settings"
+        ) as mock_settings:
+            settings_instance = MagicMock()
+            settings_instance.contradiction_enforcement_enabled = False
+            mock_settings.return_value = settings_instance
+
+            # Should succeed - enforcement is off
+            result, events = await store_claim(
+                store=store_second,
+                content="python-version is 3.12",
+                evidence_refs=[f"node:{evidence_id_2}"],
+                silo_id=SILO,
+                agent_id="agent-beta",
+                subject=SUBJECT,
+                predicate=PREDICATE,
+                object_value="3.12",
+                source_tier="unknown",
+                confidence=0.5,
+            )
+
+            # Node was created (not rejected)
+            assert result.node_id is not None

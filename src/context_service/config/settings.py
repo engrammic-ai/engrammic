@@ -1507,6 +1507,10 @@ class Settings(BaseSettings):
         default=True,
         description="Enable inline contradiction candidate flagging during writes",
     )
+    contradiction_enforcement_enabled: bool = Field(
+        default=False,
+        description="Reject writes that contradict existing claims (GAP-001 enforcement)",
+    )
     affinity_computation_enabled: bool = Field(
         default=True,
         description="Enable inline affinity edge computation after Knowledge node writes",
