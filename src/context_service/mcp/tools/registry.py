@@ -79,6 +79,7 @@ def register_tools(mcp: FastMCP) -> None:
         remember,
         tick,
         trace,
+        update,
     )
 
     tools = {
@@ -88,6 +89,7 @@ def register_tools(mcp: FastMCP) -> None:
         "trace": trace.register,
         "forget": forget.register,
         "tick": tick.register,
+        "update": update.register,
     }
 
     for name, register_fn in tools.items():

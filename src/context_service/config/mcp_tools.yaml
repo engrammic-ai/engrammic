@@ -100,3 +100,14 @@ tools:
       to specific node IDs via about_hint.
     maps_to: engagement
 
+  update:
+    description: |
+      Update existing knowledge by superseding it with new content. Provide
+      either target (explicit node_id, skips search) or query (semantic search
+      to find the node to replace). If query matches exactly one node above the
+      similarity threshold (0.7), it is auto-superseded. If multiple matches are
+      found, returns {status: "ambiguous", candidates: [...]} for the caller to
+      resolve. If no match is found, returns {status: "not_found"}. Requires
+      evidence. Use learn() to create new knowledge without supersession.
+    maps_to: Claim
+

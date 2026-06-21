@@ -27,6 +27,7 @@ from context_service.mcp.tools import (
     revise,
     tick,
     trace,
+    update,
 )
 
 # Registry
@@ -62,4 +63,5 @@ __all__ = [
     "revise",
     "tick",
     "trace",
+    "update",
 ]
