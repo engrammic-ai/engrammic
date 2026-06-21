@@ -33,10 +33,8 @@ class ReactionEventType(StrEnum):
     CASCADE_STALENESS = "cascade_staleness"
     CASCADE_STALENESS_COMPLETE = "cascade_staleness_complete"  # notification-only
     UPDATE_HEAT = "update_heat"
-    UPDATE_CLUSTER_MEMBERSHIP = "update_cluster_membership"
     FLAG_CONTRADICTION = "flag_contradiction"
     CONFLICT_DETECTED = "conflict_detected"  # notification-only
-    CHECK_SYNTHESIS = "check_synthesis"
     CHECK_EXTRACTION_TRIGGER = "check_extraction_trigger"  # TX1 EXTRACT handler
     PROPAGATE_CONFIDENCE = "propagate_confidence"
     CONSOLIDATE = "consolidate"

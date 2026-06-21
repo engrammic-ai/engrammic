@@ -1,8 +1,6 @@
 """Dagster schedule definitions for context-service.
 
 SAGE (Synthesis, Aggregation, and Graph Evolution) schedules:
-- sage_custodian_schedule: DISABLED (Phase 9) - handled by Taskiq reaction workers
-- sage_synthesizer_schedule: DISABLED (Phase 9) - handled by Taskiq reaction workers
 - sage_groundskeeper_schedule: heat and maintenance (every 15 minutes, pending-work gated)
 - sage_validator_schedule: contradiction + stale commitment checks (every 5m, pending-work gated)
 
@@ -163,74 +161,6 @@ def _run_request_with_partition(
 # -----------------------------------------------------------------------------
 # Core Pipeline Chains
 # -----------------------------------------------------------------------------
-
-# DISABLED (Phase 9): These jobs are now handled by Taskiq reaction workers.
-# See context/plans/2026-06-02-phase9-dagster-migration.md
-# Note: _SILOS_WITH_PENDING_CUSTODIAN_WORK query removed along with this schedule.
-#
-# @dg.schedule(
-#     cron_schedule="0 */2 * * *",
-#     name="sage_custodian_schedule",
-#     target=dg.AssetSelection.assets(
-#         "extraction",
-#         "embedding",
-#         "custodian_visit",
-#         "claim_to_fact_promotion",
-#         "custodian_finalize",
-#         "clustering",
-#         "proposal_detection",
-#     ),
-#     description="SAGE Custodian (every 2h): ingestion pipeline - extraction through proposal detection.",
-#     execution_timezone="UTC",
-# )
-# def sage_custodian_schedule(
-#     context: ScheduleEvaluationContext,
-#     memgraph: MemgraphResource,
-# ) -> Iterator[dg.RunRequest]:
-#     """SAGE Custodian: ingestion pipeline for silos with pending documents."""
-#     silo_ids = _fetch_silos_with_pending_work(memgraph, <query removed>)
-#
-#     for silo_id in silo_ids:
-#         _ensure_partition_exists(context, silo_id)
-#         yield _run_request_with_partition(
-#             silo_id=silo_id,
-#             run_key=f"sage_custodian:{silo_id}:{context.scheduled_execution_time.isoformat()}",
-#             tags={"sage_job": "custodian", "dagster/concurrency_key": silo_id},
-#         )
-
-
-# DISABLED (Phase 9): These jobs are now handled by Taskiq reaction workers.
-# See context/plans/2026-06-02-phase9-dagster-migration.md
-# Note: _SILOS_WITH_PENDING_SYNTHESIZER_WORK query removed along with this schedule.
-#
-# @dg.schedule(
-#     cron_schedule="0 * * * *",
-#     name="sage_synthesizer_schedule",
-#     target=dg.AssetSelection.assets(
-#         "causal_transitivity",
-#         "pattern_detection",
-#         "llm_pattern_detection",
-#         "belief_synthesis",
-#         "belief_merge",
-#         "chain_stitch",
-#     ),
-#     description="SAGE Synthesizer (hourly): belief formation - facts to wisdom.",
-#     execution_timezone="UTC",
-# )
-# def sage_synthesizer_schedule(
-#     context: ScheduleEvaluationContext,
-#     memgraph: MemgraphResource,
-# ) -> Iterator[dg.RunRequest]:
-#     """SAGE Synthesizer: belief formation for silos with pending synthesis work."""
-#     silo_ids = _fetch_silos_with_pending_work(memgraph, <query removed>)
-#
-#     for silo_id in silo_ids:
-#         _ensure_partition_exists(context, silo_id)
-#         yield _run_request_with_partition(
-#             silo_id=silo_id,
-#             run_key=f"sage_synthesizer:{silo_id}:{context.scheduled_execution_time.isoformat()}",
-#             tags={"sage_job": "synthesizer", "dagster/concurrency_key": silo_id},
-#         )
 
 
 @dg.schedule(
@@ -442,7 +372,7 @@ beacon_sender_schedule = dg.ScheduleDefinition(
 )
 
 all_schedules: list[Any] = [
-    # SAGE pipelines (custodian and synthesizer disabled in Phase 9 - Taskiq handles them)
+    # SAGE pipelines
     sage_groundskeeper_schedule,
     sage_validator_schedule,
     # Maintenance

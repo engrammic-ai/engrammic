@@ -9,16 +9,13 @@ from unittest.mock import AsyncMock
 import pytest
 
 from context_service.sage.transactions import (
-    ClusterState,
     CommitResult,
     CrystallizeResult,
     InvariantViolation,
     ReviseBeliefResult,
-    SynthesizeResult,
     commit,
     crystallize,
     revise_belief,
-    synthesize,
 )
 
 
@@ -50,183 +47,6 @@ def mock_store() -> AsyncMock:
 def make_uuid() -> str:
     """Generate a valid UUID string for tests."""
     return str(uuid.uuid4())
-
-
-class TestTx4Synthesize:
-    """Tests for TX4 SYNTHESIZE."""
-
-    @pytest.mark.asyncio
-    async def test_creates_belief_from_cluster(
-        self, mock_store: AsyncMock, mock_llm: AsyncMock, mock_embedder: AsyncMock
-    ) -> None:
-        """Test that TX4 creates a belief from a ready cluster."""
-        cluster_id = make_uuid()
-        fact_ids = [make_uuid() for _ in range(3)]
-
-        mock_store.execute_query = AsyncMock(
-            side_effect=[
-                # GET_CLUSTER_FOR_SYNTHESIS
-                [{"state": "READY", "current_belief_id": None, "synthesis_retry_count": 0}],
-                # GET_FACTS_IN_CLUSTER
-                [
-                    {"id": fid, "content": f"Fact {i}", "confidence": 0.8}
-                    for i, fid in enumerate(fact_ids)
-                ],
-            ]
-        )
-
-        result, events = await synthesize(
-            store=mock_store,
-            cluster_id=cluster_id,
-            silo_id="test-silo",
-            llm=mock_llm,
-            _embedder=mock_embedder,
-        )
-
-        assert isinstance(result, SynthesizeResult)
-        assert result.belief_id is not None
-        assert result.cluster_state == ClusterState.SYNTHESIZED
-        assert result.fact_count == 3
-        assert not result.timed_out
-
-    @pytest.mark.asyncio
-    async def test_skips_sparse_cluster(
-        self, mock_store: AsyncMock, mock_llm: AsyncMock, mock_embedder: AsyncMock
-    ) -> None:
-        """Test that TX4 skips clusters with fewer than SYNTHESIS_THRESHOLD facts."""
-        cluster_id = make_uuid()
-
-        mock_store.execute_query = AsyncMock(
-            side_effect=[
-                # GET_CLUSTER_FOR_SYNTHESIS
-                [{"state": "READY", "current_belief_id": None, "synthesis_retry_count": 0}],
-                # GET_FACTS_IN_CLUSTER - only 2 facts
-                [
-                    {"id": make_uuid(), "content": "Fact 1", "confidence": 0.8},
-                    {"id": make_uuid(), "content": "Fact 2", "confidence": 0.8},
-                ],
-            ]
-        )
-
-        result, events = await synthesize(
-            store=mock_store,
-            cluster_id=cluster_id,
-            silo_id="test-silo",
-            llm=mock_llm,
-            _embedder=mock_embedder,
-        )
-
-        assert result.belief_id is None
-        assert result.cluster_state == ClusterState.SPARSE
-        mock_llm.complete.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_skips_low_confidence(
-        self, mock_store: AsyncMock, mock_llm: AsyncMock, mock_embedder: AsyncMock
-    ) -> None:
-        """Test that TX4 skips when aggregate confidence is below threshold."""
-        cluster_id = make_uuid()
-        fact_ids = [make_uuid() for _ in range(3)]
-
-        mock_store.execute_query = AsyncMock(
-            side_effect=[
-                # GET_CLUSTER_FOR_SYNTHESIS
-                [{"state": "READY", "current_belief_id": None, "synthesis_retry_count": 0}],
-                # GET_FACTS_IN_CLUSTER - low confidence facts
-                [
-                    {"id": fid, "content": f"Fact {i}", "confidence": 0.2}
-                    for i, fid in enumerate(fact_ids)
-                ],
-            ]
-        )
-
-        result, events = await synthesize(
-            store=mock_store,
-            cluster_id=cluster_id,
-            silo_id="test-silo",
-            llm=mock_llm,
-            _embedder=mock_embedder,
-        )
-
-        assert result.belief_id is None
-        assert result.confidence is not None
-        assert result.confidence < 0.6
-        mock_llm.complete.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_handles_llm_failure(
-        self, mock_store: AsyncMock, mock_llm: AsyncMock, mock_embedder: AsyncMock
-    ) -> None:
-        """Test that TX4 handles LLM synthesis failure gracefully."""
-        cluster_id = make_uuid()
-        fact_ids = [make_uuid() for _ in range(3)]
-
-        mock_llm.complete = AsyncMock(side_effect=Exception("LLM unavailable"))
-
-        mock_store.execute_query = AsyncMock(
-            side_effect=[
-                # GET_CLUSTER_FOR_SYNTHESIS
-                [{"state": "READY", "current_belief_id": None, "synthesis_retry_count": 0}],
-                # GET_FACTS_IN_CLUSTER
-                [
-                    {"id": fid, "content": f"Fact {i}", "confidence": 0.8}
-                    for i, fid in enumerate(fact_ids)
-                ],
-            ]
-        )
-
-        result, events = await synthesize(
-            store=mock_store,
-            cluster_id=cluster_id,
-            silo_id="test-silo",
-            llm=mock_llm,
-            _embedder=mock_embedder,
-        )
-
-        assert result.belief_id is None
-        assert result.cluster_state == ClusterState.READY
-        assert not result.timed_out
-
-    @pytest.mark.asyncio
-    async def test_handles_llm_timeout(
-        self, mock_store: AsyncMock, mock_llm: AsyncMock, mock_embedder: AsyncMock
-    ) -> None:
-        """Test that TX4 handles LLM timeout gracefully."""
-        import asyncio
-
-        cluster_id = make_uuid()
-        fact_ids = [make_uuid() for _ in range(3)]
-
-        async def slow_complete(*args, **kwargs):
-            await asyncio.sleep(10)
-            return "Never returned"
-
-        mock_llm.complete = slow_complete
-
-        mock_store.execute_query = AsyncMock(
-            side_effect=[
-                # GET_CLUSTER_FOR_SYNTHESIS
-                [{"state": "READY", "current_belief_id": None, "synthesis_retry_count": 0}],
-                # GET_FACTS_IN_CLUSTER
-                [
-                    {"id": fid, "content": f"Fact {i}", "confidence": 0.8}
-                    for i, fid in enumerate(fact_ids)
-                ],
-            ]
-        )
-
-        result, events = await synthesize(
-            store=mock_store,
-            cluster_id=cluster_id,
-            silo_id="test-silo",
-            llm=mock_llm,
-            _embedder=mock_embedder,
-            timeout_seconds=0.1,  # Very short timeout
-        )
-
-        assert result.belief_id is None
-        assert result.timed_out is True
-        assert result.cluster_state == ClusterState.READY
 
 
 class TestTx8Commit:
@@ -453,35 +273,32 @@ class TestTx5ReviseBelief:
     """Tests for TX5 REVISE_BELIEF."""
 
     @pytest.mark.asyncio
-    async def test_creates_new_belief_on_content_change(
+    async def test_v2_creates_new_belief_on_content_change(
         self, mock_store: AsyncMock, mock_llm: AsyncMock, mock_embedder: AsyncMock
     ) -> None:
-        """Test that TX5 creates a new belief when content changes."""
+        """TX5 v2: creates a new belief when content changes (SYNTHESIZED_FROM path)."""
         belief_id = make_uuid()
-        cluster_id = make_uuid()
         fact_ids = [make_uuid() for _ in range(3)]
 
-        mock_llm.complete = AsyncMock(return_value="New revised belief content")
+        mock_llm.complete = AsyncMock(return_value=("New revised belief content", {}))
 
         mock_store.execute_query = AsyncMock(
             side_effect=[
-                # GET_BELIEF_FOR_REVISION
+                # GET_BELIEF_FOR_REVISION - v2 belief has no source_cluster_id
                 [
                     {
                         "id": belief_id,
                         "content": "Old belief",
                         "state": "ACTIVE",
                         "synthesis_state": "STALE",
-                        "source_cluster_id": cluster_id,
+                        "source_cluster_id": None,
                         "revision_in_progress": False,
                         "confidence": 0.8,
                     }
                 ],
-                # GET_CLUSTER_FOR_SYNTHESIS
-                [{"state": "STALE", "current_belief_id": belief_id, "synthesis_retry_count": 0}],
-                # GET_FACTS_IN_CLUSTER
+                # GET_FACTS_VIA_SYNTHESIZED_FROM
                 [
-                    {"id": fid, "content": f"Fact {i}", "confidence": 0.8}
+                    {"fact_id": fid, "content": f"Fact {i}", "confidence": 0.8}
                     for i, fid in enumerate(fact_ids)
                 ],
             ]
@@ -500,6 +317,87 @@ class TestTx5ReviseBelief:
         assert result.old_belief_id == uuid.UUID(belief_id)
         assert result.content_changed is True
         assert result.invalidated is False
+
+    @pytest.mark.asyncio
+    async def test_v2_invalidates_when_facts_below_threshold(
+        self, mock_store: AsyncMock, mock_llm: AsyncMock, mock_embedder: AsyncMock
+    ) -> None:
+        """TX5 v2: invalidates belief when SYNTHESIZED_FROM facts drop below threshold."""
+        belief_id = make_uuid()
+
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                # GET_BELIEF_FOR_REVISION
+                [
+                    {
+                        "id": belief_id,
+                        "content": "Old belief",
+                        "state": "ACTIVE",
+                        "synthesis_state": "STALE",
+                        "source_cluster_id": None,
+                        "revision_in_progress": False,
+                        "confidence": 0.8,
+                    }
+                ],
+                # GET_FACTS_VIA_SYNTHESIZED_FROM - only 1 fact
+                [{"fact_id": make_uuid(), "content": "Lonely fact", "confidence": 0.8}],
+            ]
+        )
+
+        result, events = await revise_belief(
+            store=mock_store,
+            belief_id=belief_id,
+            silo_id="test-silo",
+            llm=mock_llm,
+            _embedder=mock_embedder,
+        )
+
+        assert result.new_belief_id is None
+        assert result.invalidated is True
+        mock_llm.complete.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_v2_skips_unchanged_content(
+        self, mock_store: AsyncMock, mock_llm: AsyncMock, mock_embedder: AsyncMock
+    ) -> None:
+        """TX5 v2: no new belief created when LLM returns same content."""
+        belief_id = make_uuid()
+        fact_ids = [make_uuid() for _ in range(3)]
+
+        mock_llm.complete = AsyncMock(return_value="Old belief")
+
+        mock_store.execute_query = AsyncMock(
+            side_effect=[
+                # GET_BELIEF_FOR_REVISION
+                [
+                    {
+                        "id": belief_id,
+                        "content": "Old belief",
+                        "state": "ACTIVE",
+                        "synthesis_state": "STALE",
+                        "source_cluster_id": None,
+                        "revision_in_progress": False,
+                        "confidence": 0.8,
+                    }
+                ],
+                # GET_FACTS_VIA_SYNTHESIZED_FROM
+                [
+                    {"fact_id": fid, "content": f"Fact {i}", "confidence": 0.8}
+                    for i, fid in enumerate(fact_ids)
+                ],
+            ]
+        )
+
+        result, events = await revise_belief(
+            store=mock_store,
+            belief_id=belief_id,
+            silo_id="test-silo",
+            llm=mock_llm,
+            _embedder=mock_embedder,
+        )
+
+        assert result.new_belief_id is None
+        assert result.content_changed is False
 
     @pytest.mark.asyncio
     async def test_skips_unchanged_content(

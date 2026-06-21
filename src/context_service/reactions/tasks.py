@@ -5,10 +5,6 @@ a broker via ``register_tasks(broker)``; the broker setup in broker.py calls
 this so every silo-partitioned broker has the tasks in its local registry.
 
 Handler design:
-- Skeleton phase (Phase 8a): handlers that have a direct existing implementation
-  call it; complex handlers (consolidate, check_synthesis, update_cluster_membership,
-  propagate_confidence) are stubs that log and return. They will be filled in
-  when the Dagster migration completes in Phase 9.
 - All handlers use lazy service access via ``get_context_service()`` which
   requires worker bootstrap (Task 4 / worker.py) to call ``configure_services()``
   at startup before tasks execute.
@@ -374,19 +370,6 @@ def register_tasks(broker: ListQueueBroker) -> None:
         updated = rows[0]["heat_score"] if rows else None
         log.info("update_heat_task_done", heat_score=updated)
 
-    @broker.task(task_name=ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP, timeout=_TIMEOUT_SIMPLE)
-    async def update_cluster_membership_task(
-        node_id: str, silo_id: str, **_payload: Any
-    ) -> None:
-        """DEPRECATED (CITE v2): Clustering removed. No-op stub.
-
-        TODO: Remove task after all event emitters are updated to v2 APIs.
-        """
-        log = logger.bind(
-            node_id=node_id, silo_id=silo_id, task=ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP
-        )
-        log.info("update_cluster_membership_task_noop_v2")
-
     @broker.task(task_name=ReactionEventType.CASCADE_STALENESS, timeout=_TIMEOUT_CASCADE)
     async def cascade_staleness_task(
         node_id: str, silo_id: str, depth: int = 1, **_payload: Any
@@ -520,125 +503,6 @@ def register_tasks(broker: ListQueueBroker) -> None:
             silo_id=silo_id,
         )
         log.info("consolidate_task_done", action=result.action, rationale=result.rationale)
-
-    @broker.task(task_name=ReactionEventType.CHECK_SYNTHESIS, timeout=_TIMEOUT_LLM)
-    async def check_synthesis_task(node_id: str, silo_id: str, **_payload: Any) -> None:
-        """Trigger lazy synthesis if the node's cluster is ready.
-
-        Looks up the clusters the node belongs to (or uses ``cluster_id`` from
-        the payload if supplied), and for each cluster in READY state with at
-        least SYNTHESIS_THRESHOLD active facts, calls
-        ``sage.transactions.synthesize`` in async mode.
-
-        Args:
-            node_id: Node that triggered the synthesis check.
-            silo_id: Tenant isolation identifier.
-            **_payload: Optional ``cluster_id`` to target a specific cluster.
-        """
-        log = logger.bind(node_id=node_id, silo_id=silo_id, task=ReactionEventType.CHECK_SYNTHESIS)
-        log.info("check_synthesis_task_start")
-
-        from context_service.db import queries as q
-        from context_service.embeddings import build_embedding_service
-        from context_service.llm import build_llm_provider
-        from context_service.mcp.server import get_context_service
-        from context_service.sage.transactions import (
-            SYNTHESIS_THRESHOLD,
-            ClusterState,
-            synthesize,
-        )
-
-        try:
-            ctx_svc = get_context_service()
-        except RuntimeError:
-            log.error("check_synthesis_services_not_configured")
-            return
-
-        store = ctx_svc.graph_store
-
-        # Resolve which cluster(s) to check.
-        cluster_id_hint: str | None = _payload.get("cluster_id")
-
-        cluster_rows = await store.execute_query(
-            q.GET_NODE_CLUSTERS,
-            {"node_id": node_id, "silo_id": silo_id},
-        )
-
-        if not cluster_rows:
-            log.debug("check_synthesis_no_clusters_for_node")
-            return
-
-        for row in cluster_rows:
-            cluster_node = row.get("c")
-            if not cluster_node:
-                continue
-
-            cluster_id: str = cluster_node.get("id", "")
-            if not cluster_id:
-                continue
-
-            # If the event carried a specific cluster_id, skip others.
-            if cluster_id_hint is not None and cluster_id != cluster_id_hint:
-                continue
-
-            cluster_state = cluster_node.get("state", ClusterState.SPARSE.value)
-            if cluster_state != ClusterState.READY.value:
-                log.debug(
-                    "check_synthesis_cluster_not_ready",
-                    cluster_id=cluster_id,
-                    state=cluster_state,
-                )
-                continue
-
-            # Count active facts before acquiring the synthesis lock.
-            facts_result = await store.execute_query(
-                q.GET_FACTS_IN_CLUSTER,
-                {"cluster_id": cluster_id, "silo_id": silo_id},
-            )
-            fact_count = len(facts_result) if facts_result else 0
-
-            if fact_count < SYNTHESIS_THRESHOLD:
-                log.debug(
-                    "check_synthesis_below_threshold",
-                    cluster_id=cluster_id,
-                    fact_count=fact_count,
-                    threshold=SYNTHESIS_THRESHOLD,
-                )
-                continue
-
-            log.info(
-                "check_synthesis_triggering",
-                cluster_id=cluster_id,
-                fact_count=fact_count,
-            )
-
-            try:
-                from context_service.config.config_loader import load_config
-
-                llm_config = load_config("llm")
-                llm = build_llm_provider(
-                    llm_config.get("provider", "litellm"),
-                    llm_config.get("model"),
-                )
-                embedder = build_embedding_service()
-
-                result, _events = await synthesize(
-                    store,
-                    cluster_id=cluster_id,
-                    silo_id=silo_id,
-                    llm=llm,
-                    _embedder=embedder,
-                    mode="async",
-                )
-                log.info(
-                    "check_synthesis_done",
-                    cluster_id=cluster_id,
-                    belief_id=str(result.belief_id) if result.belief_id else None,
-                    cluster_state=result.cluster_state,
-                    fact_count=result.fact_count,
-                )
-            except Exception:
-                log.exception("check_synthesis_synthesize_error", cluster_id=cluster_id)
 
     @broker.task(task_name=ReactionEventType.PROPAGATE_CONFIDENCE, timeout=_TIMEOUT_SIMPLE)
     async def propagate_confidence_task(node_id: str, silo_id: str, **_payload: Any) -> None:
@@ -1303,8 +1167,7 @@ RETURN n.id AS id
 
         If K chains from J agents agree, creates a Fact node with PROMOTED_FROM
         (for INV2) and CONSENSUS_FROM (for provenance) edges to all supporting
-        chains. Triggers downstream COMPUTE_EMBEDDING and UPDATE_CLUSTER_MEMBERSHIP
-        reactions.
+        chains. Triggers a downstream COMPUTE_EMBEDDING reaction.
 
         If consensus already exists for this conclusion, extends it by adding
         edges from the existing Fact to this chain.
@@ -1561,16 +1424,12 @@ RETURN n.id AS id
                     edge_errors += 1
 
         # 9. Trigger downstream reactions.
-        for downstream_event_type in (
-            ReactionEventType.COMPUTE_EMBEDDING,
-            ReactionEventType.UPDATE_CLUSTER_MEMBERSHIP,
-        ):
-            downstream_event = ReactionEvent(
-                event_type=downstream_event_type,
-                node_id=str(fact_id),
-                silo_id=silo_id,
-            )
-            await emit_reaction(downstream_event)
+        downstream_event = ReactionEvent(
+            event_type=ReactionEventType.COMPUTE_EMBEDDING,
+            node_id=str(fact_id),
+            silo_id=silo_id,
+        )
+        await emit_reaction(downstream_event)
 
         elapsed_ms = (_time.perf_counter() - start_time) * 1000
         log.info(
