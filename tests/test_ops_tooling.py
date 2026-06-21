@@ -55,22 +55,24 @@ class TestBuildFindQuery:
     def test_no_filters_produces_clean_query(self) -> None:
         from context_service.engine.tombstone import build_find_query
 
-        q = build_find_query(None, None, None)
+        q, params = build_find_query(None, None, None)
         assert "$silo_id" in q
         assert "$batch_limit" in q
-        assert "type(r)" not in q
+        assert "type(r) = $edge_type" not in q
 
     def test_edge_type_filter_injected(self) -> None:
         from context_service.engine.tombstone import build_find_query
 
-        q = build_find_query("CAUSES", None, None)
-        assert "type(r) = 'CAUSES'" in q
+        q, params = build_find_query("CAUSES", None, None)
+        assert "type(r) = $edge_type" in q
+        assert params["edge_type"] == "CAUSES"
 
     def test_confidence_filter_injected(self) -> None:
         from context_service.engine.tombstone import build_find_query
 
-        q = build_find_query(None, 0.5, None)
-        assert "< 0.5" in q
+        q, params = build_find_query(None, 0.5, None)
+        assert "$confidence_below" in q
+        assert params["confidence_below"] == 0.5
 
     def test_created_before_filter_injected(self) -> None:
         from datetime import UTC, datetime
@@ -78,8 +80,9 @@ class TestBuildFindQuery:
         from context_service.engine.tombstone import build_find_query
 
         dt = datetime(2026, 1, 1, tzinfo=UTC)
-        q = build_find_query(None, None, dt)
-        assert "2026-01-01" in q
+        q, params = build_find_query(None, None, dt)
+        assert "$created_before" in q
+        assert "2026-01-01" in params["created_before"]
 
 
 class TestRunTombstoneLogic:
