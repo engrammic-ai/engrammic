@@ -61,60 +61,41 @@ just dagster-web   # Dagster UI (SAGE jobs: custodian / synthesizer / groundskee
 4. Discuss before implementing - present approach and get confirmation for significant changes
 5. Push back on problematic requests - explain why something might be a bad idea
 
-## MCP tool surface
+## MCP tool surface (CITE v2)
 
 Source of truth: `src/context_service/config/mcp_tools.yaml`. Names and descriptions are config, not code. The surface is intent/verb-based.
 
-| Tool | Maps to |
+| Tool | Purpose |
 |------|---------|
-| `remember` | memory (observation, no evidence) |
-| `learn` | knowledge (claim, evidence required) |
-| `decide` | commitment (agent decision, requires about nodes) |
-| `accept` | promote ProposedBelief to Belief |
-| `recall` | retrieval (query or node_id) |
-| `trace` | provenance (where did this come from?) |
-| `history` | versioning (how did this evolve?) |
-| `link` | typed relationship |
-| `reason` | intelligence (reasoning steps) |
-| `reflect` | meta-observation |
-| `hypothesize` | tentative belief (finalize with `commit`) |
-| `revise` | update tentative belief |
-| `commit` | crystallize hypotheses |
-| `forget` | request node deletion |
-| `patterns` | skills / workflow templates |
-| `dismiss` | dismiss marker or reject ProposedBelief |
-| `tick` | acknowledge engagement without action |
+| `remember` | Store observation to Memory (no evidence required) |
+| `learn` | Record claim with evidence to Knowledge |
+| `recall` | Search or fetch knowledge (semantic + graph fusion) |
+| `trace` | Walk provenance chain (why I believe this) |
+| `forget` | Tombstone a node (with cancel window) |
+| `tick` | Lightweight engagement check |
+| `update` | Supersede existing knowledge |
 
-## Belief architecture
+## Knowledge flow (CITE v2)
 
-Two Wisdom subtypes with different trust models:
+**Agent writes:**
+- `remember()` -> Memory node (decays per class)
+- `learn()` -> Claim node (requires evidence)
+- `update()` -> Supersedes existing Claim
 
-**Commitments (agent decisions):**
-- Created via `decide` (direct) or `commit` (from hypotheses)
-- Agent-scoped trust: "this agent decided"
-- No synthesis chain required
+**System promotes:**
+- Custodian: Claim -> Fact (when corroborated by 3+ sources)
+- Synthesizer: Facts -> Belief (when cluster density >= 3)
 
-**Beliefs (system-synthesized):**
-- Created by SAGE synthesizer as ProposedBelief
-- Require agent `accept` to promote to full Belief
-- System-scoped trust: "corroborated from facts"
-- Full provenance chain (SYNTHESIZED_FROM edges to Facts)
-- Use `dismiss` to reject
-
-**Formation flows:**
+**Formation flow:**
 ```
 Agent observes    -> remember()     -> Memory (decays)
 Agent claims      -> learn()        -> Claim (Knowledge)
-System verifies   -> [custodian]    -> Fact (Knowledge, promoted)
-System clusters   -> [custodian]    -> Cluster reaches threshold
-System synthesizes-> [synthesizer]  -> ProposedBelief (pending)
-Agent reviews     -> accept/dismiss -> Belief (Wisdom) or rejected
-Agent decides     -> decide()       -> Commitment (Wisdom)
-Agent reasons     -> hypothesize()  -> WorkingHypothesis (Intelligence)
-Agent crystallizes-> commit()       -> Commitment (from hypothesis)
+Agent updates     -> update()       -> Claim SUPERSEDES old Claim
+System verifies   -> [custodian]    -> Fact (promoted from Claim)
+System synthesizes-> [synthesizer]  -> Belief (from 3+ Facts)
 ```
 
-Agent-facing verbs: `decide` for direct decisions, `hypothesize` then `commit` for reasoning, `accept` to approve SAGE synthesis.
+Wisdom-layer nodes (Belief) are system-synthesized only. Agents write to Memory and Knowledge; SAGE promotes to Wisdom.
 
 ## Memory (Engrammic MCP)
 
