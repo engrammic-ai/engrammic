@@ -102,9 +102,9 @@ Implementation incomplete but not blocking correctness claims.
 
 **Spec:** EAG Definition A.3 — E(F) requires 3+ independent sources.
 
-**Implementation:** R2 promotion rule in primitives/eag/promotion.py only requires `>= 2` claims.
+**Implementation:** ~~R2 promotion rule in primitives/eag/promotion.py only requires `>= 2` claims.~~
 
-**Fix:** Update R2 threshold or implement R3 rule.
+**Status:** FIXED (2026-06-21, earlier session). Changed R2 threshold from `< 2` to `< 3` in primitives/eag/epistemology/promotion.py. Released in primitives v0.2.0.
 
 **Priority:** P2
 **Tracking:** [GAP-006]
@@ -141,9 +141,9 @@ Implementation incomplete but not blocking correctness claims.
 
 **Spec:** EAG Definition A.4 — warrant function mapping evidence to confidence.
 
-**Implementation:** No function named `warrant` exists. `combined_confidence` is closest but incomplete.
+**Implementation:** ~~No function named `warrant` exists. `combined_confidence` is closest but incomplete.~~
 
-**Fix:** Implement canonical warrant function per spec formula.
+**Status:** FIXED (2026-06-21). `combined_confidence` IS the warrant function — formula matches spec exactly. Added `warrant` as explicit alias in primitives/eag/epistemology/confidence.py for terminology alignment.
 
 **Priority:** P2
 **Tracking:** [GAP-009]
@@ -198,12 +198,9 @@ Context-service fetches edges from graph DB and passes to pure functions.
 
 **Spec:** EAG C3 invariant — DERIVED_FROM must be acyclic.
 
-**Implementation:** `_would_create_cycle` only covers SUPERSEDES and hierarchical edges. Line 2399-2400:
-```python
-if edge_type != "SUPERSEDES": return False
-```
+**Implementation:** ~~`_would_create_cycle` only covers SUPERSEDES and hierarchical edges.~~
 
-**Fix:** Extend cycle detection to DERIVED_FROM edges.
+**Status:** FIXED (2026-06-21). Added `ACYCLIC_EDGE_TYPES` frozenset containing SUPERSEDES, DERIVED_FROM, REFINES, GENERALIZES, CAUSED_BY. `_validate_link` now checks cycles for all acyclic edge types.
 
 **Priority:** P2
 **Tracking:** [GAP-013]
@@ -214,9 +211,13 @@ if edge_type != "SUPERSEDES": return False
 
 **Spec:** EAG Table 7 — INV1 enforced at write + T2.
 
-**Implementation:** `contradiction_flagging_enabled` is a feature flag. When false, conflicting claims are not blocked.
+**Implementation:** ~~`contradiction_flagging_enabled` is a feature flag. When false, conflicting claims are not blocked.~~
 
-**Fix:** Make INV1 enforcement mandatory, not optional.
+**Status:** RESOLVED (2026-06-21). Two flags now exist:
+- `contradiction_flagging_enabled` (default True) — detects conflicts and creates CONTRADICTS edges
+- `contradiction_enforcement_enabled` (default False) — rejects contradicting writes at write time (GAP-001)
+
+Flagging is always on by default. Enforcement is opt-in for backward compatibility during migration. This is intentional design, not a gap.
 
 **Priority:** P2
 **Tracking:** [GAP-014]

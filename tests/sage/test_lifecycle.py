@@ -261,6 +261,48 @@ class TestCascadeStaleness:
 
         assert count == 0
 
+    @pytest.mark.asyncio
+    async def test_multi_hop_cascade_propagates_through_chain(self, mock_store: AsyncMock) -> None:
+        """Test that cascade reaches nodes at depth > 1 (GAP-002 verification).
+
+        Chain: fact-1 <- claim-1 <- belief-1
+        When fact-1 is superseded, staleness should reach belief-1 at depth 2.
+        """
+        fact_id = make_uuid()
+        claim_id = make_uuid()
+        belief_id = make_uuid()
+
+        # Mock returns: depth 1 finds claim, depth 2 finds belief
+        call_count = 0
+
+        async def mock_query(query: str, params: dict) -> list:
+            nonlocal call_count
+            call_count += 1
+            node_id = params.get("node_id")
+            if node_id == fact_id:
+                # First call: fact has claim as dependent (knowledge layer, recurse)
+                return [{"id": claim_id, "layer": "knowledge", "edge_type": "DERIVED_FROM"}]
+            elif node_id == claim_id:
+                # Second call: claim has belief as dependent (wisdom layer, mark stale)
+                return [{"id": belief_id, "layer": "wisdom", "edge_type": "SYNTHESIZED_FROM"}]
+            return []
+
+        mock_store.execute_query = mock_query
+
+        count = await cascade_staleness(
+            store=mock_store,
+            node_id=fact_id,
+            silo_id="test-silo",
+            depth=1,
+        )
+
+        # Should have marked 1 belief stale (at depth 2)
+        assert count == 1
+        # Should have made 2 query calls (depth 1 and depth 2)
+        assert call_count == 2
+        # execute_write should have been called to mark belief stale
+        mock_store.execute_write.assert_called_once()
+
 
 class TestTx10HardDelete:
     """Tests for TX10 HARD_DELETE."""

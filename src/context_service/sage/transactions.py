@@ -80,6 +80,15 @@ class LinkType(StrEnum):
 
 HIERARCHICAL_EDGE_TYPES = frozenset({LinkType.REFINES, LinkType.GENERALIZES, LinkType.CAUSED_BY})
 
+# Edge types that must be acyclic (INV4, C3)
+ACYCLIC_EDGE_TYPES = frozenset({
+    LinkType.SUPERSEDES,
+    LinkType.DERIVED_FROM,
+    LinkType.REFINES,
+    LinkType.GENERALIZES,
+    LinkType.CAUSED_BY,
+})
+
 PROMOTION_THRESHOLD = 3
 SYNTHESIS_THRESHOLD = 3
 EVIDENCE_THRESHOLD = 3
@@ -2689,7 +2698,7 @@ async def _validate_link(
     if dup_results:
         return {"error": "DUPLICATE_EDGE", "existing_id": dup_results[0].get("existing_id")}
 
-    if edge_type in HIERARCHICAL_EDGE_TYPES and await _would_create_cycle(
+    if edge_type in ACYCLIC_EDGE_TYPES and await _would_create_cycle(
         store, source_id, target_id, edge_type.value, silo_id
     ):
         return {"error": "WOULD_CREATE_CYCLE"}
