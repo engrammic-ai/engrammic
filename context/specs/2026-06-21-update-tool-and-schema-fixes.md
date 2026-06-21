@@ -32,15 +32,22 @@ async def update(
 ) -> UpdateResult
 ```
 
+### Scope
+
+Knowledge-layer only (Claims). Memory nodes use `remember` with `supersedes` param.
+
 ### Behavior Matrix
 
 | Input | Action |
 |-------|--------|
 | `target` provided | Direct supersession, no search |
+| `target` is already superseded | Error: "Cannot update already-superseded node. Use its successor." |
 | `query` provided, 1 match | Auto-supersede the match |
 | `query` provided, 2+ matches | Return ambiguous with candidates |
 | `query` provided, 0 matches | Return not_found, suggest `learn` |
 | Neither provided | Error |
+
+"1 match" = exactly one result above 0.7 similarity threshold. "2+ matches" = multiple results above threshold.
 
 ### Return Types
 
@@ -57,7 +64,7 @@ async def update(
 {
     "status": "ambiguous",
     "candidates": [
-        {"id": "uuid", "content": "snippet...", "confidence": 0.85, "created_at": "iso"},
+        {"id": "uuid", "content": "snippet...", "similarity": 0.85, "created_at": "iso"},
         ...
     ]
 }
@@ -113,11 +120,12 @@ Default: `NodeStatus.ACTIVE`
 | Node created | `active` |
 | Node superseded | `active` -> `superseded` |
 | Node forgotten (tombstoned) | `active` -> `tombstoned` |
+| Superseded node forgotten | `superseded` -> `tombstoned` |
 
 ### Query Behavior
 
 - Default: `WHERE n.properties.status = 'active'`
-- `recall(include_superseded=True)` — includes superseded nodes
+- `recall(include_inactive=True)` — includes superseded and tombstoned nodes
 - `history(node_id)` — walks chain regardless of status
 
 ### Migration
@@ -182,17 +190,19 @@ Steps 1-2 can be one primitives PR. Steps 4-6 can be one context-service PR afte
 
 ### `update` tool
 - Single match auto-supersedes
-- Multiple matches returns candidates
+- Multiple matches returns candidates with `similarity` scores
 - Zero matches returns not_found
 - Direct target bypasses search
+- Target already superseded returns error
 - Superseded node gets `status=superseded`
 
 ### `status` field
 - New nodes have `status=active`
 - Supersession sets old node to `superseded`
 - Forget sets node to `tombstoned`
+- Superseded node can be tombstoned (`superseded` -> `tombstoned`)
 - Default queries exclude non-active
-- `include_superseded=True` includes them
+- `include_inactive=True` includes superseded and tombstoned
 
 ### R2 threshold
 - 2 claims do not promote
