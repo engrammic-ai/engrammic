@@ -115,9 +115,12 @@ Implementation incomplete but not blocking correctness claims.
 
 **Spec:** EAG Table 2 — Beliefs require derivation chain evidence.
 
-**Implementation:** `validate_node_for_promotion` only checks `has_citations` boolean, not chain completeness.
+**Implementation:** ~~`validate_node_for_promotion` only checks `has_citations` boolean, not chain completeness.~~
 
-**Fix:** Add derivation chain validator in promotion predicates.
+**Status:** FIXED (2026-06-21). Added derivation chain validation to `accept_proposal`:
+- Checks `source_fact_ids` count before acceptance
+- Rejects with `INSUFFICIENT_DERIVATION` if < SYNTHESIS_THRESHOLD (3)
+- Also extended `validate_node_for_promotion` in primitives with `derivation_edge_count` parameter
 
 **Priority:** P2
 **Tracking:** [GAP-007]

@@ -36,7 +36,7 @@ async def test_accept_proposal_success(mock_store: AsyncMock) -> None:
     belief_id = make_uuid()
     silo_id = "test-silo"
 
-    # GET_PROPOSED_BELIEF returns pending proposal
+    # GET_PROPOSED_BELIEF returns pending proposal with sufficient derivation chain
     mock_store.execute_query = AsyncMock(
         return_value=[
             {
@@ -44,6 +44,7 @@ async def test_accept_proposal_success(mock_store: AsyncMock) -> None:
                 "status": "pending",
                 "content": "Test synthesis",
                 "confidence": 0.85,
+                "source_fact_ids": [make_uuid(), make_uuid(), make_uuid()],
             }
         ]
     )
@@ -144,6 +145,37 @@ async def test_accept_proposal_already_accepted_idempotent(mock_store: AsyncMock
 
 
 @pytest.mark.asyncio
+async def test_accept_proposal_insufficient_derivation(mock_store: AsyncMock) -> None:
+    """Accept fails when proposal has < 3 SYNTHESIZED_FROM edges (GAP-007)."""
+    proposal_id = make_uuid()
+
+    # Only 2 source facts - below SYNTHESIS_THRESHOLD of 3
+    mock_store.execute_query = AsyncMock(
+        return_value=[
+            {
+                "proposed_belief_id": proposal_id,
+                "status": "pending",
+                "content": "Test synthesis",
+                "confidence": 0.85,
+                "source_fact_ids": [make_uuid(), make_uuid()],
+            }
+        ]
+    )
+
+    with pytest.raises(InvariantViolation) as exc:
+        await accept_proposal(
+            store=mock_store,
+            proposal_id=proposal_id,
+            silo_id="test-silo",
+            agent_id="test-agent",
+            emit=False,
+        )
+    assert exc.value.code == "INSUFFICIENT_DERIVATION"
+    assert "2 SYNTHESIZED_FROM edges" in str(exc.value)
+    assert "requires 3" in str(exc.value)
+
+
+@pytest.mark.asyncio
 async def test_accept_proposal_invalid_status(mock_store: AsyncMock) -> None:
     """Accept fails for proposal with unexpected status."""
     proposal_id = make_uuid()
@@ -182,6 +214,7 @@ async def test_accept_proposal_with_override_confidence(mock_store: AsyncMock) -
                 "status": "pending",
                 "content": "Test synthesis",
                 "confidence": 0.5,
+                "source_fact_ids": [make_uuid(), make_uuid(), make_uuid()],
             }
         ]
     )
@@ -214,6 +247,7 @@ async def test_accept_proposal_accept_failed(mock_store: AsyncMock) -> None:
                 "status": "pending",
                 "content": "Test synthesis",
                 "confidence": 0.85,
+                "source_fact_ids": [make_uuid(), make_uuid(), make_uuid()],
             }
         ]
     )
@@ -244,6 +278,7 @@ async def test_accept_proposal_reason_stored(mock_store: AsyncMock) -> None:
                 "status": "pending",
                 "content": "Test synthesis",
                 "confidence": 0.85,
+                "source_fact_ids": [make_uuid(), make_uuid(), make_uuid()],
             }
         ]
     )
@@ -277,6 +312,7 @@ async def test_accept_proposal_no_reason_single_write(mock_store: AsyncMock) -> 
                 "status": "pending",
                 "content": "Test synthesis",
                 "confidence": 0.85,
+                "source_fact_ids": [make_uuid(), make_uuid(), make_uuid()],
             }
         ]
     )

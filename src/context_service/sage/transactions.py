@@ -1769,6 +1769,16 @@ async def accept_proposal(
             f"ProposedBelief has status {status!r}, expected 'pending'",
         )
 
+    # GAP-007: Validate derivation chain before acceptance (EAG Table 2)
+    source_fact_ids = row.get("source_fact_ids") or []
+    derivation_count = len(source_fact_ids)
+    if derivation_count < SYNTHESIS_THRESHOLD:
+        raise InvariantViolation(
+            "INSUFFICIENT_DERIVATION",
+            f"ProposedBelief has {derivation_count} SYNTHESIZED_FROM edges, "
+            f"requires {SYNTHESIS_THRESHOLD} (EAG Table 2 derivation chain)",
+        )
+
     now = datetime.now(UTC)
     belief_id = uuid.uuid4()
 
