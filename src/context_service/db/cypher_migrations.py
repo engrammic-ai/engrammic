@@ -60,13 +60,21 @@ async def apply_status_backfill(client: HyperGraphStore) -> None:
 
 async def _main() -> None:
     """Entry point for running migrations directly."""
+    from neo4j import AsyncGraphDatabase
+
     from context_service.config.settings import get_settings
     from context_service.engine.memgraph_store import MemgraphStore
+    from context_service.stores import MemgraphClient
 
     settings = get_settings()
-    bolt_uri = settings.infra.memgraph.bolt_uri
-    store = MemgraphStore(bolt_uri)
-    await apply_status_backfill(store)
+    bolt_uri = settings.memgraph_uri
+    auth = (settings.memgraph_user, settings.memgraph_password.get_secret_value()) if settings.memgraph_user else None
+    driver = AsyncGraphDatabase.driver(bolt_uri, auth=auth)
+    store = MemgraphStore(MemgraphClient(driver))
+    try:
+        await apply_status_backfill(store)
+    finally:
+        await driver.close()
 
 
 if __name__ == "__main__":
