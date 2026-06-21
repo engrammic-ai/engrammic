@@ -1,4 +1,4 @@
-"""Tests for the validator_contradiction Dagster asset."""
+"""Tests for the detect_contradicts Dagster asset."""
 
 import pytest
 
@@ -7,41 +7,41 @@ import pytest
 # ---------------------------------------------------------------------------
 
 
-def test_validator_contradiction_asset_exists():
-    from context_service.pipelines.assets.validator_contradiction import (
-        validator_contradiction_asset,
+def test_detect_contradicts_asset_exists():
+    from context_service.pipelines.assets.detect_contradicts import (
+        detect_contradicts_asset,
     )
 
-    assert validator_contradiction_asset is not None
+    assert detect_contradicts_asset is not None
 
 
-def test_validator_contradiction_asset_name():
-    from context_service.pipelines.assets.validator_contradiction import (
-        validator_contradiction_asset,
+def test_detect_contradicts_asset_name():
+    from context_service.pipelines.assets.detect_contradicts import (
+        detect_contradicts_asset,
     )
 
-    keys = list(validator_contradiction_asset.keys)
+    keys = list(detect_contradicts_asset.keys)
     assert len(keys) == 1
-    assert keys[0].path[-1] == "validator_contradiction"
+    assert keys[0].path[-1] == "detect_contradicts"
 
 
-def test_validator_contradiction_has_retry_policy():
-    from context_service.pipelines.assets.validator_contradiction import (
-        validator_contradiction_asset,
+def test_detect_contradicts_has_retry_policy():
+    from context_service.pipelines.assets.detect_contradicts import (
+        detect_contradicts_asset,
     )
 
-    policy = validator_contradiction_asset.op.retry_policy
+    policy = detect_contradicts_asset.op.retry_policy
     assert policy is not None
     assert policy.max_retries == 2
 
 
-def test_validator_contradiction_in_all_assets():
+def test_detect_contradicts_in_all_assets():
     from context_service.pipelines.assets import all_assets
-    from context_service.pipelines.assets.validator_contradiction import (
-        validator_contradiction_asset,
+    from context_service.pipelines.assets.detect_contradicts import (
+        detect_contradicts_asset,
     )
 
-    assert validator_contradiction_asset in all_assets
+    assert detect_contradicts_asset in all_assets
 
 
 # ---------------------------------------------------------------------------
@@ -77,7 +77,7 @@ def test_get_nodes_content_by_ids_query_exists():
 
 
 def test_build_contradiction_prompt_includes_claims():
-    from context_service.pipelines.assets.validator_contradiction import (
+    from context_service.pipelines.assets.detect_contradicts import (
         _build_contradiction_prompt,
     )
 
@@ -87,7 +87,7 @@ def test_build_contradiction_prompt_includes_claims():
 
 
 def test_build_contradiction_prompt_has_system_and_user():
-    from context_service.pipelines.assets.validator_contradiction import (
+    from context_service.pipelines.assets.detect_contradicts import (
         _build_contradiction_prompt,
     )
 
@@ -103,7 +103,7 @@ def test_build_contradiction_prompt_has_system_and_user():
 
 
 def test_contradiction_schema_has_required_fields():
-    from context_service.pipelines.assets.validator_contradiction import (
+    from context_service.pipelines.assets.detect_contradicts import (
         _CONTRADICTION_SCHEMA,
     )
 
@@ -120,7 +120,7 @@ def test_contradiction_schema_has_required_fields():
 
 def test_false_positive_when_confidence_below_threshold():
     """confidence < 0.7 should not trigger create_contradiction."""
-    from context_service.pipelines.assets.validator_contradiction import (
+    from context_service.pipelines.assets.detect_contradicts import (
         _CONTRADICTION_CONFIDENCE_THRESHOLD,
     )
 
@@ -130,7 +130,7 @@ def test_false_positive_when_confidence_below_threshold():
 
 def test_false_positive_when_contradicts_false():
     """contradicts=false should not trigger create_contradiction regardless of confidence."""
-    from context_service.pipelines.assets.validator_contradiction import (
+    from context_service.pipelines.assets.detect_contradicts import (
         _CONTRADICTION_CONFIDENCE_THRESHOLD,
     )
 
@@ -142,7 +142,7 @@ def test_false_positive_when_contradicts_false():
 
 def test_confirmed_when_contradicts_true_and_high_confidence():
     """contradicts=true and confidence >= threshold -> should confirm."""
-    from context_service.pipelines.assets.validator_contradiction import (
+    from context_service.pipelines.assets.detect_contradicts import (
         _CONTRADICTION_CONFIDENCE_THRESHOLD,
     )
 
@@ -186,7 +186,7 @@ async def test_llm_extract_structured_confirmed():
         created_markers.append(kwargs)
         return {"marker_id": "marker-1"}
 
-    from context_service.pipelines.assets.validator_contradiction import (
+    from context_service.pipelines.assets.detect_contradicts import (
         _CONTRADICTION_CONFIDENCE_THRESHOLD,
         _build_contradiction_prompt,
     )
@@ -231,7 +231,7 @@ async def test_llm_low_confidence_does_not_create_marker():
         AsyncMock(),
     )
 
-    from context_service.pipelines.assets.validator_contradiction import (
+    from context_service.pipelines.assets.detect_contradicts import (
         _CONTRADICTION_CONFIDENCE_THRESHOLD,
         _build_contradiction_prompt,
     )

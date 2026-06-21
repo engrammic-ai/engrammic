@@ -2,7 +2,7 @@
 
 SAGE (Synthesis, Aggregation, and Graph Evolution) schedules:
 - sage_groundskeeper_schedule: heat and maintenance (every 15 minutes, pending-work gated)
-- sage_validator_schedule: contradiction + stale commitment checks (every 5m, pending-work gated)
+- sage_detector_schedule: contradiction + supports + stale commitment checks (every 5m, pending-work gated)
 
 Maintenance schedules:
 - reasoning_compaction_schedule: every 2h (pending-work gated)
@@ -327,29 +327,30 @@ def groundskeeper_gc_schedule(context: ScheduleEvaluationContext) -> dg.RunReque
 
 @dg.schedule(
     cron_schedule="*/5 * * * *",
-    name="sage_validator_schedule",
+    name="sage_detector_schedule",
     target=dg.AssetSelection.assets(
-        "validator_contradiction",
-        "validator_stale_commitment",
+        "detect_contradicts",
+        "detect_supports",
+        "detect_stale_commitment",
         "marker_cleanup",
     ),
-    description="SAGE Validator (every 5m): contradiction confirmation, stale commitment detection, and marker cleanup.",
+    description="SAGE Detector (every 5m): contradiction detection, supports detection, stale commitment detection, and marker cleanup.",
     execution_timezone="UTC",
     default_status=dg.DefaultScheduleStatus.RUNNING,
 )
-def sage_validator_schedule(
+def sage_detector_schedule(
     context: ScheduleEvaluationContext,
     memgraph: MemgraphResource,
 ) -> Iterator[dg.RunRequest]:
-    """SAGE Validator: run contradiction and stale-commitment checks for silos with pending work."""
+    """SAGE Detector: run contradiction, supports, and stale-commitment checks for silos with pending work."""
     silo_ids = _fetch_silos_with_pending_work(memgraph, _SILOS_WITH_PENDING_VALIDATION)
 
     for silo_id in silo_ids:
         _ensure_partition_exists(context, silo_id)
         yield _run_request_with_partition(
             silo_id=silo_id,
-            run_key=f"sage_validator:{silo_id}:{context.scheduled_execution_time.isoformat()}",
-            tags={"sage_job": "validator", "dagster/concurrency_key": silo_id},
+            run_key=f"sage_detector:{silo_id}:{context.scheduled_execution_time.isoformat()}",
+            tags={"sage_job": "detector", "dagster/concurrency_key": silo_id},
         )
 
 
@@ -374,7 +375,7 @@ beacon_sender_schedule = dg.ScheduleDefinition(
 all_schedules: list[Any] = [
     # SAGE pipelines
     sage_groundskeeper_schedule,
-    sage_validator_schedule,
+    sage_detector_schedule,
     # Maintenance
     reasoning_compaction_schedule,
     daily_maintenance_schedule,
@@ -391,7 +392,7 @@ all_schedules: list[Any] = [
 __all__ = [
     "all_schedules",
     "sage_groundskeeper_schedule",
-    "sage_validator_schedule",
+    "sage_detector_schedule",
     "reasoning_compaction_schedule",
     "daily_maintenance_schedule",
     "auto_tagging_schedule",
