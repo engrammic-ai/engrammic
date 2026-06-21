@@ -37,7 +37,7 @@ RETURN c.id AS claim_id,
 """
 
 
-async def find_promotion_candidates(store: Any, log: Any) -> list[dict]:
+async def find_promotion_candidates(store: Any, log: Any) -> list[dict[str, Any]]:
     """Return Claims that meet the promotion threshold across all active silos.
 
     Each item: {"claim_id": str, "silo_id": str, "corroboration_count": int}
@@ -46,7 +46,7 @@ async def find_promotion_candidates(store: Any, log: Any) -> list[dict]:
     silos = [str(r["silo_id"]) for r in silo_rows if r.get("silo_id")]
     log.info(f"promoter_op: scanning {len(silos)} silo(s)")
 
-    candidates: list[dict] = []
+    candidates: list[dict[str, Any]] = []
 
     for silo_id in silos:
         rows = await store.execute_query(_LIST_UNPROMOTED_CLAIMS, {"silo_id": silo_id})
@@ -73,7 +73,7 @@ async def find_promotion_candidates(store: Any, log: Any) -> list[dict]:
     return candidates
 
 
-async def promote_candidates(store: Any, candidates: list[dict], log: Any) -> dict[str, int]:
+async def promote_candidates(store: Any, candidates: list[dict[str, Any]], log: Any) -> dict[str, int]:
     """Call promote() for each candidate; skip on InvariantViolation (race condition)."""
     promoted = 0
     skipped = 0

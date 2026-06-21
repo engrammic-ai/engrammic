@@ -17,8 +17,8 @@ class TestPromoterJob:
         op_names = {node.name for node in sage_promoter_job.nodes}
         assert "promoter_op" in op_names
 
-    def test_op_has_no_required_resources(self) -> None:
-        assert promoter_op.required_resource_keys == set()
+    def test_op_requires_memgraph_resource(self) -> None:
+        assert "memgraph" in promoter_op.required_resource_keys
 
     def test_registered_in_definitions(self) -> None:
         from context_service.pipelines.definitions import defs
