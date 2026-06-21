@@ -1406,6 +1406,14 @@ LIST_CLUSTERS = "RETURN null LIMIT 0"
 GET_CLUSTER_FOR_SYNTHESIS = "RETURN null LIMIT 0"
 RELEASE_CLUSTER_LOCK = "RETURN 0 AS released"
 UPDATE_CLUSTER_AFTER_SYNTHESIS = "RETURN 0 AS updated"
+
+# Fetch Facts linked to a v2 Belief via SYNTHESIZED_FROM edges.
+GET_FACTS_VIA_SYNTHESIZED_FROM = """
+MATCH (b:Belief {id: $belief_id, silo_id: $silo_id})-[:SYNTHESIZED_FROM]->(f:Fact)
+WHERE f.properties.state = 'ACTIVE'
+RETURN f.id AS fact_id, f.properties.content AS content,
+       coalesce(f.properties.confidence, 0.8) AS confidence
+"""
 BATCH_UPSERT_ENTITY_MENTIONS = "RETURN 0 AS upserted"
 GET_ENTITY_GRAPH_NEIGHBORS = "RETURN null LIMIT 0"
 
