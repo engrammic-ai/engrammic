@@ -7,18 +7,22 @@ promote_candidates: call promote() for each candidate, handle races gracefully.
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import dagster as dg
 import structlog
 from dagster import ScheduleDefinition
 
-from context_service.pipelines.resources import MemgraphResource
+from context_service.pipelines.resources import EmbeddingResource, MemgraphResource
 from context_service.sage.transactions import (
     PROMOTION_THRESHOLD,
     InvariantViolation,
+    _check_corroboration,
     promote,
 )
+
+if TYPE_CHECKING:
+    from context_service.embeddings.base import EmbeddingService
 
 logger = structlog.get_logger(__name__)
 
@@ -38,7 +42,11 @@ LIMIT $batch_size
 """
 
 
-async def find_promotion_candidates(store: Any, log: Any) -> list[dict[str, Any]]:
+async def find_promotion_candidates(
+    store: Any,
+    log: Any,
+    embedding_service: EmbeddingService | None = None,
+) -> list[dict[str, Any]]:
     """Return Claims that meet the promotion threshold across all active silos.
 
     Each item: {"claim_id": str, "silo_id": str, "corroboration_count": int}
@@ -58,18 +66,21 @@ async def find_promotion_candidates(store: Any, log: Any) -> list[dict[str, Any]
 
         for row in rows:
             claim_id: str = row["claim_id"]
-            corroboration_count: int = row["corroboration_count"]
-            candidates.append(
-                {
-                    "claim_id": claim_id,
-                    "silo_id": silo_id,
-                    "corroboration_count": corroboration_count,
-                }
+            corroboration_count, should_promote = await _check_corroboration(
+                store, claim_id, silo_id, embedding_service=embedding_service
             )
-            log.info(
-                f"promoter_op: candidate claim_id={claim_id} silo={silo_id}"
-                f" corroboration={corroboration_count}"
-            )
+            if should_promote:
+                candidates.append(
+                    {
+                        "claim_id": claim_id,
+                        "silo_id": silo_id,
+                        "corroboration_count": corroboration_count,
+                    }
+                )
+                log.info(
+                    f"promoter_op: candidate claim_id={claim_id} silo={silo_id}"
+                    f" corroboration={corroboration_count}"
+                )
 
     return candidates
 
@@ -129,14 +140,16 @@ async def promote_candidates(store: Any, candidates: list[dict[str, Any]], log: 
     return {"promoted": promoted, "skipped": skipped, "errors": errors}
 
 
-@dg.op(required_resource_keys={"memgraph"})
+@dg.op(required_resource_keys={"memgraph", "embedding"})
 def promoter_op(context) -> dict[str, int]:
     """Promote eligible Claims to Facts."""
     memgraph: MemgraphResource = context.resources.memgraph
+    embedding: EmbeddingResource = context.resources.embedding
 
     async def _run() -> dict[str, int]:
         store = await memgraph.store()
-        candidates = await find_promotion_candidates(store, context.log)
+        embedding_service = embedding.get_client()
+        candidates = await find_promotion_candidates(store, context.log, embedding_service=embedding_service)
         context.log.info(f"promoter_op: found {len(candidates)} candidate(s)")
         return await promote_candidates(store, candidates, context.log)
 
