@@ -1106,26 +1106,9 @@ async def store_claim(
         )
         superseded_id = uuid.UUID(supersedes)
 
-    corroboration_count, should_promote = await _check_corroboration(
+    corroboration_count, _ = await _check_corroboration(
         store, str(node_id), silo_id, embedding_service
     )
-
-    # TX18 PROMOTE: convert Claim to Fact when corroboration threshold met
-    promoted = False
-    promotion_events: list[ReactionEvent] = []
-    if should_promote:
-        try:
-            _, promotion_events = await promote(
-                store, str(node_id), silo_id, corroboration_count=corroboration_count, emit=False
-            )
-            promoted = True
-        except InvariantViolation as e:
-            logger.warning(
-                "promote_race_condition",
-                node_id=str(node_id),
-                silo_id=silo_id,
-                error=e.code,
-            )
 
     # FLAG_CONTRADICTION: detect and flag structural conflicts
     conflict_events = await detect_spo_conflict(
@@ -1137,7 +1120,6 @@ async def store_claim(
         created_at=created_at,
         superseded_id=superseded_id,
         corroboration_count=corroboration_count,
-        promoted=promoted,
     )
 
     await _sync_to_postgres(node_id, silo_id, "knowledge", content)
@@ -1172,7 +1154,6 @@ async def store_claim(
         )
 
     events.extend(conflict_events)
-    events.extend(promotion_events)
 
     if emit:
         for event in events:
@@ -1183,7 +1164,6 @@ async def store_claim(
         node_id=str(node_id),
         silo_id=silo_id,
         corroboration_count=corroboration_count,
-        promoted=promoted,
         reaction_count=len(events),
     )
 
