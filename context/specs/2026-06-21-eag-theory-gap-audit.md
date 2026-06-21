@@ -51,14 +51,11 @@ These affect correctness and should block claims of AGM compliance or write-gate
 
 **Spec:** EAG Table 2 — Facts and Beliefs require system synthesis (3+ sources, derivation chains). Agents should not write these directly.
 
-**Implementation:** `SYSTEM_CREATED_LABELS` is defined in db/schema.py but never imported or checked. No runtime gate prevents an agent from writing `:Fact` or `:Belief` directly via graph store.
+**Implementation:** ~~`SYSTEM_CREATED_LABELS` is defined in db/schema.py but never imported or checked.~~
 
-**Impact:** The Knowledge/Wisdom layer boundary is documentation, not enforcement. An agent could bypass promotion rules entirely.
-
-**Fix:** Add runtime check in transaction layer that rejects agent-sourced writes with system-only labels.
+**Status:** CLOSED (2026-06-21). Enforcement is architectural, not runtime. MCP tool surface maps to: `remember` → Memory, `learn` → Claim, `decide` → Commitment, `hypothesize` → WorkingHypothesis. No tool creates Facts or Beliefs. Creation queries (`CREATE_FACT`, `CREATE_BELIEF_FROM_FACTS`) exist only in SAGE internals (`engine/synthesis.py`, `engine/revision.py`, `sage/transactions.py`). Agent bypass is not possible through the API layer.
 
 **Priority:** P1
-**Owner:** TBD
 **Tracking:** [GAP-003]
 
 ---
@@ -157,9 +154,14 @@ Implementation incomplete but not blocking correctness claims.
 
 **Spec:** EAG Definition A.8 — deps(n) = {m | DERIVED_FROM(m,n) ∨ SUPPORTS(m,n)}
 
-**Implementation:** `should_supersede` operates on single pairs. No function walks the dependency graph for propagation.
+**Implementation:** ~~`should_supersede` operates on single pairs. No function walks the dependency graph for propagation.~~
 
-**Fix:** Implement deps(n) BFS/DFS traversal in primitives/eag/epistemology/.
+**Status:** FIXED (2026-06-21). Added `primitives.eag.epistemology.propagation` module with:
+- `DependencyEdgeType` enum (DERIVED_FROM, SUPPORTS, SYNTHESIZED_FROM)
+- `direct_dependents(node_id, edges)` — depth-1 dependents
+- `compute_deps(node_id, edges, max_depth)` — transitive closure via BFS
+
+Context-service fetches edges from graph DB and passes to pure functions.
 
 **Priority:** P1
 **Tracking:** [GAP-010]
@@ -307,10 +309,10 @@ These components align with EAG theory:
 
 1. ~~**GAP-001** — Write-gate contradiction rejection~~ FIXED 2026-06-21
 2. ~~**GAP-002** — cascade_staleness depth fix~~ FIXED 2026-06-21
-3. **GAP-010** — deps(n) traversal (required for proper propagation)
+3. ~~**GAP-010** — deps(n) traversal~~ FIXED 2026-06-21 (primitives propagation module)
 4. ~~**GAP-004** — status=superseded marking~~ FIXED 2026-06-21 (earlier session)
 5. ~~**GAP-005** — corroboration_factor in credibility~~ FIXED 2026-06-21
-6. **GAP-003** — SYSTEM_CREATED_LABELS enforcement (layer discipline)
+6. ~~**GAP-003** — SYSTEM_CREATED_LABELS enforcement~~ CLOSED 2026-06-21 (architectural)
 
 ---
 
