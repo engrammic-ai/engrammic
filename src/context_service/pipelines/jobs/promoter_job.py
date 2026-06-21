@@ -1,21 +1,137 @@
 """Dagster job for promoting eligible Claims to Facts (SAGE Phase B).
 
-Promotion logic is implemented in Task 2. This skeleton wires up the job
-and its 5-minute schedule so it can be registered and tested independently.
+find_promotion_candidates: query ACTIVE/UNPROMOTED Claims and verify corroboration.
+promote_candidates: call promote() for each candidate, handle races gracefully.
 """
 
 from __future__ import annotations
 
+import asyncio
+from typing import Any
+
 import dagster as dg
+import structlog
 from dagster import ScheduleDefinition
 
+from context_service.pipelines.resources import MemgraphResource
+from context_service.sage.transactions import (
+    PROMOTION_THRESHOLD,
+    InvariantViolation,
+    check_corroboration,
+    promote,
+)
 
-@dg.op
+logger = structlog.get_logger(__name__)
+
+_LIST_ACTIVE_SILOS = """
+MATCH (n) WHERE n.silo_id IS NOT NULL RETURN DISTINCT n.silo_id AS silo_id LIMIT 100
+"""
+
+_LIST_UNPROMOTED_CLAIMS = """
+MATCH (c:Claim {silo_id: $silo_id})
+WHERE c.properties.state = 'ACTIVE'
+  AND c.properties.claim_status = 'UNPROMOTED'
+RETURN c.id AS claim_id,
+       c.properties.confidence AS confidence,
+       c.properties.corroboration_count AS corroboration_count
+"""
+
+
+async def find_promotion_candidates(store: Any, log: Any) -> list[dict]:
+    """Return Claims that meet the promotion threshold across all active silos.
+
+    Each item: {"claim_id": str, "silo_id": str, "corroboration_count": int}
+    """
+    silo_rows = await store.execute_query(_LIST_ACTIVE_SILOS, {})
+    silos = [str(r["silo_id"]) for r in silo_rows if r.get("silo_id")]
+    log.info(f"promoter_op: scanning {len(silos)} silo(s)")
+
+    candidates: list[dict] = []
+
+    for silo_id in silos:
+        rows = await store.execute_query(_LIST_UNPROMOTED_CLAIMS, {"silo_id": silo_id})
+        log.info(f"promoter_op: silo={silo_id} unpromoted_claims={len(rows)}")
+
+        for row in rows:
+            claim_id: str = row["claim_id"]
+            corroboration_count, should_promote = await check_corroboration(
+                store, claim_id, silo_id, threshold=PROMOTION_THRESHOLD
+            )
+            if should_promote:
+                candidates.append(
+                    {
+                        "claim_id": claim_id,
+                        "silo_id": silo_id,
+                        "corroboration_count": corroboration_count,
+                    }
+                )
+                log.info(
+                    f"promoter_op: candidate claim_id={claim_id} silo={silo_id}"
+                    f" corroboration={corroboration_count}"
+                )
+
+    return candidates
+
+
+async def promote_candidates(store: Any, candidates: list[dict], log: Any) -> dict[str, int]:
+    """Call promote() for each candidate; skip on InvariantViolation (race condition)."""
+    promoted = 0
+    skipped = 0
+
+    for candidate in candidates:
+        claim_id: str = candidate["claim_id"]
+        silo_id: str = candidate["silo_id"]
+        corroboration_count: int | None = candidate.get("corroboration_count")
+
+        try:
+            await promote(
+                store,
+                claim_id,
+                silo_id,
+                corroboration_count=corroboration_count,
+                emit=True,
+            )
+            promoted += 1
+            logger.info(
+                "promoter.promoted",
+                claim_id=claim_id,
+                silo_id=silo_id,
+                corroboration_count=corroboration_count,
+            )
+            log.info(f"promoter_op: promoted claim_id={claim_id} silo={silo_id}")
+        except InvariantViolation as exc:
+            # Race with write-time promotion path or precondition no longer holds.
+            skipped += 1
+            code = exc.code if hasattr(exc, "code") else str(exc)
+            logger.info(
+                "promoter.skipped",
+                claim_id=claim_id,
+                silo_id=silo_id,
+                reason=code,
+            )
+            log.info(
+                f"promoter_op: skipped claim_id={claim_id} silo={silo_id} reason={code}"
+            )
+
+    return {"promoted": promoted, "skipped": skipped}
+
+
+@dg.op(required_resource_keys={"memgraph"})
 def promoter_op(context) -> dict[str, int]:
-    """Promote eligible claims to facts."""
-    # TODO: Implementation in Task 2
-    context.log.info("promoter_op: no-op skeleton")
-    return {"promoted": 0, "skipped": 0}
+    """Promote eligible Claims to Facts."""
+    memgraph: MemgraphResource = context.resources.memgraph
+
+    async def _run() -> dict[str, int]:
+        store = await memgraph.store()
+        candidates = await find_promotion_candidates(store, context.log)
+        context.log.info(f"promoter_op: found {len(candidates)} candidate(s)")
+        return await promote_candidates(store, candidates, context.log)
+
+    result = asyncio.run(_run())
+    context.log.info(
+        f"promoter_op: done promoted={result['promoted']} skipped={result['skipped']}"
+    )
+    return result
 
 
 @dg.job(
