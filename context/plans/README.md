@@ -2,9 +2,13 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-06-16)
+## Current state (2026-06-21)
 
-**Focus:** mem0 benchmark - TEMPR 4-channel retrieval complete, benchmark remaining
+**Focus:** BEAM benchmark running, multi-agent coherence design complete
+
+**Recent:**
+- Multi-agent coherence design spec (2026-06-21)
+- BEAM benchmark infrastructure deployed (2026-06-20)
 
 **Recent:**
 - v2.41 Wisdom/Intelligence layer activation (complete)
@@ -16,6 +20,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
+| [2026-06-21-multi-agent-coherence.md](./2026-06-21-multi-agent-coherence.md) | Multi-agent coordination via EAG substrate | Ready |
 | [2026-06-09-longmemeval-v2-harness.md](./2026-06-09-longmemeval-v2-harness.md) | Official LongMemEval-V2 harness with Engrammic adapter | Ready |
 | [recall-quality-improvement.md](./recall-quality-improvement.md) | Question-answer asymmetry research, query expansion | Draft |
 | [polish-audit-2026-06-08.md](./polish-audit-2026-06-08.md) | 7 critical + high findings from codebase audit | Triage |
