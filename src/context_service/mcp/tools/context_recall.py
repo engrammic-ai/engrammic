@@ -154,6 +154,20 @@ async def _fetch_pending_proposals(silo_id: str, limit: int = 20) -> list[dict[s
     ]
 
 
+def _filter_inactive_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Remove nodes whose properties.state is SUPERSEDED or TOMBSTONED.
+
+    Nodes without a state set are treated as active (backward compat).
+    Error sentinel entries (no node_id) are passed through unchanged.
+    """
+    active_states = {None, "ACTIVE"}
+    return [
+        n for n in nodes
+        if "node_id" not in n or "error" in n
+        or n.get("properties", {}).get("state") in active_states
+    ]
+
+
 async def _context_recall(
     silo_id: str,
     query: str | None = None,
@@ -176,6 +190,7 @@ async def _context_recall(
     graph_depth: int | None = None,
     include_hints: bool = False,
     coherent: bool = False,
+    include_inactive: bool = False,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     if not query and not node_ids:
@@ -313,6 +328,9 @@ async def _context_recall(
             reflections_agent_id=reflections_agent_id,
         )
 
+        if not include_inactive and isinstance(response.get("nodes"), list):
+            response["nodes"] = _filter_inactive_nodes(response["nodes"])
+
         if include_steps and isinstance(response.get("nodes"), list):
             intelligence_ids = [
                 n["node_id"]
@@ -378,6 +396,7 @@ async def _context_recall(
             min_threshold=min_threshold,
             bypass_threshold=is_wildcard,
             include_hints=include_hints,
+            include_superseded=include_inactive,
         )
         response = _apply_tier_content_policy(response, include_content)
         if include_proposals:
@@ -433,6 +452,7 @@ def register(mcp: FastMCP) -> None:
         until: str | None = None,
         graph_depth: int | None = None,
         coherent: bool = False,
+        include_inactive: bool = False,
     ) -> dict[str, Any]:
         """Unified read across Memory, Knowledge, Wisdom, and Intelligence layers.
 
@@ -481,6 +501,10 @@ def register(mcp: FastMCP) -> None:
             coherent: When True and using graph traversal (node_ids + depth > 0),
                 filter out dominated contradictions to return a coherent view.
                 Default False preserves full graph structure including contradictions.
+            include_inactive: When False (default), superseded and tombstoned nodes
+                are excluded from all results. When True, all nodes regardless of
+                their lifecycle state are returned. Useful for auditing supersession
+                chains or debugging stale content.
 
         Returns:
             Depends on mode:
@@ -515,6 +539,7 @@ def register(mcp: FastMCP) -> None:
                 until=until,
                 graph_depth=graph_depth,
                 coherent=coherent,
+                include_inactive=include_inactive,
             )
             node_count = len(result.get("results", result.get("nodes", [])))
             avg_node_bytes = 500 if include_content else 100

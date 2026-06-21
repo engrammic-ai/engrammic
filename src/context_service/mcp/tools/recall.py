@@ -51,6 +51,7 @@ async def _recall_impl(
     until: str | None = None,
     graph_depth: int | None = None,
     include_hints: bool = False,
+    include_inactive: bool = False,
 ) -> dict[str, Any]:
     """Implementation for recall tool."""
     auth = await get_mcp_auth_context()
@@ -91,6 +92,7 @@ async def _recall_impl(
         until=until,
         graph_depth=graph_depth,
         include_hints=include_hints,
+        include_inactive=include_inactive,
     )
     duration_ms = (time.perf_counter() - start) * 1000
 
@@ -301,6 +303,7 @@ def register(mcp: FastMCP) -> None:
         until: str | None = None,
         graph_depth: int | None = None,
         include_hints: bool = False,
+        include_inactive: bool = False,
     ) -> dict[str, Any]:
         """Retrieve knowledge.
 
@@ -331,6 +334,9 @@ def register(mcp: FastMCP) -> None:
                 Defaults to config value (2). Overrides depth when fusion_mode=True.
             include_hints: When True, receive belief candidate suggestions when
                 corroborating facts are detected.
+            include_inactive: When False (default), superseded and tombstoned nodes
+                are excluded from results. When True, all lifecycle states are
+                returned. Useful for auditing supersession chains.
 
         Returns:
             {results|nodes, hypotheses?, ...}
@@ -355,6 +361,7 @@ def register(mcp: FastMCP) -> None:
                 until=until,
                 graph_depth=graph_depth,
                 include_hints=include_hints,
+                include_inactive=include_inactive,
             )
         except Exception:
             success = False

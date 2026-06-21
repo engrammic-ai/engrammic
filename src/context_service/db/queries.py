@@ -1921,6 +1921,51 @@ OPTIONAL MATCH (corroborating)-[:DERIVED_FROM]->(evidence)
 RETURN count(DISTINCT evidence.id) AS corroboration_count
 """
 
+# ---------------------------------------------------------------------------
+# Status migration: backfill properties.state from SUPERSEDES edges.
+#
+# Run these Cypher statements against Memgraph to set the SUPERSEDED state on
+# nodes that have been superseded, and ensure remaining nodes have ACTIVE state.
+#
+# These queries are idempotent — running them multiple times is safe.
+#
+# Usage: execute via db/cypher_migrations.py or a one-off admin script.
+# ---------------------------------------------------------------------------
+
+# Step 1: Mark superseded nodes (those that have a newer node pointing at them
+# via a SUPERSEDES edge) as SUPERSEDED if they are still ACTIVE.
+BACKFILL_SUPERSEDED_STATE = """
+MATCH (old)<-[:SUPERSEDES]-(new)
+WHERE (old.properties.state IS NULL OR old.properties.state = 'ACTIVE')
+SET old.properties.state = 'SUPERSEDED'
+"""
+
+# Step 2: Set all remaining nodes without an explicit state to ACTIVE.
+BACKFILL_ACTIVE_STATE = """
+MATCH (n)
+WHERE n.properties.state IS NULL
+SET n.properties.state = 'ACTIVE'
+"""
+
+# Batched version of GET_NODES_FOR_RECALL_BATCH that only returns active nodes.
+# Used by recall when include_inactive=False (the default).
+GET_ACTIVE_NODES_FOR_RECALL_BATCH = """
+MATCH (n {silo_id: $silo_id})
+WHERE n.id IN $node_ids
+  AND (n.properties.state IS NULL OR n.properties.state = 'ACTIVE')
+RETURN n.id AS id,
+       n.properties.content AS content,
+       n.properties.layer AS layer,
+       n.properties.state AS state,
+       n.properties.confidence AS confidence,
+       n.properties.corroboration_count AS corroboration_count,
+       n.properties.synthesis_state AS synthesis_state,
+       n.properties.created_at AS created_at,
+       n.properties.valid_to AS valid_to,
+       coalesce(n.heat_score, 0.0) AS heat_score,
+       n.properties AS properties
+"""
+
 # --- Epistemology: confidence propagation queries ---
 
 GET_SUPPORT_EDGES = """
