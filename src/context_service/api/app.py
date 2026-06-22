@@ -407,6 +407,7 @@ def create_app() -> ASGIApp:
         # Token validation happens in the tool layer via get_mcp_auth_context()
         if settings.auth_enabled:
             mcp_app.add_middleware(MCPOAuthChallengeMiddleware)
+            sse_app.add_middleware(MCPOAuthChallengeMiddleware)
             logger.info("mcp_oauth_challenge_middleware_enabled")
 
         # Store original lifespan and wrap it to include MCP lifespan
@@ -414,7 +415,11 @@ def create_app() -> ASGIApp:
 
         @asynccontextmanager
         async def combined_lifespan(app_instance: FastAPI) -> AsyncIterator[None]:
-            async with original_lifespan(app_instance), mcp_app.lifespan(app_instance):
+            async with (
+                original_lifespan(app_instance),
+                mcp_app.lifespan(app_instance),
+                sse_app.lifespan(app_instance),
+            ):
                 yield
 
         app.router.lifespan_context = combined_lifespan
