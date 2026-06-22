@@ -399,6 +399,9 @@ def create_app() -> ASGIApp:
         # Clients must use type: "http" in their config (not "sse")
         mcp_app = mcp_server.http_app(path="/", transport="http", stateless_http=True)
 
+        # SSE transport for clients that require it (Manus, etc.)
+        sse_app = mcp_server.http_app(path="/", transport="sse")
+
         # Add OAuth challenge middleware to return 401 with WWW-Authenticate header
         # when no token is present. This triggers OAuth flow in MCP clients (Cursor, etc.)
         # Token validation happens in the tool layer via get_mcp_auth_context()
@@ -422,12 +425,13 @@ def create_app() -> ASGIApp:
             return {"status": "ok", "server": mcp_server.name}
 
         app.mount("/mcp", mcp_app)
-        logger.info("mcp_server_mounted", path="/mcp", transport="http")
+        app.mount("/sse", sse_app)
+        logger.info("mcp_server_mounted", paths=["/mcp", "/sse"], transports=["http", "sse"])
 
-    # Wrap app with path normalizer to prevent 307 redirects on /mcp
+    # Wrap app with path normalizer to prevent 307 redirects on /mcp and /sse
     # Some HTTP clients (Claude web connectors) don't follow POST redirects correctly
     class MCPPathNormalizer:
-        """ASGI middleware to normalize /mcp to /mcp/ before routing."""
+        """ASGI middleware to normalize /mcp and /sse to trailing slash before routing."""
 
         def __init__(self, wrapped_app: ASGIApp) -> None:
             self.app = wrapped_app
@@ -438,9 +442,9 @@ def create_app() -> ASGIApp:
             receive: Callable[[], Awaitable[MutableMapping[str, Any]]],
             send: Callable[[MutableMapping[str, Any]], Awaitable[None]],
         ) -> None:
-            if scope["type"] == "http" and scope.get("path") == "/mcp":
+            if scope["type"] == "http" and scope.get("path") in ("/mcp", "/sse"):
                 scope = dict(scope)
-                scope["path"] = "/mcp/"
+                scope["path"] = scope["path"] + "/"
             await self.app(scope, receive, send)
 
     return MCPPathNormalizer(app)
