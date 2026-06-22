@@ -20,6 +20,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
+| [2026-06-22-cascade-invalidation-fixes.md](./2026-06-22-cascade-invalidation-fixes.md) | Patch architectural flaws in SAGE downstream cascade logic | Draft |
 | [2026-06-21-multi-agent-coherence.md](./2026-06-21-multi-agent-coherence.md) | Multi-agent coordination via EAG substrate | Ready |
 | [2026-06-09-longmemeval-v2-harness.md](./2026-06-09-longmemeval-v2-harness.md) | Official LongMemEval-V2 harness with Engrammic adapter | Ready |
 | [recall-quality-improvement.md](./recall-quality-improvement.md) | Question-answer asymmetry research, query expansion | Draft |

@@ -8,7 +8,15 @@ steps:
     entrypoint: 'bash'
     args: ['-c', 'docker pull ${_REGISTRY}/base-dagster:latest || true']
 
-  # Build base-api
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args: ['-c', 'docker pull ${_REGISTRY}/base-selfhosted:latest || true']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args: ['-c', 'docker pull ${_REGISTRY}/base-selfhosted-dagster:latest || true']
+
+  # Build base-api (beta)
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
@@ -22,7 +30,7 @@ steps:
     env:
       - 'DOCKER_BUILDKIT=1'
 
-  # Build base-dagster
+  # Build base-dagster (beta)
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
@@ -36,12 +44,42 @@ steps:
     env:
       - 'DOCKER_BUILDKIT=1'
 
+  # Build base-selfhosted (selfhosted releases)
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--build-arg=BUILDKIT_INLINE_CACHE=1'
+      - '--cache-from=${_REGISTRY}/base-selfhosted:latest'
+      - '-f'
+      - 'docker/Dockerfile.base-selfhosted'
+      - '-t'
+      - '${_REGISTRY}/base-selfhosted:latest'
+      - '.'
+    env:
+      - 'DOCKER_BUILDKIT=1'
+
+  # Build base-selfhosted-dagster (selfhosted releases)
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--build-arg=BUILDKIT_INLINE_CACHE=1'
+      - '--cache-from=${_REGISTRY}/base-selfhosted-dagster:latest'
+      - '-f'
+      - 'docker/Dockerfile.base-selfhosted-dagster'
+      - '-t'
+      - '${_REGISTRY}/base-selfhosted-dagster:latest'
+      - '.'
+    env:
+      - 'DOCKER_BUILDKIT=1'
+
 images:
   - '${_REGISTRY}/base-api:latest'
   - '${_REGISTRY}/base-dagster:latest'
+  - '${_REGISTRY}/base-selfhosted:latest'
+  - '${_REGISTRY}/base-selfhosted-dagster:latest'
 
 substitutions:
-  _REGISTRY: 'europe-north1-docker.pkg.dev/engrammic/releases'
+  _REGISTRY: 'europe-north1-docker.pkg.dev/engrammic/engrammic'
 
 options:
   machineType: 'E2_HIGHCPU_8'

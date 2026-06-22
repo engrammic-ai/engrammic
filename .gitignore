@@ -106,3 +106,8 @@ CLAUDE.md
 evals-output.json
 
 .veil/
+
+# Internal IP & Roadmaps
+context/plans/
+context/architecture/
+archive/
