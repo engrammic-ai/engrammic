@@ -1,6 +1,6 @@
 [project]
 name = "engrammic-infra"
-version = "0.2.0"
+version = "0.6.0"
 description = "Engrammic GCP infrastructure"
 requires-python = ">=3.12"
 dependencies = [
