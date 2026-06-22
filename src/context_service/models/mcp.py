@@ -39,7 +39,7 @@ class ObservationType(StrEnum):
 
 
 class RelationshipType(StrEnum):
-    """Allowed relationship types for context_link."""
+    """CITE edge relationship types."""
 
     REFERENCES = "REFERENCES"
     SUPPORTS = "SUPPORTS"
