@@ -121,15 +121,8 @@ RETURN n.id AS id,
 # GET_CLUSTERS_FOR_NODES = ...            # removed
 # GET_CLUSTERS_FOR_NODES_WITH_FACTS = ... # removed
 
-# DEPRECATED (CITE v2): :Cluster nodes and all cluster membership / hierarchy
-# queries are removed in v2. Belief synthesis uses SYNTHESIZED_FROM edges
-# directly. Leiden community detection is no longer run on the graph.
-# TODO: remove stubs after all callers are updated to v2 APIs
-# Backwards-compat stubs below - return empty results; callers should migrate to v2.
-DELETE_ALL_CLUSTERS = "RETURN 0 AS deleted_count"
-BATCH_CREATE_PART_OF = "RETURN 0 AS created_count"
-BATCH_UPDATE_CLUSTER_SUMMARIES = "RETURN 0 AS updated_count"
-BATCH_CREATE_MEMBER_OF = "RETURN 0 AS created_count"
+# CITE v2: Cluster queries removed 2026-06-22. Belief synthesis uses
+# SYNTHESIZED_FROM edges directly; Leiden community detection no longer runs.
 
 # Node importance update still valid for content nodes (used by PageRank scorer).
 BATCH_UPDATE_NODE_IMPORTANCE = f"""
