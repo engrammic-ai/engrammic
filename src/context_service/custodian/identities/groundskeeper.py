@@ -14,8 +14,9 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
+# CITE v2: Memory layer uses :Memory label (was Passage|Utterance|Event in v1)
 EXPIRED_MEMORY_QUERY = """
-MATCH (n:Passage|Utterance|Event {silo_id: $silo_id})
+MATCH (n:Memory {silo_id: $silo_id})
 WHERE n.decay_class = $decay_class
   AND n.created_at < $cutoff
 RETURN n.id AS node_id, n.decay_class AS decay_class, n.created_at AS created_at
