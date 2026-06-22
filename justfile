@@ -98,15 +98,9 @@ nuke:
 build-images:
     skaffold build --default-repo={{registry}}
 
-# Build base images only (run after uv.lock changes)
+# Build and push base images via Cloud Build (run after uv.lock changes)
 build-bases:
-    docker build -f docker/Dockerfile.base-api -t {{registry}}/base-api:latest .
-    docker build -f docker/Dockerfile.base-dagster -t {{registry}}/base-dagster:latest .
-
-# Push base images to registry
-push-bases:
-    docker push {{registry}}/base-api:latest
-    docker push {{registry}}/base-dagster:latest
+    ./scripts/deploy/build-bases.sh
 
 # =============================================================================
 # Database (Local)

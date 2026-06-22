@@ -1,0 +1,49 @@
+steps:
+  # Pull existing base images for cache
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args: ['-c', 'docker pull ${_REGISTRY}/base-api:latest || true']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args: ['-c', 'docker pull ${_REGISTRY}/base-dagster:latest || true']
+
+  # Build base-api
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--build-arg=BUILDKIT_INLINE_CACHE=1'
+      - '--cache-from=${_REGISTRY}/base-api:latest'
+      - '-f'
+      - 'docker/Dockerfile.base-api'
+      - '-t'
+      - '${_REGISTRY}/base-api:latest'
+      - '.'
+    env:
+      - 'DOCKER_BUILDKIT=1'
+
+  # Build base-dagster
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--build-arg=BUILDKIT_INLINE_CACHE=1'
+      - '--cache-from=${_REGISTRY}/base-dagster:latest'
+      - '-f'
+      - 'docker/Dockerfile.base-dagster'
+      - '-t'
+      - '${_REGISTRY}/base-dagster:latest'
+      - '.'
+    env:
+      - 'DOCKER_BUILDKIT=1'
+
+images:
+  - '${_REGISTRY}/base-api:latest'
+  - '${_REGISTRY}/base-dagster:latest'
+
+substitutions:
+  _REGISTRY: 'europe-north1-docker.pkg.dev/engrammic/releases'
+
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+timeout: '1800s'
