@@ -845,6 +845,9 @@ RETURN 1 AS deleted_docs, deleted_passages, deleted_findings
 # Alias retained for callers that used the old name.
 TOMBSTONE_DOCUMENT = TOMBSTONE_MEMORY
 
+# ponytail: SWEEP_ORPHAN_MEMORIES handles crash recovery — cleans uncommitted
+# ghost nodes left by failed ingests. Not wired yet; add to groundskeeper or
+# separate job when crash recovery becomes a priority.
 SWEEP_ORPHAN_MEMORIES = f"""
 MATCH (m:{LABEL_MEMORY})
 WHERE m.committed = false AND m.created_at < timestamp() - $age_ms
@@ -856,68 +859,10 @@ RETURN count(m) AS deleted_docs
 SWEEP_ORPHAN_DOCUMENTS = SWEEP_ORPHAN_MEMORIES
 
 # --- Inference storage queries (phase-8, spec R16) ---
-
-UPSERT_REASONING_CHAIN = f"""
-MERGE (c:{_LABEL_REASONING_CHAIN} {{id: $chain_id}})
-ON CREATE SET
-    c.silo_id = $silo_id,
-    c.tier = $tier,
-    c.produced_by_model = $produced_by_model,
-    c.produced_by_agent_id = $produced_by_agent_id,
-    c.query_context_hash = $query_context_hash,
-    c.created_at = $created_at,
-    c.steps = $steps,
-    c.status = $status,
-    c.source = $source,
-    c.valid_from = $valid_from,
-    c.access_count = 0,
-    c.heat_score = 0.0,
-    c.committed = false
-ON MATCH SET
-    c.steps = COALESCE($steps, c.steps),
-    c.access_count = c.access_count + 1,
-    c.last_accessed_at = datetime()
-RETURN c.id AS id, c.committed AS committed
-"""
-
-FLIP_CHAIN_COMMITTED = f"""
-MATCH (c:{_LABEL_REASONING_CHAIN} {{id: $chain_id, silo_id: $silo_id}})
-WHERE c.committed = false
-SET c.committed = true
-RETURN count(c) AS flipped
-"""
-
-UPSERT_COMMITMENT = f"""
-MERGE (c:{LABEL_COMMITMENT} {{id: $commitment_id}})
-ON CREATE SET
-    c.silo_id = $silo_id,
-    c.subject = $subject,
-    c.predicate = $predicate,
-    c.object = $object,
-    c.scope = $scope,
-    c.produced_by_agent_id = $produced_by_agent_id,
-    c.status = $status,
-    c.source = $source,
-    c.confidence_tier = $confidence_tier,
-    c.valid_from = $valid_from,
-    c.valid_to = $valid_to,
-    c.rationale_chain_id = $rationale_chain_id,
-    c.predicate_version = $predicate_version,
-    c.label_tier = $label_tier,
-    c.distinct_agent_count = 1,
-    c.fit_signal_base = 0.5,
-    c.committed = false
-ON MATCH SET
-    c.distinct_agent_count = c.distinct_agent_count + 1
-RETURN c.id AS id, c.committed AS committed
-"""
-
-FLIP_COMMITMENT_COMMITTED = f"""
-MATCH (c:{LABEL_COMMITMENT} {{id: $commitment_id, silo_id: $silo_id}})
-WHERE c.committed = false
-SET c.committed = true
-RETURN count(c) AS flipped
-"""
+# Note: UPSERT_REASONING_CHAIN/FLIP_CHAIN_COMMITTED removed 2026-06-22 —
+# superseded by inline Cypher in memgraph_store.upsert_reasoning_chain().
+# UPSERT_COMMITMENT/FLIP_COMMITMENT_COMMITTED removed same date —
+# superseded by db/queries.py:CREATE_COMMITMENT_WITH_ABOUT.
 
 CREATE_CRYSTALLIZED_INTO_EDGE = f"""
 MATCH (chain:{_LABEL_REASONING_CHAIN} {{id: $chain_id}})
@@ -996,51 +941,11 @@ DELETE_COMMITMENT_VECTOR = "qdrant_delete"
 
 
 # ---------------------------------------------------------------------------
-# Session trace event node queries (phase-8 P-E, spec R16-8/R16-13)
+# Session trace event queries removed 2026-06-22
+# (UPSERT_RETRIEVAL_EVENT, UPSERT_INGEST_EVENT, FIND_SESSION_EVENTS,
+# FIND_SESSIONS_WITH_OUTPUT) — session telemetry moved to Postgres
+# services/usage.py and Dagster telemetry assets.
 # ---------------------------------------------------------------------------
-
-UPSERT_RETRIEVAL_EVENT = """
-MERGE (e:RetrievalEvent {id: $event_id})
-ON CREATE SET
-    e.silo_id = $silo_id,
-    e.session_id = $session_id,
-    e.agent_id = $agent_id,
-    e.query = $query,
-    e.result_ids = $result_ids,
-    e.created_at = datetime()
-RETURN e.id AS id
-"""
-
-UPSERT_INGEST_EVENT = """
-MERGE (e:IngestEvent {id: $event_id})
-ON CREATE SET
-    e.silo_id = $silo_id,
-    e.session_id = $session_id,
-    e.agent_id = $agent_id,
-    e.document_id = $document_id,
-    e.claim_ids = $claim_ids,
-    e.created_at = datetime()
-RETURN e.id AS id
-"""
-
-FIND_SESSION_EVENTS = """
-MATCH (e)
-WHERE (e:RetrievalEvent OR e:IngestEvent)
-  AND e.session_id = $session_id
-  AND e.silo_id = $silo_id
-RETURN e, labels(e) AS labels
-ORDER BY e.created_at ASC
-"""
-
-FIND_SESSIONS_WITH_OUTPUT = """
-MATCH (e:IngestEvent {silo_id: $silo_id})
-WHERE e.created_at > $since
-WITH DISTINCT e.session_id AS session_id
-MATCH (ie:IngestEvent {session_id: session_id})
-WHERE ie.claim_ids IS NOT NULL AND size(ie.claim_ids) > 0
-RETURN DISTINCT session_id
-LIMIT $limit
-"""
 
 
 # ---------------------------------------------------------------------------
