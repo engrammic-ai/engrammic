@@ -1,7 +1,7 @@
 # Multi-Agent Coherence Design
 
 Date: 2026-06-21
-Status: Draft
+Status: Approved
 Author: Aliasgar Khimani
 
 ## Problem Statement
@@ -20,15 +20,15 @@ Current EAG stack has no concept of "who" wrote a belief. Agent nodes exist in R
 1. Any agent can see what other agents believe
 2. Conflicts between agents are detected and surfaced in real-time
 3. Accountability is built-in: every belief has an author and owner
-4. Harnesses decide resolution policy, not the substrate
-5. Works for all scenarios: fleet coordination, specialized collaboration, adversarial verification, cross-session continuity
+4. Trust is earned from track record, confidence computed from signals
+5. Harnesses decide resolution policy, substrate provides primitives
+6. Works for all scenarios: fleet coordination, specialized collaboration, adversarial verification, cross-session continuity
 
 ## Non-Goals
 
-- Consensus mechanisms (harness-side)
-- Trust scoring / reputation systems (harness-side)
+- Consensus mechanisms (harness builds on query surface)
 - Turn-taking / locking (harness-side)
-- Conflict resolution logic (harness-side)
+- Conflict resolution logic (harness decides policy)
 
 ## Design Principles
 
@@ -49,17 +49,13 @@ Why metadata, not graph structure:
 - Queries filter on metadata, not graph joins
 - Simpler migration: just add fields
 
-### Confidence Decomposition
+### Confidence Computed, Not Declared
 
-The substrate stores inputs; credence computation is reader-side.
+Agents don't get to say "I'm 90% sure." Self-reported confidence is unreliable. Instead, confidence is derived from observable signals stored on the node. The substrate computes confidence; harnesses can override with their own policies.
 
-- **Stated confidence**: agent's self-report
-- **Author identity**: who wrote this
-- **Owner identity**: who vouches
-- **Evidence links**: provenance
-- **Corroboration**: who else believes this
+### Trust Earned from Track Record
 
-Harnesses compute credence (effective weight) from these inputs using their own policies.
+Trust is per-agent, computed from historical accuracy. The substrate tracks beliefs_validated vs beliefs_contradicted. Harnesses use trust scores in their resolution policies.
 
 ## Grounding in EAG
 
@@ -91,6 +87,20 @@ Harnesses compute credence (effective weight) from these inputs using their own 
 
 ## Data Model Changes
 
+### Agent Entity (new)
+
+```python
+class Agent:
+    id: str                     # unique identifier
+    trust_score: float          # 0-1, computed from track record
+    role: str                   # "researcher", "reviewer", "human"
+    parent_agent_id: str | None # hierarchy
+    scope: list[str]            # write domains
+    beliefs_validated: int      # beliefs that held up
+    beliefs_contradicted: int   # beliefs that were wrong
+    created_at: datetime
+```
+
 ### Node Metadata Additions
 
 ```python
@@ -98,7 +108,6 @@ class NodeMetadata:
     # Existing
     content: str
     label: str
-    confidence: float
     created_at: datetime
     valid_from: datetime | None
     silo_id: str
@@ -111,6 +120,25 @@ class NodeMetadata:
     
     # New: Ownership (defaults to author)
     owner_id: str | None    # who vouches, if different from agent_id
+    
+    # New: Multi-agent belief tracking
+    believers: list[BelieverEntry]  # who believes this (array, not edges)
+    
+    # New: Confidence signals (raw data for computation)
+    confidence_signals: ConfidenceSignals
+    cached_confidence: float    # computed from signals, cached on write
+
+class BelieverEntry:
+    agent_id: str
+    since: datetime
+    confidence_at_write: float
+
+class ConfidenceSignals:
+    corroboration_count: int    # len(believers)
+    contradiction_count: int    # CONTRADICTS edges
+    validation_count: int       # VALIDATED_BY edges
+    ncb_score: float | None     # neighborhood consistency (expensive)
+    evidence_score: float | None # evidence quality (expensive)
 ```
 
 ### Edge Additions
@@ -135,6 +163,139 @@ CREATE INDEX idx_nodes_agent ON nodes(tenant_id, agent_id);
 CREATE INDEX idx_nodes_session ON nodes(tenant_id, session_id);
 CREATE INDEX idx_conflicts_unresolved ON edges 
     WHERE type = 'CONTRADICTS' AND resolution_status = 'unresolved';
+```
+
+### EventLog (append-only audit trail)
+
+```python
+class Event:
+    id: ULID                    # ordered
+    agent_id: str
+    action: EventAction         # enum
+    target_node_id: str
+    payload: dict | None        # action-specific data
+    timestamp: datetime
+
+class EventAction(Enum):
+    ASSERTED = "asserted"               # remember(), learn()
+    RETRACTED = "retracted"             # forget()
+    ENDORSED = "endorsed"               # agent joins believers
+    CHALLENGED = "challenged"           # CONTRADICTS edge
+    TRANSFERRED_OWNERSHIP = "transferred"
+    VALIDATED = "validated"             # human/senior confirms
+    SUPERSEDED = "superseded"           # update()
+```
+
+```sql
+CREATE TABLE belief_events (
+    id ULID PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    target_node_id TEXT NOT NULL,
+    payload JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_events_agent ON belief_events(agent_id, created_at);
+CREATE INDEX idx_events_node ON belief_events(target_node_id, created_at);
+```
+
+## Confidence Computation
+
+Confidence is computed from signals, not self-declared.
+
+### Cheap signals (always computed)
+
+| Signal | Source | Weight |
+|--------|--------|--------|
+| Corroboration | `len(believers)` | 0.25 |
+| Contradiction | CONTRADICTS edges (negative) | 0.25 |
+| Temporal stability | age without supersession | 0.15 |
+| Validation | VALIDATED_BY edges | 0.15 |
+
+### Expensive signals (Knowledge/Wisdom only)
+
+| Signal | Source | Weight |
+|--------|--------|--------|
+| Evidence score | LLM/heuristics on evidence URIs | 0.10 |
+| NCB score | neighborhood consistency check | 0.10 |
+
+### Formula
+
+```python
+def compute_confidence(node: Node, signals: ConfidenceSignals) -> float:
+    cheap = (
+        min(1.0, signals.corroboration_count / 5) * 0.25 +
+        max(0, 1 - signals.contradiction_count * 0.2) * 0.25 +
+        min(1.0, node.age_days / 30) * 0.15 +
+        min(1.0, signals.validation_count * 0.2) * 0.15
+    )
+    
+    if node.layer in (Layer.Knowledge, Layer.Wisdom):
+        expensive = (
+            (signals.evidence_score or 0.5) * 0.10 +
+            (signals.ncb_score or 0.5) * 0.10
+        )
+        return cheap + expensive
+    
+    # Memory layer: skip expensive, normalize
+    return cheap / 0.8
+
+def invalidate_confidence(node_id: str):
+    """Recompute when: believer added, CONTRADICTS created, VALIDATED_BY created."""
+    node = get_node(node_id)
+    signals = gather_signals(node)
+    node.cached_confidence = compute_confidence(node, signals)
+    save(node)
+```
+
+## Trust Scoring
+
+Trust is earned from track record.
+
+### Formula
+
+```python
+def compute_trust(agent: Agent) -> float:
+    total = agent.beliefs_validated + agent.beliefs_contradicted
+    if total < 10:
+        return 0.5  # insufficient data, neutral
+    return agent.beliefs_validated / total
+```
+
+### Scoring events
+
+| Event | Effect |
+|-------|--------|
+| Node superseded by higher-trust agent | `contradicted += 1` for original owner |
+| Node validated by human/senior | `validated += 1` for owner |
+| Node survives 30 days without contradiction | `validated += 1` for owner |
+| Node explicitly marked wrong | `contradicted += 1` for owner |
+
+### Effective weight (for queries)
+
+```python
+def effective_weight(node: Node) -> float:
+    author_trust = get_agent(node.agent_id).trust_score
+    owner_trust = get_agent(node.owner_id or node.agent_id).trust_score
+    
+    # Owner vouched for it, so their trust matters more
+    trust = owner_trust * 0.7 + author_trust * 0.3
+    
+    return node.cached_confidence * trust
+```
+
+## Time Travel
+
+Reconstruct state at any point using event log.
+
+```python
+def state_as_of(node_id: str, timestamp: datetime) -> Node:
+    events = query(
+        "SELECT * FROM belief_events WHERE target_node_id = %s AND created_at <= %s ORDER BY created_at",
+        node_id, timestamp
+    )
+    return replay(events)
 ```
 
 ## Identity Resolution
@@ -239,6 +400,17 @@ diff(
     topic: str | None = None,
 ) -> AgentDiff
 # Returns: {agreements, disagreements, unique_to_a, unique_to_b}
+
+# Agent's track record
+trust_report(
+    agent_id: str,
+) -> TrustReport
+# Returns: {trust_score, beliefs_validated, beliefs_contradicted, recent_beliefs}
+
+# Who believes this?
+believers(
+    node_id: str,
+) -> list[Agent]
 ```
 
 ### Conflict Resolution Tools
@@ -390,24 +562,33 @@ Recommendation: Start with polling via `conflicts()` tool. Add SSE/webhooks when
 
 ### Phase 1: Schema Additions (non-breaking)
 
-- Add identity fields to nodes
-- Backfill existing nodes with `agent_id = "legacy"`
+- Create Agent entity table
+- Add identity fields to nodes (agent_id, session_id, owner_id)
+- Add believers[], confidence_signals, cached_confidence to nodes
+- Create belief_events table
+- Backfill existing nodes with `agent_id = "legacy"`, `believers = []`
 - Add indexes
-- Extend CONTRADICTS edge with resolution_status
 
 ### Phase 2: Write-Path Changes
 
 - Identity resolution on all writes
+- Confidence signal computation on write
+- Event logging on write
 - Conflict detection on write (feature flag)
-- Event emission (feature flag)
 
 ### Phase 3: Query Surface
 
-- Add `agents()`, `beliefs_by()`, `conflicts()`, `diff()` tools
-- Extend `recall()` with agent filtering
+- Add `agents()`, `beliefs_by()`, `conflicts()`, `diff()`, `trust_report()`, `believers()` tools
+- Extend `recall()` with agent filtering, min_confidence, min_trust
 - Add conflict resolution tools
 
-### Phase 4: Deprecations
+### Phase 4: Trust Scoring
+
+- Background job to update trust scores based on outcomes
+- 30-day survival check for beliefs_validated increment
+- Hook supersession to beliefs_contradicted
+
+### Phase 5: Deprecations
 
 - SAGE batch contradiction detection becomes optional
 - No breaking changes to existing MCP tools
@@ -416,23 +597,26 @@ Recommendation: Start with polling via `conflicts()` tool. Add SSE/webhooks when
 
 | Component | What changes |
 |-----------|--------------|
+| **Agent entity** | New entity with trust_score, role, hierarchy, track record |
 | **Identity** | `agent_id`, `session_id`, `model_id`, `owner_id` on every node |
+| **Believers** | `believers[]` array on nodes (who believes this) |
+| **Confidence** | Computed from signals, cached on write |
+| **Trust** | Earned from track record (validated/contradicted ratio) |
 | **Resolution** | Layered fallback chain, always succeeds |
 | **Conflicts** | Write-time detection, CONTRADICTS edge extended |
-| **Query surface** | `agents()`, `beliefs_by()`, `conflicts()`, `diff()` |
-| **Events** | `conflict.detected`, `node.created`, etc. |
+| **Query surface** | `agents()`, `beliefs_by()`, `conflicts()`, `diff()`, `trust_report()`, `believers()` |
+| **Events** | Append-only EventLog for audit and time-travel |
 | **Harness contract** | Provide identity for coordination, or we derive it |
 
-**Memory owns:** Detection, storage, surfacing, queries.
+**Substrate owns:** Identity resolution, confidence computation, trust scoring, conflict detection, event logging, queries.
 
-**Harness owns:** Identity assignment, trust policies, resolution decisions.
+**Harness owns:** Resolution policy, consensus mechanisms, hierarchy definitions.
 
 ## Open Questions
 
-1. Should `model_id` be required or optional?
-2. Event retention: how long do we keep events for polling?
-3. Should conflict detection run on all layers or just Knowledge/Wisdom?
-4. Do we need a "merge" resolution in addition to supersede/dismiss?
+1. Event retention: how long do we keep events? (suggest: 90 days, then archive)
+2. Should expensive confidence signals (NCB, evidence_score) run sync or async?
+3. Trust score decay: should old beliefs count less than recent ones?
 
 ## References
 
