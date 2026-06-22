@@ -82,6 +82,6 @@ substitutions:
   _REGISTRY: 'europe-north1-docker.pkg.dev/engrammic/engrammic'
 
 options:
-  machineType: 'E2_HIGHCPU_8'
+  machineType: 'E2_HIGHCPU_32'
   logging: CLOUD_LOGGING_ONLY
-timeout: '1800s'
+timeout: '3600s'
