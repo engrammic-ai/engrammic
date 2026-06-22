@@ -41,16 +41,17 @@ Memgraph   Qdrant   Redis
 (graph)    (vector) (cache)
 ```
 
-The **MCP server** is the primary agent surface. Tools are intent-based verbs (`remember`, `learn`, `decide`, `recall`, etc.). Tool names and descriptions are config, not code: `src/context_service/config/mcp_tools.yaml`.
+The **MCP server** is the primary agent surface. Tools are intent-based verbs (`remember`, `learn`, `recall`, etc.). Tool names and descriptions are config, not code: `src/context_service/config/mcp_tools.yaml`.
 
 The **FastAPI REST** surface handles admin operations (silo management, health, metrics).
 
-**SAGE** (Synthesis, Aggregation, Graph Evolution) is a background agent system that runs independently of user requests:
+**SAGE** (Synthesis, Aggregation, Graph Evolution) is a background Dagster system:
 
-- `sage.custodian` - extracts, validates, and promotes claims to facts (every 10 min)
-- `sage.synthesizer` - crystallizes beliefs from corroborated fact clusters (every 30 min)
-- `sage.groundskeeper` - heat scores, retention, compaction (every 15 min)
-- `sage.validator` - contradiction detection, stale commitment monitoring (every 5 min)
+- `custodian_pipeline` - extracts, validates, and promotes claims to facts (every 15 min)
+- `knowledge_pipeline` - causal transitivity and pattern detection (hourly)
+- `clustering_pipeline` - fact clustering and belief synthesis (daily at 04:00 UTC)
+- `heat_pipeline` - heat scoring and link review (daily at 02:00 UTC)
+- `groundskeeper_nightly` - retention and compaction (daily at 01:00 UTC)
 
 Full architecture: [`context/architecture.md`](context/architecture.md)
 
@@ -89,8 +90,7 @@ Every node in the graph has a layer that reflects its trust level:
 |-------|------|-------------|
 | Memory | Observation | Agent writes via `remember`. Decays over time. |
 | Knowledge | Claim / Fact | Agent writes via `learn` with an evidence URI. Promoted to Fact by custodian after corroboration. |
-| Wisdom | Belief / Commitment | Belief: synthesized by SAGE from corroborated facts, requires agent `accept`. Commitment: agent writes directly via `decide`. |
-| Intelligence | Working Hypothesis | Agent reasons via `hypothesize`, crystallizes via `commit`. |
+| Wisdom | Belief / Commitment | Belief: synthesized by SAGE from corroborated facts. Commitment: deferred (not yet implemented). |
 
 ### Write-gate
 
@@ -98,7 +98,7 @@ Claims (Knowledge layer) require an evidence URI at write time. The custodian va
 
 ### Supersession
 
-Updates create version chains rather than overwrites. The old node stays in the graph with a `valid_to` timestamp; queries return only the chain head. Use `history(node_id)` to walk the full chain.
+Updates create version chains rather than overwrites. The old node stays in the graph with a `valid_to` timestamp; queries return only the chain head. Use `trace(node_id)` to walk provenance.
 
 ### SAGE synthesis flow
 
@@ -107,19 +107,15 @@ Agent writes learn()
        |
 AsyncBatchTrigger (batches writes)
        |
-sage.custodian
+custodian_pipeline (every 15 min)
   - SPO extraction
   - Citation validation
   - Business rule check
   - Claim -> Fact promotion
-  - Cluster detection
        |
-sage.synthesizer (when cluster threshold reached)
-  - Fact cluster -> ProposedBelief
-       |
-Agent reviews (accept / dismiss)
-  - accept() -> Belief (Wisdom layer)
-  - dismiss() -> rejected
+clustering_pipeline (daily)
+  - Fact clustering via semantic corroboration
+  - Cluster -> Belief (Wisdom layer)
 ```
 
 ### MCP tool surface
@@ -128,21 +124,11 @@ Agent reviews (accept / dismiss)
 |------|-------------|
 | `remember` | Store an observation (Memory layer, no evidence required) |
 | `learn` | Record a claim with evidence (Knowledge layer) |
-| `decide` | Declare a commitment directly (Wisdom layer) |
-| `accept` | Promote a ProposedBelief to Belief |
-| `dismiss` | Reject a ProposedBelief or dismiss a marker |
-| `recall` | Retrieve by semantic query or node ID |
-| `trace` | Provenance: where did this come from? |
-| `history` | Versioning: how did this evolve? |
-| `link` | Create typed relationship between nodes |
-| `reason` | Store a reasoning chain (Intelligence layer) |
-| `hypothesize` | Create a tentative working hypothesis |
-| `revise` | Update a working hypothesis |
-| `commit` | Crystallize hypotheses into commitments |
-| `reflect` | Store a meta-observation |
-| `forget` | Request node deletion |
-| `patterns` | Retrieve skill / workflow templates |
-| `tick` | Acknowledge engagement without action |
+| `recall` | Retrieve by semantic query, node ID, or fusion mode |
+| `trace` | Provenance: walk backward to sources or forward to dependents |
+| `forget` | Request node deletion with optional cascade |
+| `tick` | Lightweight engagement check without full recall |
+| `update` | Update existing knowledge by superseding with new content |
 
 ---
 
@@ -178,7 +164,7 @@ All Python runs via `uv run`. See `justfile` for the full list.
 
 | Command | What it does |
 |---------|-------------|
-| `just install-dev` | `uv sync --all-extras` |
+| `just install` | `uv sync --all-extras` |
 | `just check` | Lint + typecheck (must pass before merge) |
 | `just test` | Run pytest (`just test -k name` for filtering) |
 | `just ci` | check + test (pre-push) |

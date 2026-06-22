@@ -34,7 +34,6 @@ _LIST_UNPROMOTED_CLAIMS = """
 MATCH (c:Claim {silo_id: $silo_id})
 WHERE c.properties.state = 'ACTIVE'
   AND c.properties.claim_status = 'UNPROMOTED'
-  AND c.properties.corroboration_count >= $threshold
 RETURN c.id AS claim_id,
        c.properties.confidence AS confidence,
        c.properties.corroboration_count AS corroboration_count
@@ -60,7 +59,7 @@ async def find_promotion_candidates(
     for silo_id in silos:
         rows = await store.execute_query(
             _LIST_UNPROMOTED_CLAIMS,
-            {"silo_id": silo_id, "threshold": PROMOTION_THRESHOLD, "batch_size": 100},
+            {"silo_id": silo_id, "batch_size": 100},
         )
         log.info(f"promoter_op: silo={silo_id} unpromoted_claims={len(rows)}")
 

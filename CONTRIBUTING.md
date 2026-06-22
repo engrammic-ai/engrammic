@@ -5,7 +5,7 @@ Thank you for your interest in contributing to Engrammic! We welcome community c
 ## Development Setup
 
 1. Clone the repository: `git clone https://github.com/engrammic-ai/engrammic.git`
-2. Install dependencies via `uv`: `just install-dev`
+2. Install dependencies via `uv`: `just install`
 3. Start the local stack (Memgraph, Qdrant, Redis): `just up`
 4. Run the test suite: `just test`
 

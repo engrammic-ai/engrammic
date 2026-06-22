@@ -94,6 +94,7 @@ SYNTHESIS_THRESHOLD = 3
 EVIDENCE_THRESHOLD = 3
 SYNTHESIS_CONFIDENCE_THRESHOLD = 0.6
 SPO_SIMILARITY_THRESHOLD = 0.80  # Cosine similarity for semantic SPO matching
+CONTENT_SIMILARITY_THRESHOLD = 0.85  # Higher threshold for freeform content matching
 MAX_CLUSTER_SIZE = 1000
 MAX_SYNTHESIS_RETRIES = 3
 CANCEL_WINDOW_DURATION_SECONDS = 3600  # 60 minutes
@@ -2277,6 +2278,93 @@ async def _create_supersedes_edge(
     await _sync_postgres_state(loser_id, silo_id, NodeState.SUPERSEDED.value)
 
 
+async def _check_freeform_corroboration(
+    store: HyperGraphStore,
+    node_id: str,
+    silo_id: str,
+    embedding_service: EmbeddingService,
+    threshold: int = PROMOTION_THRESHOLD,
+) -> tuple[int, bool]:
+    """Content-based corroboration for freeform claims without SPO.
+
+    Uses embedding similarity on claim content to find semantically
+    equivalent claims and aggregates their evidence sources.
+    """
+    import numpy as np
+
+    # Get the claim's content and evidence
+    query = """
+    MATCH (c:Claim {id: $node_id, silo_id: $silo_id})
+    RETURN c.content AS content, c.properties.evidence AS evidence
+    """
+    result = await store.execute_query(query, {"node_id": node_id, "silo_id": silo_id})
+    if not result:
+        return 1, False
+
+    claim = result[0]
+    content = claim.get("content")
+    own_evidence = claim.get("evidence") or []
+
+    if not content:
+        return len(own_evidence), len(own_evidence) >= threshold
+
+    # Embed the claim content
+    content_embedding = await embedding_service.embed_single(content)
+    content_vec = np.array(content_embedding)
+    content_norm = np.linalg.norm(content_vec)
+    if content_norm > 0:
+        content_vec = content_vec / content_norm
+
+    # Find other freeform claims (no SPO) in the same silo
+    candidates_query = """
+    MATCH (c:Claim {silo_id: $silo_id})
+    WHERE c.properties.state = 'ACTIVE'
+      AND (c.properties.subject IS NULL OR c.properties.predicate IS NULL OR c.properties.object IS NULL)
+    RETURN c.id AS id, c.content AS content, c.properties.evidence AS evidence
+    """
+    candidates = await store.execute_query(candidates_query, {"silo_id": silo_id})
+
+    if not candidates:
+        return len(own_evidence), len(own_evidence) >= threshold
+
+    # Batch embed candidate contents
+    contents = [c.get("content", "") for c in candidates]
+    candidate_embeddings = await embedding_service.embed(contents)
+
+    # Find semantically similar claims and aggregate evidence
+    evidence_set: set[str] = set(own_evidence)
+    similar_count = 0
+
+    for i, c in enumerate(candidates):
+        if c.get("id") == node_id:
+            continue
+
+        cand_vec = np.array(candidate_embeddings[i])
+        cand_norm = np.linalg.norm(cand_vec)
+        if cand_norm > 0:
+            cand_vec = cand_vec / cand_norm
+
+        similarity = float(np.dot(content_vec, cand_vec))
+        if similarity >= CONTENT_SIMILARITY_THRESHOLD:
+            similar_count += 1
+            cand_evidence = c.get("evidence") or []
+            evidence_set.update(cand_evidence)
+
+    corroboration_count = len(evidence_set)
+    should_promote = corroboration_count >= threshold
+
+    logger.debug(
+        "freeform_corroboration_check",
+        node_id=node_id,
+        candidates_checked=len(candidates),
+        similar_found=similar_count,
+        corroboration_count=corroboration_count,
+        should_promote=should_promote,
+    )
+
+    return corroboration_count, should_promote
+
+
 async def check_corroboration(
     store: HyperGraphStore,
     node_id: str,
@@ -2371,9 +2459,11 @@ async def check_semantic_corroboration(
     new_object = new_claim.get("object")
     new_evidence = new_claim.get("evidence") or []
 
-    # If no SPO, fall back to just counting own evidence
+    # If no SPO, use content-based semantic matching for freeform claims
     if not all([new_subject, new_predicate, new_object]):
-        return len(new_evidence), len(new_evidence) >= threshold
+        return await _check_freeform_corroboration(
+            store, node_id, silo_id, embedding_service, threshold
+        )
 
     # Compute embedding for new claim's SPO
     new_spo_text = f"{new_subject} {new_predicate} {new_object}"
