@@ -408,19 +408,7 @@ RETURN DISTINCT
 
 
 # Meta-memory: belief history via SUPERSEDES chain
-# Walks backward through SUPERSEDES edges to reconstruct the evolution of a belief.
-BELIEF_HISTORY_BY_NODE = """
-MATCH path = (current {id: $node_id, silo_id: $silo_id})<-[:SUPERSEDES*0..20]-(ancestor)
-WITH ancestor, length(path) AS depth
-RETURN
-    ancestor.id AS node_id,
-    ancestor.content AS content,
-    ancestor.valid_from AS valid_from,
-    ancestor.valid_to AS valid_to,
-    ancestor.confidence AS confidence,
-    ancestor.supersession_reason AS supersession_reason
-ORDER BY depth DESC
-"""
+# BELIEF_HISTORY_BY_NODE removed 2026-06-22 — superseded by BELIEF_HISTORY_BIDIRECTIONAL
 
 # Bidirectional supersession chain traversal.
 # Walks both directions from any node in a chain to return the full history.
@@ -476,18 +464,7 @@ WHERE obs.id IN $target_ids AND obs.tombstoned_at IS NULL
 RETURN obs.id AS id, coalesce(obs.reflection_depth, 1) AS reflection_depth
 """
 
-BELIEF_HISTORY_CURRENT = """
-MATCH (n {id: $node_id, silo_id: $silo_id})
-OPTIONAL MATCH (n)-[:SUPERSEDES]->(next)
-RETURN
-    n.id AS node_id,
-    n.content AS content,
-    n.valid_from AS valid_from,
-    n.valid_to AS valid_to,
-    n.confidence AS confidence,
-    next.id AS superseded_by,
-    n.supersession_reason AS supersession_reason
-"""
+# BELIEF_HISTORY_CURRENT removed 2026-06-22 — superseded by lookup path
 
 BELIEF_HISTORY_BY_SUBJECT = """
 MATCH (n {silo_id: $silo_id})
@@ -1198,10 +1175,7 @@ SET wb.content = CASE WHEN $content IS NOT NULL THEN $content ELSE wb.content EN
 RETURN wb.id AS belief_id, wb.confidence AS confidence
 """
 
-DELETE_WORKING_HYPOTHESIS = """
-MATCH (wb:WorkingHypothesis {id: $belief_id, silo_id: $silo_id})
-DETACH DELETE wb
-"""
+# Removed 2026-06-22 — WorkingHypothesis killed in schema simplification
 
 # Sync conflict detection: given a freshly-written :WorkingHypothesis, return the
 # ids of any other :WorkingHypothesis in the same session that ABOUT the same
@@ -1216,62 +1190,9 @@ RETURN DISTINCT other.id AS conflict_id
 LIMIT 10
 """
 
-# Pairwise contradiction detection across a whole session. Returns up to 10
-# unordered pairs of WorkingHypotheses that share at least one ABOUT target.
-DETECT_CONTRADICTIONS_IN_SESSION = """
-MATCH (wb1:WorkingHypothesis {session_id: $session_id, silo_id: $silo_id})
-MATCH (wb2:WorkingHypothesis {session_id: $session_id, silo_id: $silo_id})
-WHERE wb1.id < wb2.id
-MATCH (wb1)-[:ABOUT]->(n)<-[:ABOUT]-(wb2)
-RETURN DISTINCT wb1.id AS belief_a, wb2.id AS belief_b
-LIMIT 10
-"""
+# Removed 2026-06-22 — superseded by write-time FLAG_CONTRADICTION
 
-# Promote a :WorkingHypothesis to a durable :Commitment, copy its ABOUT edges,
-# and SUPERSEDE any existing active Commitments that ABOUT the same node(s).
-# Existing commitments are considered active when no other Commitment
-# SUPERSEDES them. Their valid_to is set to $valid_from on supersession.
-# Sets tail_id/head_id pointers for O(1) chain lookups.
-# Only sets tail_id on first supersession (first chain wins for multi-supersession).
-CRYSTALLIZE_TO_COMMITMENT = """
-MATCH (wb:WorkingHypothesis {id: $belief_id, silo_id: $silo_id})
-CREATE (cm:Commitment {
-    id: $commitment_id,
-    silo_id: $silo_id,
-    layer: "wisdom",
-    content: wb.content,
-    confidence: wb.confidence,
-    created_at: $created_at,
-    valid_from: $valid_from,
-    crystallized_from: wb.id,
-    rationale_chain_id: $rationale_chain_id
-})
-WITH wb, cm
-MATCH (wb)-[:ABOUT]->(n)
-CREATE (cm)-[:ABOUT]->(n)
-WITH DISTINCT wb, cm
-OPTIONAL MATCH (cm)-[:ABOUT]->(shared_node)<-[:ABOUT]-(existing:Commitment {silo_id: $silo_id})
-WHERE existing.id <> cm.id
-WITH wb, cm, collect(DISTINCT existing) AS candidates
-DETACH DELETE wb
-WITH cm, candidates
-UNWIND (CASE WHEN size(candidates) = 0 THEN [null] ELSE candidates END) AS existing
-WITH cm, existing WHERE existing IS NOT NULL
-// Only supersede if existing is not already superseded
-OPTIONAL MATCH (superseding:Commitment)-[:SUPERSEDES]->(existing)
-WITH cm, existing, superseding WHERE superseding IS NULL
-// Create supersession with pointers (first chain wins)
-WITH cm, existing, COALESCE(existing.tail_id, existing.id) AS derived_tail_id
-FOREACH (_ IN CASE WHEN cm.tail_id IS NULL THEN [1] ELSE [] END |
-  SET cm.tail_id = derived_tail_id
-)
-CREATE (cm)-[:SUPERSEDES {reason: $reason, created_at: $created_at}]->(existing)
-SET existing.valid_to = $valid_from
-WITH cm, COALESCE(cm.tail_id, derived_tail_id) AS tail_id
-MATCH (tail:Commitment {id: tail_id, silo_id: $silo_id})
-SET tail.head_id = cm.id
-RETURN cm.id AS commitment_id, cm.confidence AS confidence
-"""
+# Removed 2026-06-22 — superseded by CREATE_COMMITMENT_WITH_ABOUT
 
 
 # ---------------------------------------------------------------------------
@@ -1956,60 +1877,8 @@ WHERE n.properties.state IS NULL
 SET n.properties.state = 'ACTIVE'
 """
 
-# --- Epistemology: confidence propagation queries ---
-
-GET_SUPPORT_EDGES = """
-MATCH (source {silo_id: $silo_id})-[e:SUPPORTS]->(target {silo_id: $silo_id})
-WHERE source.properties.state = 'ACTIVE' AND target.properties.state = 'ACTIVE'
-RETURN source.id AS source_id,
-       target.id AS target_id,
-       coalesce(e.weight, 1.0) AS weight
-"""
-
-GET_CONTRADICTION_EDGES = """
-MATCH (source {silo_id: $silo_id})-[e:CONTRADICTS]->(target {silo_id: $silo_id})
-WHERE source.properties.state = 'ACTIVE' AND target.properties.state = 'ACTIVE'
-RETURN source.id AS source_id,
-       target.id AS target_id,
-       coalesce(e.weight, 1.0) AS weight
-"""
-
-GET_GRAPH_FOR_PROPAGATION = """
-MATCH (n {silo_id: $silo_id})
-WHERE n.properties.state = 'ACTIVE'
-  AND n.properties.layer IN ['knowledge', 'wisdom']
-WITH collect({
-    id: n.id,
-    credibility: coalesce(n.credibility, n.confidence, 0.5),
-    layer: n.properties.layer
-}) AS nodes
-OPTIONAL MATCH (s {silo_id: $silo_id})-[sup:SUPPORTS]->(t {silo_id: $silo_id})
-WHERE s.properties.state = 'ACTIVE' AND t.properties.state = 'ACTIVE'
-WITH nodes, collect({source: s.id, target: t.id, weight: coalesce(sup.weight, 1.0)}) AS supports
-OPTIONAL MATCH (s2 {silo_id: $silo_id})-[con:CONTRADICTS]->(t2 {silo_id: $silo_id})
-WHERE s2.properties.state = 'ACTIVE' AND t2.properties.state = 'ACTIVE'
-RETURN nodes,
-       supports,
-       collect({source: s2.id, target: t2.id, weight: coalesce(con.weight, 1.0)}) AS contradictions
-"""
-
-CREATE_WEIGHTED_SUPPORT_EDGE = """
-MATCH (source {id: $source_id, silo_id: $silo_id})
-MATCH (target {id: $target_id, silo_id: $silo_id})
-MERGE (source)-[e:SUPPORTS]->(target)
-ON CREATE SET e.weight = $weight, e.created_at = $created_at
-ON MATCH SET e.weight = $weight
-RETURN source.id AS source_id, target.id AS target_id, e.weight AS weight
-"""
-
-CREATE_WEIGHTED_CONTRADICTION_EDGE = """
-MATCH (source {id: $source_id, silo_id: $silo_id})
-MATCH (target {id: $target_id, silo_id: $silo_id})
-MERGE (source)-[e:CONTRADICTS]->(target)
-ON CREATE SET e.weight = $weight, e.created_at = $created_at
-ON MATCH SET e.weight = $weight
-RETURN source.id AS source_id, target.id AS target_id, e.weight AS weight
-"""
+# Confidence propagation queries removed 2026-06-22 — superseded by
+# inline Cypher in reactions/tasks.py propagate_confidence_task.
 
 UPDATE_PROPAGATED_CONFIDENCE = """
 UNWIND $updates AS u

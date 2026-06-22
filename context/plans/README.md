@@ -53,14 +53,13 @@ Active implementation plans for context-service. Completed plans are moved to `a
 | [2026-05-30-evidence-verification.md](./2026-05-30-evidence-verification.md) | Evidence verification via Nango | — |
 | [2026-05-20-self-hosted-rest-api-phase1.md](./2026-05-20-self-hosted-rest-api-phase1.md) | Self-hosted REST API: auth + Memory/Knowledge endpoints | — |
 
-## Brain architecture (blocked)
+## Brain architecture (complete)
 
-Reactive brain architecture phases. Cutover blocked on invariant fixes. Phases 2-9 complete and archived.
+Reactive brain architecture fully wired. MCP tools use brain transactions.
 
 | Plan | Description | Status |
 |------|-------------|--------|
-| [2026-06-01-brain-architecture.md](./2026-06-01-brain-architecture.md) | 20 transactions, 8 invariants | Overview |
-| [2026-06-03-brain-cutover-and-quality-fixes.md](./2026-06-03-brain-cutover-and-quality-fixes.md) | Wire MCP to brain, coverage reporting | Blocked |
+| [2026-06-01-brain-architecture.md](./2026-06-01-brain-architecture.md) | 20 transactions, 8 invariants | Reference |
 
 ## Future work
 

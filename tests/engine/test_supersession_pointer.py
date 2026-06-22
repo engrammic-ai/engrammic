@@ -173,23 +173,6 @@ async def test_chain_extension_updates_tail_head_pointer(
     assert second_call_params["to_id"] == str(node_b_id)
 
 
-@pytest.mark.asyncio
-async def test_crystallize_commitment_query_sets_pointers() -> None:
-    """Verify CRYSTALLIZE_TO_COMMITMENT query includes pointer updates.
-
-    The query should:
-    - Set tail_id on the new commitment (to track chain origin)
-    - Set head_id on the tail commitment (to track current head)
-    """
-    from context_service.db import queries as db_queries
-
-    query = db_queries.CRYSTALLIZE_TO_COMMITMENT
-
-    # Query should set pointers for O(1) chain resolution
-    assert "tail_id" in query, "Query should set tail_id on new commitment"
-    assert "head_id" in query, "Query should set head_id on tail commitment"
-    assert "COALESCE" in query, "Query should derive tail_id from existing chain"
-
 
 @pytest.mark.asyncio
 async def test_resolve_current_head_via_pointers(
