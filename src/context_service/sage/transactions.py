@@ -595,6 +595,7 @@ async def _sync_postgres_state(
 
     pool = get_db_pool()
     if pool is None:
+        logger.warning("postgres_state_sync_skip_no_pool", node_id=node_id)
         return
 
     t0 = time.monotonic()
