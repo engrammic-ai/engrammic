@@ -168,6 +168,66 @@ def _filter_inactive_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+def _apply_agent_filters(
+    nodes: list[dict[str, Any]],
+    agent_id: str | None,
+    exclude_agents: list[str],
+) -> list[dict[str, Any]]:
+    """Filter nodes by agent identity.
+
+    Agent identity is stored as properties.created_by on each node.
+    Error sentinel entries (no node_id) are passed through unchanged.
+    """
+    if not agent_id and not exclude_agents:
+        return nodes
+
+    result = []
+    for node in nodes:
+        if "node_id" not in node or "error" in node:
+            result.append(node)
+            continue
+        props = node.get("properties") or {}
+        created_by = props.get("created_by")
+        if agent_id is not None and created_by != agent_id:
+            continue
+        if exclude_agents and created_by in exclude_agents:
+            continue
+        result.append(node)
+    return result
+
+
+async def _fetch_conflict_nodes(
+    silo_id: str,
+    result_nodes: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Fetch nodes that have CONTRADICTS edges to the given result nodes.
+
+    Returns a deduplicated list of conflicting nodes not already in result_nodes.
+    """
+    from context_service.mcp.server import get_context_service
+
+    node_ids = [n["node_id"] for n in result_nodes if n.get("node_id")]
+    if not node_ids:
+        return []
+
+    ctx_svc = get_context_service()
+    edges_by_node = await ctx_svc.graph_store.get_epistemic_edges_for_nodes(node_ids, silo_id)
+
+    existing_ids = set(node_ids)
+    conflict_ids: list[str] = []
+    for edges in edges_by_node.values():
+        for cid in edges.get("contradicts", []):
+            if cid not in existing_ids and cid not in conflict_ids:
+                conflict_ids.append(cid)
+
+    if not conflict_ids:
+        return []
+
+    response = await _context_get(node_ids=conflict_ids, silo_id=silo_id)
+    nodes: list[dict[str, Any]] = response.get("nodes") or []
+    return nodes
+
+
 async def _context_recall(
     silo_id: str,
     query: str | None = None,
@@ -191,8 +251,13 @@ async def _context_recall(
     include_hints: bool = False,
     coherent: bool = False,
     include_inactive: bool = False,
+    agent_id: str | None = None,
+    exclude_agents: list[str] | None = None,
+    include_conflicts: bool = False,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
+    effective_exclude_agents: list[str] = exclude_agents or []
+
     if not query and not node_ids:
         return {"error": "missing_input", "message": "Provide query or node_ids"}
 
@@ -313,6 +378,14 @@ async def _context_recall(
         response["fusion_meta"] = fusion_meta
         response["filtered_contradictions"] = filtered_contradictions
 
+        if isinstance(response.get("nodes"), list):
+            response["nodes"] = _apply_agent_filters(
+                response["nodes"], agent_id, effective_exclude_agents
+            )
+            if include_conflicts:
+                conflict_nodes = await _fetch_conflict_nodes(silo_id, response["nodes"])
+                response["conflict_nodes"] = conflict_nodes
+
         response = _apply_tier_content_policy(response, include_content)
         if include_proposals:
             response["pending_proposals"] = await _fetch_pending_proposals(silo_id)
@@ -343,6 +416,14 @@ async def _context_recall(
                     nid = node.get("node_id")
                     if nid in steps_by_id:
                         node["steps"] = steps_by_id[nid]
+
+        if isinstance(response.get("nodes"), list):
+            response["nodes"] = _apply_agent_filters(
+                response["nodes"], agent_id, effective_exclude_agents
+            )
+            if include_conflicts:
+                conflict_nodes = await _fetch_conflict_nodes(silo_id, response["nodes"])
+                response["conflict_nodes"] = conflict_nodes
 
         response = _apply_tier_content_policy(response, include_content)
         if include_proposals:
@@ -378,6 +459,14 @@ async def _context_recall(
             )
             response["filtered_contradictions"] = filtered_contradictions
 
+        if isinstance(response.get("nodes"), list):
+            response["nodes"] = _apply_agent_filters(
+                response["nodes"], agent_id, effective_exclude_agents
+            )
+            if include_conflicts:
+                conflict_nodes = await _fetch_conflict_nodes(silo_id, response["nodes"])
+                response["conflict_nodes"] = conflict_nodes
+
         response = _apply_tier_content_policy(response, include_content)
         if include_proposals:
             response["pending_proposals"] = await _fetch_pending_proposals(silo_id)
@@ -398,6 +487,13 @@ async def _context_recall(
             include_hints=include_hints,
             include_superseded=include_inactive,
         )
+        if isinstance(response.get("results"), list):
+            response["results"] = _apply_agent_filters(
+                response["results"], agent_id, effective_exclude_agents
+            )
+            if include_conflicts:
+                conflict_nodes = await _fetch_conflict_nodes(silo_id, response["results"])
+                response["conflict_nodes"] = conflict_nodes
         response = _apply_tier_content_policy(response, include_content)
         if include_proposals:
             response["pending_proposals"] = await _fetch_pending_proposals(silo_id)
@@ -410,6 +506,13 @@ async def _context_recall(
         max_nodes=top_k,
         layers=layers,
     )
+    if isinstance(response.get("nodes"), list):
+        response["nodes"] = _apply_agent_filters(
+            response["nodes"], agent_id, effective_exclude_agents
+        )
+        if include_conflicts:
+            conflict_nodes = await _fetch_conflict_nodes(silo_id, response["nodes"])
+            response["conflict_nodes"] = conflict_nodes
     response = _apply_tier_content_policy(response, include_content)
 
     if include_proposals:
