@@ -2921,14 +2921,23 @@ async def cascade_staleness(
 ) -> int:
     """CASCADE_STALENESS: Propagate staleness to dependent nodes.
 
-    Depth-limited (MAX_CASCADE_DEPTH). Sync for depth 1, async events for deeper.
-    Returns count of nodes marked stale.
+    Depth-limited (MAX_CASCADE_DEPTH). When limit reached, defers remaining
+    work to async queue instead of dropping. Returns count of nodes marked stale.
     """
     from context_service.db import queries as q
+    from context_service.reactions.events import ReactionEvent, ReactionEventType, emit_reaction
 
     if depth > MAX_CASCADE_DEPTH:
-        logger.warning("cascade_depth_limit_reached", node_id=node_id, depth=depth)
-        return 0
+        # ponytail: defer to async queue instead of dropping
+        logger.info("cascade_depth_deferred", node_id=node_id, depth=depth)
+        await emit_reaction(
+            ReactionEvent(
+                event_type=ReactionEventType.CASCADE_STALENESS,
+                node_id=node_id,
+                silo_id=silo_id,
+            )
+        )
+        return 0  # deferred, not dropped
 
     if visited is None:
         visited = set()
@@ -2953,43 +2962,59 @@ async def cascade_staleness(
         dep_id = dep["id"]
         layer = dep.get("layer")
 
-        if layer == "wisdom":
-            # GAP-015: Check if belief still has enough source facts
-            count_result = await store.execute_query(
-                q.COUNT_ACTIVE_SOURCE_FACTS,
-                {"belief_id": dep_id, "silo_id": silo_id},
-            )
-            active_count = count_result[0]["active_count"] if count_result else 0
+        try:
+            if layer == "wisdom":
+                # GAP-015: Check if belief still has enough source facts
+                count_result = await store.execute_query(
+                    q.COUNT_ACTIVE_SOURCE_FACTS,
+                    {"belief_id": dep_id, "silo_id": silo_id},
+                )
+                active_count = count_result[0]["active_count"] if count_result else 0
 
-            if active_count < SYNTHESIS_THRESHOLD:
-                # Below threshold: tombstone the orphaned belief (INV3)
-                await store.execute_write(
-                    q.TOMBSTONE_ORPHANED_BELIEF,
-                    {
-                        "node_id": dep_id,
-                        "silo_id": silo_id,
-                        "tombstoned_at": datetime.now(UTC).isoformat(),
-                    },
-                )
-                logger.info(
-                    "orphaned_belief_tombstoned",
-                    belief_id=dep_id,
-                    remaining_facts=active_count,
-                    threshold=SYNTHESIS_THRESHOLD,
-                )
+                if active_count < SYNTHESIS_THRESHOLD:
+                    # Below threshold: tombstone the orphaned belief (INV3)
+                    await store.execute_write(
+                        q.TOMBSTONE_ORPHANED_BELIEF,
+                        {
+                            "node_id": dep_id,
+                            "silo_id": silo_id,
+                            "tombstoned_at": datetime.now(UTC).isoformat(),
+                        },
+                    )
+                    logger.info(
+                        "orphaned_belief_tombstoned",
+                        belief_id=dep_id,
+                        remaining_facts=active_count,
+                        threshold=SYNTHESIS_THRESHOLD,
+                    )
+                else:
+                    # Still has enough facts: mark stale for re-synthesis check
+                    await store.execute_write(
+                        q.MARK_BELIEF_STALE_FOR_CASCADE,
+                        {
+                            "node_id": dep_id,
+                            "silo_id": silo_id,
+                        },
+                    )
+                cascade_count += 1
             else:
-                # Still has enough facts: mark stale for re-synthesis check
-                await store.execute_write(
-                    q.MARK_BELIEF_STALE_FOR_CASCADE,
-                    {
-                        "node_id": dep_id,
-                        "silo_id": silo_id,
-                    },
+                # Recurse into non-wisdom dependents
+                cascade_count += await cascade_staleness(store, dep_id, silo_id, depth + 1, visited)
+        except Exception as exc:
+            # ponytail: defer failed node to async queue for retry instead of leaving partial state
+            logger.warning(
+                "cascade_staleness_node_failed",
+                node_id=dep_id,
+                error=str(exc),
+                depth=depth,
+            )
+            await emit_reaction(
+                ReactionEvent(
+                    event_type=ReactionEventType.CASCADE_STALENESS,
+                    node_id=dep_id,
+                    silo_id=silo_id,
                 )
-            cascade_count += 1
-        else:
-            # Recurse into non-wisdom dependents
-            cascade_count += await cascade_staleness(store, dep_id, silo_id, depth + 1, visited)
+            )
 
     logger.debug(
         "cascade_staleness_complete", node_id=node_id, cascade_count=cascade_count, depth=depth
