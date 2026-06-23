@@ -75,7 +75,7 @@ def resolve_identity(
     agent_id = (
         explicit_agent_id
         or auth.agent_id
-        or f"user:{auth.user_id}"
+        or (f"user:{auth.user_id}" if auth.user_id else None)
         or _anon_fingerprint(tenant_id, auth.user_id)
     )
 
