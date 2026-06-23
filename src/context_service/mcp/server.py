@@ -13,6 +13,7 @@ from fastmcp import FastMCP
 from fastmcp.server.dependencies import get_http_headers
 
 from context_service.auth.context import AuthContext
+from context_service.auth.identity import IdentityContext
 
 if TYPE_CHECKING:
     from context_service.embeddings import EmbeddingService
@@ -268,7 +269,9 @@ async def get_mcp_auth_context() -> AuthContext:
     )
     from context_service.config.settings import get_settings
 
-    headers = get_http_headers(include={"authorization", "x-agent-id", "x-session-id", "x-org-id"})
+    headers = get_http_headers(
+        include={"authorization", "x-agent-id", "x-session-id", "x-org-id", "x-model-id"}
+    )
     auth_header = headers.get("authorization")
 
     if auth_header:
@@ -344,6 +347,27 @@ async def get_mcp_auth_context() -> AuthContext:
         is_dev=True,
         agent_id=agent_id,
         session_id=session_id,
+    )
+
+
+async def get_mcp_identity_context() -> IdentityContext:
+    """Resolve a fully attributed IdentityContext for the current MCP request.
+
+    Wraps get_mcp_auth_context() and applies the identity fallback chain,
+    adding model_id from X-Model-Id header. Call this instead of
+    get_mcp_auth_context() in any tool that writes nodes.
+    """
+    from fastmcp.server.dependencies import get_http_headers as _get_headers
+
+    from context_service.auth.identity import resolve_identity
+
+    auth = await get_mcp_auth_context()
+    extra = _get_headers(include={"x-agent-id", "x-session-id", "x-model-id"})
+    return resolve_identity(
+        auth,
+        explicit_agent_id=extra.get("x-agent-id"),
+        explicit_session_id=extra.get("x-session-id"),
+        explicit_model_id=extra.get("x-model-id"),
     )
 
 
