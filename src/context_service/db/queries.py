@@ -181,6 +181,22 @@ MERGE (a)-[:CONTRADICTS {id: r.edge_id}]->(b)
 RETURN count(*) AS edges_written
 """
 
+# Create a CONTRADICTS edge with full resolution metadata (for cross-agent conflict detection).
+# Accepts any node type (Memory, Claim, etc.) not just Claim-to-Claim.
+# Parameters: edge_id, source_id, target_id, silo_id, detected_by, resolution_status, detected_at.
+CREATE_CONTRADICTS_EDGE_WITH_METADATA = """
+MATCH (a {id: $source_id, silo_id: $silo_id})
+MATCH (b {id: $target_id, silo_id: $silo_id})
+MERGE (a)-[r:CONTRADICTS {id: $edge_id}]->(b)
+ON CREATE SET
+    r.detected_by = $detected_by,
+    r.resolution_status = $resolution_status,
+    r.detected_at = $detected_at,
+    r.resolved_by = null,
+    r.resolved_at = null
+RETURN r.id AS edge_id
+"""
+
 
 def build_batch_entity_rel_query(rel_type: RelationshipType) -> str:
     """Build a batch CREATE entity relationship query with a real edge label.
