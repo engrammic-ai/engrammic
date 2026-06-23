@@ -2,29 +2,17 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-06-21)
+## Current state (2026-06-23)
 
-**Focus:** BEAM benchmark running, multi-agent coherence design complete
+**Focus:** BEAM benchmark (Antler gate), multi-agent coherence v2
 
-**Recent:**
-- Multi-agent coherence design spec (2026-06-21)
-- BEAM benchmark infrastructure deployed (2026-06-20)
-
-**Recent:**
-- v2.41 Wisdom/Intelligence layer activation (complete)
-- v2.40 Trigram search integration for BM25 channel (complete)
-- v2.39 TEMPR 4-channel retrieval - BM25, temporal, PPR, cross-encoder (complete)
-- v2.38 Mypy strict: 115 -> 0 errors (complete)
-
-## Active plans
-
-| Plan | Description | Status |
-|------|-------------|--------|
-| [2026-06-22-cascade-invalidation-fixes.md](./2026-06-22-cascade-invalidation-fixes.md) | Patch architectural flaws in SAGE downstream cascade logic | Draft |
-| [2026-06-21-multi-agent-coherence.md](./2026-06-21-multi-agent-coherence.md) | Multi-agent coordination via EAG substrate | Ready |
-| [2026-06-09-longmemeval-v2-harness.md](./2026-06-09-longmemeval-v2-harness.md) | Official LongMemEval-V2 harness with Engrammic adapter | Ready |
-| [recall-quality-improvement.md](./recall-quality-improvement.md) | Question-answer asymmetry research, query expansion | Draft |
-| [polish-audit-2026-06-08.md](./polish-audit-2026-06-08.md) | 7 critical + high findings from codebase audit | Triage |
+**Recent completions:**
+- Multi-agent coherence v2 (full) - conflict detection, resolution verbs, agents tool, recall filters
+- Evidence stub nodes for file:// and urn:// URIs
+- Multi-agent coherence v1 (authored provenance + conflict detection) - PR #71
+- SAGE restructure (Promoter/Synthesizer/Decayer/Detector) - PRs #68-70
+- Recall consolidation + v2 synthesis trigger - PR #65
+- Cascade invalidation fixes - PR #72
 
 ## Benchmark (next priority)
 
@@ -32,35 +20,42 @@ Active implementation plans for context-service. Completed plans are moved to `a
 - [ ] Run benchmark: Engrammic full vs baseline vs mem0
 - [ ] Document benchmark results
 
+## Active plans
+
+| Plan | Description | Status |
+|------|-------------|--------|
+| [2026-06-09-longmemeval-v2-harness.md](./2026-06-09-longmemeval-v2-harness.md) | Official LongMemEval-V2 harness with Engrammic adapter | Ready |
+
 ## Draft / design
 
 | Plan | Description | Status |
 |------|-------------|--------|
-| [2026-06-08-rrf-fusion.md](./2026-06-08-rrf-fusion.md) | Cross-channel RRF fusion for recall (vector + graph) | Ready |
+| [2026-06-19-semantic-spo-corroboration.md](./2026-06-19-semantic-spo-corroboration.md) | Semantic equivalence for organic corroboration | Draft |
+| [2026-06-20-retrieval-remaining-work.md](./2026-06-20-retrieval-remaining-work.md) | Retrieval quality gaps | Spec |
 | [2026-06-08-wisdom-layer-split.md](./2026-06-08-wisdom-layer-split.md) | Separate Commitments (agent) from Beliefs (SAGE) | Draft |
-| [2026-06-08-unified-recall-and-write-dedup.md](./2026-06-08-unified-recall-and-write-dedup.md) | Merge retrieval paths, add write-time semantic dedup | Draft |
 | [2026-06-06-write-quality-gate.md](./2026-06-06-write-quality-gate.md) | Write-path quality enforcement with structural checks | Ready |
+| [2026-06-12-longmemeval-epistemic-harness.md](./2026-06-12-longmemeval-epistemic-harness.md) | LongMemEval with epistemic extensions | Draft |
+| [polish-audit-2026-06-08.md](./polish-audit-2026-06-08.md) | 7 critical + high findings from codebase audit | Triage |
 | [error-boundary-surface-invariants.md](./error-boundary-surface-invariants.md) | Error boundary design notes | Notes |
 
 ## Pending (not started)
 
 | Plan | Description | Blocker |
 |------|-------------|---------|
-| [2026-06-05-rerank-optimization.md](./2026-06-05-rerank-optimization.md) | Semantic rerank cache (L1 exact, L2 similarity) | — |
+| [2026-06-05-rerank-optimization.md](./2026-06-05-rerank-optimization.md) | Semantic rerank cache (L1 exact, L2 similarity) | - |
 | [2026-06-05-embedding-batching-phase2.md](./2026-06-05-embedding-batching-phase2.md) | Adaptive batching, queue depth tuning | Phase 1 complete |
 | [2026-06-05-admin-dashboard.md](./2026-06-05-admin-dashboard.md) | Operator dashboard (memory state, usage, health) | REST API Phase 1 |
-| [2026-06-04-supersession-chain-retrieval.md](./2026-06-04-supersession-chain-retrieval.md) | `history` MCP tool for supersession chains | — |
-| [2026-05-30-join-engrammic-onboarding-plan.md](./2026-05-30-join-engrammic-onboarding-plan.md) ([design](./2026-05-30-join-engrammic-onboarding-design.md)) | join.engrammic.ai onboarding app | — |
-| [2026-05-30-evidence-verification.md](./2026-05-30-evidence-verification.md) | Evidence verification via Nango | — |
-| [2026-05-20-self-hosted-rest-api-phase1.md](./2026-05-20-self-hosted-rest-api-phase1.md) | Self-hosted REST API: auth + Memory/Knowledge endpoints | — |
+| [2026-06-04-supersession-chain-retrieval.md](./2026-06-04-supersession-chain-retrieval.md) | `history` MCP tool for supersession chains | - |
+| [2026-06-12-rest-api-mcp-surface.md](./2026-06-12-rest-api-mcp-surface.md) | REST API mirroring MCP surface | - |
+| [2026-06-09-standalone-architecture.md](./2026-06-09-standalone-architecture.md) | Standalone deployment architecture | - |
+| [standalone-installer.md](./standalone-installer.md) | Standalone installer design | - |
 
-## Brain architecture (complete)
+## Reference
 
-Reactive brain architecture fully wired. MCP tools use brain transactions.
-
-| Plan | Description | Status |
-|------|-------------|--------|
-| [2026-06-01-brain-architecture.md](./2026-06-01-brain-architecture.md) | 20 transactions, 8 invariants | Reference |
+| Plan | Description |
+|------|-------------|
+| [2026-06-01-brain-architecture.md](./2026-06-01-brain-architecture.md) | 20 transactions, 8 invariants (complete, reference doc) |
+| [2026-06-09-longmemeval-retrieval.md](./2026-06-09-longmemeval-retrieval.md) | LongMemEval retrieval notes |
 
 ## Future work
 
@@ -69,18 +64,17 @@ Specced or checkpointed for later implementation:
 | Item | Spec/Note | Trigger |
 |------|-----------|---------|
 | **ML Products for Frontier Labs** | `docs/superpowers/specs/2026-05-23-ml-products-frontier-labs-design.md` | Post-fundraise |
-| **Self-Hosted REST API Phase 2+** | `docs/superpowers/specs/2026-05-20-self-hosted-rest-api-design.md` | After Phase 1 |
 | **Concepts** | `docs/superpowers/specs/2026-05-18-concepts-design.md` | Post-beta, retrieval quality degrades |
 
 ## Archive
 
-Completed plans in `archive/` (135+ files). Recent:
+Completed plans in `archive/` (140+ files). Recent:
+- Multi-agent coherence v1 (2026-06-22)
+- SAGE restructure - Promoter/Synthesizer/Decayer/Detector (2026-06-21)
+- Recall consolidation + v2 synthesis (2026-06-20)
+- Cascade invalidation fixes (2026-06-22)
 - TEMPR parity sprint - 4-channel retrieval (2026-06-16)
 - Wisdom/Intelligence layer activation (2026-06-14)
-- Trigram search integration (2026-06-13)
-- Read-path epistemic fusion step 1 (2026-06-11)
-- Brain architecture phases 2-9 (2026-06-01/02)
-- Embedding Batching Phase 1 (2026-06-05)
 
 ## Plan format
 
