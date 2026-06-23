@@ -630,6 +630,27 @@ class ConsolidationConfig(BaseModel):
     )
 
 
+class ConflictDetectionConfig(BaseModel):
+    """Configuration for write-time cross-agent conflict detection."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable write-time conflict detection between agents",
+    )
+    similarity_threshold: float = Field(
+        default=0.7,
+        ge=0.0,
+        le=1.0,
+        description="Cosine similarity threshold for flagging cross-agent conflicts",
+    )
+    check_other_agents_only: bool = Field(
+        default=True,
+        description="Only detect conflicts with nodes from other agents",
+    )
+
+
 def _generate_install_id() -> str:
     """Generate a stable install ID based on machine identity."""
     import hashlib
@@ -1062,6 +1083,7 @@ class Settings(BaseSettings):
     custodian: CustodianSettings = Field(default_factory=CustodianSettings)
     auto_reflect: AutoReflectConfig = Field(default_factory=AutoReflectConfig)
     consolidation: ConsolidationConfig = Field(default_factory=ConsolidationConfig)
+    conflict_detection: ConflictDetectionConfig = Field(default_factory=ConflictDetectionConfig)
     causal: CausalConfig = Field(default_factory=CausalConfig)
     pattern: PatternConfig = Field(default_factory=PatternConfig)
     weak_links: WeakLinksSettings = Field(default_factory=WeakLinksSettings)

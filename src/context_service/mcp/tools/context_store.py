@@ -17,6 +17,7 @@ from context_service.mcp.server import (
     get_context_service,
     get_evidence_validator,
     get_mcp_auth_context,
+    get_mcp_identity_context,
     get_postgres_store,
     get_silo_service,
 )
@@ -281,7 +282,8 @@ async def _context_remember(
         }
 
     ctx_svc = get_context_service()
-    agent_id = auth.agent_id or auth.org_id
+    identity = await get_mcp_identity_context()
+    agent_id = identity.agent_id
     _start = time.perf_counter()
 
     effective_metadata: dict[str, Any] = dict(metadata or {})
@@ -298,6 +300,9 @@ async def _context_remember(
         content_type=content_type,
         decay_class=decay_class,
         metadata=effective_metadata,
+        session_id=identity.session_id,
+        owner_id=identity.agent_id,
+        model_id=identity.model_id,
     )
 
     for event in events:
@@ -319,12 +324,13 @@ async def _context_remember(
                 "Use a different claim text or omit supersedes.",
             }
 
+    memory_vector: list[float] | None = None
     try:
-        vector = await embed(content)
+        memory_vector = await embed(content)
         await ctx_svc.vector_store.upsert(
             node_id=str(node_id),
-            vector=vector,
-            payload={"type": "Document", "layer": "memory"},
+            vector=memory_vector,
+            payload={"type": "Document", "layer": "memory", "agent_id": agent_id},
             silo_id=str(validated_silo_id),
         )
     except Exception:
@@ -334,6 +340,37 @@ async def _context_remember(
             node_id=str(node_id),
             layer="memory",
         )
+
+    # Cross-agent conflict detection (fire-and-forget)
+    if memory_vector:
+        try:
+            from context_service.engine.conflict_detection import detect_conflicts
+
+            raw_qdrant = await ctx_svc._qdrant._get_client()
+            conflict_edge_ids = await detect_conflicts(
+                store=ctx_svc.graph_store,
+                node_id=str(node_id),
+                node_embedding=memory_vector,
+                ctx=identity,
+                qdrant_client=raw_qdrant,
+            )
+            if conflict_edge_ids:
+                logger.info(
+                    "cross_agent_conflicts_detected",
+                    node_id=str(node_id),
+                    conflict_count=len(conflict_edge_ids),
+                    layer="memory",
+                )
+        except Exception as exc:
+            logger.debug("conflict_detection_skipped", error=str(exc), node_id=str(node_id))
+
+    from context_service.services.identity_service import fire_and_forget_identity_writes
+
+    fire_and_forget_identity_writes(
+        identity,
+        action="asserted",
+        target_node_id=str(node_id),
+    )
 
     result: dict[str, Any] = {
         "node_id": str(node_id),
@@ -420,7 +457,8 @@ async def _context_assert(
             if ev_result.node_id:
                 evidence_nodes.append(ev_result.node_id)
 
-    agent_id = auth.agent_id or auth.org_id
+    identity = await get_mcp_identity_context()
+    agent_id = identity.agent_id
     _start = time.perf_counter()
     # Use validated node IDs if available, else fall back to raw refs
     evidence_refs = [f"node:{nid}" for nid in evidence_nodes] if evidence_nodes else evidence_list
@@ -460,6 +498,9 @@ async def _context_assert(
         subject=subject,
         predicate=predicate,
         object_value=object_value,
+        session_id=identity.session_id,
+        owner_id=identity.agent_id,
+        model_id=identity.model_id,
     )
 
     for event in events:
@@ -468,12 +509,13 @@ async def _context_assert(
     record_store_latency(time.perf_counter() - _start, silo_id=expected_silo_id, layer="knowledge")
     node_id = result.node_id
 
+    claim_vector: list[float] | None = None
     try:
-        vector = await embed(claim_text)
+        claim_vector = await embed(claim_text)
         await ctx_svc.vector_store.upsert(
             node_id=str(node_id),
-            vector=vector,
-            payload={"type": "Claim", "layer": "knowledge"},
+            vector=claim_vector,
+            payload={"type": "Claim", "layer": "knowledge", "agent_id": agent_id},
             silo_id=str(expected_silo_id),
         )
     except Exception:
@@ -486,8 +528,10 @@ async def _context_assert(
 
     # Fetch embedding once for both contradiction and affinity checks
     settings = get_settings()
-    node_embedding: list[float] | None = None
-    if settings.contradiction_flagging_enabled or settings.affinity_computation_enabled:
+    node_embedding: list[float] | None = claim_vector
+    if node_embedding is None and (
+        settings.contradiction_flagging_enabled or settings.affinity_computation_enabled
+    ):
         try:
             emb_result = await ctx_svc.graph_store.execute_query(
                 _GET_NODE_EMBEDDING,
@@ -543,6 +587,37 @@ async def _context_assert(
                 node_id=str(node_id),
                 silo_id=str(expected_silo_id),
             )
+
+    # Cross-agent conflict detection (fire-and-forget)
+    if node_embedding:
+        try:
+            from context_service.engine.conflict_detection import detect_conflicts
+
+            raw_qdrant = await ctx_svc._qdrant._get_client()
+            conflict_edge_ids = await detect_conflicts(
+                store=ctx_svc.graph_store,
+                node_id=str(node_id),
+                node_embedding=node_embedding,
+                ctx=identity,
+                qdrant_client=raw_qdrant,
+            )
+            if conflict_edge_ids:
+                logger.info(
+                    "cross_agent_conflicts_detected",
+                    node_id=str(node_id),
+                    conflict_count=len(conflict_edge_ids),
+                    layer="knowledge",
+                )
+        except Exception as exc:
+            logger.debug("conflict_detection_skipped", error=str(exc), node_id=str(node_id))
+
+    from context_service.services.identity_service import fire_and_forget_identity_writes
+
+    fire_and_forget_identity_writes(
+        identity,
+        action="asserted",
+        target_node_id=str(node_id),
+    )
 
     response: dict[str, Any] = {
         "node_id": str(node_id),

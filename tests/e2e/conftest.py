@@ -321,10 +321,6 @@ async def mcp_client(e2e_org_id: str) -> AsyncGenerator[Any, None]:
             new=AsyncMock(return_value=auth),
         ),
         patch(
-            "context_service.mcp.tools.context_link.get_mcp_auth_context",
-            new=AsyncMock(return_value=auth),
-        ),
-        patch(
             "context_service.mcp.tools.context_recall.get_mcp_auth_context",
             new=AsyncMock(return_value=auth),
         ),
@@ -360,10 +356,6 @@ async def mcp_client_alt(e2e_org_id: str) -> AsyncGenerator[Any, None]:
         ),
         patch(
             "context_service.mcp.tools.context_store.get_mcp_auth_context",
-            new=AsyncMock(return_value=alt_auth),
-        ),
-        patch(
-            "context_service.mcp.tools.context_link.get_mcp_auth_context",
             new=AsyncMock(return_value=alt_auth),
         ),
         patch(

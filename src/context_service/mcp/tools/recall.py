@@ -52,6 +52,9 @@ async def _recall_impl(
     graph_depth: int | None = None,
     include_hints: bool = False,
     include_inactive: bool = False,
+    agent_id: str | None = None,
+    exclude_agents: list[str] | None = None,
+    include_conflicts: bool = False,
 ) -> dict[str, Any]:
     """Implementation for recall tool."""
     auth = await get_mcp_auth_context()
@@ -93,6 +96,9 @@ async def _recall_impl(
         graph_depth=graph_depth,
         include_hints=include_hints,
         include_inactive=include_inactive,
+        agent_id=agent_id,
+        exclude_agents=exclude_agents,
+        include_conflicts=include_conflicts,
     )
     duration_ms = (time.perf_counter() - start) * 1000
 
@@ -304,6 +310,9 @@ def register(mcp: FastMCP) -> None:
         graph_depth: int | None = None,
         include_hints: bool = False,
         include_inactive: bool = False,
+        agent_id: str | None = None,
+        exclude_agents: list[str] | None = None,
+        include_conflicts: bool = False,
     ) -> dict[str, Any]:
         """Retrieve knowledge.
 
@@ -337,9 +346,14 @@ def register(mcp: FastMCP) -> None:
             include_inactive: When False (default), superseded and tombstoned nodes
                 are excluded from results. When True, all lifecycle states are
                 returned. Useful for auditing supersession chains.
+            agent_id: When provided, only return nodes created by this agent.
+            exclude_agents: List of agent IDs whose nodes should be excluded
+                from results.
+            include_conflicts: When True, also return nodes that have CONTRADICTS
+                edges to the result nodes, in a separate conflict_nodes field.
 
         Returns:
-            {results|nodes, hypotheses?, ...}
+            {results|nodes, hypotheses?, conflict_nodes?, ...}
         """
         start = time.perf_counter()
         success = True
@@ -362,6 +376,9 @@ def register(mcp: FastMCP) -> None:
                 graph_depth=graph_depth,
                 include_hints=include_hints,
                 include_inactive=include_inactive,
+                agent_id=agent_id,
+                exclude_agents=exclude_agents,
+                include_conflicts=include_conflicts,
             )
         except Exception:
             success = False

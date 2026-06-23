@@ -8,7 +8,12 @@ from typing import TYPE_CHECKING, Any
 
 from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.rate_limit import rate_limited
-from context_service.mcp.server import get_context_service, get_mcp_auth_context, track_tool_usage
+from context_service.mcp.server import (
+    get_context_service,
+    get_mcp_auth_context,
+    get_mcp_identity_context,
+    track_tool_usage,
+)
 from context_service.mcp.tools.registry import get_tool_description
 from context_service.reactions.events import emit_reaction
 from context_service.sage.transactions import InvariantViolation
@@ -29,8 +34,9 @@ async def _forget_impl(
     """Implementation for forget tool."""
     auth = await get_mcp_auth_context()
     await track_tool_usage(auth, "forget")
+    identity = await get_mcp_identity_context()
     silo_id = str(derive_silo_id(auth.org_id))
-    agent_id = auth.agent_id or auth.org_id
+    agent_id = identity.agent_id
 
     ctx_svc = get_context_service()
     qdrant_store = getattr(ctx_svc, "_qdrant", None)
@@ -54,6 +60,10 @@ async def _forget_impl(
 
     for event in events:
         await emit_reaction(event)
+
+    from context_service.services.identity_service import fire_and_forget_identity_writes
+
+    fire_and_forget_identity_writes(identity, action="retracted", target_node_id=node_id)
 
     # Invalidate cache on successful tombstone
     cache = getattr(ctx_svc, "_cache", None)

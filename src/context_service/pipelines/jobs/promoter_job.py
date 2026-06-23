@@ -15,7 +15,6 @@ from dagster import ScheduleDefinition
 
 from context_service.pipelines.resources import EmbeddingResource, MemgraphResource
 from context_service.sage.transactions import (
-    PROMOTION_THRESHOLD,
     InvariantViolation,
     _check_corroboration,
     promote,

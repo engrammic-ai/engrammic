@@ -13,7 +13,6 @@ import pytest
 TOOL_MODULES = [
     "context_service.mcp.tools.context_get",
     "context_service.mcp.tools.context_graph",
-    "context_service.mcp.tools.context_link",
     "context_service.mcp.tools.context_query",
     "context_service.mcp.tools.context_recall",
     "context_service.mcp.tools.context_store",

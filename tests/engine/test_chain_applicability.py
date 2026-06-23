@@ -137,9 +137,12 @@ async def test_cold_start_skips_dtw() -> None:
     cfg = _make_config()
     chain = _make_chain(step_embeddings=[[0.1] * 4, [0.2] * 4])
     mock_dtw = MagicMock(return_value=0.9)
+    mock_ctx_svc = MagicMock()
+    mock_ctx_svc._memgraph = AsyncMock()
 
     with (
         patch(f"{MODULE}.get_settings", return_value=cfg),
+        patch(f"{MODULE}.get_context_service", return_value=mock_ctx_svc),
         patch(f"{MODULE}.get_session_step_embeddings", new_callable=AsyncMock, return_value=[]),
         patch(f"{MODULE}.embed_query", new_callable=AsyncMock, return_value=[0.1] * 4),
         patch(f"{MODULE}.search_chains", new_callable=AsyncMock, return_value=[chain]),
@@ -241,9 +244,12 @@ async def test_accessible_evidence_returns_chain() -> None:
     cfg = _make_config()
     required_node = str(uuid4())
     chain = _make_chain(evidence_used=[required_node])
+    mock_ctx_svc = MagicMock()
+    mock_ctx_svc._memgraph = AsyncMock()
 
     with (
         patch(f"{MODULE}.get_settings", return_value=cfg),
+        patch(f"{MODULE}.get_context_service", return_value=mock_ctx_svc),
         patch(f"{MODULE}.get_session_step_embeddings", new_callable=AsyncMock, return_value=[]),
         patch(f"{MODULE}.embed_query", new_callable=AsyncMock, return_value=[0.1] * 4),
         patch(f"{MODULE}.search_chains", new_callable=AsyncMock, return_value=[chain]),
@@ -276,9 +282,12 @@ async def test_warm_start_passing_dtw_returns_chain() -> None:
     """Warm start chain passes DTW threshold and is returned."""
     cfg = _make_config(step_threshold=0.85)
     chain = _make_chain(step_embeddings=[[0.1] * 4, [0.2] * 4])
+    mock_ctx_svc = MagicMock()
+    mock_ctx_svc._memgraph = AsyncMock()
 
     with (
         patch(f"{MODULE}.get_settings", return_value=cfg),
+        patch(f"{MODULE}.get_context_service", return_value=mock_ctx_svc),
         patch(
             f"{MODULE}.get_session_step_embeddings",
             new_callable=AsyncMock,
