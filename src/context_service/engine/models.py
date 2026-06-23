@@ -100,7 +100,7 @@ class BinaryEdge(BaseModel):
         description="Hop count for inferred edges (e.g., 2 for A->B->C).",
     )
 
-    # CONTRADICTS edge resolution fields (multi-agent coherence, v2.0)
+    # CONTRADICTS edge resolution fields
     resolution_status: str | None = Field(
         default=None,
         description="unresolved, superseded, dismissed, or escalated",
@@ -109,8 +109,14 @@ class BinaryEdge(BaseModel):
         default=None,
         description="'system' or agent_id that detected the conflict",
     )
-    resolved_by: str | None = Field(default=None)
-    resolved_at: datetime | None = Field(default=None)
+    resolved_by: str | None = Field(
+        default=None,
+        description="agent_id or 'system' that resolved the conflict",
+    )
+    resolved_at: datetime | None = Field(
+        default=None,
+        description="Timestamp when the conflict was resolved.",
+    )
 
     @model_validator(mode="after")
     def no_self_loop(self) -> BinaryEdge:

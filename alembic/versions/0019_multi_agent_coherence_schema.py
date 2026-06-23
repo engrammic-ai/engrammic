@@ -46,8 +46,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=True,
         ),
-        sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("silo_id", "id", name="uq_agents_silo_id"),
+        sa.PrimaryKeyConstraint("silo_id", "id"),
     )
     op.create_index("idx_agents_silo", "agents", ["silo_id"])
 
