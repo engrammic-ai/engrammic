@@ -9,7 +9,7 @@ Optimized for BEAM/LongMemEval benchmark runs with minimal network latency.
 """
 
 import pulumi
-from pulumi_gcp import compute, secretmanager
+from pulumi_gcp import compute
 
 # GPU configurations by tier
 GPU_CONFIGS = {

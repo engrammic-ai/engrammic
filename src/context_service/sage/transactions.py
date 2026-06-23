@@ -2764,7 +2764,7 @@ class NeighborhoodInconsistent(BrainError):
 
 async def check_ncb_before_write(
     store: HyperGraphStore,
-    content: str,
+    _content: str,  # ponytail: reserved for semantic similarity check
     about_ids: list[str],
     silo_id: str,
 ) -> list[str]:

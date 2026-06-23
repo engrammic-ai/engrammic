@@ -320,7 +320,6 @@ class TestCascadeStaleness:
 
         async def mock_query(query: str, params: dict) -> list:
             node_id = params.get("node_id")
-            belief_qid = params.get("belief_id")
             if "count(f)" in query.lower():
                 # COUNT_ACTIVE_SOURCE_FACTS - still has 3 facts
                 return [{"active_count": 3}]

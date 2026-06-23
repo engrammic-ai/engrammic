@@ -9,10 +9,9 @@ Run on beta:
 import asyncio
 import os
 
+from neo4j import AsyncGraphDatabase
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
-from neo4j import AsyncGraphDatabase
-
 
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 MEMGRAPH_URI = os.getenv("MEMGRAPH_URI", "bolt://localhost:7687")

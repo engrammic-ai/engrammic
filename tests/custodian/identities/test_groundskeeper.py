@@ -71,7 +71,7 @@ async def test_run_gc_no_expired_nodes():
 
     result = await identity.run_gc()
 
-    assert result == {"deleted": 0, "silo_id": "test-silo"}
+    assert result == {"deleted": 0, "silo_id": "test-silo", "qdrant_failed": 0}
     mock_store.execute_write.assert_not_called()
 
 
@@ -91,7 +91,7 @@ async def test_run_gc_deletes_expired_nodes():
 
     result = await identity.run_gc()
 
-    assert result == {"deleted": 2, "silo_id": "test-silo"}
+    assert result == {"deleted": 2, "silo_id": "test-silo", "qdrant_failed": 0}
     mock_store.execute_write.assert_called_once()
     write_params = mock_store.execute_write.call_args[0][1]
     assert set(write_params["node_ids"]) == {"n1", "n2"}

@@ -33,7 +33,6 @@ After deployment:
 """
 
 import pulumi
-
 from components.benchmark import BenchmarkEnvironment
 
 # Create the benchmark environment
