@@ -802,7 +802,7 @@ class FusionRetriever:
         """Apply structural epistemic signals to fused results.
 
         Only uses hard structural signals, not calibrated confidence:
-        - superseded_by: node explicitly replaced -> heavy penalty
+        - valid_to: node superseded (valid_to set) -> heavy penalty
         - corroboration_count: SAGE counted multiple sources -> boost
 
         Args:
@@ -816,8 +816,8 @@ class FusionRetriever:
         """
         # ponytail: confidence boost removed - values are hardcoded defaults (0.8/1.0), not calibrated
         for f in fused:
-            # Superseded penalty: node explicitly outdated
-            if f.properties.get("superseded_by"):
+            # Superseded penalty: node explicitly outdated (valid_to set = superseded)
+            if f.properties.get("valid_to"):
                 f.rrf_score *= superseded_penalty
                 f.channel_contributions["epistemic_superseded"] = superseded_penalty
 
