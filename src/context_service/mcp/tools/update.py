@@ -10,7 +10,12 @@ import structlog
 
 from context_service.mcp.error_boundary import mcp_error_boundary
 from context_service.mcp.rate_limit import rate_limited
-from context_service.mcp.server import get_context_service, get_mcp_auth_context, track_tool_usage
+from context_service.mcp.server import (
+    get_context_service,
+    get_mcp_auth_context,
+    get_mcp_identity_context,
+    track_tool_usage,
+)
 from context_service.mcp.tools.context_store import (
     _context_assert,
     embed,
@@ -113,6 +118,7 @@ async def _update_impl(
 
     auth = await get_mcp_auth_context()
     await track_tool_usage(auth, "update")
+    identity = await get_mcp_identity_context()
     silo_id = str(derive_silo_id(auth.org_id))
 
     supersedes_id: str
@@ -197,6 +203,11 @@ async def _update_impl(
         return result
 
     record_supersession_used("update", silo_id=silo_id)
+
+    # Log "superseded" event for the old node
+    from context_service.services.identity_service import fire_and_forget_identity_writes
+
+    fire_and_forget_identity_writes(identity, action="superseded", target_node_id=supersedes_id)
 
     # Fetch snippet of the superseded node content for the response
     ctx_svc = get_context_service()

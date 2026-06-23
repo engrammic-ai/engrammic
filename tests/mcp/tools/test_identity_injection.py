@@ -35,35 +35,35 @@ def _make_auth(agent_id: str | None = _AGENT_ID) -> MagicMock:
 
 class TestFireAndForgetIdentityWrites:
     async def test_schedules_both_tasks(self) -> None:
-        from context_service.services.identity_write import fire_and_forget_identity_writes
+        from context_service.services.identity_service import fire_and_forget_identity_writes
 
         identity = _make_identity()
         with (
             patch(
-                "context_service.services.identity_write.upsert_agent",
+                "context_service.services.identity_service.ensure_agent",
                 new=AsyncMock(),
             ),
             patch(
-                "context_service.services.identity_write.log_belief_event",
+                "context_service.services.identity_service.log_belief_event",
                 new=AsyncMock(),
             ),
-            patch("context_service.services.identity_write.asyncio.create_task") as mock_task,
+            patch("context_service.services.identity_service.asyncio.create_task") as mock_task,
         ):
             fire_and_forget_identity_writes(identity, "asserted", _NODE_ID)
             assert mock_task.call_count == 2
 
-    async def test_upsert_agent_swallows_errors(self) -> None:
-        from context_service.services.identity_write import upsert_agent
+    async def test_ensure_agent_swallows_errors(self) -> None:
+        from context_service.services.identity_service import ensure_agent
 
         identity = _make_identity()
         with patch(
             "context_service.db.postgres.get_session",
             side_effect=RuntimeError("db_down"),
         ):
-            await upsert_agent(identity)
+            await ensure_agent(identity)
 
     async def test_log_belief_event_swallows_errors(self) -> None:
-        from context_service.services.identity_write import log_belief_event
+        from context_service.services.identity_service import log_belief_event
 
         identity = _make_identity()
         with patch(
@@ -109,7 +109,7 @@ class TestContextRememberIdentityInjection:
             ),
             patch("context_service.mcp.tools.context_store.get_context_service") as mock_svc,
             patch(
-                "context_service.services.identity_write.fire_and_forget_identity_writes"
+                "context_service.services.identity_service.fire_and_forget_identity_writes"
             ) as mock_ffid,
         ):
             mock_svc.return_value.vector_store.upsert = AsyncMock()
@@ -150,7 +150,7 @@ class TestContextRememberIdentityInjection:
             ),
             patch("context_service.mcp.tools.context_store.get_context_service") as mock_svc,
             patch(
-                "context_service.services.identity_write.fire_and_forget_identity_writes"
+                "context_service.services.identity_service.fire_and_forget_identity_writes"
             ) as mock_ffid,
         ):
             mock_svc.return_value.vector_store.upsert = AsyncMock()

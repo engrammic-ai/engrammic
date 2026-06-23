@@ -530,6 +530,10 @@ async def _sync_to_postgres(
     layer: str,
     content: str,
     state: str = "ACTIVE",
+    agent_id: str | None = None,
+    session_id: str | None = None,
+    owner_id: str | None = None,
+    model_id: str | None = None,
 ) -> None:
     """Sync node to Postgres shadow table for text search.
 
@@ -554,17 +558,26 @@ async def _sync_to_postgres(
         async with pool.acquire() as conn:
             await conn.execute(
                 """
-                INSERT INTO nodes (id, silo_id, layer, content, state, created_at)
-                VALUES ($1, $2::uuid, $3, $4, $5, now())
+                INSERT INTO nodes (id, silo_id, layer, content, state, created_at,
+                    agent_id, session_id, owner_id, model_id)
+                VALUES ($1, $2::uuid, $3, $4, $5, now(), $6, $7, $8, $9)
                 ON CONFLICT (id) DO UPDATE SET
                     content = EXCLUDED.content,
-                    state = EXCLUDED.state
+                    state = EXCLUDED.state,
+                    agent_id = COALESCE(EXCLUDED.agent_id, nodes.agent_id),
+                    session_id = COALESCE(EXCLUDED.session_id, nodes.session_id),
+                    owner_id = COALESCE(EXCLUDED.owner_id, nodes.owner_id),
+                    model_id = COALESCE(EXCLUDED.model_id, nodes.model_id)
                 """,
                 node_id,
                 uuid.UUID(silo_id) if isinstance(silo_id, str) else silo_id,
                 layer,
                 content,
                 state,
+                agent_id,
+                session_id,
+                owner_id,
+                model_id,
             )
         record_postgres_sync_latency((time.monotonic() - t0) * 1000, "upsert")
     except Exception as exc:
@@ -635,6 +648,9 @@ async def store_memory(
     decay_class: str = "standard",
     metadata: dict[str, Any] | None = None,
     emit: bool = True,
+    session_id: str | None = None,
+    owner_id: str | None = None,
+    model_id: str | None = None,
 ) -> tuple[StoreMemoryResult, list[ReactionEvent]]:
     """Store an observation to Memory layer (TX0).
 
@@ -709,7 +725,16 @@ async def store_memory(
         created_at=created_at,
     )
 
-    await _sync_to_postgres(node_id, silo_id, layer, content)
+    await _sync_to_postgres(
+        node_id,
+        silo_id,
+        layer,
+        content,
+        agent_id=agent_id,
+        session_id=session_id,
+        owner_id=owner_id or agent_id,
+        model_id=model_id,
+    )
 
     events: list[ReactionEvent] = [
         ReactionEvent(
@@ -775,6 +800,9 @@ async def store_claim(
     tags: list[str] | None = None,
     emit: bool = True,
     embedding_service: EmbeddingService | None = None,
+    session_id: str | None = None,
+    owner_id: str | None = None,
+    model_id: str | None = None,
 ) -> tuple[StoreClaimResult, list[ReactionEvent]]:
     """Store a claim to Knowledge layer with evidence (TX2).
 
@@ -928,7 +956,16 @@ async def store_claim(
         corroboration_count=corroboration_count,
     )
 
-    await _sync_to_postgres(node_id, silo_id, "knowledge", content)
+    await _sync_to_postgres(
+        node_id,
+        silo_id,
+        "knowledge",
+        content,
+        agent_id=agent_id,
+        session_id=session_id,
+        owner_id=owner_id or agent_id,
+        model_id=model_id,
+    )
 
     events: list[ReactionEvent] = [
         ReactionEvent(

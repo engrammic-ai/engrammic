@@ -300,6 +300,9 @@ async def _context_remember(
         content_type=content_type,
         decay_class=decay_class,
         metadata=effective_metadata,
+        session_id=identity.session_id,
+        owner_id=identity.agent_id,
+        model_id=identity.model_id,
     )
 
     for event in events:
@@ -337,7 +340,7 @@ async def _context_remember(
             layer="memory",
         )
 
-    from context_service.services.identity_write import fire_and_forget_identity_writes
+    from context_service.services.identity_service import fire_and_forget_identity_writes
 
     fire_and_forget_identity_writes(
         identity,
@@ -471,6 +474,9 @@ async def _context_assert(
         subject=subject,
         predicate=predicate,
         object_value=object_value,
+        session_id=identity.session_id,
+        owner_id=identity.agent_id,
+        model_id=identity.model_id,
     )
 
     for event in events:
@@ -555,7 +561,7 @@ async def _context_assert(
                 silo_id=str(expected_silo_id),
             )
 
-    from context_service.services.identity_write import fire_and_forget_identity_writes
+    from context_service.services.identity_service import fire_and_forget_identity_writes
 
     fire_and_forget_identity_writes(
         identity,

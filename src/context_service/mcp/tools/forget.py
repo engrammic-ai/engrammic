@@ -61,7 +61,7 @@ async def _forget_impl(
     for event in events:
         await emit_reaction(event)
 
-    from context_service.services.identity_write import fire_and_forget_identity_writes
+    from context_service.services.identity_service import fire_and_forget_identity_writes
 
     fire_and_forget_identity_writes(identity, action="retracted", target_node_id=node_id)
 
