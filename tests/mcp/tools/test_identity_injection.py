@@ -163,3 +163,109 @@ class TestContextRememberIdentityInjection:
         mock_ffid.assert_called_once()
         _, kwargs = mock_ffid.call_args
         assert kwargs["action"] == "asserted"
+
+
+class TestForgetIdentityInjection:
+    """Verify forget fires 'retracted' belief event and uses identity agent_id."""
+
+    async def test_fires_retracted_event(self) -> None:
+        from datetime import UTC, datetime, timedelta
+
+        from context_service.sage.transactions import ForgetResult, NodeState
+
+        identity = _make_identity()
+        auth = _make_auth()
+        node_uuid = uuid.uuid4()
+        forget_result = ForgetResult(
+            node_id=node_uuid,
+            state=NodeState.TOMBSTONED,
+            tombstoned_at=datetime.now(UTC),
+            cancel_window_expires=datetime.now(UTC) + timedelta(hours=1),
+            cascade_count=0,
+        )
+
+        with (
+            patch(
+                "context_service.mcp.tools.forget.get_mcp_auth_context",
+                new=AsyncMock(return_value=auth),
+            ),
+            patch(
+                "context_service.mcp.tools.forget.get_mcp_identity_context",
+                new=AsyncMock(return_value=identity),
+            ),
+            patch("context_service.mcp.tools.forget.track_tool_usage", new=AsyncMock()),
+            patch(
+                "context_service.mcp.tools.forget.get_context_service",
+                return_value=MagicMock(_qdrant=None, _cache=None),
+            ),
+            patch(
+                "context_service.mcp.tools.forget.brain_forget",
+                new=AsyncMock(return_value=(forget_result, [])),
+            ),
+            patch("context_service.mcp.tools.forget.emit_reaction", new=AsyncMock()),
+            patch(
+                "context_service.services.identity_service.fire_and_forget_identity_writes"
+            ) as mock_ffid,
+        ):
+            from context_service.mcp.tools.forget import _forget_impl
+
+            result = await _forget_impl(str(node_uuid))
+
+        assert result["status"] == "tombstoned"
+        mock_ffid.assert_called_once_with(
+            identity, action="retracted", target_node_id=str(node_uuid)
+        )
+
+
+class TestUpdateIdentityInjection:
+    """Verify update fires 'superseded' event for the old node."""
+
+    async def test_fires_superseded_event_for_old_node(self) -> None:
+        identity = _make_identity()
+        auth = _make_auth()
+        old_node_id = str(uuid.uuid4())
+        new_node_id = str(uuid.uuid4())
+
+        assert_result = {"node_id": new_node_id, "layer": "knowledge", "created_at": "2026-01-01"}
+
+        with (
+            patch(
+                "context_service.mcp.tools.update.get_mcp_auth_context",
+                new=AsyncMock(return_value=auth),
+            ),
+            patch(
+                "context_service.mcp.tools.update.get_mcp_identity_context",
+                new=AsyncMock(return_value=identity),
+            ),
+            patch("context_service.mcp.tools.update.track_tool_usage", new=AsyncMock()),
+            patch(
+                "context_service.mcp.tools.update.validate_supersession_target",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "context_service.mcp.tools.update.get_context_service",
+            ) as mock_svc,
+            patch(
+                "context_service.mcp.tools.update._context_assert",
+                new=AsyncMock(return_value=assert_result),
+            ),
+            patch(
+                "context_service.services.identity_service.fire_and_forget_identity_writes"
+            ) as mock_ffid,
+        ):
+            mock_svc.return_value.graph_store.execute_query = AsyncMock(
+                return_value=[{"_labels": ["Claim"], "n": {"content": "old content"}}]
+            )
+
+            from context_service.mcp.tools.update import _update_impl
+
+            result = await _update_impl(
+                content="new content",
+                evidence=["node:123e4567-e89b-12d3-a456-426614174000"],
+                target=old_node_id,
+            )
+
+        assert result["status"] == "updated"
+        mock_ffid.assert_called_once_with(
+            identity, action="superseded", target_node_id=old_node_id
+        )
