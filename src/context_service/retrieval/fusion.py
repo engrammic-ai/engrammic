@@ -237,7 +237,13 @@ class FusionRetriever:
                         "valid_to": node.properties.get("valid_to"),
                         "corroboration_count": node.properties.get("corroboration_count", 0),
                         "synthesis_state": node.properties.get("synthesis_state"),
+                        "superseded_by": node.properties.get("superseded_by"),
+                        "supersedes": node.properties.get("supersedes"),
                     }
+
+        # 6. Epistemic boosting (requires fetched properties).
+        if fetch_content and final_results:
+            final_results = self._apply_epistemic_boost(final_results)
 
         # Log per-channel hit counts for diagnostics
         channel_counts = {
@@ -784,6 +790,51 @@ class FusionRetriever:
         except Exception as exc:
             logger.warning("rerank_fallback", error=str(exc))
             return fused
+
+    def _apply_epistemic_boost(
+        self,
+        fused: list[FusedResult],
+        *,
+        superseded_penalty: float = 0.3,
+        corroboration_cap: int = 5,
+        corroboration_step: float = 0.05,
+    ) -> list[FusedResult]:
+        """Apply structural epistemic signals to fused results.
+
+        Only uses hard structural signals, not calibrated confidence:
+        - superseded_by: node explicitly replaced -> heavy penalty
+        - corroboration_count: SAGE counted multiple sources -> boost
+
+        Args:
+            fused: List of FusedResult with populated properties.
+            superseded_penalty: Multiplier for superseded nodes (0.3 = 70% penalty).
+            corroboration_cap: Max corroboration count to consider.
+            corroboration_step: Boost per corroboration (0.05 = 5% per source, max 25%).
+
+        Returns:
+            Sorted list with adjusted rrf_score values.
+        """
+        # ponytail: confidence boost removed - values are hardcoded defaults (0.8/1.0), not calibrated
+        for f in fused:
+            # Superseded penalty: node explicitly outdated
+            if f.properties.get("superseded_by"):
+                f.rrf_score *= superseded_penalty
+                f.channel_contributions["epistemic_superseded"] = superseded_penalty
+
+            # Corroboration boost: bounded linear
+            corr = f.properties.get("corroboration_count", 0) or 0
+            if corr > 0:
+                corr_multiplier = 1.0 + corroboration_step * min(corr, corroboration_cap)
+                f.rrf_score *= corr_multiplier
+                f.channel_contributions["epistemic_corroboration"] = corr_multiplier
+
+        fused.sort(key=lambda f: f.rrf_score, reverse=True)
+        logger.debug(
+            "epistemic_boost_complete",
+            count=len(fused),
+            superseded_count=sum(1 for f in fused if f.properties.get("superseded_by")),
+        )
+        return fused
 
     def _fuse_rrf(
         self,
