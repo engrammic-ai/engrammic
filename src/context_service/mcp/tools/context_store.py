@@ -17,6 +17,7 @@ from context_service.mcp.server import (
     get_context_service,
     get_evidence_validator,
     get_mcp_auth_context,
+    get_mcp_identity_context,
     get_postgres_store,
     get_silo_service,
 )
@@ -281,7 +282,8 @@ async def _context_remember(
         }
 
     ctx_svc = get_context_service()
-    agent_id = auth.agent_id or auth.org_id
+    identity = await get_mcp_identity_context()
+    agent_id = identity.agent_id
     _start = time.perf_counter()
 
     effective_metadata: dict[str, Any] = dict(metadata or {})
@@ -334,6 +336,14 @@ async def _context_remember(
             node_id=str(node_id),
             layer="memory",
         )
+
+    from context_service.services.identity_write import fire_and_forget_identity_writes
+
+    fire_and_forget_identity_writes(
+        identity,
+        action="asserted",
+        target_node_id=str(node_id),
+    )
 
     result: dict[str, Any] = {
         "node_id": str(node_id),
@@ -420,7 +430,8 @@ async def _context_assert(
             if ev_result.node_id:
                 evidence_nodes.append(ev_result.node_id)
 
-    agent_id = auth.agent_id or auth.org_id
+    identity = await get_mcp_identity_context()
+    agent_id = identity.agent_id
     _start = time.perf_counter()
     # Use validated node IDs if available, else fall back to raw refs
     evidence_refs = [f"node:{nid}" for nid in evidence_nodes] if evidence_nodes else evidence_list
@@ -543,6 +554,14 @@ async def _context_assert(
                 node_id=str(node_id),
                 silo_id=str(expected_silo_id),
             )
+
+    from context_service.services.identity_write import fire_and_forget_identity_writes
+
+    fire_and_forget_identity_writes(
+        identity,
+        action="asserted",
+        target_node_id=str(node_id),
+    )
 
     response: dict[str, Any] = {
         "node_id": str(node_id),

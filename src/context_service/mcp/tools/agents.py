@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import dataclasses
 import time
 from dataclasses import dataclass
-from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from context_service.db.postgres import get_session
@@ -22,8 +22,8 @@ if TYPE_CHECKING:
 class AgentSummary:
     agent_id: str
     role: str | None
-    first_seen: datetime
-    last_seen: datetime
+    first_seen: str | None
+    last_seen: str | None
     node_count: int
     trust_score: float
 
@@ -56,17 +56,18 @@ async def _agents(silo_id: str) -> list[dict[str, Any]]:
         result = await session.execute(text(_AGENTS_QUERY), {"silo_id": silo_id})
         rows = result.mappings().all()
 
-    return [
-        {
-            "agent_id": row["id"],
-            "role": row["role"],
-            "first_seen": row["first_seen"].isoformat() if row["first_seen"] else None,
-            "last_seen": row["last_seen"].isoformat() if row["last_seen"] else None,
-            "node_count": row["node_count"],
-            "trust_score": row["trust_score"] if row["trust_score"] is not None else 0.5,
-        }
+    summaries = [
+        AgentSummary(
+            agent_id=row["id"],
+            role=row["role"],
+            first_seen=row["first_seen"].isoformat() if row["first_seen"] else None,
+            last_seen=row["last_seen"].isoformat() if row["last_seen"] else None,
+            node_count=row["node_count"],
+            trust_score=row["trust_score"] if row["trust_score"] is not None else 0.5,
+        )
         for row in rows
     ]
+    return [dataclasses.asdict(s) for s in summaries]
 
 
 def register(mcp: FastMCP) -> None:
