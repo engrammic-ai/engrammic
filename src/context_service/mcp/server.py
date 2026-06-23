@@ -181,44 +181,9 @@ async def _resolve_oauth_token(token: str) -> AuthContext | None:
 
 async def _resolve_api_key_auth(token: str) -> AuthContext | None:
     """Resolve auth context from WorkOS API key."""
-    from context_service.config.settings import get_settings
+    from context_service.auth.api_key import resolve_api_key
 
-    settings = get_settings()
-    api_key = settings.workos_api_key.get_secret_value() if settings.workos_api_key else None
-    if api_key is None:
-        logger.debug("api_key_auth_skipped", reason="no_workos_api_key_configured")
-        return None
-
-    key_prefix = token[:12] if len(token) >= 12 else token[:8]
-    try:
-        import workos
-
-        client = workos.WorkOSClient(api_key=api_key, client_id=settings.workos_client_id)
-        response = client.api_keys.create_validation(value=token)
-
-        if response.api_key is None:
-            logger.debug(
-                "api_key_auth_failed", reason="validation_returned_none", key_prefix=key_prefix
-            )
-            return None
-
-        owner = response.api_key.owner
-        org_id = getattr(owner, "organization_id", None) or owner.id
-
-        return AuthContext(
-            org_id=org_id,
-            user_id=f"apikey:{response.api_key.id}",
-            email=None,
-            is_dev=False,
-            agent_id=f"apikey:{response.api_key.id}",
-            session_id=None,
-            db_user_id=None,
-        )
-    except Exception as exc:
-        logger.warning(
-            "api_key_auth_failed", reason="exception", key_prefix=key_prefix, error=str(exc)
-        )
-        return None
+    return await resolve_api_key(token)
 
 
 async def get_mcp_auth_context() -> AuthContext:

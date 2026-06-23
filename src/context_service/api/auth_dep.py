@@ -1,4 +1,4 @@
-"""FastAPI auth dependency with dev bypass."""
+"""FastAPI auth dependency with dev bypass and API key support."""
 
 from __future__ import annotations
 
@@ -16,8 +16,10 @@ _dev_bypass_logged = False
 async def get_auth_context(request: Request) -> AuthContext:
     """Resolve the auth context for a request.
 
-    Returns a dev AuthContext when AUTH_ENABLED=false; otherwise validates
-    the Bearer token via WorkOS.
+    Auth cascade:
+    1. Dev bypass when AUTH_ENABLED=false
+    2. WorkOS API key if token starts with sk_
+    3. WorkOS sealed session (OAuth) otherwise
     """
     global _dev_bypass_logged
 
@@ -38,13 +40,22 @@ async def get_auth_context(request: Request) -> AuthContext:
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="missing or malformed Authorization header")
 
-    token = auth_header.removeprefix("Bearer ")
+    token = auth_header.removeprefix("Bearer ").strip()
 
+    # Try API key first (WorkOS keys prefixed with sk_)
+    if token.startswith("sk_"):
+        from context_service.auth.api_key import resolve_api_key
+
+        api_key_context = await resolve_api_key(token)
+        if api_key_context is not None:
+            return api_key_context
+        raise HTTPException(status_code=401, detail="Invalid API key")
+
+    # Fall back to WorkOS sealed session (OAuth)
     from context_service.auth import workos_client
 
     try:
         return await workos_client.verify_session(token)
     except ValueError as exc:
-        # Log full error internally but return generic message to client
         logger.warning("auth.session_verification_failed", error=str(exc))
         raise HTTPException(status_code=401, detail="Session verification failed") from exc

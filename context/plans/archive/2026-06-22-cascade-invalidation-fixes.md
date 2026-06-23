@@ -1,7 +1,7 @@
 # Cascade Invalidation Fixes Implementation Plan
 
 Date: 2026-06-22
-Status: Draft
+Status: Done
 
 ## Goal
 
@@ -27,10 +27,10 @@ Graph cycles are prevented by passing a `visited` tracking collection recursivel
 
 ## Scope
 
-- [ ] Wrap `cascade_staleness` operations in an atomic database transaction (`async with store.transaction():`).
-- [ ] Refactor `MAX_CASCADE_DEPTH` handling to emit a deferred `ReactionEvent` (via Taskiq) for nodes at the boundary, rather than raising a hard exception or silently dropping the update.
-- [ ] Change the `visited` collection in recursive traversal functions to a `set()`.
-- [ ] Review `flag_cascade` in `src/context_service/engine/revision.py` and `causal_invalidation.py` for similar lack of atomicity.
+- [x] ~~Wrap `cascade_staleness` operations in an atomic database transaction~~ Defer failed nodes to async queue for retry (simpler, same outcome)
+- [x] Refactor `MAX_CASCADE_DEPTH` handling to emit a deferred `ReactionEvent` for nodes at the boundary
+- [x] `visited` collection already uses `set()` (no change needed)
+- [ ] Review `flag_cascade` in `src/context_service/engine/revision.py` and `causal_invalidation.py` (deferred)
 
 ## Risks
 - Wrapping large recursive cascades in a single database transaction might hold database locks for too long if the cascade is massive. If this becomes a bottleneck, consider batching the transaction or relying strictly on the event-driven async queue for each depth level.
