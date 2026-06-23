@@ -112,3 +112,12 @@ tools:
       Use learn() to create new knowledge without supersession.
     maps_to: Claim
 
+  agents:
+    description: |
+      List agents registered in the silo. Returns agent_id, role, first_seen,
+      last_seen, node_count (nodes written by this agent), and trust_score.
+      Useful for multi-agent coordination and auditing which agents have
+      contributed to the knowledge base. silo_id defaults to the org's
+      primary silo derived from auth.
+    maps_to: agents
+

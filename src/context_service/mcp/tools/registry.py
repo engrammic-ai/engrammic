@@ -73,6 +73,7 @@ def register_tools(mcp: FastMCP) -> None:
     since tool modules import from registry.
     """
     from context_service.mcp.tools import (
+        agents,
         forget,
         learn,
         recall,
@@ -90,6 +91,7 @@ def register_tools(mcp: FastMCP) -> None:
         "forget": forget.register,
         "tick": tick.register,
         "update": update.register,
+        "agents": agents.register,
     }
 
     for name, register_fn in tools.items():
