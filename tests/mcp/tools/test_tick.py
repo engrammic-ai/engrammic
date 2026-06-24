@@ -558,9 +558,7 @@ class TestTickDecayPrevention:
         self, mock_context_service, mock_redis_client
     ):
         """When about_hint is provided, last_accessed_at should be updated."""
-        mock_context_service.graph_store.execute_write = AsyncMock(
-            return_value=[{"updated": 2}]
-        )
+        mock_context_service.graph_store.execute_write = AsyncMock(return_value=[{"updated": 2}])
 
         with (
             patch(
@@ -596,13 +594,9 @@ class TestTickDecayPrevention:
         assert result["meta"]["engagement_type"] == "used"
 
     @pytest.mark.asyncio
-    async def test_tick_engagement_type_heat_values(
-        self, mock_context_service, mock_redis_client
-    ):
+    async def test_tick_engagement_type_heat_values(self, mock_context_service, mock_redis_client):
         """Different engagement types should have different heat deltas."""
-        mock_context_service.graph_store.execute_write = AsyncMock(
-            return_value=[{"updated": 1}]
-        )
+        mock_context_service.graph_store.execute_write = AsyncMock(return_value=[{"updated": 1}])
 
         with (
             patch(

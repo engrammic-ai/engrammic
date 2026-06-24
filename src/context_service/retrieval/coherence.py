@@ -87,9 +87,7 @@ def filter_dominated_contradictions(
         return results, 0
 
     # Build node_id -> result mapping
-    by_id: dict[str, dict[str, Any]] = {
-        r["node_id"]: r for r in results if "node_id" in r
-    }
+    by_id: dict[str, dict[str, Any]] = {r["node_id"]: r for r in results if "node_id" in r}
 
     # Find contradiction pairs within result set
     # Only consider pairs where both nodes are in results

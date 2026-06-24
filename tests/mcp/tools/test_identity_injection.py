@@ -266,6 +266,4 @@ class TestUpdateIdentityInjection:
             )
 
         assert result["status"] == "updated"
-        mock_ffid.assert_called_once_with(
-            identity, action="superseded", target_node_id=old_node_id
-        )
+        mock_ffid.assert_called_once_with(identity, action="superseded", target_node_id=old_node_id)

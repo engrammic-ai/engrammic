@@ -68,7 +68,11 @@ async def _main() -> None:
 
     settings = get_settings()
     bolt_uri = settings.memgraph_uri
-    auth = (settings.memgraph_user, settings.memgraph_password.get_secret_value()) if settings.memgraph_user else None
+    auth = (
+        (settings.memgraph_user, settings.memgraph_password.get_secret_value())
+        if settings.memgraph_user
+        else None
+    )
     driver = AsyncGraphDatabase.driver(bolt_uri, auth=auth)
     store = MemgraphStore(MemgraphClient(driver))
     try:

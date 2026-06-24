@@ -74,8 +74,16 @@ class TestIsSameSubject:
     @pytest.mark.asyncio
     async def test_missing_spo_subject_falls_back(self) -> None:
         emb = [1.0, 0.0, 0.0]
-        node_a = {"spo": {"subject": "", "predicate": "", "object": ""}, "embedding": emb, "labels": ["Claim"]}
-        node_b = {"spo": {"subject": "", "predicate": "", "object": ""}, "embedding": emb, "labels": ["Claim"]}
+        node_a = {
+            "spo": {"subject": "", "predicate": "", "object": ""},
+            "embedding": emb,
+            "labels": ["Claim"],
+        }
+        node_b = {
+            "spo": {"subject": "", "predicate": "", "object": ""},
+            "embedding": emb,
+            "labels": ["Claim"],
+        }
         # Empty subjects with SPO -> returns False (spo branch returns False)
         assert await is_same_subject(node_a, node_b) is False
 
@@ -133,18 +141,14 @@ class TestCreateContradictsEdge:
 
 class TestDetectConflicts:
     @pytest.mark.asyncio
-    async def test_returns_empty_when_disabled(
-        self, identity: IdentityContext
-    ) -> None:
+    async def test_returns_empty_when_disabled(self, identity: IdentityContext) -> None:
         store = AsyncMock()
         qdrant = AsyncMock()
 
         with pytest.MonkeyPatch().context() as mp:
             mp.setattr(
                 "context_service.engine.conflict_detection.get_settings",
-                lambda: MagicMock(
-                    conflict_detection=MagicMock(enabled=False)
-                ),
+                lambda: MagicMock(conflict_detection=MagicMock(enabled=False)),
             )
             result = await detect_conflicts(
                 store=store,
@@ -158,9 +162,7 @@ class TestDetectConflicts:
         qdrant.search.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_returns_empty_without_qdrant(
-        self, identity: IdentityContext
-    ) -> None:
+    async def test_returns_empty_without_qdrant(self, identity: IdentityContext) -> None:
         store = AsyncMock()
 
         with pytest.MonkeyPatch().context() as mp:
@@ -185,9 +187,7 @@ class TestDetectConflicts:
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_creates_edge_when_same_subject(
-        self, identity: IdentityContext
-    ) -> None:
+    async def test_creates_edge_when_same_subject(self, identity: IdentityContext) -> None:
         store = AsyncMock()
         store.execute_write.return_value = [{"edge_id": "edge-1"}]
 
@@ -229,9 +229,7 @@ class TestDetectConflicts:
         store.execute_write.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_skips_when_different_subject(
-        self, identity: IdentityContext
-    ) -> None:
+    async def test_skips_when_different_subject(self, identity: IdentityContext) -> None:
         store = AsyncMock()
 
         emb = [1.0, 0.0, 0.0]
@@ -272,9 +270,7 @@ class TestDetectConflicts:
         store.execute_write.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_returns_empty_on_search_error(
-        self, identity: IdentityContext
-    ) -> None:
+    async def test_returns_empty_on_search_error(self, identity: IdentityContext) -> None:
         store = AsyncMock()
         qdrant = AsyncMock()
         qdrant.search.side_effect = Exception("Qdrant error")

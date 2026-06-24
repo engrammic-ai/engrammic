@@ -83,7 +83,9 @@ async def find_promotion_candidates(
     return candidates
 
 
-async def promote_candidates(store: Any, candidates: list[dict[str, Any]], log: Any) -> dict[str, int]:
+async def promote_candidates(
+    store: Any, candidates: list[dict[str, Any]], log: Any
+) -> dict[str, int]:
     """Call promote() for each candidate; skip on InvariantViolation (race condition)."""
     promoted = 0
     skipped = 0
@@ -120,9 +122,7 @@ async def promote_candidates(store: Any, candidates: list[dict[str, Any]], log: 
                 silo_id=silo_id,
                 reason=code,
             )
-            log.info(
-                f"promoter_op: skipped claim_id={claim_id} silo={silo_id} reason={code}"
-            )
+            log.info(f"promoter_op: skipped claim_id={claim_id} silo={silo_id} reason={code}")
         except Exception as exc:
             errors += 1
             logger.error(
@@ -131,9 +131,7 @@ async def promote_candidates(store: Any, candidates: list[dict[str, Any]], log: 
                 silo_id=silo_id,
                 error=str(exc),
             )
-            log.info(
-                f"promoter_op: error claim_id={claim_id} silo={silo_id} error={exc}"
-            )
+            log.info(f"promoter_op: error claim_id={claim_id} silo={silo_id} error={exc}")
 
     return {"promoted": promoted, "skipped": skipped, "errors": errors}
 
@@ -147,7 +145,9 @@ def promoter_op(context) -> dict[str, int]:
     async def _run() -> dict[str, int]:
         store = await memgraph.store()
         embedding_service = embedding.get_client()
-        candidates = await find_promotion_candidates(store, context.log, embedding_service=embedding_service)
+        candidates = await find_promotion_candidates(
+            store, context.log, embedding_service=embedding_service
+        )
         context.log.info(f"promoter_op: found {len(candidates)} candidate(s)")
         return await promote_candidates(store, candidates, context.log)
 

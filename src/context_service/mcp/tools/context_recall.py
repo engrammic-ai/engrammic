@@ -162,8 +162,10 @@ def _filter_inactive_nodes(nodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """
     active_states = {None, "ACTIVE"}
     return [
-        n for n in nodes
-        if "node_id" not in n or "error" in n
+        n
+        for n in nodes
+        if "node_id" not in n
+        or "error" in n
         or n.get("properties", {}).get("state") in active_states
     ]
 

@@ -124,9 +124,7 @@ async def evaluate_synthesis_candidates(
         return []
 
     # Collect unique fact IDs across all candidates
-    all_fact_ids: list[str] = list(
-        {fid for c in candidates for fid in c.fact_ids}
-    )
+    all_fact_ids: list[str] = list({fid for c in candidates for fid in c.fact_ids})
 
     rows = await graph_store.execute_query(
         """

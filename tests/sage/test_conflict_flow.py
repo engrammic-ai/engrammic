@@ -235,9 +235,7 @@ class TestContradictionEnforcement:
         )
         store_first.execute_write = AsyncMock(return_value=[])
 
-        with patch(
-            "context_service.sage.transactions.get_settings"
-        ) as mock_settings:
+        with patch("context_service.sage.transactions.get_settings") as mock_settings:
             settings_instance = MagicMock()
             settings_instance.contradiction_enforcement_enabled = True
             mock_settings.return_value = settings_instance
@@ -265,9 +263,7 @@ class TestContradictionEnforcement:
             ]
         )
 
-        with patch(
-            "context_service.sage.transactions.get_settings"
-        ) as mock_settings:
+        with patch("context_service.sage.transactions.get_settings") as mock_settings:
             settings_instance = MagicMock()
             settings_instance.contradiction_enforcement_enabled = True
             mock_settings.return_value = settings_instance
@@ -307,9 +303,7 @@ class TestContradictionEnforcement:
         )
         store_second.execute_write = AsyncMock(return_value=[])
 
-        with patch(
-            "context_service.sage.transactions.get_settings"
-        ) as mock_settings:
+        with patch("context_service.sage.transactions.get_settings") as mock_settings:
             settings_instance = MagicMock()
             settings_instance.contradiction_enforcement_enabled = False
             mock_settings.return_value = settings_instance

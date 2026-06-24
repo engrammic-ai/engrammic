@@ -59,7 +59,14 @@ defs = dg.Definitions(
         telemetry_prune_job,
         usage_retention_job,
     ],
-    schedules=[*all_schedules, orphan_recovery_schedule, sage_decayer_schedule, sage_promoter_schedule, sage_synthesizer_schedule, usage_retention_schedule],
+    schedules=[
+        *all_schedules,
+        orphan_recovery_schedule,
+        sage_decayer_schedule,
+        sage_promoter_schedule,
+        sage_synthesizer_schedule,
+        usage_retention_schedule,
+    ],
     sensors=all_sensors,
     resources=build_default_resources(),
 )

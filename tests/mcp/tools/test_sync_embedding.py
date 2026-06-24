@@ -68,9 +68,7 @@ async def test_remember_embedding_failure_does_not_fail_write(
 
 
 @pytest.mark.asyncio
-async def test_remember_embed_exception_does_not_fail_write(
-    mock_mcp_context, mock_context_service
-):
+async def test_remember_embed_exception_does_not_fail_write(mock_mcp_context, mock_context_service):
     """_context_remember should return the node_id even when embed() raises."""
     mock_context_service.vector_store = AsyncMock()
 

@@ -199,4 +199,3 @@ def test_backfill_active_state_targets_null_state():
 
     assert "ACTIVE" in BACKFILL_ACTIVE_STATE
     assert "IS NULL" in BACKFILL_ACTIVE_STATE
-

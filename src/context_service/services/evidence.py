@@ -210,9 +210,7 @@ class EvidenceValidator:
             reason=f"URI unreachable after retries: {last_error}",
         )
 
-    async def _upsert_stub_for_local_ref(
-        self, uri: str, silo_id: str, ref_type: str
-    ) -> str | None:
+    async def _upsert_stub_for_local_ref(self, uri: str, silo_id: str, ref_type: str) -> str | None:
         """Create or find a stub Document node for a local/external reference.
 
         silo_id is included in the hash so two silos citing the same URI get

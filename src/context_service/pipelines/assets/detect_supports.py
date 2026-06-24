@@ -178,9 +178,7 @@ def detect_supports_asset(
                 "errors": 0,
             }
 
-        context.log.info(
-            f"detect_supports: checking {len(fact_rows)} facts silo={silo_id}"
-        )
+        context.log.info(f"detect_supports: checking {len(fact_rows)} facts silo={silo_id}")
 
         facts_checked = 0
         supports_created = 0
@@ -296,9 +294,7 @@ def detect_supports_asset(
 
             except Exception as exc:  # noqa: BLE001
                 errors += 1
-                context.log.warning(
-                    f"detect_supports: error fact={fact_id} error={exc!r}"
-                )
+                context.log.warning(f"detect_supports: error fact={fact_id} error={exc!r}")
 
         new_watermark = datetime.now(UTC).isoformat()
         await redis_client.set(wm_key, new_watermark)

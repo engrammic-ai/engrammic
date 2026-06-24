@@ -132,7 +132,9 @@ RETURN
 # TODO: Refactor revision to use direct SYNTHESIZED_FROM edges without clusters.
 
 _GET_BELIEF_CLUSTER = "RETURN null AS cluster_id LIMIT 0"
-_GET_FACT_CONTENTS_IN_CLUSTER = "RETURN null AS fact_id, null AS content, null AS confidence, null AS valid_from LIMIT 0"
+_GET_FACT_CONTENTS_IN_CLUSTER = (
+    "RETURN null AS fact_id, null AS content, null AS confidence, null AS valid_from LIMIT 0"
+)
 
 
 def _cosine_distance(a: list[float], b: list[float]) -> float:

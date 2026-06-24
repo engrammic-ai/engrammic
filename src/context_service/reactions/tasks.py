@@ -828,7 +828,10 @@ Return only valid JSON, no other text."""
                     try:
                         _entities = await _extractor.extract(claim_content)
                     except Exception:
-                        log.warning("extract_claims_entity_extraction_error", claim_id=str(claim_result.node_id))
+                        log.warning(
+                            "extract_claims_entity_extraction_error",
+                            claim_id=str(claim_result.node_id),
+                        )
                         _entities = []
 
                     import datetime as _datetime_mod

@@ -80,11 +80,7 @@ def resolve_identity(
     )
 
     # Resolve session_id through fallback chain
-    session_id = (
-        explicit_session_id
-        or auth.session_id
-        or _session_fingerprint(agent_id, tenant_id)
-    )
+    session_id = explicit_session_id or auth.session_id or _session_fingerprint(agent_id, tenant_id)
 
     return IdentityContext(
         tenant_id=tenant_id,

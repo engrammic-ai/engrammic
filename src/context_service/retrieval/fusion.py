@@ -684,9 +684,7 @@ class FusionRetriever:
                 damping=graph_cfg.damping,
                 max_iterations=graph_cfg.max_iterations,
             )
-            scores = ppr.compute(
-                seed_ids=seed_ids, adjacency=adjacency, seed_weights=seed_weights
-            )
+            scores = ppr.compute(seed_ids=seed_ids, adjacency=adjacency, seed_weights=seed_weights)
 
             # Filter by layers if specified
             if layers:

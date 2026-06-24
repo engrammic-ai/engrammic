@@ -62,8 +62,7 @@ async def run_synthesis_for_silo(
     )
 
     log.info(
-        f"synthesizer_op: silo={silo_id} candidates={len(candidates)}"
-        f" qualified={len(qualified)}"
+        f"synthesizer_op: silo={silo_id} candidates={len(candidates)} qualified={len(qualified)}"
     )
 
     synthesized = 0
@@ -102,10 +101,7 @@ async def run_synthesis_for_silo(
                     confidence=result.confidence,
                     timed_out=result.timed_out,
                 )
-                log.info(
-                    f"synthesizer_op: skipped silo={silo_id}"
-                    f" fact_ids={candidate.fact_ids}"
-                )
+                log.info(f"synthesizer_op: skipped silo={silo_id} fact_ids={candidate.fact_ids}")
         except Exception as exc:
             errors += 1
             logger.error(
@@ -115,8 +111,7 @@ async def run_synthesis_for_silo(
                 error=str(exc),
             )
             log.info(
-                f"synthesizer_op: error silo={silo_id}"
-                f" fact_ids={candidate.fact_ids} error={exc}"
+                f"synthesizer_op: error silo={silo_id} fact_ids={candidate.fact_ids} error={exc}"
             )
 
     return {"synthesized": synthesized, "skipped": skipped, "errors": errors}

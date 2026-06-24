@@ -173,7 +173,6 @@ async def test_chain_extension_updates_tail_head_pointer(
     assert second_call_params["to_id"] == str(node_b_id)
 
 
-
 @pytest.mark.asyncio
 async def test_resolve_current_head_via_pointers(
     memgraph_store: MemgraphStore,

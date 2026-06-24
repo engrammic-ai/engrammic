@@ -47,7 +47,7 @@ SET m.properties.confidence = $new_confidence,
 
 
 def decay_confidence(confidence: float, decay_rate: float, hours_since_access: float) -> float:
-    return float(confidence * (decay_rate ** hours_since_access))
+    return float(confidence * (decay_rate**hours_since_access))
 
 
 async def find_decay_candidates(
@@ -105,12 +105,19 @@ async def apply_decay(
                 continue
 
             hours_since_access = (now - last_accessed).total_seconds() / 3600.0
-            new_confidence = decay_confidence(float(confidence), float(decay_rate), hours_since_access)
+            new_confidence = decay_confidence(
+                float(confidence), float(decay_rate), hours_since_access
+            )
             new_confidence = max(0.0, min(1.0, new_confidence))
 
             await store.execute_query(
                 _UPDATE_MEMORY_CONFIDENCE,
-                {"node_id": node_id, "silo_id": silo_id, "new_confidence": new_confidence, "now": now_dt},
+                {
+                    "node_id": node_id,
+                    "silo_id": silo_id,
+                    "new_confidence": new_confidence,
+                    "now": now_dt,
+                },
             )
             updated += 1
             logger.debug(

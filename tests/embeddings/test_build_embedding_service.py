@@ -44,9 +44,7 @@ def mock_tei_settings() -> MagicMock:
 
 def test_build_litellm_when_provider_litellm(mock_litellm_settings: MagicMock) -> None:
     """Factory should return LiteLLMEmbeddingService when provider=litellm."""
-    with patch(
-        "context_service.embeddings.get_settings", return_value=mock_litellm_settings
-    ):
+    with patch("context_service.embeddings.get_settings", return_value=mock_litellm_settings):
         from context_service.embeddings import build_embedding_service
 
         service = build_embedding_service()

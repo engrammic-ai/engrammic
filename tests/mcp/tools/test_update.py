@@ -94,7 +94,15 @@ def mock_context_service_with_graph():
     svc = MagicMock()
     svc.graph_store = MagicMock()
     svc.graph_store.execute_query = AsyncMock(
-        return_value=[{"n": {"content": "Old content about the topic", "created_at": "2026-01-01T00:00:00"}, "_labels": ["Claim"]}]
+        return_value=[
+            {
+                "n": {
+                    "content": "Old content about the topic",
+                    "created_at": "2026-01-01T00:00:00",
+                },
+                "_labels": ["Claim"],
+            }
+        ]
     )
     svc.vector_store = MagicMock()
     with patch(
@@ -212,7 +220,12 @@ async def test_query_multiple_matches_returns_ambiguous(
     ]
     mock_context_service_with_graph.vector_store.search = AsyncMock(return_value=matches)
     mock_context_service_with_graph.graph_store.execute_query = AsyncMock(
-        return_value=[{"n": {"content": "Some content here", "created_at": "2026-01-01"}, "_labels": ["Claim"]}]
+        return_value=[
+            {
+                "n": {"content": "Some content here", "created_at": "2026-01-01"},
+                "_labels": ["Claim"],
+            }
+        ]
     )
 
     with patch(
@@ -274,7 +287,9 @@ async def test_candidates_snippet_truncated_at_200_chars(
     ]
     mock_context_service_with_graph.vector_store.search = AsyncMock(return_value=matches)
     mock_context_service_with_graph.graph_store.execute_query = AsyncMock(
-        return_value=[{"n": {"content": long_content, "created_at": "2026-01-01"}, "_labels": ["Claim"]}]
+        return_value=[
+            {"n": {"content": long_content, "created_at": "2026-01-01"}, "_labels": ["Claim"]}
+        ]
     )
 
     with patch(
@@ -301,7 +316,13 @@ async def test_context_assert_error_propagates(
     """If _context_assert returns an error, propagate it."""
     with patch(
         "context_service.mcp.tools.update._context_assert",
-        new=AsyncMock(return_value={"error": "invalid_evidence", "evidence": "bad://url", "reason": "unreachable"}),
+        new=AsyncMock(
+            return_value={
+                "error": "invalid_evidence",
+                "evidence": "bad://url",
+                "reason": "unreachable",
+            }
+        ),
     ):
         result = await _update_impl(
             content="Updated claim",
@@ -333,7 +354,9 @@ async def test_target_non_claim_node_rejected(
     svc.graph_store = MagicMock()
     # Simulate a Memory node (not a Claim)
     svc.graph_store.execute_query = AsyncMock(
-        return_value=[{"n": {"content": "some memory", "created_at": "2026-01-01"}, "_labels": ["Memory"]}]
+        return_value=[
+            {"n": {"content": "some memory", "created_at": "2026-01-01"}, "_labels": ["Memory"]}
+        ]
     )
     svc.vector_store = MagicMock()
 

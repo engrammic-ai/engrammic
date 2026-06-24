@@ -121,9 +121,7 @@ def detect_contradicts_asset(
                 "errors": 0,
             }
 
-        context.log.info(
-            f"detect_contradicts: processing {len(rows)} candidates silo={silo_id}"
-        )
+        context.log.info(f"detect_contradicts: processing {len(rows)} candidates silo={silo_id}")
 
         candidates_processed = 0
         contradictions_confirmed = 0
