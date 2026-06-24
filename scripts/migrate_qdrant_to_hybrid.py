@@ -188,7 +188,7 @@ async def migrate_collection(
 
 async def main(dry_run: bool = True):
     qdrant_url = os.environ.get("QDRANT_URL", "http://localhost:6333")
-    vector_size = int(os.environ.get("VECTOR_SIZE", "768"))
+    vector_size = int(os.environ.get("VECTOR_SIZE", "1024"))  # bge-m3
 
     print(f"Connecting to Qdrant at {qdrant_url}")
     print(f"Vector size: {vector_size}")
