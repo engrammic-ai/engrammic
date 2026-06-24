@@ -440,26 +440,46 @@ EAG enables multi-agent coordination by providing:
 
 This addresses the distributed systems constraint: the external store provides the shared substrate that CAP and BFT require.
 
+\subsection{Meta-Memory}
+
+The four layers define \textit{what} the system believes. Meta-Memory addresses the reflexive question: what does the system know \textit{about} its beliefs?
+
+This is not a fifth layer but a cross-cutting capability that makes the epistemic graph introspectable. Three operations become possible that are structurally impossible with in-weights or session-scoped memory:
+
+\textbf{Provenance.} Every belief traces backward through DERIVED\_FROM edges to its evidential roots. The question ``why do you believe X?'' is answered by graph traversal, not generation. This is Axiom A4 made queryable: the provenance chain that was enforced at write time can be walked at read time, producing an audit trail that satisfies the interpretability constraint from Section~\ref{sec:thesis}.
+
+\textbf{Temporality.} Nodes carry bi-temporal timestamps: when the proposition became true in reality (valid time) and when the system learned it (system time). This enables temporal queries that in-weights memory cannot support: ``what did I believe on April 1st?'' reconstructs the epistemic state at a past moment, while ``what had I learned by April 1st?'' reconstructs the system's knowledge horizon at that time. Supersession chains preserve the full history; old beliefs are marked superseded, not deleted, so the evolution of understanding about a subject is recoverable.
+
+\textbf{Self-observation.} Agents can store observations about their own cognition: ``I noticed my belief about X changed when I read Y.'' These reflection nodes link via ABOUT edges to the entities they concern, creating a second-order epistemic layer where the system reasons about its own reasoning. This is not required for coherence but enables debugging, learning, and trust: users can ask not just ``what do you believe?'' but ``what have you noticed about your own beliefs?''
+
+Meta-Memory is where externalized epistemics pays off for audit and compliance. SOX and GDPR require independently auditable records; a belief existing only in weights has no audit trail. Here, every belief is witnessed: its provenance chain records how it came to be, its temporal fields record when, and its supersession history records how it changed.
+
 \subsection{CITE Architecture}
 
-CITE (Context In Tiered Epistemology) implements EAG as a four-layer architecture:
+CITE (Context In Tiered Epistemology) implements EAG as a four-layer architecture with Meta-Memory as cross-cutting infrastructure:
 
 \begin{figure}[H]
 \centering
 \begin{tikzpicture}[
-    layer/.style={draw, rounded corners, minimum width=9cm, minimum height=1.0cm, align=center, font=\small\bfseries},
+    layer/.style={draw, rounded corners, minimum width=8cm, minimum height=1.0cm, align=center, font=\small\bfseries},
+    meta/.style={draw, rounded corners, dashed, minimum width=10cm, minimum height=5.4cm, align=center},
     arrow/.style={->, thick, >=stealth}
 ]
-    \node[layer, fill=blue!10] (intel) at (0,3.6) {Intelligence \normalfont(session-scoped)};
-    \node[layer, fill=purple!10] (wisdom) at (0,2.4) {Wisdom \normalfont(evidence-gated)};
-    \node[layer, fill=green!10] (know) at (0,1.2) {Knowledge \normalfont(supersession)};
-    \node[layer, fill=yellow!10] (mem) at (0,0) {Memory \normalfont(decay-based)};
+    % Meta-Memory wrapper
+    \node[meta, fill=gray!5] (metamem) at (0,1.8) {};
+    \node[font=\small\bfseries, anchor=north] at (metamem.north) {Meta-Memory \normalfont(provenance, time-travel, reflection)};
 
-    \draw[arrow] (mem.east) -- ++(0.6,0) |- node[pos=0.25, right, font=\footnotesize] {evidence} (know.east);
-    \draw[arrow] (know.east) -- ++(1.0,0) |- node[pos=0.25, right, font=\footnotesize] {synthesis} (wisdom.east);
-    \draw[arrow, dashed] (intel.west) -- ++(-1.0,0) |- node[pos=0.25, left, font=\footnotesize] {trace} (mem.west);
+    % Four layers inside
+    \node[layer, fill=blue!10] (intel) at (0,3.2) {Intelligence \normalfont(session-scoped)};
+    \node[layer, fill=purple!10] (wisdom) at (0,2.1) {Wisdom \normalfont(evidence-gated)};
+    \node[layer, fill=green!10] (know) at (0,1.0) {Knowledge \normalfont(supersession)};
+    \node[layer, fill=yellow!10] (mem) at (0,-0.1) {Memory \normalfont(decay-based)};
+
+    \draw[arrow] (mem.east) -- ++(0.4,0) |- node[pos=0.25, right, font=\footnotesize] {evidence} (know.east);
+    \draw[arrow] (know.east) -- ++(0.7,0) |- node[pos=0.25, right, font=\footnotesize] {synthesis} (wisdom.east);
+    \draw[arrow, dashed] (intel.west) -- ++(-0.7,0) |- node[pos=0.25, left, font=\footnotesize] {trace} (mem.west);
 \end{tikzpicture}
-\caption{CITE four-layer architecture.}
+\caption{CITE architecture. Four cognitive layers with Meta-Memory as cross-cutting infrastructure.}
 \label{fig:layers}
 \end{figure}
 
