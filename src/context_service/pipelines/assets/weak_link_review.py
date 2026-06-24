@@ -43,10 +43,10 @@ MATCH (a)-[s:SOURCE_OF]->(w:WeakLink)-[t:TARGETS]->(b)
 WHERE w.speculative = true
   AND w.silo_id = $silo_id
   AND w.created_at < datetime() - duration({days: $max_age_days})
-  AND w.edge_heat < $min_edge_heat
 DELETE s, t, w
 RETURN count(w) AS pruned
 """
+# ponytail: removed edge_heat check; heat lacks signal at low volume, age-only until usage patterns emerge
 
 DEMOTE_SUPERSEDED_CYPHER = """
 MATCH (a)-[:SOURCE_OF]->(w:WeakLink)-[:TARGETS]->(b)
@@ -57,6 +57,15 @@ SET w.speculative = true,
     w.demoted_at = datetime(),
     w.demoted_reason = 'endpoint_superseded'
 RETURN count(w) AS demoted
+"""
+
+ORPHAN_CLEANUP_CYPHER = """
+MATCH (a)-[s:SOURCE_OF]->(w:WeakLink)-[t:TARGETS]->(b)
+WHERE w.silo_id = $silo_id
+  AND a.tombstoned_at IS NOT NULL
+  AND b.tombstoned_at IS NOT NULL
+DELETE s, t, w
+RETURN count(w) AS orphaned
 """
 
 
@@ -97,7 +106,6 @@ def weak_link_review_asset(
             {
                 "silo_id": silo_id,
                 "max_age_days": wl.pruning_max_age_days,
-                "min_edge_heat": wl.pruning_min_edge_heat,
             },
         )
         pruned = prune_result[0]["pruned"] if prune_result else 0
@@ -105,11 +113,15 @@ def weak_link_review_asset(
         demote_result = await mg.execute_write(DEMOTE_SUPERSEDED_CYPHER, {"silo_id": silo_id})
         demoted = demote_result[0]["demoted"] if demote_result else 0
 
+        orphan_result = await mg.execute_write(ORPHAN_CLEANUP_CYPHER, {"silo_id": silo_id})
+        orphaned = orphan_result[0]["orphaned"] if orphan_result else 0
+
         return {
             "silo_id": silo_id,
             "promoted": promoted,
             "pruned": pruned,
             "demoted": demoted,
+            "orphaned": orphaned,
         }
 
     result = _run_async(_run())
