@@ -74,6 +74,7 @@ Source of truth: `src/context_service/config/mcp_tools.yaml`. Names and descript
 | `forget` | Tombstone a node (with cancel window) |
 | `tick` | Lightweight engagement check |
 | `update` | Supersede existing knowledge |
+| `introspect` | Metacognitive queries (volatility, gaps, provenance) |
 
 ## Knowledge flow (CITE v2)
 

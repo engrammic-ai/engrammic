@@ -769,7 +769,21 @@ async def _context_reflect(
     confidence: float = 0.8,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Internal implementation."""
+    """Internal implementation.
+
+    Deprecated: Use remember(memory_type="reflection", about=[...]) instead.
+    """
+    import warnings
+
+    warnings.warn(
+        'layer="meta" is deprecated. Use remember(memory_type="reflection", about=[...]) instead.',
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    logger.warning(
+        "deprecated_meta_layer",
+        hint='Use remember(memory_type="reflection", about=[...]) instead',
+    )
     auth = await get_mcp_auth_context()
     ctx_svc = get_context_service()
 

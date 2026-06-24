@@ -74,6 +74,16 @@ async def _learn_impl(
         record_node_confidence(confidence, layer="knowledge", silo_id=None)
         if supersedes:
             record_supersession_used("learn", silo_id=None)
+        # Track write for stuck detection
+        import asyncio
+
+        from context_service.mcp.tools.remember import _track_write_and_resolve_stuck
+        from context_service.services.models import derive_silo_id
+
+        silo_id = str(derive_silo_id(auth.org_id))
+        asyncio.create_task(
+            _track_write_and_resolve_stuck(silo_id, auth.session_id, "learn", result.get("node_id"))
+        )
     if evidence_warning and isinstance(result, dict) and "error" not in result:
         result["warning"] = evidence_warning
     return result

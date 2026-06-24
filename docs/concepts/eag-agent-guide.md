@@ -92,6 +92,14 @@ EAG organizes knowledge into four cognitive layers, each with different semantic
 
 **Metacognition** is not a fifth layer. It's a capability that cuts across all layers via provenance edges, SUPERSEDES chains, and Memory nodes with `memory_type="reflection"`. Use `trace()` to walk provenance. Use `recall(include_reflections=true)` to surface reflections.
 
+**Metacognitive tools:**
+- `introspect(query_type="volatility")` - find topics that change frequently (high supersession churn)
+- `introspect(query_type="gaps")` - find frequently-asked but unanswered queries
+- `introspect(query_type="provenance", node_id="...")` - see which agents contributed to a belief
+- `introspect(query_type="contributions")` - see your own contribution stats
+
+The system also detects stuck patterns (repeated similar queries without writes) and surfaces breakthrough hints from past resolutions via `epistemic_hints` in recall responses.
+
 ---
 
 ## Part 2.5: When to Level Up

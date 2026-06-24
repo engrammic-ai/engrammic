@@ -1,6 +1,6 @@
 # Plan: Metacognition and Intelligence Layer Implementation
 
-**Status:** Draft
+**Status:** Complete (all phases)
 **Created:** 2026-06-24
 **Context:** Schema consolidation complete (v2 is now canonical). Metacognition clarified as cross-cutting capability, not a layer. Intelligence layer exists in schema but has no implementation.
 
@@ -12,40 +12,33 @@ From design discussion:
 - Intelligence layer is passive observation (system-created, not agent-written)
 - Provenance is already captured via edges (DERIVED_FROM, SYNTHESIZED_FROM, SUPERSEDES)
 
-## Phase 1: Reflection Support in MCP Tools
+## Phase 1: Reflection Support in MCP Tools [COMPLETE]
 
 **Goal:** Agents can create reflections via `remember()` with proper typing and linking.
 
 ### Tasks
 
-1. **Add `memory_type` parameter to `remember()` tool**
-   - File: `src/context_service/mcp/tools/context_store.py`
-   - Add optional `memory_type: str` param (default: None)
-   - Valid values: `observation`, `reflection`, `event`, `document`
-   - Store as node property
+1. [x] **Add `memory_type` parameter to `remember()` tool**
+   - `src/context_service/mcp/tools/remember.py` + `context_store.py`
+   - Passed through to `store_memory()` in transactions.py
 
-2. **Add `about` parameter to `remember()` tool**
-   - When `memory_type="reflection"`, require or allow `about: list[str]`
-   - Create ABOUT edges to referenced node IDs
-   - Validate node IDs exist in same silo
+2. [x] **Add `about` parameter to `remember()` tool**
+   - Creates ABOUT edges via `store_memory()` in transactions.py
+   - Validation in `_validate_about_refs()`
 
-2b. **Exempt reflections from decay**
-   - In retention/decay logic, skip nodes with `memory_type="reflection"`
-   - Per spec: "reflection nodes provide permanent audit trails"
+2b. [x] **Exempt reflections from decay**
+   - `retention/queries.py`: `FIND_TOMBSTONE_CANDIDATES` excludes `memory_type='reflection'`
+   - Test added: `test_tombstone_candidates_excludes_reflections`
 
-3. **Verify ABOUT edge creation path**
-   - Check `src/context_service/engine/` supports creating ABOUT edges
-   - May need to add edge creation to `store_memory()` or similar
-   - Test: `remember()` with `about` param creates edges correctly
+3. [x] **ABOUT edge creation path verified**
+   - `sage/transactions.py:store_memory()` creates ABOUT edges when `about` param provided
 
-4. **Deprecate `layer="meta"` code path**
-   - Add deprecation warning to `_context_reflect()`
-   - Document migration: `layer="meta"` -> `remember(memory_type="reflection")`
-   - Keep working for backward compat, remove in future version
+4. [x] **Deprecate `layer="meta"` code path**
+   - `_context_reflect()` emits DeprecationWarning + structlog warning
+   - Internally routes to `store_memory(memory_type="reflection")`
 
-4. **Update `mcp_tools.yaml`**
-   - Document `memory_type` and `about` params in `remember` description
-   - Add examples for reflection usage
+5. [x] **Update `mcp_tools.yaml`**
+   - `remember` description documents `memory_type` and `about` params with example
 
 ### Validation
 
@@ -55,52 +48,56 @@ From design discussion:
 
 ---
 
-## Phase 2a: Session Tracking + Stuck Detection
+## Phase 2a: Session Tracking + Stuck Detection [COMPLETE]
 
 **Goal:** Track agent sessions and detect stuck patterns.
 
 ### Tasks
 
-1. **Session tracking infrastructure**
-   - Track agent actions per session (tool calls, nodes created)
-   - Store session state in Redis (key: `session:{silo_id}:{agent_id}:{session_id}`)
-   - Session boundary: 30 min inactivity timeout or explicit end
-   - File: `src/context_service/engine/sessions.py` (extend existing)
+1. [x] **Session tracking infrastructure**
+   - Extended `session_state.py` with `QueryRecord` and query tracking
+   - `record_query()` and `record_write()` methods added
+   - Redis key format: `session:{silo_id}:{session_id}` (4h TTL)
 
-2. **Stuck pattern detection**
-   - File: `src/context_service/engine/intelligence.py` (new)
-   - Detect: 3+ similar queries in 5 min window with no writes
-   - Create StuckIndicator node (session-scoped, ephemeral)
-   - Link to query nodes via ABOUT edges
+2. [x] **Stuck pattern detection**
+   - Created `engine/intelligence.py`
+   - `detect_stuck_pattern()`: 3+ similar queries (0.7 similarity) in 5 min with no writes
+   - `create_stuck_indicator()`: EpistemicState node with 4h expiry
+   - Hooked into recall flow (fire-and-forget)
 
-3. **Add Intelligence node models to primitives**
-   - EpistemicState, Breakthrough, StuckIndicator in `primitives/schema/models.py`
-   - Ensure labels match `IntelligenceLabel` enum
+3. [x] **Write tracking + resolution**
+   - `remember()` and `learn()` call `_track_write_and_resolve_stuck()`
+   - Marks session write and resolves any active StuckIndicator
+
+4. [x] **Intelligence labels already in primitives**
+   - `IntelligenceLabel.EPISTEMIC_STATE` and `BREAKTHROUGH` exist
+   - No model changes needed (EpistemicState is the StuckIndicator)
 
 ### Validation
 
 - Agent queries same topic 3x without writing -> StuckIndicator created
 - StuckIndicator visible in session context
-- StuckIndicator expires with session
+- StuckIndicator expires with session (4h) or resolves on write
 
 ---
 
-## Phase 2b: Breakthrough Detection + Hints
+## Phase 2b: Breakthrough Detection + Hints [COMPLETE]
 
 **Goal:** Detect resolutions and surface them as hints.
 
 ### Tasks
 
-1. **Breakthrough detection**
-   - Detect: StuckIndicator exists -> agent writes something -> confidence spike
-   - Record resolution action (what tool call, what content)
-   - Create Breakthrough node (persists cross-session)
-   - Link to StuckIndicator via resolved relationship
+1. [x] **Breakthrough detection**
+   - `resolve_stuck_indicator()` now creates Breakthrough node
+   - Breakthrough stores query_pattern, action, node_id
+   - Links to StuckIndicator via RESOLVED edge
+   - Persists cross-session (no expiry)
 
-2. **Surface in recall**
-   - When agent is in stuck state, check for similar past Breakthroughs
-   - Add `epistemic_hints` field to recall response
-   - Similarity: same topic cluster or query embedding similarity
+2. [x] **Surface in recall**
+   - `find_breakthrough_hints()` matches query against past breakthroughs
+   - `recall()` adds `epistemic_hints` field when agent is stuck
+   - Similarity threshold: 0.6 (more permissive than stuck detection)
+   - Returns top 5 matching breakthroughs
 
 ### Validation
 
@@ -109,16 +106,30 @@ From design discussion:
 
 ---
 
-## Phase 3: Metacognitive Queries (Backlog)
+## Phase 3: Metacognitive Queries [COMPLETE]
 
 **Goal:** Rich querying of epistemic state across the graph.
-**Status:** Deferred. `trace()` already covers most use cases.
 
-### Tasks (when needed)
+### Tasks
 
-1. **Volatility detection** - surface warning for high-supersession topics
-2. **Gap detection** - track unanswered queries as "known unknowns"
-3. **Cross-agent provenance** - contribution graph per belief
+1. [x] **Volatility detection**
+   - `detect_volatile_topics()` finds high-supersession chains
+   - Exposed via `introspect(query_type="volatility")`
+
+2. [x] **Gap detection**
+   - `record_knowledge_gap()` tracks unanswered queries as KnownUnknown nodes
+   - `find_knowledge_gaps()` surfaces frequent gaps
+   - Hooked into recall (fire-and-forget on empty results)
+   - Exposed via `introspect(query_type="gaps")`
+
+3. [x] **Cross-agent provenance**
+   - `get_belief_provenance()` traces contributing agents per belief
+   - `get_agent_contribution_stats()` shows agent's impact
+   - Exposed via `introspect(query_type="provenance|contributions")`
+
+4. [x] **New MCP tool: `introspect`**
+   - `mcp/tools/introspect.py` - unified interface for metacognitive queries
+   - Registered in tool registry, documented in mcp_tools.yaml
 
 ---
 

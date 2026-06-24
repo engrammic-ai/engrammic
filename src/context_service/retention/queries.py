@@ -5,6 +5,7 @@ MATCH (n {silo_id: $silo_id})
 WHERE n.decay_class IS NOT NULL
   AND n.tombstoned_at IS NULL
   AND n.decay_class <> 'permanent'
+  AND coalesce(n.memory_type, '') <> 'reflection'
 RETURN n.id AS id,
        n.decay_class AS decay_class,
        n.created_at AS created_at,

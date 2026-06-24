@@ -76,6 +76,7 @@ def register_tools(mcp: FastMCP) -> None:
         agents,
         conflicts,
         forget,
+        introspect,
         learn,
         recall,
         remember,
@@ -94,6 +95,7 @@ def register_tools(mcp: FastMCP) -> None:
         "update": update.register,
         "agents": agents.register,
         "conflicts": conflicts.register,
+        "introspect": introspect.register,
     }
 
     for name, register_fn in tools.items():

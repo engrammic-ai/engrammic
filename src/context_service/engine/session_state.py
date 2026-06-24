@@ -16,6 +16,14 @@ DEBOUNCE_TICKS = 3
 MAX_IGNORES_BEFORE_SUPPRESS = 3
 
 
+class QueryRecord(BaseModel):
+    """A single query for stuck detection."""
+
+    query: str
+    timestamp: datetime
+    had_write: bool = False
+
+
 class SessionState(BaseModel):
     """Session state for tick() engagement tracking."""
 
@@ -25,6 +33,7 @@ class SessionState(BaseModel):
     shown_nudges: dict[str, list[int]] = Field(default_factory=dict)
     ignored_nudges: dict[str, int] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    recent_queries: list[QueryRecord] = Field(default_factory=list)
 
     def should_show_nudge(self, nudge_type: str) -> bool:
         """Check if nudge should be shown based on debouncing rules."""
@@ -47,6 +56,19 @@ class SessionState(BaseModel):
     def record_nudge_ignored(self, nudge_type: str) -> None:
         """Record that a nudge was ignored."""
         self.ignored_nudges[nudge_type] = self.ignored_nudges.get(nudge_type, 0) + 1
+
+    def record_query(self, query: str) -> None:
+        """Record a query for stuck detection."""
+        self.recent_queries.append(
+            QueryRecord(query=query, timestamp=datetime.now(UTC))
+        )
+        # Keep only last 20 queries
+        self.recent_queries = self.recent_queries[-20:]
+
+    def record_write(self) -> None:
+        """Mark the most recent query as having a write."""
+        if self.recent_queries:
+            self.recent_queries[-1].had_write = True
 
 
 def _session_key(silo_id: str, session_id: str) -> str:

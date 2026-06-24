@@ -148,6 +148,12 @@ async def _recall_impl(
 
         asyncio.create_task(_track_node_access(silo_id, session_id, result["results"]))
 
+    # Stuck detection: record query and check for stuck pattern
+    if query and session_id:
+        import asyncio
+
+        asyncio.create_task(_check_stuck_pattern(silo_id, session_id, query))
+
     # Engagement detection: check for markers touching the about-set
     about_ids = [item.get("node_id") for item in result_list if item.get("node_id")]
     redis = get_redis()
@@ -234,17 +240,65 @@ async def _recall_impl(
                 )
             result["withheld"] = withheld
 
-    # Wisdom/Intelligence activation hints.
-    # Populated by Parts 1 and 2 once detection logic is wired in.
-    # Empty array for now; keyed on feature flag for safe rollout.
+    # Epistemic hints: surface past breakthroughs when agent might be stuck
     settings = get_settings()
-    if settings.recall_hints_enabled:
-        hints: list[dict[str, Any]] = []
-        result["hints"] = hints
+    if settings.recall_hints_enabled and query and session_id:
+        try:
+            from context_service.engine.intelligence import (
+                find_breakthrough_hints,
+                get_active_stuck_indicator,
+            )
+            from context_service.mcp.server import get_context_service
+
+            ctx = get_context_service()
+
+            # Check if agent is stuck
+            stuck = await get_active_stuck_indicator(ctx._memgraph, silo_id, session_id)
+            if stuck:
+                # Find similar past breakthroughs
+                hints = await find_breakthrough_hints(ctx._memgraph, silo_id, query)
+                if hints:
+                    result["epistemic_hints"] = {
+                        "stuck_on": stuck.get("query_pattern"),
+                        "breakthroughs": hints,
+                        "message": "You may be stuck. Here are past resolutions for similar queries.",
+                    }
+                else:
+                    result["epistemic_hints"] = None
+            else:
+                result["epistemic_hints"] = None
+        except Exception:
+            import structlog
+
+            structlog.get_logger(__name__).debug("epistemic_hints_failed", silo_id=silo_id)
+            result["epistemic_hints"] = None
     else:
-        result["hints"] = None
+        result["epistemic_hints"] = None
+
+    # Gap detection: record unanswered queries
+    result_count = len(result.get("results") or result.get("nodes") or [])
+    if query and result_count == 0:
+        import asyncio
+
+        asyncio.create_task(_record_knowledge_gap(silo_id, query))
 
     return result
+
+
+async def _record_knowledge_gap(silo_id: str, query: str) -> None:
+    """Record an unanswered query as a knowledge gap."""
+    import structlog
+
+    from context_service.engine.intelligence import record_knowledge_gap
+    from context_service.mcp.server import get_context_service
+
+    log = structlog.get_logger(__name__)
+
+    try:
+        ctx = get_context_service()
+        await record_knowledge_gap(ctx._memgraph, silo_id, query)
+    except Exception as e:
+        log.debug("gap_recording_failed", error=str(e))
 
 
 async def _track_node_access(silo_id: str, session_id: str, results: list[dict[str, Any]]) -> None:
@@ -282,6 +336,46 @@ async def _track_node_access(silo_id: str, session_id: str, results: list[dict[s
     except Exception as e:
         # Non-fatal: don't break recall on tracking failure
         log.warning("track_node_access_failed", error=str(e))
+
+
+async def _check_stuck_pattern(silo_id: str, session_id: str, query: str) -> None:
+    """Check for stuck pattern and create indicator if detected."""
+    import structlog
+
+    from context_service.engine.intelligence import (
+        create_stuck_indicator,
+        detect_stuck_pattern,
+        get_active_stuck_indicator,
+    )
+    from context_service.engine.session_state import get_or_create_session, save_session
+    from context_service.mcp.server import get_context_service, get_redis
+
+    log = structlog.get_logger(__name__)
+
+    try:
+        redis = get_redis()
+        if redis is None:
+            return
+
+        session = await get_or_create_session(redis._redis, session_id, silo_id)
+        session.record_query(query)
+        await save_session(redis._redis, session, silo_id)
+
+        # Check for stuck pattern
+        similar_queries = detect_stuck_pattern(session)
+        if similar_queries:
+            # Check if we already have an active indicator
+            ctx = get_context_service()
+            existing = await get_active_stuck_indicator(ctx._memgraph, silo_id, session_id)
+            if not existing:
+                await create_stuck_indicator(
+                    ctx._memgraph,
+                    silo_id,
+                    session_id,
+                    similar_queries,
+                )
+    except Exception as e:
+        log.debug("stuck_detection_failed", error=str(e))
 
 
 def register(mcp: FastMCP) -> None:

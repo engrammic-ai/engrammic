@@ -126,3 +126,18 @@ tools:
       primary silo derived from auth.
     maps_to: agents
 
+  introspect:
+    description: |
+      Query metacognitive state of the knowledge graph. Use for understanding
+      epistemic health and agent contributions.
+
+      query_type options:
+      - volatility: Find topics with high supersession churn (unstable knowledge)
+      - gaps: Find frequently-asked but unanswered queries (known unknowns)
+      - provenance: Trace which agents contributed to a belief (requires node_id)
+      - contributions: Get contribution stats for an agent (defaults to self)
+
+      Example: introspect(query_type="gaps", min_threshold=3) returns queries
+      asked 3+ times that returned no results.
+    maps_to: introspect
+

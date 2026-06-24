@@ -17,3 +17,9 @@ def test_queries_are_valid_cypher_syntax():
     assert "DETACH DELETE" in HARD_DELETE_NODE
     assert "SKIP $keep_count" in FIND_EXCESS_META_OBSERVATIONS
     assert "heat_dirty" in MARK_HEAT_DIRTY
+
+
+def test_tombstone_candidates_excludes_reflections():
+    """Reflections are exempt from decay per spec: they provide permanent audit trails."""
+    assert "memory_type" in FIND_TOMBSTONE_CANDIDATES
+    assert "reflection" in FIND_TOMBSTONE_CANDIDATES

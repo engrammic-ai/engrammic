@@ -48,7 +48,50 @@ async def _remember_impl(
         record_node_confidence(1.0, layer="memory", silo_id=silo_id)
         if supersedes:
             record_supersession_used("remember", silo_id=silo_id)
+        # Track write for stuck detection
+        import asyncio
+
+        asyncio.create_task(
+            _track_write_and_resolve_stuck(silo_id, auth.session_id, "remember", result.get("node_id"))
+        )
     return result
+
+
+async def _track_write_and_resolve_stuck(
+    silo_id: str, session_id: str | None, action: str, node_id: str | None
+) -> None:
+    """Track write in session state and resolve any stuck indicator."""
+    import structlog
+
+    from context_service.mcp.server import get_context_service, get_redis
+
+    log = structlog.get_logger(__name__)
+    if not session_id:
+        return
+
+    try:
+        redis = get_redis()
+        if redis is None:
+            return
+
+        from context_service.engine.session_state import get_or_create_session, save_session
+
+        session = await get_or_create_session(redis._redis, session_id, silo_id)
+        session.record_write()
+        await save_session(redis._redis, session, silo_id)
+
+        # Resolve any active stuck indicator
+        from context_service.engine.intelligence import (
+            get_active_stuck_indicator,
+            resolve_stuck_indicator,
+        )
+
+        ctx = get_context_service()
+        stuck = await get_active_stuck_indicator(ctx._memgraph, silo_id, session_id)
+        if stuck:
+            await resolve_stuck_indicator(ctx._memgraph, stuck["id"], silo_id, action, node_id)
+    except Exception as e:
+        log.debug("write_tracking_failed", error=str(e))
 
 
 def register(mcp: FastMCP) -> None:
