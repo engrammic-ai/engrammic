@@ -58,22 +58,27 @@ class PersonalizedPageRank:
         self,
         seed_ids: list[str],
         adjacency: dict[str, list[tuple[str, float]]],
+        seed_weights: dict[str, float] | None = None,
     ) -> dict[str, float]:
         """Run PPR from *seed_ids* over the weighted *adjacency* graph.
 
         Parameters
         ----------
         seed_ids:
-            Node IDs from which teleportation probability is distributed
-            uniformly.  Nodes not present in *adjacency* are silently
-            ignored (they contribute 0 outbound weight but still appear in
-            the seed distribution if present as keys in adjacency or
-            referenced as neighbours).
+            Node IDs from which teleportation probability is distributed.
+            Nodes not present in *adjacency* are silently ignored (they
+            contribute 0 outbound weight but still appear in the seed
+            distribution if present as keys in adjacency or referenced
+            as neighbours).
         adjacency:
             Mapping ``node_id -> [(neighbour_id, edge_weight), ...]``.
             Edge weights must be non-negative; zero-weight edges are
             treated as absent.  Nodes with no outbound edges are treated
             as dangling nodes (their rank mass is redistributed to seeds).
+        seed_weights:
+            Optional per-seed importance weights. If provided, seeds are
+            weighted proportionally (normalized to sum to 1). If None,
+            seeds get uniform weight. Use for heat-boosted personalization.
 
         Returns
         -------
@@ -118,15 +123,24 @@ class PersonalizedPageRank:
                 edges[src].append((dst, weight))
                 out_weight[src] += weight
 
-        # Seed distribution: uniform over valid seed nodes
-        valid_seeds = [node_index[s] for s in seed_ids if s in node_index]
-        if not valid_seeds:
+        # Seed distribution: weighted or uniform over valid seed nodes
+        valid_seed_ids = [s for s in seed_ids if s in node_index]
+        if not valid_seed_ids:
             return {}
 
-        seed_prob = 1.0 / len(valid_seeds)
         seed_vector: list[float] = [0.0] * n
-        for s in valid_seeds:
-            seed_vector[s] = seed_prob
+        if seed_weights:
+            # Weighted distribution: normalize provided weights
+            raw_weights = [seed_weights.get(sid, 1.0) for sid in valid_seed_ids]
+            total = sum(raw_weights) or 1.0
+            for sid, w in zip(valid_seed_ids, raw_weights, strict=True):
+                seed_vector[node_index[sid]] = w / total
+        else:
+            # Uniform distribution
+            seed_prob = 1.0 / len(valid_seed_ids)
+            for sid in valid_seed_ids:
+                seed_vector[node_index[sid]] = seed_prob
+        valid_seeds = [node_index[sid] for sid in valid_seed_ids]
 
         # Initial rank vector = seed distribution
         rank: list[float] = list(seed_vector)
@@ -147,10 +161,9 @@ class PersonalizedPageRank:
                     for dst, weight in edges[i]:
                         new_rank[dst] += self.damping * rank[i] * (weight / w_total)
 
-            # Distribute dangling mass uniformly to seeds
-            dangling_contrib = self.damping * dangling_mass * seed_prob
+            # Distribute dangling mass to seeds proportionally
             for s in valid_seeds:
-                new_rank[s] += dangling_contrib
+                new_rank[s] += self.damping * dangling_mass * seed_vector[s]
 
             # Teleportation
             for i in range(n):

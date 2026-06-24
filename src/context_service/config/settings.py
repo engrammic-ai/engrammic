@@ -224,6 +224,9 @@ class GraphChannelConfig(BaseModel):
             "LINK": 1.0,
         }
     )
+    # ponytail: heat boost for PPR seeds; alpha=0 disables without flag check
+    heat_boost_enabled: bool = False
+    heat_boost_alpha: float = 0.5
 
 
 class CrossEncoderConfig(BaseModel):

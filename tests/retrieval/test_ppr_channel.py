@@ -149,3 +149,35 @@ def test_ppr_scores_sum_to_one() -> None:
     scores = ppr.compute(["A"], adjacency)
     total = sum(scores.values())
     assert abs(total - 1.0) < 1e-5
+
+
+# ---------------------------------------------------------------------------
+# Weighted seeds (heat boost)
+# ---------------------------------------------------------------------------
+
+
+def test_ppr_weighted_seeds() -> None:
+    """Seed with higher weight propagates more influence to its neighborhood."""
+    ppr = _make_ppr()
+    adjacency = {
+        "hot": [("hot_neighbor", 1.0)],
+        "cold": [("cold_neighbor", 1.0)],
+        "hot_neighbor": [],
+        "cold_neighbor": [],
+    }
+    # hot seed weighted 2x vs cold
+    weights = {"hot": 2.0, "cold": 1.0}
+    scores = ppr.compute(["hot", "cold"], adjacency, seed_weights=weights)
+
+    # hot seed and its neighbor should score higher
+    assert scores["hot"] > scores["cold"]
+    assert scores["hot_neighbor"] > scores["cold_neighbor"]
+
+
+def test_ppr_weighted_seeds_none_fallback() -> None:
+    """When seed_weights is None, distribution is uniform."""
+    ppr = _make_ppr()
+    adjacency = {"A": [], "B": []}
+    scores_uniform = ppr.compute(["A", "B"], adjacency, seed_weights=None)
+    # Both seeds should have equal scores
+    assert abs(scores_uniform["A"] - scores_uniform["B"]) < 1e-9

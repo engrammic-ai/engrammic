@@ -665,12 +665,28 @@ class FusionRetriever:
                     latency_ms=(time.perf_counter() - t0) * 1000.0,
                 )
 
+            # Fetch heat scores for seed weighting if enabled
+            seed_weights: dict[str, float] | None = None
+            if graph_cfg.heat_boost_enabled and graph_cfg.heat_boost_alpha > 0:
+                heat_cypher = """
+                UNWIND $seed_ids AS seed
+                MATCH (n:Node {id: seed, silo_id: $silo_id})
+                RETURN n.id AS id, coalesce(n.heat_score, 0.0) AS heat
+                """
+                heat_rows = await self._ctx.graph_store.execute_query(
+                    heat_cypher, {"seed_ids": seed_ids, "silo_id": str(scope.silo_id)}
+                )
+                alpha = graph_cfg.heat_boost_alpha
+                seed_weights = {r["id"]: 1.0 + alpha * r["heat"] for r in heat_rows}
+
             # Run PPR
             ppr = PersonalizedPageRank(
                 damping=graph_cfg.damping,
                 max_iterations=graph_cfg.max_iterations,
             )
-            scores = ppr.compute(seed_ids=seed_ids, adjacency=adjacency)
+            scores = ppr.compute(
+                seed_ids=seed_ids, adjacency=adjacency, seed_weights=seed_weights
+            )
 
             # Filter by layers if specified
             if layers:
