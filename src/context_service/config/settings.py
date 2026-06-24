@@ -1193,7 +1193,7 @@ class Settings(BaseSettings):
     # Embedding Settings (dimensions moved to models.yaml, provider via tier)
     # =========================================================================
 
-    embedding_dimensions: int = Field(default=2048)
+    embedding_dimensions: int = Field(default=1024)  # bge-m3 output
 
     hybrid_search_enabled: bool = Field(default=True)
 

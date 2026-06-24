@@ -38,7 +38,7 @@ class TEIEmbeddingService:
     def __init__(
         self,
         base_url: str,
-        dimensions: int = 768,
+        dimensions: int = 1024,  # bge-m3
         timeout: float = 30.0,
         _embedding_cache: EmbeddingCache | None = None,
         max_retries: int = 3,

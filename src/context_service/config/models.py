@@ -115,11 +115,11 @@ class ModelsConfig(BaseModel):
 
     @property
     def embedding_dimensions(self) -> int:
-        """Embedding dimensions: override > tier default > 768."""
+        """Embedding dimensions: override > tier default > 1024 (bge-m3)."""
         if self.embedding_dimensions_override is not None:
             return self.embedding_dimensions_override
         spec = self.get_embedding_model()
-        return spec.dimensions or 2048
+        return spec.dimensions or 1024
 
     def get_reranker_model(self) -> ModelSpec | None:
         """Get the reranker model for the active tier, if configured."""

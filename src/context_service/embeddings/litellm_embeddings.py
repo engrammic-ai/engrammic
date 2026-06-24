@@ -57,7 +57,7 @@ class LiteLLMEmbeddingService:
     def __init__(
         self,
         model: str,
-        dimensions: int = 768,
+        dimensions: int = 1024,
         max_input_chars: int = 30000,
         rate_limit: ModelRateLimitConfig | None = None,
         _embedding_cache: EmbeddingCache | None = None,

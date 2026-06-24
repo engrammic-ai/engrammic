@@ -61,7 +61,7 @@ class SemanticRerankCache:
         similarity_threshold: float = 0.95,
         l1_ttl_seconds: int = 300,
         l1_maxsize: int = 1000,
-        embedding_dimensions: int = 768,
+        embedding_dimensions: int = 1024,
     ) -> None:
         self._qdrant = qdrant
         self._collection = collection_name
