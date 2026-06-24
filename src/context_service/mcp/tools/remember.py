@@ -28,6 +28,8 @@ async def _remember_impl(
     tags: list[str] | None = None,
     decay: str = "standard",
     supersedes: str | None = None,
+    memory_type: str | None = None,
+    about: list[str] | None = None,
 ) -> dict[str, Any]:
     """Implementation for remember tool."""
     auth = await get_mcp_auth_context()
@@ -39,6 +41,8 @@ async def _remember_impl(
         tags=tags,
         decay_class=decay,
         supersedes=supersedes,
+        memory_type=memory_type,
+        about=about,
     )
     if "error" not in result:
         record_node_confidence(1.0, layer="memory", silo_id=silo_id)
@@ -60,6 +64,8 @@ def register(mcp: FastMCP) -> None:
         tags: list[str] | None = None,
         decay: str = "standard",
         supersedes: str | None = None,
+        memory_type: str | None = None,
+        about: list[str] | None = None,
     ) -> dict[str, Any]:
         """Store an observation.
 
@@ -68,6 +74,10 @@ def register(mcp: FastMCP) -> None:
             tags: Optional categorization tags.
             decay: How long to keep: ephemeral|standard|durable|permanent.
             supersedes: Node ID this observation replaces. Use recall first to find existing nodes.
+            memory_type: Type of memory: observation|reflection|event|document.
+                Use "reflection" for metacognitive observations (these don't decay).
+            about: Node IDs this memory is about. Creates ABOUT edges.
+                Required when memory_type="reflection".
 
         Returns:
             {node_id, created_at, supersedes?}
@@ -75,7 +85,7 @@ def register(mcp: FastMCP) -> None:
         start = time.perf_counter()
         success = True
         try:
-            return await _remember_impl(content, tags, decay, supersedes)
+            return await _remember_impl(content, tags, decay, supersedes, memory_type, about)
         except Exception:
             success = False
             raise

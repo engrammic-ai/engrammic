@@ -257,6 +257,8 @@ async def _context_remember(
     decay_class: str = "standard",
     observed_from: str | None = None,
     supersedes: str | None = None,
+    memory_type: str | None = None,
+    about: list[str] | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     auth = await get_mcp_auth_context()
@@ -303,6 +305,8 @@ async def _context_remember(
         session_id=identity.session_id,
         owner_id=identity.agent_id,
         model_id=identity.model_id,
+        memory_type=memory_type,
+        about=about,
     )
 
     for event in events:

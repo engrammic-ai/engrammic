@@ -45,6 +45,11 @@ tools:
       recall, use the returned node_id with recall(node_ids=[...]). No evidence
       required. Consider recall first - if updating existing knowledge, pass
       supersedes:<node_id>.
+
+      For reflections (metacognitive observations about other nodes), pass
+      memory_type="reflection" and about=[node_ids]. Reflections don't decay
+      and create ABOUT edges to the referenced nodes. Example:
+      remember("I was wrong about X because Y", memory_type="reflection", about=["node_123"])
     maps_to: Memory
 
   learn:
