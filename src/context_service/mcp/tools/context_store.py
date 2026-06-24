@@ -778,13 +778,20 @@ async def _context_reflect(
     agent_id = auth.agent_id or auth.org_id
 
     _start = time.perf_counter()
+    # ponytail: layer="meta" is deprecated, use memory_type="reflection" instead
     result, events = await store_memory(
         store=ctx_svc.graph_store,
         content=observation,
         silo_id=str(expected_silo_id),
         agent_id=agent_id,
-        layer="meta",
-        metadata={**(metadata or {}), "confidence": confidence},
+        layer="memory",
+        memory_type="reflection",
+        about=about,
+        metadata={
+            **(metadata or {}),
+            "confidence": confidence,
+            "observation_type": observation_type,
+        },
     )
 
     for event in events:
@@ -797,7 +804,7 @@ async def _context_reflect(
         await ctx_svc.vector_store.upsert(
             node_id=str(result.node_id),
             vector=vector,
-            payload={"type": "MetaObservation", "layer": "meta"},
+            payload={"type": "Memory", "layer": "memory", "memory_type": "reflection"},
             silo_id=str(expected_silo_id),
         )
     except Exception:

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
-import context_service.mcp.tools.context_link  # noqa: F401
 import pytest
 
 import context_service.mcp.tools.context_recall  # noqa: F401

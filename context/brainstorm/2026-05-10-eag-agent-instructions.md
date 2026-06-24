@@ -67,13 +67,13 @@ Both live in Wisdom, but they're different cognitive acts.
 
 ### The reflection question: "Has my understanding changed?"
 
-Meta-Memory exists because beliefs change. When you:
+When your understanding changes, record it as a reflection. When you:
 - Update a belief based on new evidence
 - Notice a contradiction you hadn't seen before
 - Correct a mistake
 - Shift confidence in something
 
-...record that to Meta. This creates the audit trail that lets you (or others) understand *why* the system believes what it believes.
+...store a Memory with `memory_type="reflection"` linked to the affected nodes. This creates the audit trail that lets you (or others) understand *why* the system believes what it believes.
 
 **Heuristic:** If you're changing your mind, note it. If you're uncertain about something you were certain about, note it. The history of belief is as valuable as current belief.
 
@@ -85,12 +85,12 @@ EAG organizes knowledge into four cognitive layers, each with different semantic
 
 | Layer | What lives here | Persistence | Core property |
 |-------|-----------------|-------------|---------------|
-| **Memory** | Raw observations, documents, events | Decays (7d to 5y) | Freshness-scored |
+| **Memory** | Raw observations, reflections, events | Decays (7d to 5y) | Freshness-scored |
 | **Knowledge** | Facts and claims with evidence | Indefinite, supersession | Evidence-backed |
-| **Wisdom** | Beliefs, patterns, commitments | Indefinite | Synthesized from facts |
-| **Intelligence** | Reasoning chains, working hypotheses | Session-only | Ephemeral |
+| **Wisdom** | Beliefs, commitments | Indefinite | Synthesized from facts |
+| **Intelligence** | Epistemic state observations | System-observed | Phase 2 |
 
-Plus **Meta-Memory** (cross-cutting): provenance, reflections, audit trail. Never decays.
+**Metacognition** is not a fifth layer. It's a capability that cuts across all layers via provenance edges, SUPERSEDES chains, and Memory nodes with `memory_type="reflection"`. Use `trace()` to walk provenance. Use `recall(include_reflections=true)` to surface reflections.
 
 ---
 

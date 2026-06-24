@@ -81,13 +81,15 @@ class LinkType(StrEnum):
 HIERARCHICAL_EDGE_TYPES = frozenset({LinkType.REFINES, LinkType.GENERALIZES, LinkType.CAUSED_BY})
 
 # Edge types that must be acyclic (INV4, C3)
-ACYCLIC_EDGE_TYPES = frozenset({
-    LinkType.SUPERSEDES,
-    LinkType.DERIVED_FROM,
-    LinkType.REFINES,
-    LinkType.GENERALIZES,
-    LinkType.CAUSED_BY,
-})
+ACYCLIC_EDGE_TYPES = frozenset(
+    {
+        LinkType.SUPERSEDES,
+        LinkType.DERIVED_FROM,
+        LinkType.REFINES,
+        LinkType.GENERALIZES,
+        LinkType.CAUSED_BY,
+    }
+)
 
 PROMOTION_THRESHOLD = 3
 SYNTHESIS_THRESHOLD = 3
@@ -651,6 +653,8 @@ async def store_memory(
     session_id: str | None = None,
     owner_id: str | None = None,
     model_id: str | None = None,
+    memory_type: str | None = None,
+    about: list[str] | None = None,
 ) -> tuple[StoreMemoryResult, list[ReactionEvent]]:
     """Store an observation to Memory layer (TX0).
 
@@ -665,6 +669,9 @@ async def store_memory(
         agent_id: Agent performing the write.
         tags: Optional categorization tags.
         content_type: Type of content (text, utterance, event).
+        memory_type: Type of memory (observation, reflection, event, document).
+            Reflections are exempt from decay per spec.
+        about: Node IDs this memory is about. Creates ABOUT edges.
         decay_class: How long to keep (ephemeral, standard, durable, permanent).
         metadata: Additional properties to store.
 
@@ -687,6 +694,11 @@ async def store_memory(
     }
     if tags:
         props["tags"] = tags
+    if memory_type:
+        props["memory_type"] = memory_type
+        # ponytail: reflections don't decay per spec (04-metacognition.md:183)
+        if memory_type == "reflection":
+            props["decay_class"] = "permanent"
 
     # Build Cypher with literal label (labels can't be parameterized in Cypher)
     # Must include all fields expected by _node_from_record in memgraph_store.py
@@ -719,6 +731,19 @@ async def store_memory(
             "props": props,
         },
     )
+
+    # Create ABOUT edges if targets specified
+    if about:
+        about_cypher = """
+        MATCH (source {id: $source_id, silo_id: $silo_id})
+        UNWIND $about_ids AS target_id
+        MATCH (target {id: target_id, silo_id: $silo_id})
+        MERGE (source)-[:ABOUT]->(target)
+        """
+        await store.execute_write(
+            about_cypher,
+            {"source_id": str(node_id), "silo_id": silo_id, "about_ids": about},
+        )
 
     result = StoreMemoryResult(
         node_id=node_id,
@@ -2529,10 +2554,7 @@ async def check_semantic_corroboration(
         return len(new_evidence), len(new_evidence) >= threshold
 
     # Batch embed all candidate SPO texts
-    spo_texts = [
-        f"{c.get('subject')} {c.get('predicate')} {c.get('object')}"
-        for c in candidates
-    ]
+    spo_texts = [f"{c.get('subject')} {c.get('predicate')} {c.get('object')}" for c in candidates]
     candidate_embeddings = await embedding_service.embed(spo_texts)
 
     # Find semantically similar claims
@@ -2578,9 +2600,7 @@ async def _check_corroboration(
     Returns (corroboration_count, should_promote).
     """
     if embedding_service is not None:
-        return await check_semantic_corroboration(
-            store, node_id, silo_id, embedding_service
-        )
+        return await check_semantic_corroboration(store, node_id, silo_id, embedding_service)
     return await check_corroboration(store, node_id, silo_id)
 
 

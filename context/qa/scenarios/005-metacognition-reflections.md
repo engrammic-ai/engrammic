@@ -11,6 +11,10 @@
 
 None (fresh session)
 
+## Background
+
+Metacognition is not a separate layer. Reflections are Memory nodes with `memory_type="reflection"` and ABOUT edges linking to the nodes being reflected upon. This scenario tests that pattern.
+
 ## Instructions
 
 Research topic: **"Differences between feline and canine genetics"**
@@ -25,11 +29,9 @@ Research topic: **"Differences between feline and canine genetics"**
 
 2. Store 2 knowledge-layer facts synthesizing the observations:
    ```
-   mcp__engrammic__context_store(
-       layer="knowledge",
+   learn(
        content="<synthesized fact>",
-       evidence=["node:<obs_id_1>", "node:<obs_id_2>"],
-       source_type="agent"
+       evidence=["node:<obs_id_1>", "node:<obs_id_2>"]
    )
    ```
 
@@ -38,56 +40,59 @@ Research topic: **"Differences between feline and canine genetics"**
 ### Worker 2: Meta-Observer
 
 1. Query for Worker 1's observations and facts
-2. Store 3 meta-observations reflecting on the knowledge:
+2. Store 3 reflections as Memory nodes with `memory_type="reflection"`:
    ```
-   mcp__engrammic__context_store(
-       layer="meta",
+   remember(
        content="The chromosome count observation may be misleading without context about gene density",
-       observation_type="uncertainty",
+       memory_type="reflection",
        about=["<node_id>"]
    )
    ```
    
-   Types to use:
-   - `uncertainty` - flag uncertain or incomplete knowledge
-   - `connection` - note unexpected relationship between nodes
-   - `gap` - identify missing information
+   Reflection content types to cover:
+   - Uncertainty - flag uncertain or incomplete knowledge
+   - Connection - note unexpected relationship between nodes
+   - Gap - identify missing information
 
-3. Report meta-observation IDs
+3. Report reflection node IDs
 
 ### Worker 3: Reflection Reviewer
 
-1. Query the meta layer for reflections:
+1. Query for reflections:
    ```
-   mcp__engrammic__context_recall(
-       query="uncertainty gap connection genetics",
-       layers=["meta"]
+   recall(
+       query="uncertainty gap connection genetics"
    )
    ```
 
 2. Query original nodes with reflections attached:
    ```
-   mcp__engrammic__context_recall(
+   recall(
        node_ids=["<original_node_id>"],
        include_reflections=true
    )
    ```
 
-3. Verify reflections are linked to their target nodes
-4. Report findings
+3. Trace provenance of a fact to see its sources:
+   ```
+   trace(node_id="<fact_id>", direction="up")
+   ```
+
+4. Verify reflections are linked to their target nodes via ABOUT edges
+5. Report findings
 
 ## Success Criteria
 
-- [ ] Worker 1 created 4 observations + 2 facts
-- [ ] Worker 2 created 3 meta-observations with different types
-- [ ] Meta-observations have ABOUT edges to target nodes
+- [ ] Worker 1 created 4 observations + 2 facts (Claims promoted to Fact by corroboration)
+- [ ] Worker 2 created 3 reflection Memory nodes
+- [ ] Reflection nodes have ABOUT edges to target nodes
 - [ ] Reflections retrievable via include_reflections=true
-- [ ] Meta layer queryable separately from memory/knowledge
+- [ ] trace() shows provenance chain for facts
 
 ## Notes
 
-Tests the meta-memory system:
-- MetaObservation node type
-- ABOUT edges from meta to other layers
-- include_reflections flag on recall
-- Meta layer as cross-cutting concern
+Tests metacognition as a cross-cutting capability:
+- Reflections are Memory nodes with memory_type="reflection"
+- ABOUT edges connect reflections to target nodes
+- include_reflections flag surfaces reflections on recall
+- trace() walks provenance chains (DERIVED_FROM, SYNTHESIZED_FROM, SUPERSEDES)

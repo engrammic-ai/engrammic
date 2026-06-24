@@ -95,7 +95,7 @@ None
 
 ## Notes
 
-Tests temporal/meta-memory features:
+Tests temporal and metacognitive capabilities:
 - valid_from / valid_to timestamps
 - SUPERSEDES relationship
 - as_of parameter for time-travel queries
