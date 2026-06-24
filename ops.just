@@ -152,3 +152,4 @@ longmemeval category="knowledge-update" limit="100":
         --parallel --max-concurrent 8 \
         -c {{category}} -n {{limit}} \
         -o results/longmemeval-{{category}}-$(date +%Y%m%d-%H%M%S).json
+

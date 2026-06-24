@@ -30,6 +30,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
+| [../review/2026-06-24-heat-ranking-research.md](../review/2026-06-24-heat-ranking-research.md) | Heat as PPR seed boost, synonymy edges, degree normalization | Consider |
 | [2026-06-19-semantic-spo-corroboration.md](./2026-06-19-semantic-spo-corroboration.md) | Semantic equivalence for organic corroboration | Draft |
 | [2026-06-20-retrieval-remaining-work.md](./2026-06-20-retrieval-remaining-work.md) | Retrieval quality gaps | Spec |
 | [2026-06-08-wisdom-layer-split.md](./2026-06-08-wisdom-layer-split.md) | Separate Commitments (agent) from Beliefs (SAGE) | Draft |
