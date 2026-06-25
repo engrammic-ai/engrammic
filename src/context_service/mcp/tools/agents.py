@@ -42,7 +42,7 @@ LEFT JOIN (
     FROM nodes
     WHERE silo_id = :silo_id
     GROUP BY agent_id
-) n ON n.agent_id = a.id
+) n ON n.agent_id = a.id::text
 WHERE a.silo_id = :silo_id
 ORDER BY a.last_seen DESC
 """
