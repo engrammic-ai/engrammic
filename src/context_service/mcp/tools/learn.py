@@ -78,7 +78,6 @@ async def _learn_impl(
         import asyncio
 
         from context_service.mcp.tools.remember import _track_write_and_resolve_stuck
-        from context_service.services.models import derive_silo_id
 
         silo_id = str(derive_silo_id(auth.org_id))
         asyncio.create_task(
