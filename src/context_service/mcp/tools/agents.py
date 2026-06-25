@@ -40,9 +40,9 @@ FROM agents a
 LEFT JOIN (
     SELECT agent_id, COUNT(*) AS node_count
     FROM nodes
-    WHERE silo_id = :silo_id
+    WHERE silo_id = :silo_id::uuid
     GROUP BY agent_id
-) n ON n.agent_id = a.id::text
+) n ON n.agent_id = a.id
 WHERE a.silo_id = :silo_id
 ORDER BY a.last_seen DESC
 """
