@@ -1,3 +1,3 @@
 """Delta Prime context service."""
 
-__version__ = "0.1.0-dev"
+__version__ = "0.7.0-dev"
