@@ -78,6 +78,7 @@ services:
     env_file:
       - .env
     volumes:
+      - ~/.config/gcloud:/mnt/gcloud:ro
       - ./config:/app/config-override:ro
     environment:
       - ENVIRONMENT=self-hosted
@@ -88,6 +89,9 @@ services:
       - POSTGRES_HOST=postgres
       - POSTGRES_USER=engrammic
       - POSTGRES_DATABASE=engrammic
+      - GOOGLE_APPLICATION_CREDENTIALS=/mnt/gcloud/application_default_credentials.json
+      - VERTEXAI_PROJECT=${VERTEX_PROJECT:-}
+      - VERTEXAI_LOCATION=${VERTEX_LOCATION:-}
       - DISABLE_AIOHTTP_TRANSPORT=true
     depends_on:
       memgraph:
@@ -117,6 +121,7 @@ services:
     env_file:
       - .env
     volumes:
+      - ~/.config/gcloud:/mnt/gcloud:ro
       - ./config:/app/config-override:ro
     environment:
       - ENVIRONMENT=self-hosted
@@ -128,6 +133,9 @@ services:
       - POSTGRES_HOST=postgres
       - POSTGRES_USER=engrammic
       - POSTGRES_DATABASE=engrammic
+      - GOOGLE_APPLICATION_CREDENTIALS=/mnt/gcloud/application_default_credentials.json
+      - VERTEXAI_PROJECT=${VERTEX_PROJECT:-}
+      - VERTEXAI_LOCATION=${VERTEX_LOCATION:-}
       - DISABLE_AIOHTTP_TRANSPORT=true
     depends_on:
       dagster:

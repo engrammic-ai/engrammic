@@ -7,7 +7,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from context_service.mcp.server import get_mcp_auth_context
+from context_service.db.queries import COUNT_ACTIVE_NODES, LIST_NODES_PAGINATED
+from context_service.mcp.server import get_context_service, get_mcp_auth_context
 from context_service.mcp.tools.context_get import _context_get
 from context_service.mcp.tools.context_graph import _context_graph
 from context_service.mcp.tools.context_query import _context_query
@@ -18,6 +19,60 @@ from context_service.telemetry.metrics import record_context_recall_size, record
 
 if TYPE_CHECKING:
     from fastmcp import FastMCP
+
+
+async def _list_all_nodes(
+    silo_id: str,
+    offset: int = 0,
+    limit: int = 20,
+    layers: list[str] | None = None,
+) -> dict[str, Any]:
+    """List all active nodes in a silo with pagination.
+
+    Used for wildcard queries (query="*") to bypass embedding search.
+    """
+    start = time.perf_counter()
+    ctx_svc = get_context_service()
+
+    # Get total count
+    count_rows = await ctx_svc.graph_store.execute_query(
+        COUNT_ACTIVE_NODES, {"silo_id": silo_id}
+    )
+    total = count_rows[0]["total"] if count_rows else 0
+
+    # Get paginated nodes
+    rows = await ctx_svc.graph_store.execute_query(
+        LIST_NODES_PAGINATED,
+        {"silo_id": silo_id, "offset": offset, "limit": limit},
+    )
+
+    results = []
+    for row in rows:
+        layer = row.get("layer") or "unknown"
+        if layers and layer not in layers:
+            continue
+        results.append({
+            "node_id": row["id"],
+            "layer": layer,
+            "content": row.get("content") or "",
+            "confidence": row.get("confidence") or 0.0,
+            "created_at": row.get("created_at"),
+            "tags": row.get("tags") or [],
+            "heat_score": row.get("heat_score") or 0.0,
+            "node_type": row.get("node_type"),
+        })
+
+    elapsed_ms = int((time.perf_counter() - start) * 1000)
+
+    return {
+        "results": results,
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "has_more": offset + len(results) < total,
+        "search_time_ms": elapsed_ms,
+        "search_mode": "list",
+    }
 
 
 async def _fetch_chain_steps(
@@ -262,6 +317,13 @@ async def _context_recall(
 
     if not query and not node_ids:
         return {"error": "missing_input", "message": "Provide query or node_ids"}
+
+    # Wildcard query: list all nodes with pagination (skip embedding search)
+    if query in ("*", "") and not node_ids and depth == 0:
+        # ponytail: offset param not exposed yet, default 0
+        response = await _list_all_nodes(silo_id, offset=0, limit=top_k, layers=layers)
+        response = _apply_tier_content_policy(response, include_content)
+        return response
 
     if fusion_mode and not query:
         return {"error": "fusion_requires_query", "message": "fusion_mode=True requires a query"}

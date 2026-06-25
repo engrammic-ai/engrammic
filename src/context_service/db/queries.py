@@ -115,6 +115,37 @@ RETURN n.id AS id,
        n.properties AS properties
 """
 
+# List all nodes in a silo with pagination (for wildcard recall).
+# Ordered by created_at descending (newest first), supports offset/limit.
+# Excludes inactive nodes by default (tombstoned, superseded).
+LIST_NODES_PAGINATED = """
+MATCH (n {silo_id: $silo_id})
+WHERE n.properties.state = 'ACTIVE'
+  AND n.properties.content IS NOT NULL
+  AND n.properties.content <> ''
+RETURN n.id AS id,
+       n.properties.content AS content,
+       n.properties.layer AS layer,
+       n.properties.state AS state,
+       n.properties.confidence AS confidence,
+       n.properties.created_at AS created_at,
+       n.properties.tags AS tags,
+       coalesce(n.heat_score, 0.0) AS heat_score,
+       labels(n)[0] AS node_type
+ORDER BY n.properties.created_at DESC
+SKIP $offset
+LIMIT $limit
+"""
+
+# Count total active nodes in a silo (for pagination metadata).
+COUNT_ACTIVE_NODES = """
+MATCH (n {silo_id: $silo_id})
+WHERE n.properties.state = 'ACTIVE'
+  AND n.properties.content IS NOT NULL
+  AND n.properties.content <> ''
+RETURN count(n) AS total
+"""
+
 # DEPRECATED (CITE v2): Clustering via :Cluster nodes and :MEMBER_OF edges is
 # removed in v2. Belief synthesis is driven by SYNTHESIZED_FROM edges directly
 # between :Belief and :Fact nodes. These queries are dead code.

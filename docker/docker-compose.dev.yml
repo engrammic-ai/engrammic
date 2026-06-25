@@ -279,6 +279,7 @@ services:
       - POSTGRES_HOST=postgres
       - HOME=/home/dagster
       - DAGSTER_POSTGRES_DB=engrammic_dagster
+      - GOOGLE_APPLICATION_CREDENTIALS=/mnt/gcloud/application_default_credentials.json
     volumes:
       - ../src:/app/src
       - ../workspace.yaml:/app/workspace.yaml:ro
