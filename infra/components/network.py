@@ -128,7 +128,7 @@ class NetworkStack(pulumi.ComponentResource):
         self.tei_subnet = compute.Subnetwork(
             f"{name}-tei-subnet",
             name=f"engrammic-{env}-tei",
-            ip_cidr_range="10.0.4.0/24",
+            ip_cidr_range="10.0.5.0/24",
             region=tei_region,
             network=self.vpc.id,
             private_ip_google_access=True,
