@@ -107,6 +107,9 @@ async def _update_impl(
     target: str | None = None,
     source_tier: str | None = None,
     confidence: float = 0.8,
+    # REST overrides (bypass MCP context when provided)
+    silo_id: str | None = None,
+    _agent_id: str | None = None,  # noqa: ARG001 - reserved for audit
 ) -> dict[str, Any]:
     """Implementation for update tool."""
     if query is None and target is None:
@@ -116,10 +119,14 @@ async def _update_impl(
             "message": "must provide query or target",
         }
 
-    auth = await get_mcp_auth_context()
-    await track_tool_usage(auth, "update")
-    identity = await get_mcp_identity_context()
-    silo_id = str(derive_silo_id(auth.org_id))
+    # Use explicit params if provided (REST path), otherwise MCP context
+    if silo_id is None:
+        auth = await get_mcp_auth_context()
+        await track_tool_usage(auth, "update")
+        identity = await get_mcp_identity_context()
+        silo_id = str(derive_silo_id(auth.org_id))
+    else:
+        identity = None  # REST path - no identity context
 
     supersedes_id: str
 
@@ -204,10 +211,11 @@ async def _update_impl(
 
     record_supersession_used("update", silo_id=silo_id)
 
-    # Log "superseded" event for the old node
-    from context_service.services.identity_service import fire_and_forget_identity_writes
+    # Log "superseded" event for the old node (only if identity context available)
+    if identity is not None:
+        from context_service.services.identity_service import fire_and_forget_identity_writes
 
-    fire_and_forget_identity_writes(identity, action="superseded", target_node_id=supersedes_id)
+        fire_and_forget_identity_writes(identity, action="superseded", target_node_id=supersedes_id)
 
     # Fetch snippet of the superseded node content for the response
     ctx_svc = get_context_service()
