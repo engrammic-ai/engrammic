@@ -3,43 +3,61 @@ name: engrammic:eag-guide
 description: Proactive memory behavior + layer selection for Engrammic MCP
 ---
 
-# EAG Cognitive Guide
+# LeAP Cognitive Guide
+
+Layered Epistemic Agent Protocol (LeAP) guide for Engrammic MCP.
 
 ## MANDATORY PROTOCOL
 
-Before ANY store operation, follow these steps in order:
+Before ANY store operation:
 
 ```
 1. RECALL FIRST   — recall(query="<topic>") to check existing knowledge
 2. DECIDE         — Does a node exist?
-                    - Yes, update:      supersede it (pass supersedes=<node_id>)
-                    - Yes, contradicts: link(type="CONTRADICTS") + reflect
-                    - Yes, related:     link to it after storing
+                    - Yes, update:      use update() or pass supersedes=<node_id>
+                    - Yes, contradicts: store your claim, system detects contradiction
                     - No:               proceed to store
 3. STORE          — Use the appropriate layer (see Decision Tree below)
-4. LINK           — If you referenced other nodes, link them explicitly
 ```
 
-Skipping step 1 creates duplicates. Skipping step 4 creates orphan nodes.
+Skipping step 1 creates duplicates. The Custodian catches them but explicit supersession is better.
 
 ---
 
 ## DECISION TREE
 
 ```
-Is this uncertain or still evolving?
-  → hypothesize, then revise/commit when resolved
-
 Do you have a citable source (file path, URL, doc reference)?
-  → learn(claim="...", evidence=["<uri>"])
+  -> learn(claim="...", evidence=["<uri>"])
 
-Is this a conclusion drawn from multiple known facts?
-  → recall those facts, get their node IDs
-  → believe(claim="...", about=["<id1>", "<id2>"])
+Otherwise (raw observation, no source)?
+  -> remember(content="...")
 
-Otherwise (raw observation, no source, not a conclusion)?
-  → remember(content="...")
+Is this a reflection on your own reasoning or mistakes?
+  -> remember(content="...", memory_type="reflection", about=["<node_ids>"])
 ```
+
+Wisdom-layer nodes (Belief) are system-synthesized from corroborated facts. Agents write to Memory and Knowledge only.
+
+---
+
+## TOOL SURFACE
+
+| Tool | Layer | When to use |
+|------|-------|-------------|
+| `remember` | Memory | Raw observations, preferences, no evidence needed |
+| `learn` | Knowledge | Claims with evidence (file://, https://) |
+| `update` | Knowledge | Supersede existing claim with new content |
+| `recall` | All | Search or fetch before storing or when context needed |
+| `trace` | All | Understand provenance (why I believe this) |
+| `forget` | All | Remove wrong/harmful nodes (not stale ones) |
+| `tick` | - | Lightweight engagement check |
+| `introspect` | - | Check volatility, gaps, contributions |
+| `agents` | - | List agents in silo |
+| `conflicts` | - | List contradictions |
+| `dismiss_conflict` | - | Mark as not-a-real-conflict |
+| `escalate_conflict` | - | Flag for human review |
+| `resolve_conflict` | - | Pick winner, supersede loser |
 
 ---
 
@@ -49,11 +67,10 @@ Otherwise (raw observation, no source, not a conclusion)?
 |--------|-----------------|
 | Before any store | `recall(query="<topic>")` |
 | Starting work in a domain you've touched before | `recall` relevant background |
-| Your understanding of something changed | `reflect` |
-| Found two nodes that contradict each other | `link(type="CONTRADICTS")` + `reflect` |
-| Drawing a conclusion from multiple facts | `believe` with `about` node IDs |
-| Wrapping up an exploration session | `recall` your session tag, check for orphan nodes |
-| User corrects you or clarifies intent | Store the correction immediately |
+| Your understanding changed or you made a mistake | `remember(..., memory_type="reflection", about=[...])` |
+| Found contradicting information | Store your claim with `learn`; system detects contradiction |
+| Wrapping up a session | `recall` to check for anything worth storing |
+| User corrects you | Store the correction immediately |
 
 ---
 
@@ -61,46 +78,47 @@ Otherwise (raw observation, no source, not a conclusion)?
 
 ```
 recall first, always — before any store
-supersede, don't duplicate — pass supersedes= when updating
+supersede, don't duplicate — use update() or pass supersedes=
 remember = raw observation (no evidence needed)
 learn = claim with evidence (evidence= required)
-believe = conclusion from facts (about= required, recall IDs first)
-hypothesize = uncertain/evolving (finalize with commit)
-link = explicit relationship (CONTRADICTS / SUPPORTS / SUPERSEDES / RELATES_TO)
-reflect = when understanding shifts
+update = replace existing claim (query or target + new content)
 forget = wrong/harmful nodes only, not stale ones
-tick = check pending markers without a full recall
+tick = check pending markers without full recall
+introspect = check volatility, gaps, provenance, contributions
+conflicts = list contradictions needing resolution
 ```
 
 ---
 
-## REFERENCE SECTIONS
-
-### Recall Triggers
+## RECALL TRIGGERS
 
 Act on these automatically:
-- User mentions a person, project, term, or concept: recall to check what you know
+- User mentions a person, project, term, or concept: recall what you know
 - User says "before", "last time", "we discussed", "remember": recall that context
 - Starting work in a domain you've touched before: recall relevant background
 - Topic overlaps with prior work but you're unsure of details: recall before assuming
 - User asks "what do you know about X": recall then synthesize
 
-**Threshold:** Only recall when the result would materially change your response. Don't recall on every noun.
+**Threshold:** Only recall when the result would materially change your response.
 
-**Using results:** Treat recalled context as knowledge you already have — don't announce "I found in memory..." Just use it naturally.
+**Using results:** Treat recalled context as knowledge you already have. Don't announce "I found in memory..." Just use it naturally.
 
-### Store Triggers
+---
+
+## STORE TRIGGERS
 
 Store when future sessions would benefit:
-- User shares a preference, constraint, or standing decision: store it
-- You learn something non-obvious about the codebase/project: store it
-- User corrects you or clarifies intent: store the correction
-- A task reveals a pattern or insight: store the pattern
-- You make a decision worth remembering the rationale for: store why
+- User shares a preference, constraint, or standing decision
+- You learn something non-obvious about the codebase/project
+- User corrects you or clarifies intent
+- A task reveals a pattern or insight
+- You make a decision worth remembering the rationale for
 
 Skip: current task steps, transient state, things obvious from code.
 
-### Action Triggers (Mandatory)
+---
+
+## ACTION TRIGGERS (Mandatory)
 
 **After fixing a bug:**
 ```
@@ -111,9 +129,6 @@ learn(
   tags=["bug-fix", "<relevant-domain>"]
 )
 ```
-
-**After a non-trivial commit:**
-If the commit reveals something non-obvious (gotcha, workaround, design decision), store it. Skip for routine changes.
 
 **After discovering a codebase pattern or gotcha:**
 ```
@@ -131,136 +146,118 @@ Store the error message, root cause, and fix so future sessions can recall it.
 **After user teaches you something project-specific:**
 Store immediately so you don't need to be taught twice.
 
-### Layer Selector
+---
+
+## LAYER SELECTION
 
 **Raw observation, no evidence?**
-Use Memory (remember)
+Use Memory: `remember(content="...")`
 
 **Claim with a citable source?**
-Use Knowledge (learn) — requires evidence_uri (file path, URL, doc reference)
+Use Knowledge: `learn(claim="...", evidence=["file://...", "https://..."])`
 
 **Uncertain about evidence?**
-Store as Memory with a note about the claim. Upgrade to Knowledge when you find the source.
-
-**Conclusion synthesized from multiple facts?**
-Use Wisdom (believe) — requires about_node_ids linking to the supporting facts
+Store as Memory with a note. Upgrade to Knowledge when you find the source.
 
 **Your understanding just changed?**
-Use Meta (reflect) — link to the nodes that changed
+Use reflection: `remember(content="I was wrong about X because Y", memory_type="reflection", about=["<node_ids>"])`
 
-### Reasoning Flow vs Direct Belief
+---
 
-Two paths to Wisdom:
+## SUPERSESSION PATTERN
 
-**Direct belief** — when you have facts and can immediately form a grounded conclusion:
+When updating existing knowledge:
+
 ```
-recall facts then believe (with about_node_ids)
+1. recall("topic")
+2. Found node abc123 with old content
+3. update(content="new content", evidence=[...], target="abc123")
+   — OR —
+   learn(claim="new content", evidence=[...], supersedes="abc123")
 ```
 
-**Reasoning flow** — when working through a problem over multiple steps:
+Use `update()` when you want semantic search to find the target. Use `supersedes=` on `learn()` when you already have the node ID.
+
+---
+
+## CONFLICT HANDLING
+
+The system detects contradictions via CONTRADICTS edges. When you encounter conflicts:
+
 ```
-hypothesize (tentative) then gather evidence then revise if needed then commit (crystallize)
+conflicts()                          # List unresolved contradictions
+resolve_conflict(conflict_id, winner_id)  # Pick winner, supersede loser
+dismiss_conflict(conflict_id, reason)     # Mark as not-a-real-conflict
+escalate_conflict(conflict_id, message)   # Flag for human review
 ```
 
-Use hypothesize/commit when you're uncertain and refining. Use believe directly when the conclusion is clear from existing facts.
+Don't let conflicts accumulate. Resolve or escalate proactively.
 
-### Using Link
+---
 
-Create explicit relationships when:
-- Two nodes are related but that relationship isn't obvious from content
-- You want to mark a supersession, contradiction, or dependency
-- Building a knowledge structure that should be traversable
+## METACOGNITIVE QUERIES
 
-Don't over-link — the system infers relationships from content. Link when inference would miss the connection.
+Use `introspect()` to understand epistemic health:
 
-### When to Forget
+```
+introspect(query_type="volatility")      # Topics with high churn
+introspect(query_type="gaps")            # Frequently asked, never answered
+introspect(query_type="provenance", node_id="...")  # Who contributed to this belief
+introspect(query_type="contributions")   # Your contribution stats
+```
 
-Use forget to remove nodes that:
-- Are factually wrong and shouldn't persist (not just outdated — those get superseded)
+---
+
+## ENGAGEMENT MARKERS
+
+The system surfaces markers requiring attention. Check via `tick()` or the `engagement` field in `recall()` responses.
+
+**Two modes:**
+
+| Mode | Behavior |
+|------|----------|
+| `soft` | Markers are advisory. Results still returned. |
+| `hard` | Results withheld until you resolve markers. |
+
+Hard mode activates after repeated touches without resolution.
+
+---
+
+## WHEN TO FORGET
+
+Use `forget()` for nodes that:
+- Are factually wrong (not just outdated — those get superseded)
 - Were stored in error (wrong layer, duplicate, test data)
 - User explicitly asks to remove
-- Contain information that should not have been stored (PII, secrets discovered post-hoc)
+- Contain information that should not have been stored
 
-**Don't forget** things just because they're old or no longer relevant — decay handles that naturally. Forget is for "this should never have existed" not "this is stale."
+**Don't forget** things just because they're old. Decay handles staleness naturally.
 
-When removing: if the node has dependents (beliefs grounded in it, links to it), consider whether those also need updating or removal.
+---
 
-### Quality Checks
+## QUALITY CHECKS
 
 **Memory:** "Would I tell a colleague about this tomorrow?"
 - Yes: store
 - No: skip, it's noise
 
 **Knowledge:** "Can I point to a specific source?"
-- Yes: store with evidence_uri
-- No: use Memory instead, or don't store
+- Yes: store with evidence
+- No: use Memory instead
 
-**Wisdom:** "Based on [these specific facts], I believe [this conclusion]."
-- Can fill in [facts]: form belief, link to those nodes
-- Can't: it's a hunch — store as Memory
+---
 
-### Belief vs Commitment
-
-Both live in Wisdom:
-
-- **Belief:** Grounded in evidence. "Based on load tests, Redis handles our access patterns better than Memcached."
-- **Commitment:** A declared decision. "We will use Redis for all cache layers. Decided 2026-04-12, no benchmark required — team decision." Commitments don't need evidence; they need declaration.
-
-### When to Reflect
-
-Record to Meta when your understanding shifts:
-- You update or reverse a belief based on new evidence
-- You notice a contradiction between stored facts
-- You correct a mistake
-- Your confidence changes significantly
-
-The history of belief is as valuable as current belief.
-
-### Engagement: Handling Markers
-
-The system surfaces engagement markers that require your attention. Check `recall` responses for an `engagement` field, or call `tick()` periodically.
-
-**Marker types:**
-- **ProposedBelief:** SAGE synthesized a candidate belief from existing knowledge
-- **Contradiction:** Two knowledge claims conflict
-- **StaleCommitment:** A commitment is outdated relative to newer knowledge
-
-**Two modes:**
-
-| Mode | Behavior | What to do |
-|------|----------|------------|
-| `soft` | Markers are advisory. Results still returned. | Resolve when convenient, don't let them accumulate |
-| `hard` | Results withheld until you resolve at least one marker | Must resolve before continuing |
-
-Hard mode activates after 3+ touches without resolution.
-
-**Resolution verbs:**
-
-| Marker | Right action | Wrong action |
-|--------|--------------|--------------|
-| ProposedBelief (accurate) | `accept(belief_id)` | `dismiss` |
-| ProposedBelief (inaccurate) | `reject(belief_id, reason)` | `dismiss` |
-| Contradiction | `believe(..., supersedes=...)` then `dismiss(marker_id, reason)` | ignore |
-| StaleCommitment | `believe(..., supersedes=...)` then `dismiss(marker_id, reason)` | ignore |
-
-**Proactive checking:** Call `tick()` if many turns have passed without a `recall`. It surfaces pending markers without full recall overhead.
-
-For full details, see the `engrammic:engage` skill.
-
-### Anti-patterns
+## ANTI-PATTERNS
 
 **Storing:**
-- Storing everything "just in case": creates noise, degrades recall quality
-- Skipping evidence on knowledge claims: ungrounded facts pollute the graph
-- Forming beliefs without linked facts: these are hunches, not beliefs
-- Storing without recalling first: creates duplicates the Custodian has to clean up
+- Storing everything "just in case": creates noise
+- Skipping evidence on claims: ungrounded facts pollute the graph
+- Storing without recalling first: creates duplicates
 
 **Recalling:**
-- Waiting to be explicitly asked: be proactive
-- Skipping recall because you're fairly sure: false confidence propagates stale context
-- Recalling on every topic: only when it would change your response
+- Waiting to be asked: be proactive
+- Skipping recall because you're "fairly sure": false confidence propagates stale context
 
 **Engagement:**
 - Ignoring soft markers until they go hard: resolve proactively
-- Using `dismiss` for ProposedBeliefs: use `accept` or `reject` instead
-- Letting contradictions accumulate: they degrade knowledge quality
+- Letting conflicts accumulate: they degrade knowledge quality

@@ -1,82 +1,55 @@
-# Context Skills
+# Engrammic Skills
 
-Skills for working with engrammic context-service MCP tools.
+Skills for working with Engrammic MCP tools.
 
-## Installing skills locally
+## Installing
 
-Engrammic skills follow the SKILL.md open standard. Copy the base skill
-directories into the portable agent-skills location so any compatible harness
-(Claude Code, Codex, Cursor, Windsurf, Gemini CLI) can discover them:
+Copy skill directories to the portable agent-skills location:
 
 ```bash
-cp -r skills/engrammic:* ~/.agents/skills/
+cp -r skills/engrammic-* ~/.agents/skills/
 ```
 
-Claude Code also reads `~/.claude/skills/`; either location works for that
-harness. The local copy step covers the base `engrammic:*` skills only. ICP
-overlay skills (`coding:*`, `b2b-ops:*`) are not part of what you copy into
-your own harness. The Engrammic server keeps them in its skill catalog, and
-the preset-aware `patterns` tool surfaces the right one per tenant: it ranks
-by namespace and auto-qualifies a bare `onboarding` request to the tenant's
-ICP variant.
-
-### Other Agents
-
-Load skill content from `{skill}/SKILL.md` into your agent's system prompt on-demand.
+Claude Code also reads `~/.claude/skills/`.
 
 ## Skills
 
-### Cognitive Guide
+| Skill | Purpose |
+|-------|---------|
+| `engrammic-eag-guide` | LeAP cognitive guide: layer selection, store/recall triggers, conflict handling |
+| `engrammic-explore-codebase` | Two-phase codebase exploration with memory |
+| `engrammic-wander` | Gap-filling exploration for missed areas |
 
-| Skill | Trigger | Purpose |
-|-------|---------|---------|
-| `eag-guide` | "how should I use memory", "when to form beliefs" | Cognitive framework for EAG layer usage |
+### ICP Presets (not for local install)
 
-### Write Operations
+| Skill | Purpose |
+|-------|---------|
+| `coding:onboarding` | Developer persona onboarding |
+| `b2b-ops:onboarding` | B2B ops persona onboarding |
 
-| Skill | Trigger | Layer |
-|-------|---------|-------|
-| `observe` | "remember this", "note that" | memory |
-| `learn` | "assert that", "we know that" | knowledge |
-| `reason` | "figure out", "derive" | intelligence |
-| `reflect` | "I was wrong", "flag contradiction" | meta |
-| `connect` | "X relates to Y", "link these" | link |
+These are served by the Engrammic server per-tenant. Don't copy locally.
 
-### Belief Operations
+## MCP Tool Surface
 
-| Skill | Trigger | Layer |
-|-------|---------|-------|
-| `belief-state` | "what hypotheses", "session beliefs" | intelligence (read) |
-| `update-belief` | "revise hypothesis", "add evidence" | intelligence |
-| `crystallize` | "commit to", "finalize belief" | wisdom |
-| `accept` | "accept proposal", "approve belief" | wisdom |
-| `reject` | "reject proposal", "decline belief" | wisdom |
+Full reference: `docs/api/mcp-tools-reference.md`
 
-### Read Operations
-
-| Skill | Trigger | Layer |
-|-------|---------|-------|
-| `recall` | "what do I know", "search for" | read |
-| `trace` | "why do I believe", "provenance" | admin |
-
-## Tagging Guidelines
-
-Always include `tags` when storing context (2-5 tags per node).
-
-**Categories:**
-- **Domain:** `api`, `database`, `auth`, `ui`, `infra`
-- **Type:** `bug-fix`, `feature`, `decision`, `spec`, `checkpoint`
-- **Scope:** `session`, `project`
-
-**Rules:** lowercase, hyphenated, specific over generic.
-
-## Token Cost
-
-- Index in system-reminder: ~30 tokens/skill (~210 total)
-- On-demand load: ~100-150 tokens per skill when invoked
-- MCP tool schemas: ~300 tokens/tool (~1,200 total)
+| Tool | Purpose |
+|------|---------|
+| `remember` | Store observation to Memory |
+| `learn` | Record claim with evidence to Knowledge |
+| `recall` | Search or fetch knowledge |
+| `update` | Supersede existing knowledge |
+| `trace` | Walk provenance chain |
+| `forget` | Tombstone a node |
+| `tick` | Engagement check |
+| `introspect` | Metacognitive queries |
+| `agents` | List agents in silo |
+| `conflicts` | List contradictions |
+| `dismiss_conflict` | Mark as not-a-conflict |
+| `escalate_conflict` | Flag for human review |
+| `resolve_conflict` | Pick winner |
 
 ## Prerequisites
 
-1. Context-service MCP server running
-2. The agent-facing MCP verbs connected (`remember`, `learn`, `recall`, `link`, `trace`)
+1. Engrammic MCP server connected
+2. Valid auth token
