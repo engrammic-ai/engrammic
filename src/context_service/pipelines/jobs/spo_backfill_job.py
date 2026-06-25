@@ -22,8 +22,8 @@ WHERE c.silo_id IS NOT NULL
   AND (c.properties.subject IS NULL OR c.properties.predicate IS NULL OR c.properties.object IS NULL)
 RETURN c.id AS id, c.silo_id AS silo_id, c.content AS content
 ORDER BY c.created_at DESC
-SKIP $offset
-LIMIT $limit
+SKIP {offset}
+LIMIT {limit}
 """
 
 _COUNT_CLAIMS_WITHOUT_SPO = """
@@ -82,10 +82,9 @@ def backfill_spo_op(context) -> dict[str, Any]:
         offset = 0
 
         while True:
-            batch = await mg_store.execute_query(
-                _LIST_CLAIMS_WITHOUT_SPO,
-                {"offset": offset, "limit": BATCH_SIZE},
-            )
+            # ponytail: Memgraph doesn't support parameterized SKIP/LIMIT
+            query = _LIST_CLAIMS_WITHOUT_SPO.format(offset=offset, limit=BATCH_SIZE)
+            batch = await mg_store.execute_query(query, {})
 
             if not batch:
                 break
