@@ -1,6 +1,6 @@
 # Contributing to Engrammic
 
-Thank you for your interest in contributing to Engrammic! We welcome community contributions to help build the future of Epistemic Augmented Generation (EAG).
+Thank you for your interest in contributing to Engrammic! We welcome community contributions to help build the future of the Layered Epistemic Agent Protocol (LeAP).
 
 ## Development Setup
 

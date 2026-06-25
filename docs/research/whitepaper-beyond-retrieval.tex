@@ -93,7 +93,7 @@
     linkcolor=blue!70!black,
     urlcolor=blue!70!black,
     citecolor=blue!70!black,
-    pdftitle={Beyond Retrieval: Epistemic Augmented Generation for Coherent Agent Memory},
+    pdftitle={Beyond Retrieval: Layered Epistemic Agent Protocol for Coherent Agent Memory},
     pdfauthor={Aliasgar Khimani},
     pdfkeywords={agent memory, epistemology, belief revision, RAG, knowledge graphs}
 }
@@ -113,7 +113,7 @@
 % ------------------------------------------------------------
 % TITLE
 % ------------------------------------------------------------
-\title{Beyond Retrieval:\\Epistemic Augmented Generation for Coherent Agent Memory\\[0.4em]{\large\normalfont Treating agent memory as epistemology, not retrieval.}}
+\title{Beyond Retrieval:\\Layered Epistemic Agent Protocol for Coherent Agent Memory\\[0.4em]{\large\normalfont Treating agent memory as epistemology, not retrieval.}}
 
 \author{
     \textbf{Aliasgar Khimani}\thanks{\texttt{aliasgar.khimani@engrammic.ai}}\\
@@ -130,9 +130,9 @@
 \begin{abstract}
 Retrieval-Augmented Generation (RAG) treats memory as a retrieval problem: store content, embed it, fetch what is relevant. This suffices for static knowledge bases but breaks down for agents that learn over time, where stored information contradicts itself, beliefs evolve, and corrections must propagate through dependent reasoning. As Roynard~\cite{roynard2026} observes, current architectures commit a \textit{category error}, applying uniform persistence semantics to information with fundamentally different epistemic status.
 
-We introduce \textbf{Epistemic Augmented Generation (EAG)}, a framework that treats agent memory as an epistemology problem. EAG formalizes stratified epistemic types with distinct evidence requirements (observations require no justification, claims require single sources, facts require corroboration, and beliefs require derivation chains) and defines warrant functions, coherence invariants, and a revision protocol that we prove satisfies AGM belief revision postulates. Coherence is decidable for finite stores.
+We introduce \textbf{Layered Epistemic Agent Protocol (LeAP)}, a framework that treats agent memory as an epistemology problem. LeAP formalizes stratified epistemic types with distinct evidence requirements (observations require no justification, claims require single sources, facts require corroboration, and beliefs require derivation chains) and defines warrant functions, coherence invariants, and a revision protocol that we prove satisfies AGM belief revision postulates. Coherence is decidable for finite stores.
 
-We present \textbf{CITE (Context In Tiered Epistemology)}, a four-layer architecture implementing EAG. Its four layers, Memory (decay-based), Knowledge (supersession-based), Wisdom (evidence-gated), and Intelligence (session-scoped), enforce distinct persistence semantics. Write-time validation gates every entry by epistemic layer, preventing contradiction accumulation at the source rather than detecting it after retrieval.
+We present \textbf{CITE (Context In Tiered Epistemology)}, a four-layer architecture implementing LeAP. Its four layers, Memory (decay-based), Knowledge (supersession-based), Wisdom (evidence-gated), and Intelligence (session-scoped), enforce distinct persistence semantics. Write-time validation gates every entry by epistemic layer, preventing contradiction accumulation at the source rather than detecting it after retrieval.
 
 In a design validation on 500 annotated coding-agent sessions, CITE achieves 95\% contradiction detection compared to 66\% for an embedding-only baseline, and 87\% revision propagation compared to 12\%. The architecture and implementation are open source under Apache 2.0.
 \end{abstract}
@@ -144,11 +144,13 @@ In a design validation on 500 annotated coding-agent sessions, CITE achieves 95\
 
 RAG was designed for grounded generation over static corpora: a user poses a query, the system retrieves relevant passages, and a language model synthesizes an answer. The corpus is assumed stable, and each session starts without memory of the last.
 
-Long-running agents violate these assumptions. Consider an agent that records ``the API uses OAuth2'' on day one, then encounters documentation stating ``the API uses API keys'' on day two. Without epistemic structure, both statements persist with equal standing, and beliefs derived from the first (downstream tool configurations, access patterns) are never revisited. Worse, a hallucinated claim stored in one session can resurface weeks later as apparent ground truth, with no mechanism to distinguish it from verified knowledge.
+Long-running agents violate these assumptions. Consider an agent that records ``the database is PostgreSQL'' on day one, then encounters a config file specifying MySQL on day two. Without epistemic structure, both statements persist with equal standing, and beliefs derived from the first (connection strings, query syntax, migration scripts) are never revisited. Worse, a hallucinated claim stored in one session can resurface weeks later as apparent ground truth, with no mechanism to distinguish it from verified knowledge.
+
+Recent work confirms these failure modes are systematic, not anecdotal. Sunil et al.~\cite{sunil2026} demonstrate memory poisoning attacks achieving over 95\% injection success rates on production agents---malicious content, once stored, persists and propagates. Lam et al.~\cite{lam2026ssgm} observe that ``unlike static RAG systems, where errors are isolated to a single retrieval step, errors in evolving memory systems are cumulative and persistent.''
 
 Roynard\footnote{\url{https://arxiv.org/abs/2604.11364}}~\cite{roynard2026} identifies this as a \textit{category error}: current memory systems apply a single persistence model (typically decay) uniformly to information with fundamentally different epistemic status. A decaying Slack message is appropriate; a decaying validated fact is a defect. This critique extends to cognitive architectures such as CoALA\footnote{\url{https://arxiv.org/abs/2309.02427}}~\cite{sumers2023coala} and JEPA~\cite{lecun2022path}, which lack an explicit Knowledge layer with formal epistemic semantics.
 
-\textbf{Epistemic Augmented Generation (EAG)} reframes agent memory as an epistemology problem:
+\textbf{Layered Epistemic Agent Protocol (LeAP)} reframes agent memory as an epistemology problem:
 \begin{itemize}[noitemsep]
     \item What do I believe? (epistemic types)
     \item Why do I believe it? (justification and provenance)
@@ -160,13 +162,13 @@ Roynard\footnote{\url{https://arxiv.org/abs/2604.11364}}~\cite{roynard2026} iden
 
 This paper makes three technical contributions and provides an open-source implementation:
 \begin{enumerate}[noitemsep]
-    \item A \textbf{formal framework for epistemic agent memory} (EAG) that extends Roynard's four-layer proposal with formal definitions of epistemic types, warrant functions, and coherence invariants, including a proof that the revision protocol satisfies AGM belief revision postulates (Theorem~\ref{thm:agm}).
-    \item The \textbf{CITE architecture}, which implements EAG with write-time coherence enforcement, supersession chains, and dependency propagation.
+    \item A \textbf{formal framework for epistemic agent memory} (LeAP) that extends Roynard's four-layer proposal with formal definitions of epistemic types, warrant functions, and coherence invariants, including a proof that the revision protocol satisfies AGM belief revision postulates (Theorem~\ref{thm:agm}).
+    \item The \textbf{CITE architecture}, which implements LeAP with write-time coherence enforcement, supersession chains, and dependency propagation.
     \item A \textbf{design validation} demonstrating 95\% contradiction detection (vs. 66\% baseline) and 87\% revision propagation (vs. 12\%) on 500 annotated coding-agent sessions.
 \end{enumerate}
 The architecture and implementation are available under Apache 2.0.\footnote{Code and data: \url{https://github.com/engrammic-ai/engrammic}}
 
-The remainder of the paper is organized as follows. Section~\ref{sec:background} reviews formal epistemology and existing agent memory systems. Section~\ref{sec:eag} presents the EAG formal framework, and Section~\ref{sec:cite} describes the CITE architecture that implements it. Section~\ref{sec:eval} evaluates the system on coherence maintenance tasks, and Section~\ref{sec:discussion} discusses extensions to world models and multi-agent settings.
+The remainder of the paper is organized as follows. Section~\ref{sec:background} reviews formal epistemology and existing agent memory systems. Section~\ref{sec:leap} presents the LeAP formal framework, and Section~\ref{sec:cite} describes the CITE architecture that implements it. Section~\ref{sec:eval} evaluates the system on coherence maintenance tasks, and Section~\ref{sec:discussion} discusses extensions to world models and multi-agent settings.
 
 % ------------------------------------------------------------
 % 2. BACKGROUND
@@ -178,7 +180,7 @@ The remainder of the paper is organized as follows. Section~\ref{sec:background}
 
 Epistemology studies knowledge: what it is, how we acquire it, and how we justify it. Gettier~\cite{gettier1963} demonstrated that justified true belief is insufficient for knowledge, since lucky guesses can satisfy the JTB criteria without constituting genuine knowledge, motivating the search for stronger conditions.
 
-Plantinga~\cite{plantinga1993} introduced \textit{warrant} as the property that distinguishes knowledge from mere true belief, requiring proper function of cognitive faculties, a suitable environment, and a design plan aimed at truth. We operationalize warrant as a function of evidence credibility, independence, and recency (Section~\ref{sec:eag}).
+Plantinga~\cite{plantinga1993} introduced \textit{warrant} as the property that distinguishes knowledge from mere true belief, requiring proper function of cognitive faculties, a suitable environment, and a design plan aimed at truth. We operationalize warrant as a function of evidence credibility, independence, and recency (Section~\ref{sec:leap}).
 
 BonJour~\cite{bonjour1985} defends \textit{coherentism}, the view that justification derives from membership in a coherent system of beliefs rather than from foundational axioms. Our coherence invariants implement this principle structurally: contradictions are rejected at write time, enforcing system-level consistency as a precondition for storage.
 
@@ -190,7 +192,7 @@ The AGM framework~\cite{agm1985} formalizes rational belief change through three
     \item \textbf{Inclusion}: $K + \phi \subseteq K * \phi$, i.e., revision preserves beliefs unrelated to the changed proposition
 \end{itemize}
 
-In Theorem~\ref{thm:agm} we show that EAG's supersession operation satisfies both postulates.
+In Theorem~\ref{thm:agm} we show that LeAP's supersession operation satisfies both postulates.
 
 \subsection{Agent Memory Systems}
 
@@ -204,19 +206,21 @@ Current agent memory systems vary in sophistication but share a common gap: none
 
 \textbf{Hindsight}\footnote{\url{https://github.com/vectorize-io/hindsight}}~\cite{hindsight} organizes memory into four networks (World, Experience, Opinion, Observation) with on-demand synthesis, but performs no live truth maintenance: contradictions are surfaced only when queried, and corrections do not propagate to dependent beliefs.
 
+Xu~\cite{xu2026mmp} audits eight memory substrates against three criteria for multi-agent collaboration: per-field semantic admission, signal-level lineage, and write-time filtering. All eight systems---including MemGPT, Mem0, CoALA, and Reflexion---fail on most criteria. Cemri et al.~\cite{cemri2025} catalogue 14 distinct failure modes across 1,600+ annotated multi-agent traces, finding that 79\% originate from specification and coordination issues rather than base-model limitations.
+
 \subsection{LLM Reliability Research}
 
-Several recent findings in LLM reliability directly motivate EAG's design choices.
+Several recent findings in LLM reliability directly motivate LeAP's design choices.
 
 Wang et al.~\cite{wang2026contamination} show that toxic content survives context compression below classifier thresholds (SPG = 0.140), motivating sanitization \textit{before} compression into persistent memory rather than after retrieval. Xu et al.~\cite{xu2026ncb} demonstrate that beliefs grounded in local graph structure are more robust than isolated embeddings, supporting our use of graph-aware write-time validation. He et al.~\cite{he2026collective} find that multi-agent beliefs stabilize within a few communication rounds, suggesting that real-time contradiction detection is preferable to batch reconciliation. Finally, Yuan et al.~\cite{yuan2026saver} introduce a typed violation taxonomy that enables minimal targeted repair, which we adopt as the basis for typed rejection reasons in the write gate.
 
 \begin{table}[H]
 \centering
-\caption{Epistemological concepts and their EAG operationalizations.}
+\caption{Epistemological concepts and their LeAP operationalizations.}
 \label{tab:concepts}
 \begin{tabular}{@{}ll@{}}
 \toprule
-\textbf{Epistemological Concept} & \textbf{EAG Operationalization} \\
+\textbf{Epistemological Concept} & \textbf{LeAP Operationalization} \\
 \midrule
 Belief & Stored proposition with epistemic type \\
 Justification & DERIVED\_FROM edges to evidence nodes \\
@@ -229,16 +233,16 @@ Defeaters & CONTRADICTS edges triggering re-evaluation \\
 \end{table}
 
 % ------------------------------------------------------------
-% 3. THE EAG FRAMEWORK
+% 3. THE LeAP FRAMEWORK
 % ------------------------------------------------------------
-\section{The EAG Framework}
-\label{sec:eag}
+\section{The LeAP Framework}
+\label{sec:leap}
 
-EAG formalizes agent memory through four key concepts: epistemic types, warrant, coherence, and revision. Full formal definitions appear in Appendix~\ref{app:formal}.
+LeAP formalizes agent memory through four key concepts: epistemic types, warrant, coherence, and revision. Full formal definitions appear in Appendix~\ref{app:formal}.
 
 \subsection{Epistemic Types}
 
-EAG distinguishes six epistemic types organized into four cognitive layers:
+LeAP distinguishes six epistemic types organized into four cognitive layers:
 
 \begin{table}[H]
 \centering
@@ -287,7 +291,7 @@ Contradiction detection ($n_1 \perp n_2$) uses a two-stage check: semantic simil
 
 \subsection{Belief Revision}
 
-When facts change, derived beliefs must be re-evaluated. EAG implements this through \textbf{supersession chains}:
+When facts change, derived beliefs must be re-evaluated. LeAP implements this through \textbf{supersession chains}:
 
 \begin{enumerate}[noitemsep]
     \item Create new node $n'$ with updated content
@@ -304,7 +308,7 @@ This preserves audit history while cascading corrections. We prove (Theorem~\ref
 \section{CITE: Context In Tiered Epistemology}
 \label{sec:cite}
 
-CITE implements EAG as a four-layer architecture with write-time validation.
+CITE implements LeAP as a four-layer architecture with write-time validation.
 
 \subsection{Layer Architecture}
 
@@ -478,11 +482,11 @@ Constraints: DERIVED\_FROM forms a DAG (no cycles); SUPERSEDES forms a linked li
 
 \subsection{Transition Catalogue}
 
-The layers define what epistemic states exist; the \textbf{transitions} define how information moves between them. An EAG implementation that omits any transition class cannot maintain the invariants of Section~\ref{sec:cite}.
+The layers define what epistemic states exist; the \textbf{transitions} define how information moves between them. An LeAP implementation that omits any transition class cannot maintain the invariants of Section~\ref{sec:cite}.
 
 \begin{table}[H]
 \centering
-\caption{EAG transitions between epistemic layers.}
+\caption{LeAP transitions between epistemic layers.}
 \label{tab:transitions}
 \begin{tabular}{@{}clllp{3.8cm}@{}}
 \toprule
@@ -527,7 +531,7 @@ Meta-Memory is where externalized epistemics delivers on auditability. SOX and G
 
 \subsection{System Invariants}
 
-EAG maintains eight invariants that define store coherence:
+LeAP maintains eight invariants that define store coherence:
 
 \begin{table}[H]
 \centering
@@ -559,7 +563,7 @@ Every transition preserves all invariants: if $S$ satisfies INV1--INV8 before tr
 
 \subsection{Experimental Setup}
 
-We evaluate CITE as a design validation against the architectural claims of Section~\ref{sec:eag}, using an embedding-only baseline that mirrors the append-and-retrieve pattern common to current systems. We do not claim state-of-the-art retrieval performance; the evaluation targets coherence maintenance, which existing benchmarks do not measure.
+We evaluate CITE as a design validation against the architectural claims of Section~\ref{sec:leap}, using an embedding-only baseline that mirrors the append-and-retrieve pattern common to current systems. We do not claim state-of-the-art retrieval performance; the evaluation targets coherence maintenance, which existing benchmarks do not measure.
 
 \textbf{Corpus}: 500 coding-agent sessions from internal deployments, annotated for contradictions (both lexical and semantic), corrections, hallucinations, and derivation chains.
 
@@ -636,9 +640,9 @@ Dependency propagation is the load-bearing mechanism for revision, while contrad
 \section{Discussion}
 \label{sec:discussion}
 
-\subsection{EAG as Applied Epistemology}
+\subsection{LeAP as Applied Epistemology}
 
-EAG operationalizes several concepts from analytic epistemology for use in artificial agents. Evidence requirements address \textbf{Gettier cases} by preventing lucky-true-beliefs from being stored as Facts. The warrant function $w(n)$ (Definition~\ref{def:warrant}) operationalizes \textbf{Plantinga's warrant} as a computable measure of evidential support. Coherence invariants enforce \textbf{BonJour's coherentism} by requiring consistency as a precondition for storage. CONTRADICTS edges and supersession chains implement \textbf{Lehrer-Paxson defeater} semantics, allowing new evidence to undermine previously justified beliefs.
+LeAP operationalizes several concepts from analytic epistemology for use in artificial agents. Evidence requirements address \textbf{Gettier cases} by preventing lucky-true-beliefs from being stored as Facts. The warrant function $w(n)$ (Definition~\ref{def:warrant}) operationalizes \textbf{Plantinga's warrant} as a computable measure of evidential support. Coherence invariants enforce \textbf{BonJour's coherentism} by requiring consistency as a precondition for storage. CONTRADICTS edges and supersession chains implement \textbf{Lehrer-Paxson defeater} semantics, allowing new evidence to undermine previously justified beliefs.
 
 A key difference from traditional epistemology is perspective: classical epistemology assumes a first-person knower, while agent epistemology requires third-party adjudication. The write gate serves this adjudicatory role, applying epistemic standards that the agent itself does not need to internalize.
 
@@ -646,7 +650,7 @@ A key difference from traditional epistemology is perspective: classical epistem
 
 LeCun's JEPA architecture\footnote{\url{https://openreview.net/pdf?id=BZ5a1r-kVsf}}~\cite{lecun2022path} explicitly specifies external memory as a component, and recent Vision-Language-Action work (MemoryVLA, EchoVLA, MemER) consistently implements external retrieval. However, existing implementations treat this memory as unstructured storage without epistemic semantics.
 
-The EAG type system is representation-agnostic, and we conjecture that its principles extend naturally to latent-space representations:
+The LeAP type system is representation-agnostic, and we conjecture that its principles extend naturally to latent-space representations:
 \begin{enumerate}[noitemsep]
     \item \textbf{Epistemic types are content-agnostic}: the Observation/Claim/Belief distinction applies whether the underlying content is natural language or an embedding vector
     \item \textbf{Evidence requirements transfer}: latent claims still require provenance to source percepts
@@ -654,11 +658,11 @@ The EAG type system is representation-agnostic, and we conjecture that its princ
     \item \textbf{Supersession preserves audit}: SUPERSEDES edges function identically regardless of content representation
 \end{enumerate}
 
-JEPA addresses prediction (``what will happen next'') but does not provide epistemic structure for its stored representations: belief status, uncertainty quantification, provenance, or contradiction handling. EAG could complement JEPA by providing these missing semantics, though we leave formal treatment of latent-space epistemology to future work.
+JEPA addresses prediction (``what will happen next'') but does not provide epistemic structure for its stored representations: belief status, uncertainty quantification, provenance, or contradiction handling. LeAP could complement JEPA by providing these missing semantics, though we leave formal treatment of latent-space epistemology to future work.
 
 \subsection{Multi-Agent Epistemology}
 
-The MAST taxonomy~\cite{mast2025} finds that 79\% of multi-agent failures stem from coordination errors, suggesting that single-agent memory is insufficient when agents share state. EAG's architecture is naturally suited to multi-agent settings: shared coherence invariants ensure that all agents writing to the same store are subject to the same epistemic rules; provenance enables blame assignment by tracing contradictions to the originating agent; confidence-weighted consensus allows higher-evidence claims to dominate; and supersession with propagation ensures that one agent's correction cascades to all dependent beliefs, regardless of which agent derived them.
+The MAST taxonomy~\cite{mast2025} finds that 79\% of multi-agent failures stem from coordination errors, suggesting that single-agent memory is insufficient when agents share state. LeAP's architecture is naturally suited to multi-agent settings: shared coherence invariants ensure that all agents writing to the same store are subject to the same epistemic rules; provenance enables blame assignment by tracing contradictions to the originating agent; confidence-weighted consensus allows higher-evidence claims to dominate; and supersession with propagation ensures that one agent's correction cascades to all dependent beliefs, regardless of which agent derived them.
 
 We have not yet evaluated multi-agent coherence empirically. Future work includes Byzantine fault tolerance for adversarial agents, incentive alignment for cooperative settings, and formal verification of distributed invariants.
 
@@ -686,7 +690,7 @@ Zep/Graphiti & 1 & LLM-based & Edge invalid. & To episode & Yes \\
 MemGPT & 2 & None & None & None & No \\
 ByteRover & Hierarchy & None & Append-only & File path & No \\
 Hindsight & 4 networks & On-demand & None & None & No \\
-\textbf{EAG/CITE} & \textbf{4 + meta} & \textbf{Write-gate} & \textbf{Chains} & \textbf{Full DAG} & \textbf{Yes} \\
+\textbf{LeAP/CITE} & \textbf{4 + meta} & \textbf{Write-gate} & \textbf{Chains} & \textbf{Full DAG} & \textbf{Yes} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -699,16 +703,16 @@ Hindsight & 4 networks & On-demand & None & None & No \\
 
 \textbf{Hindsight}~\cite{hindsight} organizes four memory networks with on-demand synthesis but does not perform live truth maintenance or propagate corrections.
 
-EAG's distinguishing contribution relative to these systems is the combination of a four-layer epistemic ontology, write-time coherence enforcement, AGM-compliant revision, and dependency propagation.
+LeAP's distinguishing contribution relative to these systems is the combination of a four-layer epistemic ontology, write-time coherence enforcement, AGM-compliant revision, and dependency propagation.
 
 % ------------------------------------------------------------
 % 8. IMPLEMENTATION
 % ------------------------------------------------------------
 \section{Implementation}
 
-Engrammic implements EAG/CITE as two open-source packages under Apache 2.0.
+Engrammic implements LeAP/CITE as two open-source packages under Apache 2.0.
 
-\textbf{engrammic-primitives}\footnote{\url{https://pypi.org/project/engrammic-primitives/}} defines the schema layer: epistemic types, edge types, confidence propagation, and promotion rules. It is intended as a shared dependency for any system implementing EAG semantics.
+\textbf{engrammic-primitives}\footnote{\url{https://pypi.org/project/engrammic-primitives/}} defines the schema layer: epistemic types, edge types, confidence propagation, and promotion rules. It is intended as a shared dependency for any system implementing LeAP semantics.
 
 \textbf{engrammic}\footnote{\url{https://github.com/engrammic-ai/engrammic}} provides the full backend, including a Model Context Protocol (MCP) server, a FastAPI administration surface, graph and vector stores, and the SAGE pipeline for background synthesis. The MCP server exposes six primary operations corresponding to the epistemic verbs described in Section~\ref{sec:cite}.
 
@@ -722,7 +726,7 @@ cd engrammic && just up && just dev
 % ------------------------------------------------------------
 \section{Conclusion}
 
-We have presented Epistemic Augmented Generation, a framework that reframes agent memory from a retrieval problem to an epistemology problem. Building on Roynard's identification of the category error in cognitive architectures, EAG formalizes stratified epistemic types with distinct evidence requirements and persistence semantics, and provides a revision protocol that satisfies AGM belief revision postulates (Theorem~\ref{thm:agm}).
+We have presented Epistemic Augmented Generation, a framework that reframes agent memory from a retrieval problem to an epistemology problem. Building on Roynard's identification of the category error in cognitive architectures, LeAP formalizes stratified epistemic types with distinct evidence requirements and persistence semantics, and provides a revision protocol that satisfies AGM belief revision postulates (Theorem~\ref{thm:agm}).
 
 The CITE architecture demonstrates that write-time coherence enforcement is both practical and effective: on 500 annotated coding-agent sessions, it achieves 95\% contradiction detection and 87\% revision propagation, compared to 66\% and 12\% for an embedding-only baseline. The additional write latency (165ms at p50) is concentrated on infrequent Knowledge and Wisdom writes, where the cost of accepting a contradiction far exceeds the cost of validating against one.
 
@@ -828,6 +832,26 @@ Li, W., et al. (2026).
 Zhang, H., et al. (2026).
 \newblock A Survey on Memory Mechanisms for Large Language Models.
 \newblock \textit{arXiv:2603.07670}. \url{https://arxiv.org/abs/2603.07670}
+
+\bibitem{sunil2026}
+Sunil, B.D., Sinha, I., Maheshwari, P., Todmal, S., Mallik, S., and Mishra, S. (2026).
+\newblock Memory Poisoning Attack and Defense on Memory Based LLM-Agents.
+\newblock \textit{arXiv:2601.05504}. \url{https://arxiv.org/abs/2601.05504}
+
+\bibitem{lam2026ssgm}
+Lam, C., Li, J., Zhang, L., and Zhao, K. (2026).
+\newblock Governing Evolving Memory in LLM Agents: Risks, Mechanisms, and the Stability and Safety Governed Memory (SSGM) Framework.
+\newblock \textit{arXiv:2603.11768}. \url{https://arxiv.org/abs/2603.11768}
+
+\bibitem{xu2026mmp}
+Xu, H. (2026).
+\newblock Mesh Memory Protocol: Semantic Infrastructure for Multi-Agent LLM Systems.
+\newblock \textit{arXiv:2604.19540}. \url{https://arxiv.org/abs/2604.19540}
+
+\bibitem{cemri2025}
+Cemri, M., Pan, M.Z., Yang, S., Agrawal, L.A., Chopra, B., and Tiwari, R. (2025).
+\newblock Why Do Multi-Agent LLM Systems Fail?
+\newblock \textit{Advances in Neural Information Processing Systems (NeurIPS)}.
 
 \end{thebibliography}
 
@@ -952,7 +976,7 @@ $\text{deps}(n) = \{m \mid \text{DERIVED\_FROM}(m, n) \vee \text{SUPPORTS}(m, n)
 
 \begin{theorem}[AGM Satisfaction]
 \label{thm:agm}
-EAG supersession satisfies AGM belief revision postulates:
+LeAP supersession satisfies AGM belief revision postulates:
 \begin{itemize}[noitemsep]
     \item \textbf{Recovery}: $(K * \neg\phi) + \phi \vdash K$
     \item \textbf{Inclusion}: $K + \phi \subseteq K * \phi$

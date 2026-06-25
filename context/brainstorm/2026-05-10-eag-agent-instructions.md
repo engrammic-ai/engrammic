@@ -1,6 +1,6 @@
-# EAG Agent Instructions
+# LeAP Agent Instructions
 
-Brainstorm: basic instruction set for agents using EAG (Epistemic Augmented Generation) via the Engrammic MCP surface.
+Brainstorm: basic instruction set for agents using LeAP (Layered Epistemic Agent Protocol) via the Engrammic MCP surface.
 
 ---
 
@@ -81,7 +81,7 @@ When your understanding changes, record it as a reflection. When you:
 
 ## Part 2: The Four Layers
 
-EAG organizes knowledge into four cognitive layers, each with different semantics:
+LeAP organizes knowledge into four cognitive layers, each with different semantics:
 
 | Layer | What lives here | Persistence | Core property |
 |-------|-----------------|-------------|---------------|
@@ -465,7 +465,7 @@ The system doesn't delete old beliefs. It chains them via SUPERSEDES. This means
 
 ### Working with uncertainty
 
-Not everything is certain. EAG handles uncertainty through:
+Not everything is certain. LeAP handles uncertainty through:
 
 **Confidence scores (0.0 - 1.0):**
 - Every node has a confidence

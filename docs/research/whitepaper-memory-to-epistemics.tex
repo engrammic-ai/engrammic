@@ -132,7 +132,7 @@ Where should an AI agent's knowledge live? Three architectural options exist: in
 
 We present convergent evidence from five domains: (1) \textbf{information theory}, where neural network weights have a capacity ceiling of approximately 3.6 bits per parameter, insufficient for open-ended knowledge accumulation; (2) \textbf{optimization theory}, where catastrophic forgetting is geometric, not incidental, as new-task gradients implicitly attack old-task knowledge; (3) \textbf{interpretability}, where superposition and nonidentifiability make ``what does the model believe?'' an ill-posed question; (4) \textbf{distributed systems}, where multi-agent coordination requires shared substrate per CAP theorem and Byzantine fault tolerance theory; (5) \textbf{neuroscience}, where biological memory systems externalize episodic content to the hippocampus before slow neocortical consolidation.
 
-We formalize these constraints as the \textbf{Externalized Epistemics Thesis}: any system requiring durable, auditable, multi-agent-coherent beliefs must maintain epistemic state outside the models doing inference. We present Epistemic Augmented Generation (EAG) as an architecture satisfying these requirements, achieving 95\% contradiction detection and 87\% revision propagation versus 66\% and 12\% for in-context baselines. The framework extends to latent-space epistemology for JEPA-style world models.
+We formalize these constraints as the \textbf{Externalized Epistemics Thesis}: any system requiring durable, auditable, multi-agent-coherent beliefs must maintain epistemic state outside the models doing inference. We present Layered Epistemic Agent Protocol (LeAP) as an architecture satisfying these requirements, achieving 95\% contradiction detection and 87\% revision propagation versus 66\% and 12\% for in-context baselines. The framework extends to latent-space epistemology for JEPA-style world models.
 \end{abstract}
 
 % ------------------------------------------------------------
@@ -161,14 +161,14 @@ This paper argues that \textbf{externalized epistemics} (maintaining beliefs in 
 \begin{enumerate}[noitemsep]
     \item \textbf{The Externalized Epistemics Thesis}: A formal argument, grounded in information theory, optimization theory, interpretability research, distributed systems, and neuroscience, that epistemic state must be external to inference.
 
-    \item \textbf{Epistemic Augmented Generation (EAG)}: A four-layer architecture implementing externalized epistemics with write-time coherence enforcement and AGM-compliant belief revision.
+    \item \textbf{Layered Epistemic Agent Protocol (LeAP)}: A four-layer architecture implementing externalized epistemics with write-time coherence enforcement and AGM-compliant belief revision.
 
     \item \textbf{Empirical validation}: 95\% contradiction detection, 87\% revision propagation on 500 annotated coding-agent sessions.
 
     \item \textbf{Extension to world models}: Analysis of how externalized epistemics applies to JEPA-style latent-space architectures.
 \end{enumerate}
 
-The remainder of the paper is organized as follows. Section~\ref{sec:thesis} presents the Externalized Epistemics Thesis with evidence from five domains. Section~\ref{sec:eag} describes the EAG architecture. Section~\ref{sec:eval} evaluates the system. Section~\ref{sec:extensions} discusses extensions to world models and multi-agent settings.
+The remainder of the paper is organized as follows. Section~\ref{sec:thesis} presents the Externalized Epistemics Thesis with evidence from five domains. Section~\ref{sec:leap} describes the LeAP architecture. Section~\ref{sec:eval} evaluates the system. Section~\ref{sec:extensions} discusses extensions to world models and multi-agent settings.
 
 % ------------------------------------------------------------
 % 2. THE EXTERNALIZED EPISTEMICS THESIS
@@ -305,17 +305,17 @@ In-weights memory fails on capacity, durability, and auditability; per-agent lea
 % 3. EPISTEMIC AUGMENTED GENERATION
 % ------------------------------------------------------------
 \section{Epistemic Augmented Generation}
-\label{sec:eag}
+\label{sec:leap}
 
 Given that epistemic state must be external, what structure should it have?
 
 Retrieval-Augmented Generation (RAG) externalizes content but treats all stored information uniformly. This commits what Roynard~\cite{roynard2026} calls a \textit{category error}: applying uniform persistence semantics to information with fundamentally different epistemic status. A decaying Slack message is appropriate; a decaying validated fact is a defect.
 
-\textbf{Epistemic Augmented Generation (EAG)} externalizes not just content but \textit{epistemic structure}: the distinctions between observations, claims, facts, and beliefs; the evidence requirements for each; the revision protocols when beliefs change.
+\textbf{Layered Epistemic Agent Protocol (LeAP)} externalizes not just content but \textit{epistemic structure}: the distinctions between observations, claims, facts, and beliefs; the evidence requirements for each; the revision protocols when beliefs change.
 
 \subsection{Premise and Axioms}
 
-EAG rests on a foundational premise and four axioms that map epistemological concepts to computable primitives.
+LeAP rests on a foundational premise and four axioms that map epistemological concepts to computable primitives.
 
 \textbf{Premise (Category Separation)}: Information has intrinsic epistemic status that determines its persistence semantics. Uniform treatment is a category error.
 
@@ -333,11 +333,11 @@ These axioms are enforced as transaction invariants.
 
 \subsection{The Four Deterministic Primitives}
 
-EAG operationalizes the axioms through four primitives, implemented as pure functions over structured claims of the form $(subject, predicate, object) + rationale$:
+LeAP operationalizes the axioms through four primitives, implemented as pure functions over structured claims of the form $(subject, predicate, object) + rationale$:
 
 \begin{table}[H]
 \centering
-\caption{EAG primitives and their determinism.}
+\caption{LeAP primitives and their determinism.}
 \label{tab:primitives}
 \begin{tabular}{@{}lll@{}}
 \toprule
@@ -378,7 +378,7 @@ Violations are rejected at write time.
 
 \subsection{Epistemic Types}
 
-EAG distinguishes four primary epistemic types organized into four cognitive layers:
+LeAP distinguishes four primary epistemic types organized into four cognitive layers:
 
 \begin{table}[H]
 \centering
@@ -400,7 +400,7 @@ The progression from Observation to Belief forms a trust ladder, with each rung 
 
 \subsection{Write-Time Coherence}
 
-EAG enforces coherence at write time, not read time. Every write passes through a validation gate:
+LeAP enforces coherence at write time, not read time. Every write passes through a validation gate:
 
 \begin{enumerate}[noitemsep]
     \item \textbf{Contradiction detection}: Does this conflict with existing beliefs?
@@ -414,7 +414,7 @@ Ungrounded claims are rejected before they enter the store.
 
 \subsection{Supersession and Revision}
 
-When facts change, derived beliefs must be re-evaluated. EAG implements \textbf{supersession chains}:
+When facts change, derived beliefs must be re-evaluated. LeAP implements \textbf{supersession chains}:
 
 \begin{enumerate}[noitemsep]
     \item Create new node with updated content
@@ -429,7 +429,7 @@ This addresses the ``contradiction accumulation'' failure mode: corrections casc
 
 \subsection{Multi-Agent Coherence}
 
-EAG enables multi-agent coordination by providing:
+LeAP enables multi-agent coordination by providing:
 
 \begin{itemize}[noitemsep]
     \item \textbf{Shared coherence invariants}: All agents write to same store, same rules
@@ -456,7 +456,7 @@ Meta-Memory is where externalized epistemics pays off for audit and compliance. 
 
 \subsection{CITE Architecture}
 
-CITE (Context In Tiered Epistemology) implements EAG as a four-layer architecture with Meta-Memory as cross-cutting infrastructure:
+CITE (Context In Tiered Epistemology) implements LeAP as a four-layer architecture with Meta-Memory as cross-cutting infrastructure:
 
 \begin{figure}[H]
 \centering
@@ -567,7 +567,7 @@ LeCun's JEPA architecture~\cite{lecun2022path} explicitly separates the world mo
 
 External memory is the natural complement: JEPA generates the latent embedding; something else must store, version, and retrieve it with epistemic structure.
 
-EAG principles extend to latent representations:
+LeAP principles extend to latent representations:
 
 \begin{enumerate}[noitemsep]
     \item \textbf{Epistemic types are content-agnostic}: Observation/Claim/Belief distinctions apply whether content is text or embedding
@@ -607,7 +607,7 @@ mem0 & 1 & None & None & None \\
 Zep/Graphiti & 1 & LLM-based & Edge invalid. & To episode \\
 MemGPT & 2 & None & None & None \\
 Hindsight & 4 networks & On-demand & None & None \\
-\textbf{EAG/CITE} & \textbf{4 + meta} & \textbf{Write-gate} & \textbf{Chains} & \textbf{Full DAG} \\
+\textbf{LeAP/CITE} & \textbf{4 + meta} & \textbf{Write-gate} & \textbf{Chains} & \textbf{Full DAG} \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -620,7 +620,7 @@ Hindsight & 4 networks & On-demand & None & None \\
 
 \textbf{Knowledge graphs}: Traditional KG systems provide structural substrate but not epistemic semantics (evidence requirements, revision protocols).
 
-EAG's contribution: four-layer epistemic ontology with write-time coherence, AGM-compliant revision, and dependency propagation.
+LeAP's contribution: four-layer epistemic ontology with write-time coherence, AGM-compliant revision, and dependency propagation.
 
 % ------------------------------------------------------------
 % 7. CONCLUSION
@@ -792,7 +792,7 @@ Store $S$ is coherent iff:
 
 \begin{theorem}[AGM Satisfaction]
 \label{thm:agm}
-EAG supersession satisfies AGM belief revision postulates:
+LeAP supersession satisfies AGM belief revision postulates:
 \begin{itemize}[noitemsep]
     \item \textbf{Recovery}: $(K * \neg\phi) + \phi \vdash K$
     \item \textbf{Inclusion}: $K + \phi \subseteq K * \phi$

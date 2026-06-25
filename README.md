@@ -188,7 +188,7 @@ All Python runs via `uv run`. See `justfile` for the full list.
 
 - [primitives](https://github.com/engrammic-ai/primitives) - Schema library (`primitives.schema.*`, `primitives.eag.*`)
 - [mcp client](https://github.com/engrammic-ai/mcp) - Thin MCP proxy client
-- [`../primitives/docs/`](../primitives/docs/) - EAG paradigm documentation
+- [`../primitives/docs/`](../primitives/docs/) - LeAP paradigm documentation
 
 ---
 

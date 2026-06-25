@@ -27,7 +27,7 @@ just dagster-web   # Dagster UI (SAGE jobs: custodian / synthesizer / groundskee
 
 ## Concepts
 
-- **EAG** (Epistemic Augmented Generation) — generation paradigm
+- **LeAP** (Epistemic Augmented Generation) — generation paradigm
 - **CITE** (Context In Tiered Epistemology) — schema/architecture (see `primitives.schema.*`)
 - Four cognitive layers: Memory → Knowledge → Wisdom → Intelligence
 - **Meta-Memory** — provenance, time-travel, reflection (cross-cutting, not a 5th layer)
@@ -36,11 +36,11 @@ just dagster-web   # Dagster UI (SAGE jobs: custodian / synthesizer / groundskee
 
 - `src/context_service/mcp/` — MCP server + tools (primary agent surface)
 - `src/context_service/engine/protocols.py` — storage interfaces (depend on this, not concrete stores)
-- `../primitives/docs/` — EAG paradigm docs
+- `../primitives/docs/` — LeAP paradigm docs
 - `context/architecture.md` — service architecture (surfaces, storage, SAGE pipeline)
 - `context/architecture/sage-system.md` — SAGE sub-agents (custodian, synthesizer, groundskeeper, validator)
 - `context/plans/` — active implementation plans
-- `context/brainstorm/2026-05-10-eag-agent-instructions.md` — cognitive guide for EAG usage
+- `context/brainstorm/2026-05-10-eag-agent-instructions.md` — cognitive guide for LeAP usage
 - `skills/` — MCP skills for agent onboarding (copy to `~/.claude/skills/` to use)
 
 ## Rules
