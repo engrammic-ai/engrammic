@@ -1,2 +1,5 @@
 environment:
   - engrammic-infra/dev
+config:
+  engrammic-infra:use_tei: "true"
+  engrammic-infra:tei_zone: europe-west1-b
