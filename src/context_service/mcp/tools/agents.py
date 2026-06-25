@@ -40,7 +40,7 @@ FROM agents a
 LEFT JOIN (
     SELECT agent_id, COUNT(*) AS node_count
     FROM nodes
-    WHERE silo_id = CAST(:silo_id AS uuid)
+    WHERE silo_id = CAST(:silo_id_uuid AS uuid)
     GROUP BY agent_id
 ) n ON n.agent_id = a.id
 WHERE a.silo_id = :silo_id
@@ -53,7 +53,9 @@ async def _agents(silo_id: str) -> list[dict[str, Any]]:
     from sqlalchemy import text
 
     async with get_session() as session:
-        result = await session.execute(text(_AGENTS_QUERY), {"silo_id": silo_id})
+        result = await session.execute(
+            text(_AGENTS_QUERY), {"silo_id": silo_id, "silo_id_uuid": silo_id}
+        )
         rows = result.mappings().all()
 
     summaries = [
