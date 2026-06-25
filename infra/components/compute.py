@@ -480,7 +480,7 @@ docker run -d --name tei \\
   ghcr.io/huggingface/text-embeddings-inference:turing-1.7 \\
   --model-id {model_id} \\
   --pooling cls \\
-  --max-client-batch-size 32
+  --max-client-batch-size 128
 
 # Run TEI reranker on port 8081
 docker run -d --name reranker \\
