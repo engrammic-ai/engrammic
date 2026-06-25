@@ -1,5 +1,5 @@
 ---
-name: engrammic:eag-guide
+name: engrammic:leap-guide
 description: Proactive memory behavior + layer selection for Engrammic MCP
 ---
 

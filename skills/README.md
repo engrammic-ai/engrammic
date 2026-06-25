@@ -16,7 +16,7 @@ Claude Code also reads `~/.claude/skills/`.
 
 | Skill | Purpose |
 |-------|---------|
-| `engrammic-eag-guide` | LeAP cognitive guide: layer selection, store/recall triggers, conflict handling |
+| `engrammic-leap-guide` | LeAP cognitive guide: layer selection, store/recall triggers, conflict handling |
 | `engrammic-explore-codebase` | Two-phase codebase exploration with memory |
 | `engrammic-wander` | Gap-filling exploration for missed areas |
 
