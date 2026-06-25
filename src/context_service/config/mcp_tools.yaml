@@ -141,3 +141,31 @@ tools:
       asked 3+ times that returned no results.
     maps_to: introspect
 
+  conflicts:
+    description: |
+      List contradictions between nodes. Returns CONTRADICTS edges with both
+      node contents and agent attributions. Filter by status (default: unresolved)
+      or by agent_id to see conflicts involving a specific agent.
+    maps_to: conflicts
+
+  dismiss_conflict:
+    description: |
+      Mark a conflict as not-a-real-conflict. Use when nodes don't actually
+      contradict (different contexts, complementary facts, etc.). Records
+      reason for audit trail.
+    maps_to: conflicts
+
+  escalate_conflict:
+    description: |
+      Flag a conflict for human review. Use when agent cannot determine which
+      node is correct or when domain expertise is needed. Records message
+      for the reviewer.
+    maps_to: conflicts
+
+  resolve_conflict:
+    description: |
+      Pick a winner for a conflict. By default (supersede=true), the loser
+      node is marked superseded by the winner. Pass supersede=false to mark
+      resolved without supersession chain.
+    maps_to: conflicts
+

@@ -63,7 +63,7 @@ just dagster-web   # Dagster UI (SAGE jobs: custodian / synthesizer / groundskee
 
 ## MCP tool surface (CITE v2)
 
-Source of truth: `src/context_service/config/mcp_tools.yaml`. Names and descriptions are config, not code. The surface is intent/verb-based.
+Source of truth: `src/context_service/config/mcp_tools.yaml`. Full reference: `docs/api/mcp-tools-reference.md`.
 
 | Tool | Purpose |
 |------|---------|
@@ -74,7 +74,12 @@ Source of truth: `src/context_service/config/mcp_tools.yaml`. Names and descript
 | `forget` | Tombstone a node (with cancel window) |
 | `tick` | Lightweight engagement check |
 | `update` | Supersede existing knowledge |
+| `agents` | List agents in silo |
 | `introspect` | Metacognitive queries (volatility, gaps, provenance) |
+| `conflicts` | List unresolved contradictions |
+| `dismiss_conflict` | Mark conflict as not-a-real-conflict |
+| `escalate_conflict` | Flag conflict for human review |
+| `resolve_conflict` | Pick winner, optionally supersede loser |
 
 ## Knowledge flow (CITE v2)
 
