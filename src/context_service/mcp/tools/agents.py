@@ -40,7 +40,7 @@ FROM agents a
 LEFT JOIN (
     SELECT agent_id, COUNT(*) AS node_count
     FROM nodes
-    WHERE silo_id = :silo_id::uuid
+    WHERE silo_id = CAST(:silo_id AS uuid)
     GROUP BY agent_id
 ) n ON n.agent_id = a.id
 WHERE a.silo_id = :silo_id
