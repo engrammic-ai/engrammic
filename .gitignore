@@ -110,4 +110,9 @@ evals-output.json
 # Internal IP & Roadmaps
 context/plans/
 context/architecture/
+context/review/
+context/competitive/
+context/brainstorm/
+context/design-partner-*.md
+context/cost-analysis.csv
 archive/
