@@ -2,9 +2,9 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-06-23)
+## Current state (2026-06-27)
 
-**Focus:** BEAM benchmark (Antler gate), multi-agent coherence v2
+**Focus:** BEAM benchmark (Antler gate), batch API for seeding
 
 **Recent completions:**
 - Multi-agent coherence v2 (full) - conflict detection, resolution verbs, agents tool, recall filters
@@ -24,6 +24,7 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
+| [Batch API](../docs/superpowers/plans/2026-06-27-batch-api.md) | POST /batch/remember + /batch/learn for bulk ingestion | Ready |
 | [2026-06-09-longmemeval-v2-harness.md](./2026-06-09-longmemeval-v2-harness.md) | Official LongMemEval-V2 harness with Engrammic adapter | Ready |
 
 ## Draft / design
