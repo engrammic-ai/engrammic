@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
-from typing import Literal
+from contextlib import asynccontextmanager
+from typing import AsyncIterator, Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -15,7 +17,7 @@ from context_service.api.routes._auth import (
     get_authenticated_silo,
     require_admin_override,
 )
-from context_service.mcp.server import get_context_service
+from context_service.mcp.server import get_context_service, get_redis
 from context_service.sage.transactions import store_claim, store_memory
 from context_service.services.batch_processor import (
     batch_embed,
@@ -32,6 +34,44 @@ router = APIRouter(prefix="/api/v1/batch", tags=["batch"])
 
 GRAPH_WRITE_CHUNK_SIZE = 100
 MAX_ITEMS_PER_REQUEST = 10_000
+BATCH_LOCK_TTL = 300  # 5 min max lock duration
+
+
+@asynccontextmanager
+async def batch_silo_lock(silo_id: str) -> AsyncIterator[None]:
+    """Acquire per-silo lock to serialize batch writes.
+
+    Prevents Memgraph transaction conflicts from concurrent supersession detection.
+    """
+    redis = get_redis()
+    if redis is None:
+        yield  # No Redis, skip locking
+        return
+
+    lock_key = f"batch:lock:{silo_id}"
+    lock_value = str(uuid.uuid4())
+
+    # Try to acquire lock with exponential backoff
+    for attempt in range(10):
+        acquired = await redis._redis.set(
+            lock_key, lock_value, nx=True, ex=BATCH_LOCK_TTL
+        )
+        if acquired:
+            try:
+                yield
+            finally:
+                # Release lock only if we still own it
+                current = await redis._redis.get(lock_key)
+                if current and current.decode() == lock_value:
+                    await redis._redis.delete(lock_key)
+            return
+
+        # Wait with exponential backoff
+        wait = min(0.5 * (2 ** attempt), 10)  # Max 10 sec wait
+        logger.debug("batch_lock_wait", silo_id=silo_id, attempt=attempt, wait=wait)
+        await asyncio.sleep(wait)
+
+    raise HTTPException(503, "Batch lock unavailable - concurrent batch in progress")
 
 
 class BatchRememberItem(BaseModel):
@@ -275,6 +315,21 @@ async def batch_learn(
     if body.options.skip_evidence_validation:
         await require_admin_override(request.headers.get("X-Admin-Override"))
 
+    # Serialize batch writes per silo to prevent Memgraph transaction conflicts
+    async with batch_silo_lock(silo_id):
+        return await _batch_learn_impl(
+            body, silo_id, request_id, sage_bypass, start
+        )
+
+
+async def _batch_learn_impl(
+    body: BatchLearnRequest,
+    silo_id: str,
+    request_id: str,
+    sage_bypass: bool,
+    start: float,
+) -> BatchLearnResponse:
+    """Inner implementation of batch_learn, called under silo lock."""
     try:
         ctx = get_context_service()
     except RuntimeError as exc:
