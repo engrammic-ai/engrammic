@@ -120,6 +120,30 @@ class TestTx0StoreMemory:
         call_args = mock_store.execute_write.call_args
         assert "tag1" in str(call_args)
 
+    @pytest.mark.asyncio
+    async def test_with_precomputed_embedding(self, mock_store: AsyncMock) -> None:
+        """Precomputed embedding skips compute_embedding event and stores inline."""
+        embedding = [0.1] * 1024
+
+        result, events = await store_memory(
+            store=mock_store,
+            content="Test",
+            silo_id="test-silo",
+            agent_id="test-agent",
+            embedding=embedding,
+            document_id="ext-doc-1",
+        )
+
+        assert isinstance(result, StoreMemoryResult)
+        event_types = [e.event_type for e in events]
+        assert "compute_embedding" not in event_types
+
+        call_args = mock_store.execute_write.call_args
+        props = call_args[0][1]["props"]
+        assert props["embedding"] == embedding
+        assert props["document_id"] == "ext-doc-1"
+        assert props["embedding_pending"] is False
+
 
 class TestTx2StoreClaim:
     """Tests for TX2 STORE_CLAIM."""
@@ -715,6 +739,43 @@ class TestFlagContradiction:
         write_calls = mock_store.execute_write.call_args_list
         status_calls = [c for c in write_calls if ConflictStatus.UNRESOLVED.value in str(c)]
         assert len(status_calls) >= 1
+
+    @pytest.mark.asyncio
+    async def test_store_claim_with_precomputed_embedding(self, mock_store: AsyncMock) -> None:
+        """Test store_claim accepts pre-computed embedding, document_id, and skip_sage_triggers."""
+        evidence_id = "12345678-1234-1234-1234-123456789abc"
+        mock_store.execute_query = AsyncMock(
+            return_value=[
+                {
+                    "id": evidence_id,
+                    "silo_id": "test-silo",
+                    "layer": "memory",
+                    "state": "ACTIVE",
+                }
+            ]
+        )
+        embedding = [0.1] * 1024
+
+        result, events = await store_claim(
+            store=mock_store,
+            content="Test claim",
+            evidence_refs=[f"node:{evidence_id}"],
+            silo_id="test-silo",
+            agent_id="agent-1",
+            embedding=embedding,
+            skip_sage_triggers=True,
+            document_id="ext-claim-1",
+        )
+
+        create_call = mock_store.execute_write.call_args_list[0]
+        props = create_call[0][1]["props"]
+        assert props["embedding"] == embedding
+        assert props["document_id"] == "ext-claim-1"
+        assert props["embedding_pending"] is False
+        assert props.get("sage_pending") is True
+        assert not any(
+            e.event_type == "compute_embedding" for e in events
+        )
 
 
 class TestTx2Credibility:

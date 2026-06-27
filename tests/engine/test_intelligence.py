@@ -2,11 +2,8 @@
 
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
 from context_service.engine.intelligence import (
     STUCK_QUERY_COUNT,
-    STUCK_SIMILARITY_THRESHOLD,
     _query_similarity,
     detect_stuck_pattern,
 )

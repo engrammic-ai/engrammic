@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import socket
 import uuid
 from collections.abc import AsyncIterator
@@ -30,9 +31,29 @@ def _check_docker_available() -> bool:
         return False
 
 
+def _check_service_available(host: str = "127.0.0.1", port: int = 8000) -> bool:
+    """Check if the REST service is reachable."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(1)
+        s.connect((host, port))
+        s.close()
+        return True
+    except (TimeoutError, OSError):
+        return False
+
+
 docker_available = pytest.mark.skipif(
     not _check_docker_available(),
     reason="Docker stack not running (Memgraph on 7687)",
+)
+
+service_available = pytest.mark.skipif(
+    not _check_service_available(
+        host=os.environ.get("INTEGRATION_HOST", "127.0.0.1"),
+        port=int(os.environ.get("INTEGRATION_PORT", "8000")),
+    ),
+    reason="Service not running (default: 127.0.0.1:8000)",
 )
 
 
@@ -76,6 +97,26 @@ def scope_context(
 ) -> ScopeContext:
     """ScopeContext for test isolation."""
     return ScopeContext(org_id=unique_org_id, silo_id=unique_silo_id)
+
+
+@pytest.fixture
+async def integration_client() -> AsyncIterator[object]:
+    """AsyncClient pointed at a live running service instance.
+
+    Skipped automatically when the service is not reachable.
+    Set INTEGRATION_HOST / INTEGRATION_PORT env vars to override defaults.
+    """
+    import httpx
+
+    host = os.environ.get("INTEGRATION_HOST", "127.0.0.1")
+    port = int(os.environ.get("INTEGRATION_PORT", "8000"))
+
+    if not _check_service_available(host, port):
+        pytest.skip(f"Service not running at {host}:{port}")
+
+    base_url = f"http://{host}:{port}"
+    async with httpx.AsyncClient(base_url=base_url, timeout=60.0) as client:
+        yield client
 
 
 @pytest.fixture

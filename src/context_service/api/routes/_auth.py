@@ -40,6 +40,21 @@ async def get_authenticated_silo(
 
 
 # Backwards compatibility - deprecated, use get_authenticated_silo instead
+async def require_admin_override(
+    x_admin_override: str | None = Header(None, alias="X-Admin-Override"),
+) -> None:
+    """Require X-Admin-Override header for sensitive operations."""
+    if x_admin_override != "true":
+        raise HTTPException(403, "X-Admin-Override header required")
+
+
+async def check_sage_bypass(
+    x_bypass_sage: str | None = Header(None, alias="X-Bypass-SAGE"),
+) -> bool:
+    """Check if SAGE bypass is requested (internal service accounts only)."""
+    return x_bypass_sage == "true"
+
+
 async def get_silo_context(
     x_silo_id: str | None,
     x_session_id: str | None = None,
