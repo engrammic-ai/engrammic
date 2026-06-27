@@ -298,11 +298,20 @@ MemgraphStore  QdrantClient
 (graph node)   (embedding)
     |
     v
+Supersession detection (if no explicit `supersedes`)
+    |  surfaces likely/possible updates, may auto-chain
+    v
 AsyncBatchTrigger (if Knowledge layer)
     |
     v
 SAGE Pipeline (async)
 ```
+
+**Write-time supersession detection** (`engine/supersession_detection.py`): when a
+write omits `supersedes`, tiered matching (session recall -> SPO/subject match ->
+semantic similarity) finds nodes the write likely replaces. High-confidence matches
+can be auto-chained; others are surfaced in the response (`likely_updates`,
+`possible_updates`) for the agent to confirm. Config-gated via `supersession_detection.*`.
 
 ### Read Path (Agent <- Storage)
 

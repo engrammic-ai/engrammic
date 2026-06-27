@@ -32,6 +32,9 @@ MEMORY_INDEX_QUERIES: tuple[str, ...] = (
     f"CREATE INDEX ON :{MemoryLabel.MEMORY}(memory_type);",
     f"CREATE INDEX ON :{MemoryLabel.MEMORY}(embedded_at);",
     f"CREATE INDEX ON :{MemoryLabel.MEMORY}(created_at);",
+    # SPO indexes for supersession detection
+    f"CREATE INDEX ON :{MemoryLabel.MEMORY}(silo_id, subject);",
+    f"CREATE INDEX ON :{MemoryLabel.MEMORY}(silo_id, agent_id, subject);",
 )
 
 
@@ -44,11 +47,17 @@ KNOWLEDGE_INDEX_QUERIES: tuple[str, ...] = (
     f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(evidence_uri);",
     f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(embedded_at);",
     f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(created_at);",
+    # SPO indexes for supersession detection (Tier 1)
+    f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(silo_id, subject);",
+    f"CREATE INDEX ON :{KnowledgeLabel.CLAIM}(silo_id, agent_id, subject);",
     f"CREATE INDEX ON :{KnowledgeLabel.FACT}(id);",
     f"CREATE INDEX ON :{KnowledgeLabel.FACT}(silo_id);",
     f"CREATE INDEX ON :{KnowledgeLabel.FACT}(silo_id, committed);",
     f"CREATE INDEX ON :{KnowledgeLabel.FACT}(valid_from);",
     f"CREATE INDEX ON :{KnowledgeLabel.FACT}(promoted_from);",
+    # SPO indexes for Facts
+    f"CREATE INDEX ON :{KnowledgeLabel.FACT}(silo_id, subject);",
+    f"CREATE INDEX ON :{KnowledgeLabel.FACT}(silo_id, agent_id, subject);",
 )
 
 

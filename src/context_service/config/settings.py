@@ -654,6 +654,37 @@ class ConflictDetectionConfig(BaseModel):
     )
 
 
+class SupersessionDetectionConfig(BaseModel):
+    """Configuration for write-time supersession candidate detection."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    enabled: bool = Field(
+        default=True,
+        description="Enable write-time supersession detection",
+    )
+    auto_supersede_enabled: bool = Field(
+        default=True,
+        description="Auto-create SUPERSEDES edge on high-confidence matches",
+    )
+    semantic_fallback_enabled: bool = Field(
+        default=True,
+        description="Use semantic similarity as fallback when SPO not available",
+    )
+    similarity_threshold: float = Field(
+        default=0.85,
+        ge=0.0,
+        le=1.0,
+        description="Cosine similarity threshold for semantic fallback (Tier 2)",
+    )
+    auto_supersede_window_minutes: int = Field(
+        default=5,
+        ge=1,
+        le=60,
+        description="Time window for auto-supersession without session match",
+    )
+
+
 def _generate_install_id() -> str:
     """Generate a stable install ID based on machine identity."""
     import hashlib
@@ -1087,6 +1118,9 @@ class Settings(BaseSettings):
     auto_reflect: AutoReflectConfig = Field(default_factory=AutoReflectConfig)
     consolidation: ConsolidationConfig = Field(default_factory=ConsolidationConfig)
     conflict_detection: ConflictDetectionConfig = Field(default_factory=ConflictDetectionConfig)
+    supersession_detection: SupersessionDetectionConfig = Field(
+        default_factory=SupersessionDetectionConfig
+    )
     causal: CausalConfig = Field(default_factory=CausalConfig)
     pattern: PatternConfig = Field(default_factory=PatternConfig)
     weak_links: WeakLinksSettings = Field(default_factory=WeakLinksSettings)

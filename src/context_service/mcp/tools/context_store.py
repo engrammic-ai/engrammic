@@ -623,6 +623,55 @@ async def _context_assert(
         target_node_id=str(node_id),
     )
 
+    # Supersession detection (only if no explicit supersedes provided)
+    supersession_info: dict[str, Any] = {}
+    if supersedes is None and settings.supersession_detection.enabled:
+        try:
+            from context_service.engine.supersession_detection import (
+                detect_supersession_candidates,
+                format_candidates_for_response,
+            )
+
+            qdrant_for_detection = (
+                await ctx_svc._qdrant._get_client() if node_embedding else None
+            )
+            detection_result = await detect_supersession_candidates(
+                store=ctx_svc.graph_store,
+                silo_id=str(expected_silo_id),
+                node_id=str(node_id),
+                agent_id=agent_id,
+                session_id=identity.session_id,
+                subject=subject,
+                predicate=predicate,
+                obj=object_value,
+                embedding=node_embedding,
+                qdrant_client=qdrant_for_detection,
+            )
+
+            # Auto-supersede if high-confidence match found
+            if (
+                detection_result.auto_supersede_id
+                and settings.supersession_detection.auto_supersede_enabled
+            ):
+                try:
+                    await create_supersession(
+                        node_id,
+                        detection_result.auto_supersede_id,
+                        str(expected_silo_id),
+                        reason="auto_detected",
+                    )
+                    supersedes = detection_result.auto_supersede_id
+                except Exception as exc:
+                    logger.warning(
+                        "auto_supersession_failed",
+                        error=str(exc),
+                        target_id=detection_result.auto_supersede_id,
+                    )
+
+            supersession_info = format_candidates_for_response(detection_result)
+        except Exception as exc:
+            logger.debug("supersession_detection_failed", error=str(exc))
+
     response: dict[str, Any] = {
         "node_id": str(node_id),
         "layer": "knowledge",
@@ -635,6 +684,8 @@ async def _context_assert(
         response["supersedes"] = supersedes
     if contradiction_candidates:
         response["contradiction_candidates"] = contradiction_candidates
+    if supersession_info:
+        response.update(supersession_info)
     return response
 
 
