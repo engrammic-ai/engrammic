@@ -344,6 +344,7 @@ async def batch_learn(
 
     # Track node_ids created this batch for intra-batch supersession
     created_nodes: dict[int, str] = {}  # array_index -> node_id
+    created_by_doc_id: dict[str, str] = {}  # document_id -> node_id
 
     for chunk_start in range(0, len(items_to_write), GRAPH_WRITE_CHUNK_SIZE):
         chunk = items_to_write[chunk_start : chunk_start + GRAPH_WRITE_CHUNK_SIZE]
@@ -356,6 +357,8 @@ async def batch_learn(
             supersedes = item.supersedes
             if not supersedes and item._supersedes_array_index is not None:
                 supersedes = created_nodes.get(item._supersedes_array_index)
+            if not supersedes and item.supersedes_document_id:
+                supersedes = created_by_doc_id.get(item.supersedes_document_id)
 
             try:
                 meta: dict[str, object] = {**item.metadata}
@@ -383,6 +386,8 @@ async def batch_learn(
                     document_id=item.document_id,
                 )
                 created_nodes[item.array_index] = str(result.node_id)
+                if item.document_id:
+                    created_by_doc_id[item.document_id] = str(result.node_id)
                 results.append(
                     BatchResultItem(
                         node_id=str(result.node_id),
