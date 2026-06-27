@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 import structlog
 
@@ -23,7 +23,7 @@ class BatchResult:
     created: int = 0
     skipped: int = 0
     failed: int = 0
-    results: list[dict] = field(default_factory=list)
+    results: list[dict[str, Any]] = field(default_factory=list)
 
 
 class _GraphStoreWithDocIds(Protocol):

@@ -1287,6 +1287,50 @@ class MemgraphStore(EAGKnowledgeStore):
         )
         return {row["doc_id"]: row["node_id"] for row in result}
 
+    async def query_spo_pairs(
+        self, silo_id: str, sp_pairs: list[tuple[str, str]]
+    ) -> dict[tuple[str, str], list[dict[str, Any]]]:
+        """Return existing active Claim nodes grouped by (subject, predicate).
+
+        Used by supersession detection to find prior values for the same (S, P).
+        """
+        if not sp_pairs:
+            return {}
+
+        # Build inline OR conditions to avoid Cypher parameter limitations on tuple lists.
+        # Subjects and predicates are internal data (not user-controlled at this call site),
+        # but we still sanitize by rejecting single-quote characters to prevent injection.
+        conditions = " OR ".join(
+            f"(n.subject = '{s.replace(chr(39), '')}' AND n.predicate = '{p.replace(chr(39), '')}')"
+            for s, p in sp_pairs
+        )
+
+        result = await self._client.execute_query(
+            f"""
+            MATCH (n:{LABEL_CLAIM} {{silo_id: $silo_id}})
+            WHERE n.subject IS NOT NULL AND n.predicate IS NOT NULL
+              AND n.tombstoned_at IS NULL
+              AND ({conditions})
+            RETURN n.id AS node_id, n.subject AS subject, n.predicate AS predicate,
+                   n.object AS object, n.timestamp AS timestamp, n.document_id AS document_id
+            ORDER BY n.timestamp ASC
+            LIMIT 10000
+            """,
+            {"silo_id": silo_id},
+        )
+
+        grouped: dict[tuple[str, str], list[dict[str, Any]]] = {}
+        for row in result:
+            grouped.setdefault((row["subject"], row["predicate"]), []).append(
+                {
+                    "node_id": row["node_id"],
+                    "object": row["object"],
+                    "timestamp": row.get("timestamp"),
+                    "document_id": row.get("document_id"),
+                }
+            )
+        return dict(grouped)
+
     async def batch_touch_accessed(self, node_ids: list[uuid.UUID], silo_id: str) -> int:
         """Update last_accessed_at for a batch of nodes."""
         if not node_ids:
