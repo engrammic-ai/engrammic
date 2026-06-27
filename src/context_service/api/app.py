@@ -23,6 +23,7 @@ from context_service import __version__
 from context_service.api.metrics import REGISTRY, metrics_endpoint
 from context_service.api.middleware import PrometheusTimingMiddleware, RateLimitMiddleware
 from context_service.api.routes import admin, health
+from context_service.api.routes.batch import router as batch_router
 from context_service.api.routes.gdpr import router as gdpr_router
 from context_service.api.routes.graph import router as graph_router
 from context_service.api.routes.intelligence import router as intelligence_router
@@ -376,6 +377,7 @@ def create_app() -> ASGIApp:
 
     app.include_router(health.router)
     app.include_router(admin.router)
+    app.include_router(batch_router)
     app.include_router(gdpr_router)
     app.include_router(graph_router)
     app.include_router(memory_router)
