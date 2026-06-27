@@ -17,6 +17,10 @@ Auto-supersede thresholds:
 - SPO (S,P) match + same agent + same session → auto
 - SPO (S,P) match + same agent + <5min → auto
 - Everything else → return candidates for agent decision
+
+# ponytail: 1:N supersession supported at edge level but pointer optimization
+# (tail_id/head_id) only tracks first chain. Upgrade to DAG traversal if 1:N
+# becomes common; current approach trades O(1) for simplicity.
 """
 
 from __future__ import annotations
