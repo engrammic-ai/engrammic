@@ -253,6 +253,31 @@ def _apply_agent_filters(
     return result
 
 
+def _apply_tag_filter(
+    nodes: list[dict[str, Any]],
+    tags: list[str],
+) -> list[dict[str, Any]]:
+    """Filter nodes to those having ALL specified tags.
+
+    Tags are stored in node["tags"] or node["properties"]["tags"].
+    Error sentinel entries (no node_id) are passed through unchanged.
+    """
+    if not tags:
+        return nodes
+
+    required = set(tags)
+    result = []
+    for node in nodes:
+        if "node_id" not in node or "error" in node:
+            result.append(node)
+            continue
+        # ponytail: tags can be top-level or in properties depending on code path
+        node_tags = node.get("tags") or node.get("properties", {}).get("tags") or []
+        if required.issubset(set(node_tags)):
+            result.append(node)
+    return result
+
+
 async def _fetch_conflict_nodes(
     silo_id: str,
     result_nodes: list[dict[str, Any]],
@@ -311,9 +336,11 @@ async def _context_recall(
     agent_id: str | None = None,
     exclude_agents: list[str] | None = None,
     include_conflicts: bool = False,
+    tags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     effective_exclude_agents: list[str] = exclude_agents or []
+    effective_tags: list[str] = tags or []
 
     if not query and not node_ids:
         return {"error": "missing_input", "message": "Provide query or node_ids"}
@@ -446,6 +473,7 @@ async def _context_recall(
             response["nodes"] = _apply_agent_filters(
                 response["nodes"], agent_id, effective_exclude_agents
             )
+            response["nodes"] = _apply_tag_filter(response["nodes"], effective_tags)
             if include_conflicts:
                 conflict_nodes = await _fetch_conflict_nodes(silo_id, response["nodes"])
                 response["conflict_nodes"] = conflict_nodes
@@ -485,6 +513,7 @@ async def _context_recall(
             response["nodes"] = _apply_agent_filters(
                 response["nodes"], agent_id, effective_exclude_agents
             )
+            response["nodes"] = _apply_tag_filter(response["nodes"], effective_tags)
             if include_conflicts:
                 conflict_nodes = await _fetch_conflict_nodes(silo_id, response["nodes"])
                 response["conflict_nodes"] = conflict_nodes
@@ -527,6 +556,7 @@ async def _context_recall(
             response["nodes"] = _apply_agent_filters(
                 response["nodes"], agent_id, effective_exclude_agents
             )
+            response["nodes"] = _apply_tag_filter(response["nodes"], effective_tags)
             if include_conflicts:
                 conflict_nodes = await _fetch_conflict_nodes(silo_id, response["nodes"])
                 response["conflict_nodes"] = conflict_nodes
@@ -555,6 +585,7 @@ async def _context_recall(
             response["results"] = _apply_agent_filters(
                 response["results"], agent_id, effective_exclude_agents
             )
+            response["results"] = _apply_tag_filter(response["results"], effective_tags)
             if include_conflicts:
                 conflict_nodes = await _fetch_conflict_nodes(silo_id, response["results"])
                 response["conflict_nodes"] = conflict_nodes
@@ -574,6 +605,7 @@ async def _context_recall(
         response["nodes"] = _apply_agent_filters(
             response["nodes"], agent_id, effective_exclude_agents
         )
+        response["nodes"] = _apply_tag_filter(response["nodes"], effective_tags)
         if include_conflicts:
             conflict_nodes = await _fetch_conflict_nodes(silo_id, response["nodes"])
             response["conflict_nodes"] = conflict_nodes

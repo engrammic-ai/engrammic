@@ -79,6 +79,8 @@ tools:
 
       Hints: Set include_hints=true to receive belief candidate suggestions
       when corroborating facts are detected.
+
+      Tags: Pass tags=["foo", "bar"] to filter to nodes with ALL specified tags.
     maps_to: retrieve
 
   trace:

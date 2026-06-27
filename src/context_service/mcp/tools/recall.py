@@ -55,6 +55,7 @@ async def _recall_impl(
     agent_id: str | None = None,
     exclude_agents: list[str] | None = None,
     include_conflicts: bool = False,
+    tags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Implementation for recall tool."""
     auth = await get_mcp_auth_context()
@@ -99,6 +100,7 @@ async def _recall_impl(
         agent_id=agent_id,
         exclude_agents=exclude_agents,
         include_conflicts=include_conflicts,
+        tags=tags,
     )
     duration_ms = (time.perf_counter() - start) * 1000
 
@@ -407,6 +409,7 @@ def register(mcp: FastMCP) -> None:
         agent_id: str | None = None,
         exclude_agents: list[str] | None = None,
         include_conflicts: bool = False,
+        tags: list[str] | None = None,
     ) -> dict[str, Any]:
         """Retrieve knowledge.
 
@@ -445,6 +448,7 @@ def register(mcp: FastMCP) -> None:
                 from results.
             include_conflicts: When True, also return nodes that have CONTRADICTS
                 edges to the result nodes, in a separate conflict_nodes field.
+            tags: Filter to nodes having ALL specified tags.
 
         Returns:
             {results|nodes, hypotheses?, conflict_nodes?, ...}
@@ -473,6 +477,7 @@ def register(mcp: FastMCP) -> None:
                 agent_id=agent_id,
                 exclude_agents=exclude_agents,
                 include_conflicts=include_conflicts,
+                tags=tags,
             )
         except Exception:
             success = False
