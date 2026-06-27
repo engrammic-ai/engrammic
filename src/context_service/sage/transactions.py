@@ -840,6 +840,9 @@ async def store_claim(
     session_id: str | None = None,
     owner_id: str | None = None,
     model_id: str | None = None,
+    embedding: list[float] | None = None,
+    skip_sage_triggers: bool = False,
+    document_id: str | None = None,
 ) -> tuple[StoreClaimResult, list[ReactionEvent]]:
     """Store a claim to Knowledge layer with evidence (TX2).
 
@@ -923,9 +926,15 @@ async def store_claim(
         "source_tier": source_tier or "unknown",
         "created_by": agent_id,
         "evidence": evidence_refs,
-        "embedding_pending": False,
+        "embedding_pending": embedding is None,
         **(metadata or {}),
     }
+    if embedding is not None:
+        props["embedding"] = embedding
+    if document_id:
+        props["document_id"] = document_id
+    if skip_sage_triggers:
+        props["sage_pending"] = True
     if tags:
         props["tags"] = tags
     if subject and predicate and object_value:
@@ -977,9 +986,11 @@ async def store_claim(
         )
         superseded_id = uuid.UUID(supersedes)
 
-    corroboration_count, _ = await _check_corroboration(
-        store, str(node_id), silo_id, embedding_service
-    )
+    corroboration_count = 0
+    if not skip_sage_triggers:
+        corroboration_count, _ = await _check_corroboration(
+            store, str(node_id), silo_id, embedding_service
+        )
 
     # FLAG_CONTRADICTION: detect and flag structural conflicts
     conflict_events = await detect_spo_conflict(
@@ -1004,19 +1015,23 @@ async def store_claim(
         model_id=model_id,
     )
 
-    events: list[ReactionEvent] = [
-        ReactionEvent(
-            event_type=ReactionEventType.COMPUTE_EMBEDDING,
-            node_id=str(node_id),
-            silo_id=silo_id,
-        ),
+    events: list[ReactionEvent] = []
+    if embedding is None:
+        events.append(
+            ReactionEvent(
+                event_type=ReactionEventType.COMPUTE_EMBEDDING,
+                node_id=str(node_id),
+                silo_id=silo_id,
+            )
+        )
+    events.append(
         ReactionEvent(
             event_type=ReactionEventType.UPDATE_HEAT,
             node_id=str(node_id),
             silo_id=silo_id,
             payload={"access_type": "WRITE"},
-        ),
-    ]
+        )
+    )
 
     if supersedes:
         events.append(
