@@ -1,4 +1,4 @@
-"""Tests for POST /api/v1/batch/remember endpoint."""
+"""Tests for POST /api/v1/batch/remember and POST /api/v1/batch/learn endpoints."""
 
 from __future__ import annotations
 
@@ -273,3 +273,251 @@ async def test_batch_remember_item_without_document_id() -> None:
     data = response.json()
     assert data["created"] == 1
     assert data["results"][0]["status"] == "created"
+
+
+# ---------------------------------------------------------------------------
+# batch/learn tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_batch_learn_creates_claims() -> None:
+    """POST /api/v1/batch/learn creates claims and returns sage_deferred flag."""
+    node_id = uuid.uuid4()
+    result = _make_store_result(node_id)
+
+    mock_graph = AsyncMock()
+    mock_graph.query_document_ids = AsyncMock(return_value={})
+    mock_graph.query_spo_pairs = AsyncMock(return_value={})
+
+    mock_ctx = MagicMock()
+    mock_ctx.graph_store = mock_graph
+    mock_ctx.embedding_client = None
+
+    app = _make_app()
+
+    with (
+        patch(
+            "context_service.api.routes.batch.get_context_service",
+            return_value=mock_ctx,
+        ),
+        patch(
+            "context_service.api.routes.batch.store_claim",
+            new_callable=AsyncMock,
+            return_value=(result, []),
+        ),
+        patch(
+            "context_service.api.routes.batch.dedup_check",
+            new_callable=AsyncMock,
+            return_value={},
+        ),
+        patch(
+            "context_service.api.routes.batch.detect_supersession",
+            new_callable=AsyncMock,
+        ),
+    ):
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/batch/learn",
+            headers={"X-Bypass-SAGE": "true"},
+            json={
+                "items": [
+                    {
+                        "content": "User prefers dark mode",
+                        "evidence": ["https://example.com/settings"],
+                        "subject": "user",
+                        "predicate": "prefers",
+                        "object": "dark_mode",
+                        "document_id": "claim-1",
+                    },
+                ],
+                "options": {
+                    "skip_evidence_validation": False,
+                    "conflict_mode": "supersede",
+                },
+            },
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["created"] == 1
+    assert data["sage_deferred"] is True
+    assert data["results"][0]["status"] == "created"
+
+
+@pytest.mark.asyncio
+async def test_batch_learn_skip_evidence_validation_requires_admin_override() -> None:
+    """skip_evidence_validation without X-Admin-Override returns 403."""
+    mock_ctx = MagicMock()
+    mock_ctx.graph_store = AsyncMock()
+    mock_ctx.embedding_client = None
+
+    app = _make_app()
+
+    with patch(
+        "context_service.api.routes.batch.get_context_service",
+        return_value=mock_ctx,
+    ):
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/batch/learn",
+            json={
+                "items": [{"content": "test", "evidence": ["https://example.com"]}],
+                "options": {"skip_evidence_validation": True},
+            },
+        )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_batch_learn_skip_evidence_validation_with_admin_override() -> None:
+    """skip_evidence_validation with X-Admin-Override: true is accepted."""
+    node_id = uuid.uuid4()
+    result = _make_store_result(node_id)
+
+    mock_graph = AsyncMock()
+    mock_graph.query_document_ids = AsyncMock(return_value={})
+    mock_graph.query_spo_pairs = AsyncMock(return_value={})
+
+    mock_ctx = MagicMock()
+    mock_ctx.graph_store = mock_graph
+    mock_ctx.embedding_client = None
+
+    app = _make_app()
+
+    with (
+        patch(
+            "context_service.api.routes.batch.get_context_service",
+            return_value=mock_ctx,
+        ),
+        patch(
+            "context_service.api.routes.batch.store_claim",
+            new_callable=AsyncMock,
+            return_value=(result, []),
+        ),
+        patch(
+            "context_service.api.routes.batch.dedup_check",
+            new_callable=AsyncMock,
+            return_value={},
+        ),
+        patch(
+            "context_service.api.routes.batch.detect_supersession",
+            new_callable=AsyncMock,
+        ),
+    ):
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/batch/learn",
+            headers={"X-Admin-Override": "true"},
+            json={
+                "items": [{"content": "test claim", "evidence": ["https://example.com"]}],
+                "options": {"skip_evidence_validation": True},
+            },
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["created"] == 1
+
+
+@pytest.mark.asyncio
+async def test_batch_learn_supersession_value_error_returns_400() -> None:
+    """ValueError from detect_supersession returns HTTP 400."""
+    mock_graph = AsyncMock()
+    mock_graph.query_document_ids = AsyncMock(return_value={})
+    mock_graph.query_spo_pairs = AsyncMock(return_value={})
+
+    mock_ctx = MagicMock()
+    mock_ctx.graph_store = mock_graph
+    mock_ctx.embedding_client = None
+
+    app = _make_app()
+
+    with (
+        patch(
+            "context_service.api.routes.batch.get_context_service",
+            return_value=mock_ctx,
+        ),
+        patch(
+            "context_service.api.routes.batch.dedup_check",
+            new_callable=AsyncMock,
+            return_value={},
+        ),
+        patch(
+            "context_service.api.routes.batch.detect_supersession",
+            new_callable=AsyncMock,
+            side_effect=ValueError("SPO entry limit exceeded"),
+        ),
+    ):
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/batch/learn",
+            json={
+                "items": [
+                    {
+                        "content": "test",
+                        "evidence": ["https://example.com"],
+                        "subject": "user",
+                        "predicate": "prefers",
+                        "object": "light_mode",
+                    }
+                ],
+            },
+        )
+
+    assert response.status_code == 400
+    assert "SPO entry limit exceeded" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_batch_learn_skips_duplicates() -> None:
+    """Items with existing document_ids are skipped."""
+    existing_node_id = str(uuid.uuid4())
+
+    mock_graph = AsyncMock()
+    mock_graph.query_document_ids = AsyncMock(return_value={})
+    mock_graph.query_spo_pairs = AsyncMock(return_value={})
+
+    mock_ctx = MagicMock()
+    mock_ctx.graph_store = mock_graph
+    mock_ctx.embedding_client = None
+
+    app = _make_app()
+
+    with (
+        patch(
+            "context_service.api.routes.batch.get_context_service",
+            return_value=mock_ctx,
+        ),
+        patch(
+            "context_service.api.routes.batch.dedup_check",
+            new_callable=AsyncMock,
+            return_value={"dup-claim-1": existing_node_id},
+        ),
+        patch(
+            "context_service.api.routes.batch.detect_supersession",
+            new_callable=AsyncMock,
+        ),
+    ):
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/batch/learn",
+            json={
+                "items": [
+                    {
+                        "content": "duplicate claim",
+                        "evidence": ["https://example.com"],
+                        "document_id": "dup-claim-1",
+                    }
+                ],
+                "options": {"conflict_mode": "skip"},
+            },
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["skipped"] == 1
+    assert data["created"] == 0
+    assert data["results"][0]["status"] == "skipped"
+    assert data["results"][0]["node_id"] == existing_node_id

@@ -7,15 +7,23 @@ import uuid
 from typing import Literal
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from context_service.api.routes._auth import get_authenticated_silo
+from context_service.api.routes._auth import (
+    check_sage_bypass,
+    get_authenticated_silo,
+    require_admin_override,
+)
 from context_service.mcp.server import get_context_service
-from context_service.sage.transactions import store_memory
+from context_service.sage.transactions import store_claim, store_memory
 from context_service.services.batch_processor import (
     batch_embed,
     dedup_check,
+)
+from context_service.services.supersession import (
+    BatchLearnItem,
+    detect_supersession,
 )
 
 logger = structlog.get_logger(__name__)
@@ -213,4 +221,246 @@ async def batch_remember(
         failed=failed,
         results=results,
         elapsed_ms=(time.perf_counter() - start) * 1000,
+    )
+
+
+class BatchLearnItemModel(BaseModel):
+    content: str
+    evidence: list[str] = Field(default_factory=list)
+    user_id: str | None = None
+    timestamp: str | None = None
+    document_id: str | None = None
+    confidence: float = 0.8
+    tags: list[str] = Field(default_factory=list)
+    source_tier: str | None = None
+    subject: str | None = None
+    predicate: str | None = None
+    object_value: str | None = Field(None, alias="object")
+    supersedes: str | None = None
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
+class BatchLearnOptions(BaseModel):
+    skip_evidence_validation: bool = False
+    conflict_mode: Literal["skip", "supersede", "error"] = "skip"
+
+
+class BatchLearnRequest(BaseModel):
+    items: list[BatchLearnItemModel] = Field(max_length=MAX_ITEMS_PER_REQUEST)
+    options: BatchLearnOptions = Field(default_factory=BatchLearnOptions)
+
+
+class BatchLearnResponse(BaseModel):
+    request_id: str
+    created: int
+    skipped: int
+    failed: int
+    results: list[BatchResultItem]
+    elapsed_ms: float
+    sage_deferred: bool
+
+
+@router.post("/learn", response_model=BatchLearnResponse)
+async def batch_learn(
+    request: Request,
+    body: BatchLearnRequest,
+    auth_context: tuple[str, str | None] = Depends(get_authenticated_silo),
+    sage_bypass: bool = Depends(check_sage_bypass),
+) -> BatchLearnResponse:
+    """Batch store claims to Knowledge layer with supersession detection."""
+    start = time.perf_counter()
+    request_id = str(uuid.uuid4())
+    silo_id, _ = auth_context
+
+    if body.options.skip_evidence_validation:
+        await require_admin_override(request.headers.get("X-Admin-Override"))
+
+    try:
+        ctx = get_context_service()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail="Context service not available") from exc
+
+    graph_store = ctx.graph_store
+    embedding_service = ctx.embedding_client
+    agent_id = "batch-api"
+
+    results: list[BatchResultItem] = []
+    created = skipped = failed = 0
+
+    # Convert to internal items
+    items = [
+        BatchLearnItem(
+            content=it.content,
+            evidence=it.evidence,
+            user_id=it.user_id,
+            timestamp=it.timestamp,
+            document_id=it.document_id,
+            confidence=it.confidence,
+            tags=it.tags,
+            source_tier=it.source_tier,
+            subject=it.subject,
+            predicate=it.predicate,
+            object=it.object_value,
+            supersedes=it.supersedes,
+            metadata=it.metadata,
+            array_index=i,
+        )
+        for i, it in enumerate(body.items)
+    ]
+
+    # 1. Dedup check
+    doc_ids = [it.document_id for it in items if it.document_id]
+    existing = await dedup_check(doc_ids, silo_id, graph_store) if doc_ids else {}
+
+    for item in items:
+        if item.document_id and item.document_id in existing:
+            if body.options.conflict_mode == "error":
+                item.error = f"Duplicate document_id: {item.document_id}"
+            else:
+                item.skip = True
+
+    # 2. Supersession detection (full request scope)
+    try:
+        await detect_supersession(
+            [it for it in items if not it.skip and not it.error],
+            silo_id,
+            body.options.conflict_mode,
+            graph_store,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+    # 3. Batch embed
+    items_to_embed = [it for it in items if not it.skip and not it.error]
+    texts = [it.content for it in items_to_embed]
+    if embedding_service is not None and texts:
+        embeddings: list[list[float] | None] = await batch_embed(texts, embedding_service)
+    else:
+        embeddings = [None] * len(texts)
+    emb_map = {it.array_index: emb for it, emb in zip(items_to_embed, embeddings, strict=True)}
+
+    # 4. Process in chunks
+    items_to_write = [it for it in items if not it.skip and not it.error]
+
+    # Track node_ids created this batch for intra-batch supersession
+    created_nodes: dict[int, str] = {}  # array_index -> node_id
+
+    for chunk_start in range(0, len(items_to_write), GRAPH_WRITE_CHUNK_SIZE):
+        chunk = items_to_write[chunk_start : chunk_start + GRAPH_WRITE_CHUNK_SIZE]
+        chunk_failed = 0
+
+        for item in chunk:
+            embedding = emb_map.get(item.array_index)
+
+            # Resolve intra-batch supersession
+            supersedes = item.supersedes
+            if not supersedes and item._supersedes_array_index is not None:
+                supersedes = created_nodes.get(item._supersedes_array_index)
+
+            try:
+                meta: dict[str, object] = {**item.metadata}
+                if item.user_id:
+                    meta["user_id"] = item.user_id
+                if item.timestamp:
+                    meta["timestamp"] = item.timestamp
+
+                result, _ = await store_claim(
+                    graph_store,
+                    item.content,
+                    item.evidence,
+                    silo_id,
+                    agent_id,
+                    subject=item.subject,
+                    predicate=item.predicate,
+                    object_value=item.object,
+                    source_tier=item.source_tier,
+                    confidence=item.confidence,
+                    supersedes=supersedes,
+                    metadata=meta,
+                    tags=item.tags or None,
+                    embedding=embedding,
+                    skip_sage_triggers=sage_bypass,
+                    document_id=item.document_id,
+                )
+                created_nodes[item.array_index] = str(result.node_id)
+                results.append(
+                    BatchResultItem(
+                        node_id=str(result.node_id),
+                        document_id=item.document_id,
+                        status="created",
+                        index=item.array_index,
+                    )
+                )
+                created += 1
+            except Exception as exc:
+                logger.warning(
+                    "batch_learn_item_failed", index=item.array_index, error=str(exc)
+                )
+                results.append(
+                    BatchResultItem(
+                        error=str(exc),
+                        index=item.array_index,
+                        document_id=item.document_id,
+                    )
+                )
+                failed += 1
+                chunk_failed += 1
+
+        if chunk_failed > len(chunk) // 2:
+            logger.error(
+                "batch_learn_chunk_abort",
+                chunk_start=chunk_start,
+                failed=chunk_failed,
+            )
+            for remaining_idx in range(chunk_start + len(chunk), len(items_to_write)):
+                rem_item = items_to_write[remaining_idx]
+                results.append(
+                    BatchResultItem(
+                        error="Aborted due to prior failures",
+                        index=rem_item.array_index,
+                        document_id=rem_item.document_id,
+                    )
+                )
+                failed += 1
+            break
+
+    # Add skipped/errored items to results
+    for item in items:
+        if item.skip:
+            results.append(
+                BatchResultItem(
+                    node_id=existing.get(item.document_id) if item.document_id else None,
+                    document_id=item.document_id,
+                    status="skipped",
+                    index=item.array_index,
+                )
+            )
+            skipped += 1
+        elif item.error:
+            results.append(
+                BatchResultItem(
+                    error=item.error,
+                    index=item.array_index,
+                    document_id=item.document_id,
+                )
+            )
+            failed += 1
+
+    logger.info(
+        "batch_learn_complete",
+        request_id=request_id,
+        silo_id=silo_id,
+        created=created,
+        skipped=skipped,
+        failed=failed,
+    )
+
+    return BatchLearnResponse(
+        request_id=request_id,
+        created=created,
+        skipped=skipped,
+        failed=failed,
+        results=results,
+        elapsed_ms=(time.perf_counter() - start) * 1000,
+        sage_deferred=sage_bypass,
     )
