@@ -19,6 +19,7 @@ from context_service.db.schema import (
     LABEL_CLAIM,
     LABEL_DOCUMENT,
     LABEL_ENTITY,
+    LABEL_MEMORY,
     LABEL_PASSAGE,
     content_union_predicate,
 )
@@ -1277,8 +1278,8 @@ class MemgraphStore(EAGKnowledgeStore):
         if not document_ids:
             return {}
         result = await self._client.execute_query(
-            """
-            MATCH (n:Document {silo_id: $silo_id})
+            f"""
+            MATCH (n:{LABEL_MEMORY} {{silo_id: $silo_id}})
             WHERE n.document_id IN $document_ids
             RETURN n.document_id AS doc_id, n.id AS node_id
             """,
