@@ -120,6 +120,30 @@ class TestTx0StoreMemory:
         call_args = mock_store.execute_write.call_args
         assert "tag1" in str(call_args)
 
+    @pytest.mark.asyncio
+    async def test_with_precomputed_embedding(self, mock_store: AsyncMock) -> None:
+        """Precomputed embedding skips compute_embedding event and stores inline."""
+        embedding = [0.1] * 1024
+
+        result, events = await store_memory(
+            store=mock_store,
+            content="Test",
+            silo_id="test-silo",
+            agent_id="test-agent",
+            embedding=embedding,
+            document_id="ext-doc-1",
+        )
+
+        assert isinstance(result, StoreMemoryResult)
+        event_types = [e.event_type for e in events]
+        assert "compute_embedding" not in event_types
+
+        call_args = mock_store.execute_write.call_args
+        props = call_args[0][1]["props"]
+        assert props["embedding"] == embedding
+        assert props["document_id"] == "ext-doc-1"
+        assert props["embedding_pending"] is False
+
 
 class TestTx2StoreClaim:
     """Tests for TX2 STORE_CLAIM."""
