@@ -80,7 +80,7 @@ async def dedup_check(
     """Check which document_ids already exist in the graph.
 
     Returns {document_id: node_id} for documents that already exist.
-    Requires graph_store to implement query_document_ids (added in Task 2).
+    Requires graph_store to implement query_document_ids. Added to HyperGraphStore protocol separately.
     """
     if not document_ids:
         return {}

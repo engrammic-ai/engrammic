@@ -1270,6 +1270,22 @@ class MemgraphStore(EAGKnowledgeStore):
         )
         return bool(result)
 
+    async def query_document_ids(
+        self, silo_id: str, document_ids: list[str]
+    ) -> dict[str, str]:
+        """Return {document_id: node_id} for nodes whose document_id matches the input list."""
+        if not document_ids:
+            return {}
+        result = await self._client.execute_query(
+            """
+            MATCH (n:Document {silo_id: $silo_id})
+            WHERE n.document_id IN $document_ids
+            RETURN n.document_id AS doc_id, n.id AS node_id
+            """,
+            {"silo_id": silo_id, "document_ids": document_ids},
+        )
+        return {row["doc_id"]: row["node_id"] for row in result}
+
     async def batch_touch_accessed(self, node_ids: list[uuid.UUID], silo_id: str) -> int:
         """Update last_accessed_at for a batch of nodes."""
         if not node_ids:

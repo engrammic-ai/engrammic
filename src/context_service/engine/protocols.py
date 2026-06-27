@@ -276,6 +276,14 @@ class HyperGraphStore(Protocol):
         """Convert a node to a stub by clearing content fields while preserving edges."""
         ...
 
+    # --- Batch Dedup ---
+
+    async def query_document_ids(
+        self, silo_id: str, document_ids: list[str]
+    ) -> dict[str, str]:
+        """Return {document_id: node_id} for nodes whose document_id is in the input list."""
+        ...
+
     # --- Bulk Operations ---
 
     async def batch_upsert_nodes(self, nodes: list[Node]) -> None: ...
