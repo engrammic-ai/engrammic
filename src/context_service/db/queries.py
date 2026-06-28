@@ -490,8 +490,9 @@ ORDER BY coalesce(n.valid_from, datetime('1970-01-01T00:00:00Z')) ASC
 # Meta-memory: reflections about a node filtered by agent_id.
 # Pass $agent_id = null to return observations from all agents.
 GET_REFLECTIONS_FOR_NODE_BY_AGENT = """
-MATCH (obs:MetaObservation)-[:ABOUT]->(n {id: $node_id, silo_id: $silo_id})
+MATCH (obs:Memory)-[:ABOUT]->(n {id: $node_id, silo_id: $silo_id})
 WHERE obs.silo_id = $silo_id
+  AND obs.memory_type = 'reflection'
   AND obs.tombstoned_at IS NULL
   AND ($agent_id IS NULL OR obs.agent_id = $agent_id)
 RETURN
@@ -504,10 +505,10 @@ RETURN
 ORDER BY obs.created_at DESC
 """
 
-# Get reflection depths for MetaObservation targets (for hierarchical reflection)
+# Get reflection depths for reflection Memory nodes (for hierarchical reflection)
 GET_META_OBSERVATION_DEPTHS = """
-MATCH (obs:MetaObservation {silo_id: $silo_id})
-WHERE obs.id IN $target_ids AND obs.tombstoned_at IS NULL
+MATCH (obs:Memory {silo_id: $silo_id})
+WHERE obs.id IN $target_ids AND obs.memory_type = 'reflection' AND obs.tombstoned_at IS NULL
 RETURN obs.id AS id, coalesce(obs.reflection_depth, 1) AS reflection_depth
 """
 

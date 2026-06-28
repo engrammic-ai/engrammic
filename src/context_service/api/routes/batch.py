@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator, Literal
+from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request

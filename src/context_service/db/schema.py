@@ -101,6 +101,7 @@ LEGACY_LABEL_MAP: dict[str, str] = {
     "Utterance": LABEL_MEMORY,
     "Event": LABEL_MEMORY,
     "Observation": LABEL_MEMORY,
+    "MetaObservation": LABEL_MEMORY,  # migrated to Memory{memory_type:"reflection"}
     "ProposedBelief": LABEL_BELIEF,
 }
 

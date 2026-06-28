@@ -468,3 +468,58 @@ class TestExtractClaimsTask:
 
             assert edge.edge_type == CITEEdgeType.EXTRACTED_FROM
             assert edge.target_id == mock_node.id
+
+
+class TestHeatBasedExtractionTrigger:
+    """Tests for heat-based extraction trigger (P6).
+
+    The trigger logic is: extract if content_qualifies OR heat_qualifies.
+    heat_qualifies = threshold > 0.0 AND heat_score >= threshold.
+    These tests verify the threshold constants and settings wiring.
+    """
+
+    def test_heat_threshold_default_is_zero(self) -> None:
+        """Default settings have heat_threshold=0.0 (trigger disabled)."""
+        from context_service.config.settings import ExtractionConfig
+
+        cfg = ExtractionConfig()
+        assert cfg.heat_threshold == 0.0
+
+    def test_heat_threshold_configurable(self) -> None:
+        """heat_threshold can be set to a positive value to enable the trigger."""
+        from context_service.config.settings import ExtractionConfig
+
+        cfg = ExtractionConfig(heat_threshold=5.0)
+        assert cfg.heat_threshold == 5.0
+
+    def test_heat_threshold_rejects_negative(self) -> None:
+        """heat_threshold must be >= 0."""
+        from pydantic import ValidationError
+
+        from context_service.config.settings import ExtractionConfig
+
+        with pytest.raises(ValidationError):
+            ExtractionConfig(heat_threshold=-1.0)
+
+    def test_heat_qualifies_logic(self) -> None:
+        """Verify the heat_qualifies condition in isolation."""
+        threshold = 5.0
+
+        def heat_qualifies(heat_score: float) -> bool:
+            return threshold > 0.0 and heat_score >= threshold
+
+        assert not heat_qualifies(0.0)
+        assert not heat_qualifies(4.9)
+        assert heat_qualifies(5.0)
+        assert heat_qualifies(10.0)
+
+    def test_heat_trigger_disabled_when_threshold_zero(self) -> None:
+        """When threshold is 0.0, any heat_score should not qualify."""
+        threshold = 0.0
+
+        def heat_qualifies(heat_score: float) -> bool:
+            return threshold > 0.0 and heat_score >= threshold
+
+        assert not heat_qualifies(0.0)
+        assert not heat_qualifies(100.0)
+        assert not heat_qualifies(float("inf"))

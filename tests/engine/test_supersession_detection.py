@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -371,29 +370,30 @@ class TestDetectSupersessionCandidates:
         mock_settings.supersession_detection.semantic_fallback_enabled = True
         mock_settings.supersession_detection.similarity_threshold = 0.85
 
-        with patch(
-            "context_service.engine.supersession_detection.get_settings",
-            return_value=mock_settings,
-        ):
-            # Mock contradiction candidates (async function)
-            with patch(
+        with (
+            patch(
+                "context_service.engine.supersession_detection.get_settings",
+                return_value=mock_settings,
+            ),
+            patch(
                 "context_service.engine.contradiction.check_contradiction_candidates",
                 new_callable=AsyncMock,
                 return_value=["similar-node"],
-            ):
-                mock_qdrant = AsyncMock()
-                result = await detect_supersession_candidates(
-                    store=mock_store,
-                    silo_id="test-silo",
-                    node_id="new-node",
-                    agent_id="agent-1",
-                    session_id="session-1",
-                    subject=None,  # No subject = skip Tier 0 and 1
-                    predicate=None,
-                    obj=None,
-                    embedding=[0.1] * 768,
-                    qdrant_client=mock_qdrant,
-                )
+            ),
+        ):
+            mock_qdrant = AsyncMock()
+            result = await detect_supersession_candidates(
+                store=mock_store,
+                silo_id="test-silo",
+                node_id="new-node",
+                agent_id="agent-1",
+                session_id="session-1",
+                subject=None,  # No subject = skip Tier 0 and 1
+                predicate=None,
+                obj=None,
+                embedding=[0.1] * 768,
+                qdrant_client=mock_qdrant,
+            )
 
         # Semantic matches should never auto-supersede
         assert result.auto_supersede_id is None
@@ -473,7 +473,7 @@ class TestAutoSupersedWindow:
     """Tests for AUTO_SUPERSEDE_WINDOW constant."""
 
     def test_window_is_5_minutes(self) -> None:
-        assert AUTO_SUPERSEDE_WINDOW == timedelta(minutes=5)
+        assert timedelta(minutes=5) == AUTO_SUPERSEDE_WINDOW
 
 
 class TestSupersessionPrecedenceRules:

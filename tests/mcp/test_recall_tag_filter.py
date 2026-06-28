@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from context_service.mcp.tools.context_recall import _apply_tag_filter
 
 

@@ -103,7 +103,7 @@ class LLMEntityExtractor(EntityExtractor):
             from context_service.config.settings import get_settings
             from context_service.llm import build_litellm_provider
 
-            model = get_settings().llm.flash_model.split(":")[-1]  # strip provider prefix
+            model = get_settings().default_llm_model  # ponytail: use default flash model
             self._provider = build_litellm_provider("vertex_gemini", model)
         return self._provider
 

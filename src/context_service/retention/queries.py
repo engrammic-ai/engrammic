@@ -43,8 +43,8 @@ DETACH DELETE n
 """
 
 FIND_EXCESS_META_OBSERVATIONS = """
-MATCH (n:MetaObservation {silo_id: $silo_id})
-WHERE n.tombstoned_at IS NULL
+MATCH (n:Memory {silo_id: $silo_id})
+WHERE n.memory_type = 'reflection' AND n.tombstoned_at IS NULL
 WITH n ORDER BY n.created_at DESC
 SKIP $keep_count
 RETURN n.id AS id

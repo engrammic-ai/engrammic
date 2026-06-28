@@ -1,4 +1,4 @@
-"""System-generated MetaObservation nodes for significant epistemic events.
+"""System-generated reflection nodes for significant epistemic events.
 
 Auto-reflections are written inline using template-based content (no LLM call).
 They use ``agent_id = "system"`` and carry ``auto_generated = True`` to
@@ -8,7 +8,7 @@ Public API
 ----------
 create_auto_reflection(store, observation_type, content, about_node_ids, silo_id)
     -> str | None
-    Write a :MetaObservation node with ABOUT edges and return its id.
+    Write a :Memory{memory_type:"reflection"} node with ABOUT edges and return its id.
     Returns None if the write fails non-fatally (logged, never re-raised).
 
 make_supersession_content(old_content, new_content, reason) -> str
@@ -31,15 +31,17 @@ logger = structlog.get_logger(__name__)
 
 _SYSTEM_AGENT_ID = "system"
 
-# Cypher: create a MetaObservation node and wire ABOUT edges in one statement.
+# Cypher: create a Memory{memory_type:"reflection"} node and wire ABOUT edges in one statement.
 _CREATE_AUTO_REFLECTION = """
-MERGE (obs:MetaObservation {id: $obs_id, silo_id: $silo_id})
+MERGE (obs:Memory {id: $obs_id, silo_id: $silo_id})
 ON CREATE SET
     obs.content = $content,
+    obs.memory_type = 'reflection',
     obs.observation_type = $observation_type,
     obs.confidence = $confidence,
     obs.agent_id = $agent_id,
     obs.auto_generated = true,
+    obs.decay_class = 'permanent',
     obs.created_at = $created_at
 WITH obs
 UNWIND $about_node_ids AS target_id
@@ -70,7 +72,7 @@ async def create_auto_reflection(
     *,
     confidence: float = 0.9,
 ) -> tuple[str | None, Exception | None]:
-    """Create a system-generated MetaObservation node.
+    """Create a system-generated reflection (Memory{memory_type:"reflection"}) node.
 
     Parameters
     ----------
@@ -84,7 +86,7 @@ async def create_auto_reflection(
         IDs of graph nodes this observation concerns. Nodes that do not exist
         in the silo are silently skipped by the MATCH clause.
     silo_id:
-        Silo scope for the new MetaObservation and ABOUT edge targets.
+        Silo scope for the new reflection node and ABOUT edge targets.
     confidence:
         Assigned confidence for the auto-generated observation. Default 0.9 —
         auto-reflections are deterministic so high confidence is appropriate.

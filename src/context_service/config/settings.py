@@ -580,7 +580,7 @@ class PromptsConfig(BaseModel):
 
 
 class AutoReflectConfig(BaseModel):
-    """Feature flags for automatic MetaObservation generation."""
+    """Feature flags for automatic reflection generation."""
 
     model_config = ConfigDict(frozen=True, extra="ignore")
 
@@ -830,6 +830,15 @@ class ExtractionConfig(BaseModel):
     # TX1 EXTRACT settings
     enabled: bool = True
     threshold: int = 200  # Minimum content length to trigger extraction
+    heat_threshold: float = Field(
+        default=0.0,
+        ge=0.0,
+        description=(
+            "Extract from Memory nodes whose heat_score meets or exceeds this value, "
+            "even when content is below the length threshold. "
+            "0.0 disables the heat trigger."
+        ),
+    )
     max_claims: int = 10  # Cap on claims extracted per memory
     model: str = "gemini-1.5-flash"  # LLM model for extraction
     timeout_ms: int = 25000  # Extraction timeout

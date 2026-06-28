@@ -50,7 +50,7 @@ class RetentionOverrides(BaseModel):
     meta_observation_max_count: int | None = Field(
         default=None,
         ge=10,
-        description="Maximum MetaObservation nodes retained per silo.",
+        description="Maximum reflection Memory nodes retained per silo.",
     )
     grace_period_days: int | None = Field(
         default=None,

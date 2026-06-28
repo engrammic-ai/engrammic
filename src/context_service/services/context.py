@@ -64,9 +64,8 @@ def _get_custodian_trigger() -> Any:
     return _custodian_trigger
 
 
-# node_type values accepted by store(). Drawn from primitives schema plus
-# MetaObservation which is service-specific (not yet promoted to a primitives label).
-_ALLOWED_NODE_TYPES: frozenset[str] = ALL_CITE_LABELS | frozenset({"MetaObservation"})
+# node_type values accepted by store(). Drawn from primitives schema labels.
+_ALLOWED_NODE_TYPES: frozenset[str] = ALL_CITE_LABELS
 
 # Maps content_type strings from context_remember to proper Memgraph label names.
 _CONTENT_TYPE_TO_LABEL: dict[str, str] = {
@@ -1323,11 +1322,11 @@ class ContextService:
         metadata: dict[str, Any] | None = None,
         agent_id: str,
     ) -> Node:
-        """Store a meta-observation (Meta-Memory layer).
+        """Store a reflection (Memory{memory_type:"reflection"}).
 
-        Supports hierarchical reflection: if targets include MetaObservations,
+        Supports hierarchical reflection: if targets include reflection nodes,
         the new observation's reflection_depth is max(target_depths) + 1.
-        All MetaObservations have decay_class=permanent (they don't decay).
+        All reflections have decay_class=permanent (they don't decay).
         """
         from context_service.db.queries import GET_META_OBSERVATION_DEPTHS
 
@@ -1352,14 +1351,15 @@ class ContextService:
         else:
             props["reflection_depth"] = 1
 
-        # MetaObservations don't decay (per spec)
+        # Reflections don't decay (per spec)
+        props["memory_type"] = "reflection"
         props["decay_class"] = "permanent"
         props["layer"] = "meta"
 
         node = await self.store(
             scope=scope,
             content=observation,
-            node_type="MetaObservation",
+            node_type="Memory",
             properties=props,
         )
 
@@ -1384,7 +1384,7 @@ class ContextService:
         *,
         agent_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Get MetaObservations about a node.
+        """Get reflections (Memory{memory_type:"reflection"}) about a node.
 
         Args:
             silo_id: Silo UUID.
