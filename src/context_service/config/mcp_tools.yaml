@@ -50,6 +50,16 @@ tools:
       memory_type="reflection" and about=[node_ids]. Reflections don't decay
       and create ABOUT edges to the referenced nodes. Example:
       remember("I was wrong about X because Y", memory_type="reflection", about=["node_123"])
+
+      For long content (>200 chars), pass summary with a 1-sentence key fact to
+      improve semantic search precision. The summary is embedded instead of the
+      full content, producing a tighter embedding that recalls more accurately.
+      Example: remember("...[long observation]...", summary="User prefers async patterns over callbacks")
+    params:
+      summary:
+        type: string
+        maxLength: 128
+        description: "Key fact for semantic search (recommended for long content >200 chars)"
     maps_to: Memory
 
   learn:
@@ -58,6 +68,14 @@ tools:
       node becomes searchable within ~500ms (async embedding). Recall first
       to check for existing claims - pass supersedes:<node_id> to update.
       Optionally hint source_tier.
+    params:
+      source_content:
+        type: string
+        maxLength: 4096
+        description: |
+          Full text the claim is derived from. Required for auth-gated sources.
+          SAGE verifies claim against this content. Deleted after Claim->Fact promotion.
+          Example: If claiming "API uses OAuth2", paste the relevant docs section.
     maps_to: Claim
 
   recall:

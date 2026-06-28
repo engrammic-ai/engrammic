@@ -13,7 +13,8 @@ import dagster as dg
 import structlog
 from dagster import ScheduleDefinition
 
-from context_service.pipelines.resources import EmbeddingResource, MemgraphResource
+from context_service.llm.base import LLMProvider
+from context_service.pipelines.resources import EmbeddingResource, LLMResource, MemgraphResource
 from context_service.sage.transactions import (
     InvariantViolation,
     _check_corroboration,
@@ -84,7 +85,10 @@ async def find_promotion_candidates(
 
 
 async def promote_candidates(
-    store: Any, candidates: list[dict[str, Any]], log: Any
+    store: Any,
+    candidates: list[dict[str, Any]],
+    log: Any,
+    llm: LLMProvider | None = None,
 ) -> dict[str, int]:
     """Call promote() for each candidate; skip on InvariantViolation (race condition)."""
     promoted = 0
@@ -97,13 +101,23 @@ async def promote_candidates(
         corroboration_count: int | None = candidate.get("corroboration_count")
 
         try:
-            await promote(
+            result, _ = await promote(
                 store,
                 claim_id,
                 silo_id,
                 corroboration_count=corroboration_count,
                 emit=True,
+                llm=llm,
             )
+            if result is None:
+                # Source verification failed
+                skipped += 1
+                logger.info(
+                    "promoter.verification_failed",
+                    claim_id=claim_id,
+                    silo_id=silo_id,
+                )
+                continue
             promoted += 1
             logger.info(
                 "promoter.promoted",
@@ -136,20 +150,22 @@ async def promote_candidates(
     return {"promoted": promoted, "skipped": skipped, "errors": errors}
 
 
-@dg.op(required_resource_keys={"memgraph", "embedding"})
+@dg.op(required_resource_keys={"memgraph", "embedding", "llm"})
 def promoter_op(context) -> dict[str, int]:
     """Promote eligible Claims to Facts."""
     memgraph: MemgraphResource = context.resources.memgraph
     embedding: EmbeddingResource = context.resources.embedding
+    llm_resource: LLMResource = context.resources.llm
 
     async def _run() -> dict[str, int]:
         store = await memgraph.store()
         embedding_service = embedding.get_client()
+        llm = llm_resource.get_client()
         candidates = await find_promotion_candidates(
             store, context.log, embedding_service=embedding_service
         )
         context.log.info(f"promoter_op: found {len(candidates)} candidate(s)")
-        return await promote_candidates(store, candidates, context.log)
+        return await promote_candidates(store, candidates, context.log, llm=llm)
 
     result = asyncio.run(_run())
     context.log.info(

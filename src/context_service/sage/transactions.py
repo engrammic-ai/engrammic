@@ -3332,13 +3332,17 @@ async def promote(
     *,
     corroboration_count: int | None = None,
     emit: bool = True,
-) -> tuple[PromoteResult, list[ReactionEvent]]:
+    llm: LLMProvider | None = None,
+) -> tuple[PromoteResult | None, list[ReactionEvent]]:
     """Promote Claim to Fact when corroboration threshold met (TX18).
 
     Per brain-transactions-pseudocode.md:
     - Preconditions: claim exists, state ACTIVE, claim_status UNPROMOTED
     - Preconditions: corroboration_count >= PROMOTION_THRESHOLD
     - Idempotent: already promoted returns success without modification
+
+    When llm is provided, verifies each linked Source node supports the claim
+    before promotion. Fails open: an LLM error does not block promotion.
     """
     _ = emit  # Unused; kept for API compatibility, events always empty
     from context_service.db import queries as q
@@ -3385,6 +3389,39 @@ async def promote(
             threshold=PROMOTION_THRESHOLD,
         )
 
+    # Source entailment verification: if linked Source nodes exist and an LLM is
+    # available, confirm the claim is actually supported before promoting.
+    if llm is not None:
+        source_result = await store.execute_query(
+            """
+            MATCH (c {id: $claim_id, silo_id: $silo_id})
+            OPTIONAL MATCH (c)-[:DERIVED_FROM]->(s:Source)
+            RETURN c.content AS claim_content, collect(s.content) AS source_contents
+            """,
+            {"claim_id": claim_id, "silo_id": silo_id},
+        )
+        if source_result:
+            row = source_result[0]
+            claim_content: str = row.get("claim_content") or ""
+            source_contents: list[str] = [
+                sc for sc in (row.get("source_contents") or []) if sc
+            ]
+            if claim_content and source_contents:
+                from context_service.sage.source_verification import (
+                    verify_claim_against_source,
+                )
+
+                for source_content in source_contents:
+                    if not await verify_claim_against_source(
+                        claim_content, source_content, llm
+                    ):
+                        logger.warning(
+                            "claim_failed_source_verification",
+                            claim_id=claim_id,
+                            silo_id=silo_id,
+                        )
+                        return None, []
+
     now = datetime.now(UTC)
     # Boost confidence based on corroboration
     new_confidence = min(
@@ -3400,6 +3437,19 @@ async def promote(
             "new_confidence": new_confidence,
         },
     )
+
+    # After successful promotion, cleanup ephemeral Source nodes
+    try:
+        await store.execute_query(
+            """
+            MATCH (f {id: $fact_id, silo_id: $silo_id})-[:DERIVED_FROM]->(s:Source)
+            DETACH DELETE s
+            """,
+            {"fact_id": claim_id, "silo_id": silo_id},
+        )
+    except Exception as e:
+        logger.warning("source_cleanup_failed", fact_id=claim_id, error=str(e))
+        # Don't fail promotion on cleanup error
 
     result = PromoteResult(
         claim_id=uuid.UUID(claim_id),

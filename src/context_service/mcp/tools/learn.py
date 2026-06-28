@@ -37,6 +37,7 @@ async def _learn_impl(
     tags: list[str] | None = None,
     source_tier: str | None = None,
     supersedes: str | None = None,
+    source_content: str | None = None,
 ) -> dict[str, Any]:
     """Implementation for learn tool."""
     auth = await get_mcp_auth_context()
@@ -69,6 +70,7 @@ async def _learn_impl(
         tags=tags,
         source_tier=source_tier,
         supersedes=supersedes,
+        source_content=source_content,
     )
     if "error" not in result:
         record_node_confidence(confidence, layer="knowledge", silo_id=None)
@@ -104,6 +106,7 @@ def register(mcp: FastMCP) -> None:
         tags: list[str] | None = None,
         source_tier: str | None = None,
         supersedes: str | None = None,
+        source_content: str | None = None,
     ) -> dict[str, Any]:
         """Record something you learned with evidence.
 
@@ -116,6 +119,9 @@ def register(mcp: FastMCP) -> None:
             source_tier: Optional quality tier hint: authoritative|validated|community|unknown.
                 If omitted, tier is resolved automatically from evidence refs and silo rules.
             supersedes: Node ID this claim replaces. Use recall first to find existing claims.
+            source_content: Full text the claim is derived from (max 4096 chars).
+                Required for auth-gated sources. SAGE verifies claim against this content.
+                Deleted after Claim->Fact promotion.
 
         Returns:
             {node_id, evidence_status, created_at, supersedes?}
@@ -124,7 +130,7 @@ def register(mcp: FastMCP) -> None:
         success = True
         try:
             return await _learn_impl(
-                claim, evidence, source, confidence, tags, source_tier, supersedes
+                claim, evidence, source, confidence, tags, source_tier, supersedes, source_content
             )
         except Exception:
             success = False
