@@ -666,7 +666,7 @@ def register(mcp: FastMCP) -> None:
             silo_id: UUID of the silo. Optional; defaults to the org's primary silo
                 derived from auth.
             include_reflections: When True and fetching by node_ids at depth=0,
-                attach MetaObservation reflections to each returned node.
+                attach reflection Memory nodes to each returned node.
             reflections_agent_id: Optional agent ID to filter reflections. When
                 provided with include_reflections=True, only observations created
                 by that agent are returned. Omit to return all agents' observations.

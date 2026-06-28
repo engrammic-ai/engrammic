@@ -235,7 +235,7 @@ _LAYER_TO_LABEL: dict[str, str] = {
     "knowledge": "Claim",
     "wisdom": "Commitment",
     "intelligence": "ReasoningChain",
-    "meta": "MetaObservation",
+    "meta": "Memory",
     "belief": "WorkingHypothesis",
 }
 

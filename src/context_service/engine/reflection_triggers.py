@@ -124,7 +124,7 @@ async def maybe_trigger_confidence_shift(
 
     The caller provides the confidence value before and after the write.  If the
     absolute delta exceeds ``confidence_shift_threshold`` and the silo is within
-    its rate limit, a ``"belief_change"`` MetaObservation is created.
+    its rate limit, a ``"belief_change"`` reflection Memory node is created.
 
     This function never raises.
     """
@@ -175,7 +175,7 @@ async def maybe_trigger_contradiction(
     """Queue a background auto-reflection for a detected contradiction.
 
     Called when a new claim contradicts an existing Fact-layer node.  Creates a
-    ``"contradiction_detected"`` MetaObservation linked to both nodes.
+    ``"contradiction_detected"`` reflection Memory node linked to both nodes.
 
     This function never raises.
     """

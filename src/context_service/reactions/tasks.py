@@ -695,12 +695,20 @@ RETURN
             return
 
         content = node.content or ""
-        if len(content) < _EXTRACTION_THRESHOLD:
-            log.debug("extract_claims_content_too_short", length=len(content))
+        props = node.properties or {}
+        heat_score = float(props.get("heat_score", 0.0))
+        heat_threshold = settings.extraction.heat_threshold  # ponytail: read at call time, not import
+        content_qualifies = len(content) >= _EXTRACTION_THRESHOLD
+        heat_qualifies = heat_threshold > 0.0 and heat_score >= heat_threshold
+        if not content_qualifies and not heat_qualifies:
+            log.debug(
+                "extract_claims_below_thresholds",
+                length=len(content),
+                heat=heat_score,
+            )
             return
 
         # 2. Check idempotency
-        props = node.properties or {}
         if props.get("extracted_at") and props.get("extraction_version") == _EXTRACTION_VERSION:
             log.debug("extract_claims_already_extracted")
             return

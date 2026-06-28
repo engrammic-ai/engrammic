@@ -187,7 +187,7 @@ class RetentionService:
         silo_id: str,
         run_id: str,
     ) -> int:
-        """Tombstone MetaObservation nodes beyond max count."""
+        """Tombstone reflection Memory nodes beyond max count."""
         rows: list[dict[str, Any]] = await self._store.execute_query(
             FIND_EXCESS_META_OBSERVATIONS,
             {"silo_id": silo_id, "keep_count": self._policy.meta_observation_max_count},

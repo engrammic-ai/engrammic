@@ -8,11 +8,11 @@ from context_service.services.models import ScopeContext
 
 
 class TestHierarchicalReflection:
-    """MetaObservations can target other MetaObservations."""
+    """reflection Memory nodes can target other reflection Memory nodes."""
 
     @pytest.mark.asyncio
     async def test_reflect_on_non_meta_sets_depth_1(self) -> None:
-        """Reflecting on a non-MetaObservation node sets reflection_depth=1."""
+        """Reflecting on a non-reflection Memory node node sets reflection_depth=1."""
         from unittest.mock import AsyncMock, MagicMock
 
         from context_service.services.context import ContextService
@@ -44,13 +44,13 @@ class TestHierarchicalReflection:
 
     @pytest.mark.asyncio
     async def test_reflect_on_meta_observation_increments_depth(self) -> None:
-        """Reflecting on a MetaObservation of depth 1 sets reflection_depth=2."""
+        """Reflecting on a reflection Memory node of depth 1 sets reflection_depth=2."""
         from unittest.mock import AsyncMock, MagicMock
 
         from context_service.services.context import ContextService
 
         mock_store = MagicMock()
-        # First query returns the target MetaObservation with depth 1
+        # First query returns the target reflection Memory node with depth 1
         mock_store.execute_query = AsyncMock(
             return_value=[{"id": "meta-target", "reflection_depth": 1}]
         )

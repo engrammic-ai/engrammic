@@ -1,6 +1,6 @@
 """E2E tests for reflection storage and retrieval.
 
-Validates that MetaObservations stored via context_reflect are retrievable
+Validates that Reflections stored via context_reflect are retrievable
 via context_get_reflections with correct properties preserved.
 """
 
@@ -16,7 +16,7 @@ from tests.integration.conftest import docker_available
 @docker_available
 @pytest.mark.integration
 class TestReflectionRoundTrip:
-    """MetaObservations are stored and retrieved correctly."""
+    """Reflections are stored and retrieved correctly."""
 
     async def test_reflect_and_retrieve(
         self,
@@ -151,9 +151,10 @@ class TestReflectionRoundTrip:
         obs_id = str(uuid.uuid4())
         await memgraph_client.execute_write(
             """
-            CREATE (obs:MetaObservation {
+            CREATE (obs:Memory {
                 id: $obs_id,
                 silo_id: $silo_id_2,
+                memory_type: 'reflection',
                 content: 'Reflection in silo 2',
                 observation_type: 'insight',
                 confidence: 0.8
