@@ -1,6 +1,6 @@
 [project]
 name = "engrammic"
-version = "0.6.0"
+version = "0.7.0"
 description = "Engrammic - cognitive substrate for AI agents"
 readme = "README.md"
 requires-python = ">=3.13"
