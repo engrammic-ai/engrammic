@@ -2,17 +2,17 @@
 
 Active implementation plans for context-service. Completed plans are moved to `archive/`.
 
-## Current state (2026-06-27)
+## Current state (2026-06-28)
 
 **Focus:** BEAM benchmark (Antler gate), batch API for seeding
 
 **Recent completions:**
+- Embedding quality + source verification - PR #80
 - Multi-agent coherence v2 (full) - conflict detection, resolution verbs, agents tool, recall filters
 - Evidence stub nodes for file:// and urn:// URIs
 - Multi-agent coherence v1 (authored provenance + conflict detection) - PR #71
 - SAGE restructure (Promoter/Synthesizer/Decayer/Detector) - PRs #68-70
 - Recall consolidation + v2 synthesis trigger - PR #65
-- Cascade invalidation fixes - PR #72
 
 ## Benchmark (next priority)
 
@@ -31,27 +31,15 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
-| [2026-06-28-embedding-quality-spec.md](./2026-06-28-embedding-quality-spec.md) | Smart truncation + async extraction for embedding quality | Draft |
-| [2026-06-28-spec-alignment-plan.md](./2026-06-28-spec-alignment-plan.md) | Address spec vs impl drift (8 phases, ~31h) | Draft |
-| [2026-06-24-metacognition-intelligence.md](./2026-06-24-metacognition-intelligence.md) | Reflection support in MCP tools + Intelligence layer impl | Draft |
 | [../review/2026-06-24-heat-ranking-research.md](../review/2026-06-24-heat-ranking-research.md) | Heat as PPR seed boost, synonymy edges, degree normalization | Consider |
-| [2026-06-19-semantic-spo-corroboration.md](./2026-06-19-semantic-spo-corroboration.md) | Semantic equivalence for organic corroboration | Draft |
 | [2026-06-20-retrieval-remaining-work.md](./2026-06-20-retrieval-remaining-work.md) | Retrieval quality gaps | Spec |
-| [2026-06-08-wisdom-layer-split.md](./2026-06-08-wisdom-layer-split.md) | Separate Commitments (agent) from Beliefs (SAGE) | Draft |
-| [2026-06-06-write-quality-gate.md](./2026-06-06-write-quality-gate.md) | Write-path quality enforcement with structural checks | Ready |
 | [2026-06-12-longmemeval-epistemic-harness.md](./2026-06-12-longmemeval-epistemic-harness.md) | LongMemEval with epistemic extensions | Draft |
-| [polish-audit-2026-06-08.md](./polish-audit-2026-06-08.md) | 7 critical + high findings from codebase audit | Triage |
-| [error-boundary-surface-invariants.md](./error-boundary-surface-invariants.md) | Error boundary design notes | Notes |
 
 ## Pending (not started)
 
 | Plan | Description | Blocker |
 |------|-------------|---------|
-| [2026-06-05-rerank-optimization.md](./2026-06-05-rerank-optimization.md) | Semantic rerank cache (L1 exact, L2 similarity) | - |
-| [2026-06-05-embedding-batching-phase2.md](./2026-06-05-embedding-batching-phase2.md) | Adaptive batching, queue depth tuning | Phase 1 complete |
 | [2026-06-05-admin-dashboard.md](./2026-06-05-admin-dashboard.md) | Operator dashboard (memory state, usage, health) | REST API Phase 1 |
-| [2026-06-04-supersession-chain-retrieval.md](./2026-06-04-supersession-chain-retrieval.md) | `history` MCP tool for supersession chains | - |
-| [2026-06-12-rest-api-mcp-surface.md](./2026-06-12-rest-api-mcp-surface.md) | REST API mirroring MCP surface | - |
 | [2026-06-09-standalone-architecture.md](./2026-06-09-standalone-architecture.md) | Standalone deployment architecture | - |
 | [standalone-installer.md](./standalone-installer.md) | Standalone installer design | - |
 
@@ -73,13 +61,13 @@ Specced or checkpointed for later implementation:
 
 ## Archive
 
-Completed plans in `archive/` (140+ files). Recent:
+Completed plans in `archive/` (160+ files). Recent:
+- Embedding quality + source verification (2026-06-28)
 - Multi-agent coherence v1 (2026-06-22)
 - SAGE restructure - Promoter/Synthesizer/Decayer/Detector (2026-06-21)
 - Recall consolidation + v2 synthesis (2026-06-20)
 - Cascade invalidation fixes (2026-06-22)
 - TEMPR parity sprint - 4-channel retrieval (2026-06-16)
-- Wisdom/Intelligence layer activation (2026-06-14)
 
 ## Plan format
 
