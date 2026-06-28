@@ -538,7 +538,7 @@ async def _context_assert(
             }
         import hashlib
 
-        from primitives.schema import Source  # type: ignore[attr-defined]
+        from primitives.schema import Source
 
         source_id = uuid.uuid4()
         content_hash = hashlib.sha256(source_content.encode()).hexdigest()
