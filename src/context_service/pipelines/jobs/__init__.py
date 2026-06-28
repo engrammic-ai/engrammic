@@ -13,6 +13,10 @@ from context_service.pipelines.jobs.orphan_recovery import (
 )
 from context_service.pipelines.jobs.promoter_job import sage_promoter_job, sage_promoter_schedule
 from context_service.pipelines.jobs.reembed_job import reembed_migration
+from context_service.pipelines.jobs.source_cleanup_job import (
+    source_cleanup_job,
+    source_cleanup_schedule,
+)
 from context_service.pipelines.jobs.spo_backfill_job import spo_backfill_job
 from context_service.pipelines.jobs.synthesizer_job import (
     sage_synthesizer_job,
@@ -38,6 +42,8 @@ __all__ = [
     "sage_synthesizer_schedule",
     "sage_detector_job",
     "spo_backfill_job",
+    "source_cleanup_job",
+    "source_cleanup_schedule",
     "usage_retention_job",
     "usage_retention_schedule",
 ]

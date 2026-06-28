@@ -259,6 +259,7 @@ async def _context_remember(
     supersedes: str | None = None,
     memory_type: str | None = None,
     about: list[str] | None = None,
+    summary: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation for testing."""
     auth = await get_mcp_auth_context()
@@ -329,8 +330,19 @@ async def _context_remember(
             }
 
     memory_vector: list[float] | None = None
+    embedding_coverage: str = "full"
     try:
-        memory_vector = await embed(content)
+        from context_service.engine.key_sentence_extraction import extract_key_sentences
+
+        if summary:
+            embed_text = summary
+            embedding_coverage = "full"  # ponytail: agent-provided summary = full coverage
+        elif len(content) > 200:
+            embed_text = extract_key_sentences(content, budget=512)
+            embedding_coverage = "partial"
+        else:
+            embed_text = content
+        memory_vector = await embed(embed_text)
         await ctx_svc.vector_store.upsert(
             node_id=str(node_id),
             vector=memory_vector,
@@ -381,6 +393,7 @@ async def _context_remember(
         "layer": "memory",
         "decay_class": decay_class,
         "created_at": datetime.now(UTC).isoformat(),
+        "embedding_coverage": embedding_coverage,
     }
     if supersedes is not None:
         result["supersedes"] = supersedes
@@ -398,6 +411,7 @@ async def _context_assert(
     evidence_mode: str = "sync",
     source_tier: str | None = None,
     supersedes: str | None = None,
+    source_content: str | None = None,
 ) -> dict[str, Any]:
     """Internal implementation."""
     auth = await get_mcp_auth_context()
@@ -488,6 +502,8 @@ async def _context_assert(
     else:
         claim_text = parsed_claim
 
+    effective_metadata: dict[str, Any] = dict(metadata or {})
+
     result, events = await store_claim(
         store=ctx_svc.graph_store,
         content=claim_text,
@@ -497,7 +513,7 @@ async def _context_assert(
         source_tier=resolved_tier,
         confidence=confidence,
         tags=tags,
-        metadata=metadata,
+        metadata=effective_metadata,
         supersedes=supersedes,
         subject=subject,
         predicate=predicate,
@@ -512,6 +528,70 @@ async def _context_assert(
 
     record_store_latency(time.perf_counter() - _start, silo_id=expected_silo_id, layer="knowledge")
     node_id = result.node_id
+
+    # Create Source node when source_content is provided, for SAGE verification
+    source_node_id: str | None = None
+    if source_content is not None:
+        import hashlib
+
+        from primitives.schema import Source  # type: ignore[attr-defined]
+
+        source_id = uuid.uuid4()
+        content_hash = hashlib.sha256(source_content.encode()).hexdigest()
+
+        source_node = Source(
+            id=source_id,
+            silo_id=str(expected_silo_id),
+            content=source_content,
+            evidence_uri=evidence_list[0] if evidence_list else "",
+            content_hash=content_hash,
+            created_at=datetime.now(UTC),
+        )
+
+        try:
+            await ctx_svc.graph_store.execute_query(
+                """
+                CREATE (s:Source {
+                    id: $id,
+                    silo_id: $silo_id,
+                    content: $content,
+                    evidence_uri: $evidence_uri,
+                    content_hash: $content_hash,
+                    created_at: $created_at
+                })
+                """,
+                {
+                    "id": str(source_id),
+                    "silo_id": source_node.silo_id,
+                    "content": source_node.content,
+                    "evidence_uri": source_node.evidence_uri,
+                    "content_hash": source_node.content_hash,
+                    "created_at": source_node.created_at.isoformat(),
+                },
+            )
+
+            await ctx_svc.graph_store.execute_query(
+                """
+                MATCH (claim {id: $claim_id, silo_id: $silo_id})
+                MATCH (source:Source {id: $source_id, silo_id: $silo_id})
+                CREATE (claim)-[:DERIVED_FROM {created_at: $created_at}]->(source)
+                """,
+                {
+                    "claim_id": str(node_id),
+                    "source_id": str(source_id),
+                    "silo_id": str(expected_silo_id),
+                    "created_at": datetime.now(UTC).isoformat(),
+                },
+            )
+
+            source_node_id = str(source_id)
+        except Exception:
+            logger.warning(
+                "source_node_creation_failed",
+                exc_info=True,
+                node_id=str(node_id),
+                silo_id=str(expected_silo_id),
+            )
 
     claim_vector: list[float] | None = None
     try:
@@ -682,6 +762,8 @@ async def _context_assert(
     }
     if supersedes is not None:
         response["supersedes"] = supersedes
+    if source_node_id is not None:
+        response["source_id"] = source_node_id
     if contradiction_candidates:
         response["contradiction_candidates"] = contradiction_candidates
     if supersession_info:
