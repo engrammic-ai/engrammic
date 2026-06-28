@@ -77,6 +77,10 @@ tools:
       to filter by node creation time. Requires fusion_mode=True. Accepts
       relative ("7d", "1w", "30d") or ISO datetime.
 
+      Time-travel: Use as_of="2024-06-01T12:00:00Z" to query epistemic state
+      at a historical point. Returns nodes valid at that time, excluding
+      nodes created after or superseded before the timestamp.
+
       Hints: Set include_hints=true to receive belief candidate suggestions
       when corroborating facts are detected.
 

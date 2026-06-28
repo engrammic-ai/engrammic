@@ -56,6 +56,7 @@ async def _recall_impl(
     exclude_agents: list[str] | None = None,
     include_conflicts: bool = False,
     tags: list[str] | None = None,
+    as_of: str | None = None,
 ) -> dict[str, Any]:
     """Implementation for recall tool."""
     auth = await get_mcp_auth_context()
@@ -98,6 +99,7 @@ async def _recall_impl(
         include_hints=include_hints,
         include_inactive=include_inactive,
         agent_id=agent_id,
+        as_of=as_of,
         exclude_agents=exclude_agents,
         include_conflicts=include_conflicts,
         tags=tags,
@@ -410,6 +412,7 @@ def register(mcp: FastMCP) -> None:
         exclude_agents: list[str] | None = None,
         include_conflicts: bool = False,
         tags: list[str] | None = None,
+        as_of: str | None = None,
     ) -> dict[str, Any]:
         """Retrieve knowledge.
 
@@ -449,6 +452,10 @@ def register(mcp: FastMCP) -> None:
             include_conflicts: When True, also return nodes that have CONTRADICTS
                 edges to the result nodes, in a separate conflict_nodes field.
             tags: Filter to nodes having ALL specified tags.
+            as_of: Query epistemic state at a historical point in time.
+                Accepts ISO datetime (e.g. "2024-06-01T12:00:00Z"). Returns
+                only nodes that were valid at that time, excluding nodes
+                created after or superseded before the given timestamp.
 
         Returns:
             {results|nodes, hypotheses?, conflict_nodes?, ...}
@@ -478,6 +485,7 @@ def register(mcp: FastMCP) -> None:
                 exclude_agents=exclude_agents,
                 include_conflicts=include_conflicts,
                 tags=tags,
+                as_of=as_of,
             )
         except Exception:
             success = False

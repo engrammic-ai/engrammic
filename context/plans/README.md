@@ -31,6 +31,8 @@ Active implementation plans for context-service. Completed plans are moved to `a
 
 | Plan | Description | Status |
 |------|-------------|--------|
+| [2026-06-28-embedding-quality-spec.md](./2026-06-28-embedding-quality-spec.md) | Smart truncation + async extraction for embedding quality | Draft |
+| [2026-06-28-spec-alignment-plan.md](./2026-06-28-spec-alignment-plan.md) | Address spec vs impl drift (8 phases, ~31h) | Draft |
 | [2026-06-24-metacognition-intelligence.md](./2026-06-24-metacognition-intelligence.md) | Reflection support in MCP tools + Intelligence layer impl | Draft |
 | [../review/2026-06-24-heat-ranking-research.md](../review/2026-06-24-heat-ranking-research.md) | Heat as PPR seed boost, synonymy edges, degree normalization | Consider |
 | [2026-06-19-semantic-spo-corroboration.md](./2026-06-19-semantic-spo-corroboration.md) | Semantic equivalence for organic corroboration | Draft |

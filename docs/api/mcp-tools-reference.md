@@ -193,6 +193,7 @@ Search or fetch knowledge. Primary retrieval tool.
 | `exclude_agents` | string[] | No | null | Exclude nodes by these agents |
 | `include_conflicts` | bool | No | false | Return contradicting nodes in `conflict_nodes` |
 | `tags` | string[] | No | null | Filter to nodes having ALL specified tags |
+| `as_of` | string | No | null | Query epistemic state at historical point (ISO datetime) |
 | `include_hypotheses` | bool | No | false | Include unconfirmed hypothesis nodes |
 | `bypass_cache` | bool | No | false | Force fresh search |
 | `max_age_seconds` | int | No | null | Max cache age before refresh |
@@ -237,6 +238,16 @@ Requires `fusion_mode=True`. Accepts:
 ```json
 {"query": "auth changes", "fusion_mode": true, "since": "7d"}
 ```
+
+#### Time-Travel
+
+Query the knowledge state at a historical point using `as_of`:
+
+```json
+{"query": "API config", "as_of": "2024-06-01T12:00:00Z"}
+```
+
+Returns only nodes that were valid at that time (excludes nodes created after or superseded before the timestamp).
 
 #### Notes
 
