@@ -348,7 +348,8 @@ RETURN path IS NOT NULL AS would_cycle
 
 # Cross-node SUPERSEDES for Custodian-detected semantic supersession.
 # Sets tail_id on new node (if not already set), head_id on tail node for O(1) chain lookups.
-# If new node already has tail_id (multi-supersession), first chain wins to avoid inconsistent state.
+# ponytail: 1:N supersession uses edges (works) but pointers are 1:1 (first chain wins).
+# Upgrade path: store tail_ids as array or switch to DAG-aware head resolution.
 CREATE_CROSS_NODE_SUPERSEDES = f"""
 MATCH (new) WHERE {content_union_predicate("new")} AND new.id = $from_id AND new.silo_id = $silo_id
 MATCH (old) WHERE {content_union_predicate("old")} AND old.id = $to_id AND old.silo_id = $silo_id AND new <> old

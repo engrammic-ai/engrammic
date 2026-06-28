@@ -53,6 +53,7 @@ Store an observation to memory. No evidence required.
 
 - Reflections (`memory_type="reflection"`) don't decay and require `about` to link to referenced nodes.
 - Node becomes searchable within ~500ms (async embedding). For immediate recall, use `recall(node_ids=[node_id])`.
+- When `supersedes` is omitted, the write triggers [write-time supersession detection](#write-time-supersession-detection); the response may include `auto_superseded`, `likely_updates`, or `possible_updates`.
 
 ---
 
@@ -77,18 +78,24 @@ Record a claim with evidence. Writes a Knowledge-layer Claim node.
 ```json
 {
   "node_id": "uuid",
-  "evidence_status": "valid",
+  "layer": "knowledge",
+  "claim_type": "spo",
+  "evidence_status": "verified",
+  "evidence_nodes": ["uuid"],
   "created_at": "2024-01-01T00:00:00Z",
   "supersedes": "uuid-if-provided",
   "warning": "optional warning if evidence missing"
 }
 ```
 
+`evidence_status` is `verified` when evidence is validated synchronously, or `pending` when validation is deferred.
+
 #### Notes
 
 - Evidence is required by default. If enforcement is enabled and evidence is empty, returns an error.
 - Use `source_tier` to hint quality when you know it (e.g., `.gov`/`.edu` = `authoritative`).
 - HTTP-fetches evidence URLs for validation. Private/auth-gated URLs will fail validation.
+- When `supersedes` is omitted, the write triggers [write-time supersession detection](#write-time-supersession-detection); the response may include `auto_superseded`, `likely_updates`, or `possible_updates`.
 
 ---
 
@@ -185,6 +192,9 @@ Search or fetch knowledge. Primary retrieval tool.
 | `agent_id` | string | No | null | Filter to nodes by this agent |
 | `exclude_agents` | string[] | No | null | Exclude nodes by these agents |
 | `include_conflicts` | bool | No | false | Return contradicting nodes in `conflict_nodes` |
+| `tags` | string[] | No | null | Filter to nodes having ALL specified tags |
+| `as_of` | string | No | null | Query epistemic state at historical point (ISO datetime) |
+| `include_hypotheses` | bool | No | false | Include unconfirmed hypothesis nodes |
 | `bypass_cache` | bool | No | false | Force fresh search |
 | `max_age_seconds` | int | No | null | Max cache age before refresh |
 
@@ -228,6 +238,16 @@ Requires `fusion_mode=True`. Accepts:
 ```json
 {"query": "auth changes", "fusion_mode": true, "since": "7d"}
 ```
+
+#### Time-Travel
+
+Query the knowledge state at a historical point using `as_of`:
+
+```json
+{"query": "API config", "as_of": "2024-06-01T12:00:00Z"}
+```
+
+Returns only nodes that were valid at that time (excludes nodes created after or superseded before the timestamp).
 
 #### Notes
 
@@ -278,6 +298,43 @@ When `direction="down"`:
   "leaf_nodes": ["uuid", "uuid"]
 }
 ```
+
+---
+
+## Intelligence Tools
+
+### reason
+
+Create ephemeral reasoning chain for multi-step inference.
+
+#### Parameters
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `steps` | array | Yes | - | Reasoning steps: `[{step: 1, reasoning: "...", confidence: 0.9}]` |
+| `conclusion` | string | No | null | Final conclusion from reasoning |
+| `evidence_used` | string[] | No | null | Node IDs used as evidence |
+| `crystallizations` | array | No | null | Beliefs to commit: `[{claim: "...", confidence: 0.9}]` |
+| `parent_chain_id` | string | No | null | Continue from previous chain |
+
+#### Response
+
+```json
+{
+  "chain_id": "uuid",
+  "layer": "intelligence",
+  "steps_count": 3,
+  "crystallized_claim_ids": ["uuid"],
+  "session_id": "uuid",
+  "created_at": "2024-06-01T12:00:00Z"
+}
+```
+
+#### Notes
+
+- Chains are session-scoped (not retrieved cross-session by default).
+- Crystallizations create Commitment nodes (Wisdom layer).
+- Use `parent_chain_id` to chain reasoning across multiple calls.
 
 ---
 
@@ -581,6 +638,41 @@ Always recall before storing to chain updates:
 2. Found node abc123: "Uses OAuth2"
 3. learn("Uses OAuth2 with PKCE", evidence=[...], supersedes="abc123")
 ```
+
+### Write-time Supersession Detection
+
+When you call `remember` or `learn` **without** an explicit `supersedes`, the
+system checks whether the new write likely replaces an existing node, so you
+don't silently duplicate knowledge. Detection runs in tiers and stops at the
+first confident match:
+
+1. `session_recall` - a node you recalled earlier this session, matched by subject
+2. `spo_match` / `subject_match` - same agent, matching subject-predicate-object
+3. `semantic_similarity` - embedding similarity fallback (never auto-supersedes)
+
+The response may carry up to three extra fields:
+
+```json
+{
+  "node_id": "new-uuid",
+  "auto_superseded": "old-uuid",
+  "likely_updates": [
+    {"id": "uuid", "subject": "...", "predicate": "...", "object": "...", "reason": "spo_match"}
+  ],
+  "possible_updates": [
+    {"id": "uuid", "reason": "semantic_similarity"}
+  ]
+}
+```
+
+- `auto_superseded` - a high-confidence match the system chained automatically
+  (only when auto-supersede is enabled). The new node already supersedes it.
+- `likely_updates` - high-confidence candidates surfaced for you to confirm with
+  an explicit `update`/`supersedes`.
+- `possible_updates` - lower-confidence (semantic-only) candidates; review before acting.
+
+Detection is config-gated (`supersession_detection.*`); when disabled, these
+fields are absent.
 
 ### Session Continuity
 

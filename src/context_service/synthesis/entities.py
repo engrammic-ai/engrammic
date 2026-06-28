@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import abc
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
 from context_service.config.logging import get_logger
+
+if TYPE_CHECKING:
+    from context_service.llm.base import LLMProvider
 
 logger = get_logger(__name__)
 
@@ -47,14 +50,98 @@ class EntityExtractor(abc.ABC):
         """
 
 
+_entity_prompt_cache: str | None = None
+
+
+def _load_entity_prompt() -> str:
+    """Load entity extraction prompt from config/prompts.yaml (cached)."""
+    global _entity_prompt_cache
+    if _entity_prompt_cache is not None:
+        return _entity_prompt_cache
+
+    import yaml
+
+    from context_service.config.config_loader import CONFIG_DIR
+
+    path = CONFIG_DIR / "prompts.yaml"
+    with path.open() as f:
+        data = yaml.safe_load(f)
+    _entity_prompt_cache = data.get("entity_extraction", {}).get("gemini", {}).get("user", "")
+    return _entity_prompt_cache
+
+
+_ENTITY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "entities": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string"},
+                    "type": {"type": "string"},
+                    "start": {"type": "integer"},
+                    "end": {"type": "integer"},
+                },
+                "required": ["name", "type", "start", "end"],
+            },
+        }
+    },
+    "required": ["entities"],
+}
+
+
 class LLMEntityExtractor(EntityExtractor):
-    """Entity extractor backed by Gemini Flash.
+    """Entity extractor backed by LLM (Gemini Flash by default)."""
 
-    LLM call is stubbed — returns empty list until prompt + parsing are wired.
-    """
+    def __init__(self, provider: LLMProvider | None = None) -> None:
+        self._provider = provider
 
-    async def extract(self, text: str) -> list[Entity]:  # noqa: ARG002
-        return []
+    def _get_provider(self) -> LLMProvider:
+        """Lazy-load provider using configured flash model."""
+        if self._provider is None:
+            from context_service.config.settings import get_settings
+            from context_service.llm import build_litellm_provider
+
+            model = get_settings().llm.flash_model.split(":")[-1]  # strip provider prefix
+            self._provider = build_litellm_provider("vertex_gemini", model)
+        return self._provider
+
+    async def extract(self, text: str) -> list[Entity]:
+        if not text or len(text) < 10:
+            return []
+
+        try:
+            provider = self._get_provider()
+            prompt_template = _load_entity_prompt()
+            prompt = prompt_template.format(text=text)
+            messages = [{"role": "user", "content": prompt}]
+
+            result, _ = await provider.extract_structured(
+                messages, _ENTITY_SCHEMA, max_tokens=1024, timeout=10.0
+            )
+
+            entities = []
+            for e in result.get("entities", []):
+                name = e.get("name", "")
+                if not name:
+                    continue
+                # ponytail: trust LLM offsets but clamp to text bounds
+                start = max(0, e.get("start", 0))
+                end = min(len(text), e.get("end", start))
+                if start < end:
+                    entities.append(
+                        Entity(
+                            name=name,
+                            type=e.get("type", "OTHER"),
+                            start=start,
+                            end=end,
+                        )
+                    )
+            return entities
+        except Exception as exc:
+            logger.warning("llm_entity_extraction_failed", error=str(exc))
+            return []
 
 
 class SpacyEntityExtractor(EntityExtractor):

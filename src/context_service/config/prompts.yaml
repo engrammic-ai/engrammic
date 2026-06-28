@@ -1,0 +1,20 @@
+# LLM prompts for context-service
+# Each section groups prompts by feature. Sub-keys are provider presets.
+
+entity_extraction:
+  gemini:
+    system: ""
+    user: |
+      Extract named entities from this text. Return JSON with an "entities" array.
+
+      For each entity include:
+      - name: the entity text as it appears
+      - type: one of PERSON, ORG, PRODUCT, TECH, LOCATION, EVENT, OTHER
+      - start: character offset where entity begins
+      - end: character offset where entity ends
+
+      Only extract concrete, specific entities (proper nouns, product names, technologies).
+      Skip generic terms like "user", "system", "data".
+
+      Text:
+      {text}
