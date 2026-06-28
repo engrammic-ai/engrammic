@@ -11,6 +11,7 @@ from context_service.engine.conflict_detection import (
     _cosine,
     create_contradicts_edge,
     detect_conflicts,
+    has_structural_spo_conflict,
     is_same_subject,
 )
 
@@ -36,6 +37,51 @@ class TestCosine:
 
     def test_length_mismatch_returns_zero(self) -> None:
         assert _cosine([1.0], [1.0, 0.0]) == 0.0
+
+
+class TestHasStructuralSpoConflict:
+    def test_same_subject_predicate_different_object(self) -> None:
+        node_a = {"spo": {"subject": "API", "predicate": "uses", "object": "OAuth2"}}
+        node_b = {"spo": {"subject": "API", "predicate": "uses", "object": "API keys"}}
+        assert has_structural_spo_conflict(node_a, node_b) is True
+
+    def test_same_subject_predicate_same_object_no_conflict(self) -> None:
+        node_a = {"spo": {"subject": "API", "predicate": "uses", "object": "OAuth2"}}
+        node_b = {"spo": {"subject": "API", "predicate": "uses", "object": "OAuth2"}}
+        assert has_structural_spo_conflict(node_a, node_b) is False
+
+    def test_different_predicate_no_conflict(self) -> None:
+        node_a = {"spo": {"subject": "API", "predicate": "uses", "object": "OAuth2"}}
+        node_b = {"spo": {"subject": "API", "predicate": "requires", "object": "a token"}}
+        assert has_structural_spo_conflict(node_a, node_b) is False
+
+    def test_different_subject_no_conflict(self) -> None:
+        node_a = {"spo": {"subject": "API", "predicate": "uses", "object": "OAuth2"}}
+        node_b = {"spo": {"subject": "SDK", "predicate": "uses", "object": "API keys"}}
+        assert has_structural_spo_conflict(node_a, node_b) is False
+
+    def test_missing_spo_returns_false(self) -> None:
+        node_a = {"embedding": [1.0, 0.0]}
+        node_b = {"spo": {"subject": "API", "predicate": "uses", "object": "OAuth2"}}
+        assert has_structural_spo_conflict(node_a, node_b) is False
+
+    def test_both_missing_spo_returns_false(self) -> None:
+        assert has_structural_spo_conflict({}, {}) is False
+
+    def test_case_insensitive_comparison(self) -> None:
+        node_a = {"spo": {"subject": "API", "predicate": "Uses", "object": "OAuth2"}}
+        node_b = {"spo": {"subject": "api", "predicate": "uses", "object": "API Keys"}}
+        assert has_structural_spo_conflict(node_a, node_b) is True
+
+    def test_empty_subject_returns_false(self) -> None:
+        node_a = {"spo": {"subject": "", "predicate": "uses", "object": "OAuth2"}}
+        node_b = {"spo": {"subject": "", "predicate": "uses", "object": "API keys"}}
+        assert has_structural_spo_conflict(node_a, node_b) is False
+
+    def test_empty_predicate_returns_false(self) -> None:
+        node_a = {"spo": {"subject": "API", "predicate": "", "object": "OAuth2"}}
+        node_b = {"spo": {"subject": "API", "predicate": "", "object": "API keys"}}
+        assert has_structural_spo_conflict(node_a, node_b) is False
 
 
 class TestIsSameSubject:
@@ -268,6 +314,53 @@ class TestDetectConflicts:
 
         assert result == []
         store.execute_write.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_structural_spo_conflict_fires_without_embedding_similarity(
+        self, identity: IdentityContext
+    ) -> None:
+        """Structural SPO conflict is detected even when embeddings are dissimilar."""
+        store = AsyncMock()
+        store.execute_write.return_value = [{"edge_id": "edge-struct-1"}]
+
+        # Orthogonal embeddings -- cosine similarity would be 0, below any threshold
+        emb_a = [1.0, 0.0, 0.0]
+        emb_b = [0.0, 1.0, 0.0]
+        spo_a = {"subject": "API", "predicate": "uses", "object": "OAuth2"}
+        spo_b = {"subject": "API", "predicate": "uses", "object": "API keys"}
+
+        store.execute_query.side_effect = [
+            [{"id": "new-node", "embedding": emb_a, "labels": ["Claim"], "spo": spo_a}],
+            [{"id": "candidate-1", "embedding": emb_b, "labels": ["Claim"], "spo": spo_b}],
+        ]
+
+        qdrant = AsyncMock()
+        hit = MagicMock()
+        hit.payload = {"node_id": "candidate-1", "agent_id": "agent-B"}
+        hit.score = 0.5  # low similarity score -- would not trigger embedding path alone
+        qdrant.search.return_value = [hit]
+
+        with pytest.MonkeyPatch().context() as mp:
+            mp.setattr(
+                "context_service.engine.conflict_detection.get_settings",
+                lambda: MagicMock(
+                    conflict_detection=MagicMock(
+                        enabled=True,
+                        similarity_threshold=0.7,
+                        check_other_agents_only=True,
+                    )
+                ),
+            )
+            result = await detect_conflicts(
+                store=store,
+                node_id="new-node",
+                node_embedding=emb_a,
+                ctx=identity,
+                qdrant_client=qdrant,
+            )
+
+        assert len(result) == 1
+        store.execute_write.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_returns_empty_on_search_error(self, identity: IdentityContext) -> None:

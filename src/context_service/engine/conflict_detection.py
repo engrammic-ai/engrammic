@@ -5,8 +5,11 @@ existing content, this module detects it and creates a CONTRADICTS edge.
 
 Detection flow:
 1. After write, search Qdrant for similar nodes from OTHER agents.
-2. For each candidate, call is_same_subject() to confirm topical overlap.
-3. If confirmed, create a CONTRADICTS edge with resolution metadata.
+2. For each candidate, run a two-stage contradiction check:
+   a. Structural SPO check: same subject + same predicate + different object.
+   b. If no structural conflict, fall back to embedding cosine similarity +
+      subject match (catches semantic contradictions without full SPO).
+3. If either check fires, create a CONTRADICTS edge with resolution metadata.
 4. Return the list of created edge IDs (fire-and-forget acceptable).
 """
 
@@ -44,6 +47,47 @@ MATCH (n {id: $node_id, silo_id: $silo_id})
 RETURN n.id AS id, n.embedding AS embedding, labels(n) AS labels,
        n.subject AS subject, n.spo AS spo
 """
+
+
+def has_structural_spo_conflict(
+    node_a_props: dict[str, Any],
+    node_b_props: dict[str, Any],
+) -> bool:
+    """Check if two nodes structurally contradict each other via SPO.
+
+    Two nodes structurally contradict when they share the same subject and
+    predicate but assert different objects -- i.e., they answer the same
+    question differently.
+
+    Example:
+        Claim A: subject="API", predicate="uses", object="OAuth2"
+        Claim B: subject="API", predicate="uses", object="API keys"
+        -> structural conflict: same question, different answer.
+
+    Args:
+        node_a_props: Properties of the first node (must include spo dict).
+        node_b_props: Properties of the second node (must include spo dict).
+
+    Returns:
+        True if same subject + same predicate but different object.
+    """
+    spo_a = node_a_props.get("spo")
+    spo_b = node_b_props.get("spo")
+
+    if not spo_a or not spo_b:
+        return False
+
+    subject_a = (spo_a.get("subject") or "").lower().strip()
+    subject_b = (spo_b.get("subject") or "").lower().strip()
+    predicate_a = (spo_a.get("predicate") or "").lower().strip()
+    predicate_b = (spo_b.get("predicate") or "").lower().strip()
+    object_a = (spo_a.get("object") or "").lower().strip()
+    object_b = (spo_b.get("object") or "").lower().strip()
+
+    if not subject_a or not subject_b or not predicate_a or not predicate_b:
+        return False
+
+    return subject_a == subject_b and predicate_a == predicate_b and object_a != object_b
 
 
 def _cosine(a: list[float], b: list[float]) -> float:
@@ -245,9 +289,20 @@ async def detect_conflicts(
             )
             continue
 
-        same_subject = await is_same_subject(new_node_props, candidate_props)
-        if not same_subject:
-            continue
+        # Structural SPO check: same subject + predicate, different object.
+        # Run this before the embedding fallback -- it is cheaper and catches
+        # contradictions that are not semantically similar.
+        structural_conflict = has_structural_spo_conflict(new_node_props, candidate_props)
+        if structural_conflict:
+            logger.debug(
+                "structural_spo_conflict_detected",
+                node_id=node_id,
+                candidate_id=candidate_id,
+            )
+        else:
+            same_subject = await is_same_subject(new_node_props, candidate_props)
+            if not same_subject:
+                continue
 
         edge_id = await create_contradicts_edge(
             store=store,
