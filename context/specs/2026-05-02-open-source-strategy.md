@@ -5,7 +5,7 @@ Date: 2026-05-02
 
 ## Goals
 
-- Thought leadership: establish EAG as the paradigm for agent memory
+- Thought leadership: establish LeAP as the paradigm for agent memory
 - Developer adoption: get engineers building on primitives + engine
 
 ## Package Structure
@@ -73,7 +73,7 @@ Audience: AI engineers and technical founders/CTOs
 
 Key changes from review:
 - Hook in first paragraph, not section 2
-- Define EAG in first 3 sentences
+- Define LeAP in first 3 sentences
 - Concrete hello-world: claim in, fact out, query back
 
 Outline (~5-6 pages, 15 min read):
@@ -81,7 +81,7 @@ Outline (~5-6 pages, 15 min read):
 1. **The Hook** (opening paragraph)
    - "The difference between a filing cabinet and an analyst."
    - "Memory products store what agents saw. Delta Prime stores what agents figured out, and whether it held up."
-   - Define EAG: Epistemic Augmented Generation - a paradigm where agent knowledge is curated, not just stored.
+   - Define LeAP: Learned Epistemic Augmented Persistence - a paradigm where agent knowledge is curated, not just stored.
 
 2. **The Problem** (1 page)
    - RAG was built for chatbots, not agent teams
@@ -94,7 +94,7 @@ Outline (~5-6 pages, 15 min read):
    - Wisdom: beliefs that revise on evidence shift
    - Intelligence: ephemeral reasoning (session-scoped)
 
-4. **EAG in Practice** (2 pages)
+4. **LeAP in Practice** (2 pages)
    - How claims become facts (R1/R2 promotion)
    - How facts get superseded
    - Code snippets from primitives

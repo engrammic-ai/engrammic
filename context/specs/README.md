@@ -14,7 +14,7 @@ Service-level specifications for the context-service. These cover implementation
 
 ## Relationship to primitives docs
 
-EAG (Epistemic Augmented Generation) paradigm documentation (layers, transitions, epistemology) lives in `primitives/docs/`. This directory covers what the service layer adds on top: storage integration, MCP interface, Custodian workers, extraction pipeline, and operational config.
+LeAP (Learned Epistemic Augmented Persistence) paradigm documentation (layers, transitions, epistemology) lives in `primitives/docs/`. This directory covers what the service layer adds on top: storage integration, MCP interface, Custodian workers, extraction pipeline, and operational config.
 
 ## Relationship to prototype (original prototype)
 
