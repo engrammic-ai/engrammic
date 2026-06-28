@@ -48,13 +48,9 @@ def cleanup_orphan_sources(context) -> dict[str, Any]:
                 deleted = result[0].get("deleted", 0) if result else 0
                 total_deleted += int(deleted)
                 if deleted:
-                    context.log.info(
-                        f"source_cleanup: silo={silo_id} deleted={deleted}"
-                    )
+                    context.log.info(f"source_cleanup: silo={silo_id} deleted={deleted}")
             except Exception as e:
-                context.log.warning(
-                    f"source_cleanup_failed: silo={silo_id} error={e}"
-                )
+                context.log.warning(f"source_cleanup_failed: silo={silo_id} error={e}")
 
         return {"total_deleted": total_deleted, "silos_processed": len(silos), "cutoff": cutoff}
 

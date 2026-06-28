@@ -89,6 +89,7 @@ def test_query_similarity_for_hints():
 
 # Phase 3 tests
 
+
 def test_volatility_query_has_required_params():
     """Volatility query should have silo_id filtering."""
     from context_service.engine.intelligence import FIND_VOLATILE_TOPICS

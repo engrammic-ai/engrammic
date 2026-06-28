@@ -449,9 +449,7 @@ class TestDetectSupersessionCandidates:
     @pytest.mark.asyncio
     async def test_handles_query_failure_gracefully(self, mock_store: AsyncMock) -> None:
         """Detection continues despite tier failures."""
-        mock_store.execute_query = AsyncMock(
-            side_effect=Exception("Database error")
-        )
+        mock_store.execute_query = AsyncMock(side_effect=Exception("Database error"))
 
         result = await detect_supersession_candidates(
             store=mock_store,
@@ -552,9 +550,7 @@ class TestSupersessionPrecedenceRules:
         assert result.candidates[0].auto_supersede is False
 
     @pytest.mark.asyncio
-    async def test_different_agent_excluded_from_spo_match(
-        self, mock_store: AsyncMock
-    ) -> None:
+    async def test_different_agent_excluded_from_spo_match(self, mock_store: AsyncMock) -> None:
         """SPO match from different agent should not be returned.
 
         The query filters by agent_id, so we verify by checking that an

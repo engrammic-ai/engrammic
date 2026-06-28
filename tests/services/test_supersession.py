@@ -217,7 +217,14 @@ async def test_spo_limit_raises_value_error() -> None:
 @pytest.mark.asyncio
 async def test_intra_batch_with_document_id() -> None:
     items = [
-        make_item("user", "age", "25", document_id="doc-abc", timestamp="2024-01-01T00:00:00Z", array_index=0),
+        make_item(
+            "user",
+            "age",
+            "25",
+            document_id="doc-abc",
+            timestamp="2024-01-01T00:00:00Z",
+            array_index=0,
+        ),
         make_item("user", "age", "26", timestamp="2024-01-02T00:00:00Z", array_index=1),
     ]
 

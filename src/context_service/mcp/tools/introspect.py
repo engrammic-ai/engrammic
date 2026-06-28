@@ -66,7 +66,10 @@ async def _introspect_impl(
     elif query_type == "contributions":
         target_agent = agent_id or auth.agent_id
         if not target_agent:
-            return {"error": "missing_agent_id", "message": "agent_id required for contributions query"}
+            return {
+                "error": "missing_agent_id",
+                "message": "agent_id required for contributions query",
+            }
         stats = await get_agent_contribution_stats(store, silo_id, target_agent)
         if not stats:
             return {"error": "not_found", "message": f"Agent {target_agent} not found"}

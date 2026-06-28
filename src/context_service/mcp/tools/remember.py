@@ -54,7 +54,9 @@ async def _remember_impl(
         import asyncio
 
         asyncio.create_task(
-            _track_write_and_resolve_stuck(silo_id, auth.session_id, "remember", result.get("node_id"))
+            _track_write_and_resolve_stuck(
+                silo_id, auth.session_id, "remember", result.get("node_id")
+            )
         )
     return result
 
@@ -134,7 +136,9 @@ def register(mcp: FastMCP) -> None:
         start = time.perf_counter()
         success = True
         try:
-            return await _remember_impl(content, tags, decay, supersedes, memory_type, about, summary)
+            return await _remember_impl(
+                content, tags, decay, supersedes, memory_type, about, summary
+            )
         except Exception:
             success = False
             raise

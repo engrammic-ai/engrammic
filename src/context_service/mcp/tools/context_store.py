@@ -716,9 +716,7 @@ async def _context_assert(
                 format_candidates_for_response,
             )
 
-            qdrant_for_detection = (
-                await ctx_svc._qdrant._get_client() if node_embedding else None
-            )
+            qdrant_for_detection = await ctx_svc._qdrant._get_client() if node_embedding else None
             detection_result = await detect_supersession_candidates(
                 store=ctx_svc.graph_store,
                 silo_id=str(expected_silo_id),

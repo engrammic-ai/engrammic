@@ -1,4 +1,5 @@
 """Regex-based key sentence extraction for embedding quality."""
+
 import re
 
 
@@ -10,15 +11,15 @@ def score_sentence(sent: str, position: float) -> float:
     score += 0.3 * (1 - abs(position - 0.5) * 2)
 
     # Cue phrases: "found", "key", "because", etc.
-    if re.search(r'\b(found|discovered|key|important|actually|because)\b', sent, re.I):
+    if re.search(r"\b(found|discovered|key|important|actually|because)\b", sent, re.I):
         score += 0.25
 
     # Specificity: code, paths, numbers
-    if re.search(r'`[^`]+`|/[\w/]+\.\w+|\d+', sent):
+    if re.search(r"`[^`]+`|/[\w/]+\.\w+|\d+", sent):
         score += 0.2
 
     # Entity density: capitalized words
-    caps = len(re.findall(r'\b[A-Z][a-z]+\b', sent))
+    caps = len(re.findall(r"\b[A-Z][a-z]+\b", sent))
     score += min(0.15, caps * 0.05)
 
     # Length: 20-150 chars is sweet spot
@@ -36,7 +37,7 @@ def extract_key_sentences(content: str, budget: int = 512) -> str:
     if len(content) <= budget:
         return content
 
-    sentences = re.split(r'(?<=[.!?])\s+', content)
+    sentences = re.split(r"(?<=[.!?])\s+", content)
     if not sentences:
         return content[:budget]
 
@@ -57,4 +58,4 @@ def extract_key_sentences(content: str, budget: int = 512) -> str:
 
     # Restore original order
     selected.sort(key=lambda s: content.index(s))
-    return ' '.join(selected)
+    return " ".join(selected)

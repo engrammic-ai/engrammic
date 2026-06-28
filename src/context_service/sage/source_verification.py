@@ -1,4 +1,5 @@
 """SAGE source content verification for claims."""
+
 from __future__ import annotations
 
 import structlog

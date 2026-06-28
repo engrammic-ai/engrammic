@@ -278,9 +278,7 @@ class HyperGraphStore(Protocol):
 
     # --- Batch Dedup ---
 
-    async def query_document_ids(
-        self, silo_id: str, document_ids: list[str]
-    ) -> dict[str, str]:
+    async def query_document_ids(self, silo_id: str, document_ids: list[str]) -> dict[str, str]:
         """Return {document_id: node_id} for nodes whose document_id is in the input list."""
         ...
 

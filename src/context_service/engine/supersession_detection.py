@@ -231,9 +231,7 @@ async def detect_supersession_candidates(
 
                 # Auto-supersede if: same (S,P), different O, and (same session OR recent)
                 should_auto = bool(
-                    has_predicate_match
-                    and different_object
-                    and (same_session or recent)
+                    has_predicate_match and different_object and (same_session or recent)
                 )
 
                 confidence = 0.9 if has_predicate_match else 0.7
@@ -355,8 +353,7 @@ def format_candidates_for_response(result: SupersessionDetectionResult) -> dict[
 
     if medium_confidence:
         response["possible_updates"] = [
-            {"id": c.node_id, "reason": c.reason}
-            for c in medium_confidence
+            {"id": c.node_id, "reason": c.reason} for c in medium_confidence
         ]
 
     return response

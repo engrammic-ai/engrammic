@@ -18,4 +18,6 @@ def test_score_sentence_cue_phrases():
 
 
 def test_score_sentence_code_specificity():
-    assert score_sentence("Check `config.py` for settings.", 0.5) > score_sentence("Check the config.", 0.5)
+    assert score_sentence("Check `config.py` for settings.", 0.5) > score_sentence(
+        "Check the config.", 0.5
+    )

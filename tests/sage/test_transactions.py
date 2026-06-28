@@ -773,9 +773,7 @@ class TestFlagContradiction:
         assert props["document_id"] == "ext-claim-1"
         assert props["embedding_pending"] is False
         assert props.get("sage_pending") is True
-        assert not any(
-            e.event_type == "compute_embedding" for e in events
-        )
+        assert not any(e.event_type == "compute_embedding" for e in events)
 
 
 class TestTx2Credibility:

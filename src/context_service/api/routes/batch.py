@@ -54,9 +54,7 @@ async def batch_silo_lock(silo_id: str) -> AsyncIterator[None]:
 
     # Try to acquire lock with exponential backoff
     for attempt in range(10):
-        acquired = await redis._redis.set(
-            lock_key, lock_value, nx=True, ex=BATCH_LOCK_TTL
-        )
+        acquired = await redis._redis.set(lock_key, lock_value, nx=True, ex=BATCH_LOCK_TTL)
         if acquired:
             try:
                 yield
@@ -68,7 +66,7 @@ async def batch_silo_lock(silo_id: str) -> AsyncIterator[None]:
             return
 
         # Wait with exponential backoff
-        wait = min(0.5 * (2 ** attempt), 10)  # Max 10 sec wait
+        wait = min(0.5 * (2**attempt), 10)  # Max 10 sec wait
         logger.debug("batch_lock_wait", silo_id=silo_id, attempt=attempt, wait=wait)
         await asyncio.sleep(wait)
 
@@ -214,9 +212,7 @@ async def batch_remember(
                 )
                 created += 1
             except Exception as exc:
-                logger.warning(
-                    "batch_remember_item_failed", index=orig_idx, error=str(exc)
-                )
+                logger.warning("batch_remember_item_failed", index=orig_idx, error=str(exc))
                 results.append(
                     BatchResultItem(
                         error=str(exc),
@@ -318,9 +314,7 @@ async def batch_learn(
 
     # Serialize batch writes per silo to prevent Memgraph transaction conflicts
     async with batch_silo_lock(silo_id):
-        return await _batch_learn_impl(
-            body, silo_id, request_id, sage_bypass, start
-        )
+        return await _batch_learn_impl(body, silo_id, request_id, sage_bypass, start)
 
 
 async def _batch_learn_impl(
@@ -454,9 +448,7 @@ async def _batch_learn_impl(
                 )
                 created += 1
             except Exception as exc:
-                logger.warning(
-                    "batch_learn_item_failed", index=item.array_index, error=str(exc)
-                )
+                logger.warning("batch_learn_item_failed", index=item.array_index, error=str(exc))
                 results.append(
                     BatchResultItem(
                         error=str(exc),

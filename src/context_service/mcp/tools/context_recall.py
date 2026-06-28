@@ -35,9 +35,7 @@ async def _list_all_nodes(
     ctx_svc = get_context_service()
 
     # Get total count
-    count_rows = await ctx_svc.graph_store.execute_query(
-        COUNT_ACTIVE_NODES, {"silo_id": silo_id}
-    )
+    count_rows = await ctx_svc.graph_store.execute_query(COUNT_ACTIVE_NODES, {"silo_id": silo_id})
     total = count_rows[0]["total"] if count_rows else 0
 
     # Get paginated nodes
@@ -51,16 +49,18 @@ async def _list_all_nodes(
         layer = row.get("layer") or "unknown"
         if layers and layer not in layers:
             continue
-        results.append({
-            "node_id": row["id"],
-            "layer": layer,
-            "content": row.get("content") or "",
-            "confidence": row.get("confidence") or 0.0,
-            "created_at": row.get("created_at"),
-            "tags": row.get("tags") or [],
-            "heat_score": row.get("heat_score") or 0.0,
-            "node_type": row.get("node_type"),
-        })
+        results.append(
+            {
+                "node_id": row["id"],
+                "layer": layer,
+                "content": row.get("content") or "",
+                "confidence": row.get("confidence") or 0.0,
+                "created_at": row.get("created_at"),
+                "tags": row.get("tags") or [],
+                "heat_score": row.get("heat_score") or 0.0,
+                "node_type": row.get("node_type"),
+            }
+        )
 
     elapsed_ms = int((time.perf_counter() - start) * 1000)
 

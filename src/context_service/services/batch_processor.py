@@ -27,9 +27,7 @@ class BatchResult:
 
 
 class _GraphStoreWithDocIds(Protocol):
-    async def query_document_ids(
-        self, silo_id: str, document_ids: list[str]
-    ) -> dict[str, str]: ...
+    async def query_document_ids(self, silo_id: str, document_ids: list[str]) -> dict[str, str]: ...
 
 
 async def batch_embed(
@@ -64,10 +62,7 @@ async def batch_embed(
             except Exception as exc:
                 logger.warning("batch_embed_chunk_failed", start=start, error=str(exc))
 
-    tasks = [
-        embed_chunk(i, texts[i : i + chunk_size])
-        for i in range(0, len(texts), chunk_size)
-    ]
+    tasks = [embed_chunk(i, texts[i : i + chunk_size]) for i in range(0, len(texts), chunk_size)]
     await asyncio.gather(*tasks)
     return results
 

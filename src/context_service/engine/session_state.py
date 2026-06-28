@@ -59,9 +59,7 @@ class SessionState(BaseModel):
 
     def record_query(self, query: str) -> None:
         """Record a query for stuck detection."""
-        self.recent_queries.append(
-            QueryRecord(query=query, timestamp=datetime.now(UTC))
-        )
+        self.recent_queries.append(QueryRecord(query=query, timestamp=datetime.now(UTC)))
         # Keep only last 20 queries
         self.recent_queries = self.recent_queries[-20:]
 

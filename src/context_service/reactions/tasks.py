@@ -697,7 +697,9 @@ RETURN
         content = node.content or ""
         props = node.properties or {}
         heat_score = float(props.get("heat_score", 0.0))
-        heat_threshold = settings.extraction.heat_threshold  # ponytail: read at call time, not import
+        heat_threshold = (
+            settings.extraction.heat_threshold
+        )  # ponytail: read at call time, not import
         content_qualifies = len(content) >= _EXTRACTION_THRESHOLD
         heat_qualifies = heat_threshold > 0.0 and heat_score >= heat_threshold
         if not content_qualifies and not heat_qualifies:

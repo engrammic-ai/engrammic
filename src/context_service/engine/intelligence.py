@@ -41,10 +41,7 @@ def detect_stuck_pattern(session: SessionState) -> list[str] | None:
     cutoff = now - timedelta(minutes=STUCK_WINDOW_MINUTES)
 
     # Filter to recent queries without writes
-    recent = [
-        q for q in session.recent_queries
-        if q.timestamp >= cutoff and not q.had_write
-    ]
+    recent = [q for q in session.recent_queries if q.timestamp >= cutoff and not q.had_write]
 
     if len(recent) < STUCK_QUERY_COUNT:
         return None
@@ -54,7 +51,8 @@ def detect_stuck_pattern(session: SessionState) -> list[str] | None:
     reference = last_queries[-1].query
 
     similar = [
-        q.query for q in last_queries
+        q.query
+        for q in last_queries
         if _query_similarity(q.query, reference) >= STUCK_SIMILARITY_THRESHOLD
     ]
 
@@ -306,13 +304,15 @@ async def find_breakthrough_hints(
 
         similarity = _query_similarity(query, pattern)
         if similarity >= similarity_threshold:
-            hints.append({
-                "breakthrough_id": row["id"],
-                "query_pattern": pattern,
-                "resolved_by_action": row.get("action"),
-                "resolved_by_node": row.get("node_id"),
-                "similarity": round(similarity, 3),
-            })
+            hints.append(
+                {
+                    "breakthrough_id": row["id"],
+                    "query_pattern": pattern,
+                    "resolved_by_action": row.get("action"),
+                    "resolved_by_node": row.get("node_id"),
+                    "similarity": round(similarity, 3),
+                }
+            )
 
     # Sort by similarity descending
     hints.sort(key=lambda x: x["similarity"], reverse=True)
@@ -541,10 +541,12 @@ async def get_belief_provenance(
                 "claims": [],
             }
         if contrib.get("claim_id"):
-            agents[agent_id]["claims"].append({
-                "claim_id": contrib["claim_id"],
-                "content_preview": (contrib.get("claim_content") or "")[:100],
-            })
+            agents[agent_id]["claims"].append(
+                {
+                    "claim_id": contrib["claim_id"],
+                    "content_preview": (contrib.get("claim_content") or "")[:100],
+                }
+            )
 
     return {
         "belief_id": row["belief_id"],

@@ -3403,18 +3403,14 @@ async def promote(
         if source_result:
             row = source_result[0]
             claim_content: str = row.get("claim_content") or ""
-            source_contents: list[str] = [
-                sc for sc in (row.get("source_contents") or []) if sc
-            ]
+            source_contents: list[str] = [sc for sc in (row.get("source_contents") or []) if sc]
             if claim_content and source_contents:
                 from context_service.sage.source_verification import (
                     verify_claim_against_source,
                 )
 
                 for source_content in source_contents:
-                    if not await verify_claim_against_source(
-                        claim_content, source_content, llm
-                    ):
+                    if not await verify_claim_against_source(claim_content, source_content, llm):
                         logger.warning(
                             "claim_failed_source_verification",
                             claim_id=claim_id,
