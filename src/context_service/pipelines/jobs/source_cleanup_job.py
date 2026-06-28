@@ -19,7 +19,7 @@ MATCH (n) WHERE n.silo_id IS NOT NULL RETURN DISTINCT n.silo_id AS silo_id LIMIT
 """
 
 _CLEANUP_ORPHAN_SOURCES = """
-MATCH (s:Source)
+MATCH (s:Source {silo_id: $silo_id})
 WHERE NOT (s)<-[:DERIVED_FROM]-()
   AND s.created_at < $cutoff
 DETACH DELETE s
@@ -43,7 +43,7 @@ def cleanup_orphan_sources(context) -> dict[str, Any]:
             try:
                 result = await store.execute_query(
                     _CLEANUP_ORPHAN_SOURCES,
-                    {"cutoff": cutoff},
+                    {"cutoff": cutoff, "silo_id": silo_id},
                 )
                 deleted = result[0].get("deleted", 0) if result else 0
                 total_deleted += int(deleted)

@@ -13,6 +13,7 @@ import structlog
 from context_service.api.metrics import record_store_latency
 from context_service.config.settings import get_settings
 from context_service.engine.exceptions import SupersessionCycleError
+from context_service.engine.key_sentence_extraction import extract_key_sentences
 from context_service.mcp.server import (
     get_context_service,
     get_evidence_validator,
@@ -332,8 +333,6 @@ async def _context_remember(
     memory_vector: list[float] | None = None
     embedding_coverage: str = "full"
     try:
-        from context_service.engine.key_sentence_extraction import extract_key_sentences
-
         if summary:
             embed_text = summary
             embedding_coverage = "full"  # ponytail: agent-provided summary = full coverage
@@ -532,6 +531,11 @@ async def _context_assert(
     # Create Source node when source_content is provided, for SAGE verification
     source_node_id: str | None = None
     if source_content is not None:
+        if len(source_content) > 4096:
+            return {
+                "error": "source_content_too_large",
+                "message": f"source_content exceeds 4096 chars (got {len(source_content)})",
+            }
         import hashlib
 
         from primitives.schema import Source  # type: ignore[attr-defined]

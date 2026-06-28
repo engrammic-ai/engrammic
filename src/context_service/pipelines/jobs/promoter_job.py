@@ -97,13 +97,22 @@ async def promote_candidates(
         corroboration_count: int | None = candidate.get("corroboration_count")
 
         try:
-            await promote(
+            result, _ = await promote(
                 store,
                 claim_id,
                 silo_id,
                 corroboration_count=corroboration_count,
                 emit=True,
             )
+            if result is None:
+                # Source verification failed
+                skipped += 1
+                logger.info(
+                    "promoter.verification_failed",
+                    claim_id=claim_id,
+                    silo_id=silo_id,
+                )
+                continue
             promoted += 1
             logger.info(
                 "promoter.promoted",
