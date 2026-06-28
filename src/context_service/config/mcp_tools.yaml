@@ -96,6 +96,15 @@ tools:
       PROMOTED_FROM, SYNTHESIZED_FROM, REFERENCES.
     maps_to: provenance
 
+  reason:
+    description: |
+      Create ephemeral reasoning chain for multi-step inference (Intelligence layer).
+      Pass steps as [{step: 1, reasoning: "...", confidence: 0.9}, ...].
+      Optionally provide conclusion, evidence_used (node IDs), and crystallizations
+      to commit beliefs from the reasoning. Chains are session-scoped by default.
+      Use parent_chain_id to continue a previous chain.
+    maps_to: intelligence
+
   forget:
     description: |
       Request deletion of a node. The node is tombstoned and enters a cancel

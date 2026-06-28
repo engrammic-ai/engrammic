@@ -301,6 +301,43 @@ When `direction="down"`:
 
 ---
 
+## Intelligence Tools
+
+### reason
+
+Create ephemeral reasoning chain for multi-step inference.
+
+#### Parameters
+
+| Name | Type | Required | Default | Description |
+|------|------|----------|---------|-------------|
+| `steps` | array | Yes | - | Reasoning steps: `[{step: 1, reasoning: "...", confidence: 0.9}]` |
+| `conclusion` | string | No | null | Final conclusion from reasoning |
+| `evidence_used` | string[] | No | null | Node IDs used as evidence |
+| `crystallizations` | array | No | null | Beliefs to commit: `[{claim: "...", confidence: 0.9}]` |
+| `parent_chain_id` | string | No | null | Continue from previous chain |
+
+#### Response
+
+```json
+{
+  "chain_id": "uuid",
+  "layer": "intelligence",
+  "steps_count": 3,
+  "crystallized_claim_ids": ["uuid"],
+  "session_id": "uuid",
+  "created_at": "2024-06-01T12:00:00Z"
+}
+```
+
+#### Notes
+
+- Chains are session-scoped (not retrieved cross-session by default).
+- Crystallizations create Commitment nodes (Wisdom layer).
+- Use `parent_chain_id` to chain reasoning across multiple calls.
+
+---
+
 ## Engagement Tools
 
 ### tick

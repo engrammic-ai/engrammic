@@ -50,8 +50,15 @@ class EntityExtractor(abc.ABC):
         """
 
 
+_entity_prompt_cache: str | None = None
+
+
 def _load_entity_prompt() -> str:
-    """Load entity extraction prompt from config/prompts.yaml."""
+    """Load entity extraction prompt from config/prompts.yaml (cached)."""
+    global _entity_prompt_cache
+    if _entity_prompt_cache is not None:
+        return _entity_prompt_cache
+
     import yaml
 
     from context_service.config.config_loader import CONFIG_DIR
@@ -59,7 +66,8 @@ def _load_entity_prompt() -> str:
     path = CONFIG_DIR / "prompts.yaml"
     with path.open() as f:
         data = yaml.safe_load(f)
-    return data.get("entity_extraction", {}).get("gemini", {}).get("user", "")
+    _entity_prompt_cache = data.get("entity_extraction", {}).get("gemini", {}).get("user", "")
+    return _entity_prompt_cache
 
 
 _ENTITY_SCHEMA = {
@@ -115,13 +123,16 @@ class LLMEntityExtractor(EntityExtractor):
 
             entities = []
             for e in result.get("entities", []):
+                name = e.get("name", "")
+                if not name:
+                    continue
                 # ponytail: trust LLM offsets but clamp to text bounds
                 start = max(0, e.get("start", 0))
                 end = min(len(text), e.get("end", start))
                 if start < end:
                     entities.append(
                         Entity(
-                            name=e.get("name", ""),
+                            name=name,
                             type=e.get("type", "OTHER"),
                             start=start,
                             end=end,
