@@ -4,6 +4,7 @@ steps:
     id: 'build-api'
     args:
       - 'build'
+      - '--no-cache'
       - '-t'
       - '${_REGISTRY}/engrammic-api:${_VERSION}'
       - '-t'
@@ -21,6 +22,7 @@ steps:
     id: 'build-dagster'
     args:
       - 'build'
+      - '--no-cache'
       - '-t'
       - '${_REGISTRY}/engrammic-dagster:${_VERSION}'
       - '-t'
