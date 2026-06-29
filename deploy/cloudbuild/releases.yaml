@@ -1,23 +1,9 @@
 steps:
-  # Pull existing images for cache (ignore failure if not exists)
-  - name: 'gcr.io/cloud-builders/docker'
-    entrypoint: 'bash'
-    args: ['-c', 'docker pull ${_REGISTRY}/engrammic-api:latest || true']
-
-  - name: 'gcr.io/cloud-builders/docker'
-    entrypoint: 'bash'
-    args: ['-c', 'docker pull ${_REGISTRY}/engrammic-beacon:latest || true']
-
-  - name: 'gcr.io/cloud-builders/docker'
-    entrypoint: 'bash'
-    args: ['-c', 'docker pull ${_REGISTRY}/engrammic-dagster:latest || true']
-
-  # Build API with BuildKit and cache-from
+  # Build API with BuildKit (no-cache for Dockerfile changes)
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
-      - '--build-arg=BUILDKIT_INLINE_CACHE=1'
-      - '--cache-from=${_REGISTRY}/engrammic-api:latest'
+      - '--no-cache'
       - '-f'
       - 'docker/Dockerfile.selfhosted.api'
       - '-t'
@@ -30,12 +16,11 @@ steps:
     env:
       - 'DOCKER_BUILDKIT=1'
 
-  # Build Beacon with BuildKit and cache-from
+  # Build Beacon with BuildKit (no-cache for Dockerfile changes)
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
-      - '--build-arg=BUILDKIT_INLINE_CACHE=1'
-      - '--cache-from=${_REGISTRY}/engrammic-beacon:latest'
+      - '--no-cache'
       - '-f'
       - 'docker/Dockerfile.selfhosted.beacon'
       - '-t'
@@ -48,12 +33,11 @@ steps:
     env:
       - 'DOCKER_BUILDKIT=1'
 
-  # Build Dagster (SAGE pipelines) with BuildKit and cache-from
+  # Build Dagster (SAGE pipelines) with BuildKit (no-cache for Dockerfile changes)
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
-      - '--build-arg=BUILDKIT_INLINE_CACHE=1'
-      - '--cache-from=${_REGISTRY}/engrammic-dagster:latest'
+      - '--no-cache'
       - '-f'
       - 'docker/Dockerfile.selfhosted.dagster'
       - '-t'
