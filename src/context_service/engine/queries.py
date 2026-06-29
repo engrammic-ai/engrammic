@@ -866,16 +866,16 @@ SWEEP_ORPHAN_DOCUMENTS = SWEEP_ORPHAN_MEMORIES
 # superseded by db/queries.py:CREATE_COMMITMENT_WITH_ABOUT.
 
 CREATE_CRYSTALLIZED_INTO_EDGE = f"""
-MATCH (chain:{_LABEL_REASONING_CHAIN} {{id: $chain_id}})
-MATCH (target {{id: $target_id}})
+MATCH (chain:{_LABEL_REASONING_CHAIN} {{id: $chain_id, silo_id: $silo_id}})
+MATCH (target {{id: $target_id, silo_id: $silo_id}})
 WHERE (target:{LABEL_CLAIM} OR target:Finding OR target:{_LABEL_COMMITMENT})
   AND ({FILTER_FINDING_STATUS.format(var="target")})
 MERGE (chain)-[:CRYSTALLIZED_INTO]->(target)
 """
 
 CREATE_DERIVED_FROM_EVIDENCE_EDGE = f"""
-MATCH (chain:{_LABEL_REASONING_CHAIN} {{id: $chain_id}})
-MATCH (evidence {{id: $evidence_id}})
+MATCH (chain:{_LABEL_REASONING_CHAIN} {{id: $chain_id, silo_id: $silo_id}})
+MATCH (evidence {{id: $evidence_id, silo_id: $silo_id}})
 WHERE (evidence:{LABEL_MEMORY} OR evidence:{LABEL_CLAIM}
       OR evidence:Finding OR evidence:{LABEL_COMMITMENT} OR evidence:{_LABEL_REASONING_CHAIN})
   AND ({FILTER_FINDING_STATUS.format(var="evidence")})

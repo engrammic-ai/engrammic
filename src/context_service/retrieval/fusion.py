@@ -217,7 +217,7 @@ class FusionRetriever:
         fused = self._fuse_rrf(channel_results, fetch_k)
 
         # 4. Optional reranking.
-        reranked = await self._rerank(query, fused[:50])
+        reranked = await self._rerank(query, fused[:50], scope)
 
         # 5. Batch fetch content if requested.
         final_results = reranked[:top_k]
@@ -728,6 +728,7 @@ class FusionRetriever:
         self,
         query: str,
         fused: list[FusedResult],
+        scope: ScopeContext,
     ) -> list[FusedResult]:
         """Cross-encoder reranking of fused results.
 
@@ -754,13 +755,15 @@ class FusionRetriever:
             # Get node IDs to rerank (up to cross_encoder.top_k)
             node_ids = [f.node_id for f in fused[: settings.cross_encoder.top_k]]
 
-            # Fetch content for these nodes
+            # Fetch content for these nodes (silo-scoped for isolation)
             cypher = """
             UNWIND $node_ids AS nid
-            MATCH (n:Node {id: nid})
+            MATCH (n:Node {id: nid, silo_id: $silo_id})
             RETURN n.id AS node_id, n.content AS content
             """
-            rows = await self._ctx.graph_store.execute_query(cypher, {"node_ids": node_ids})
+            rows = await self._ctx.graph_store.execute_query(
+                cypher, {"node_ids": node_ids, "silo_id": str(scope.silo_id)}
+            )
             id_to_content = {row["node_id"]: row.get("content", "") for row in rows}
 
             # Prepare for reranking

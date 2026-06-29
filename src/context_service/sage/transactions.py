@@ -2198,11 +2198,11 @@ async def _validate_evidence_nodes(
 
     cypher = """
     UNWIND $node_ids AS nid
-    MATCH (n {id: nid})
+    MATCH (n {id: nid, silo_id: $silo_id})
     RETURN n.id AS id, n.silo_id AS silo_id, n.properties.layer AS layer,
            n.properties.state AS state
     """
-    results = await store.execute_query(cypher, {"node_ids": node_ids})
+    results = await store.execute_query(cypher, {"node_ids": node_ids, "silo_id": silo_id})
 
     found_ids = {r["id"] for r in results}
     missing = set(node_ids) - found_ids
@@ -2258,12 +2258,12 @@ async def _validate_supersession(
 ) -> dict[str, Any]:
     """Validate supersession: both exist, same silo, correct states, no cycle."""
     cypher = """
-    MATCH (w {id: $winner_id})
-    MATCH (l {id: $loser_id})
+    MATCH (w {id: $winner_id, silo_id: $silo_id})
+    MATCH (l {id: $loser_id, silo_id: $silo_id})
     RETURN w.silo_id AS winner_silo, l.silo_id AS loser_silo,
            w.properties.state AS winner_state, l.properties.state AS loser_state
     """
-    results = await store.execute_query(cypher, {"winner_id": winner_id, "loser_id": loser_id})
+    results = await store.execute_query(cypher, {"winner_id": winner_id, "loser_id": loser_id, "silo_id": silo_id})
 
     if not results:
         return {"error": "NODE_NOT_FOUND", "message": "Winner or loser node not found"}
@@ -2640,12 +2640,14 @@ async def _validate_link(
 ) -> dict[str, Any]:
     """Validate link: both exist, same silo, no duplicate, no cycle for hierarchical."""
     cypher = """
-    MATCH (s {id: $source_id})
-    MATCH (t {id: $target_id})
+    MATCH (s {id: $source_id, silo_id: $silo_id})
+    MATCH (t {id: $target_id, silo_id: $silo_id})
     RETURN s.silo_id AS source_silo, t.silo_id AS target_silo,
            s.properties.state AS source_state, t.properties.state AS target_state
     """
-    results = await store.execute_query(cypher, {"source_id": source_id, "target_id": target_id})
+    results = await store.execute_query(
+        cypher, {"source_id": source_id, "target_id": target_id, "silo_id": silo_id}
+    )
 
     if not results:
         return {"error": "NODE_NOT_FOUND", "message": "Source or target node not found"}
@@ -2665,11 +2667,11 @@ async def _validate_link(
         return {"error": "NODE_DELETED", "message": "Cannot link to deleted nodes"}
 
     dup_check = f"""
-    MATCH (s {{id: $source_id}})-[e:{edge_type.value}]->(t {{id: $target_id}})
+    MATCH (s {{id: $source_id, silo_id: $silo_id}})-[e:{edge_type.value}]->(t {{id: $target_id, silo_id: $silo_id}})
     RETURN e.id AS existing_id
     """
     dup_results = await store.execute_query(
-        dup_check, {"source_id": source_id, "target_id": target_id}
+        dup_check, {"source_id": source_id, "target_id": target_id, "silo_id": silo_id}
     )
     if dup_results:
         return {"error": "DUPLICATE_EDGE", "existing_id": dup_results[0].get("existing_id")}

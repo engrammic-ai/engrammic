@@ -30,7 +30,7 @@ _RETRY_THRESHOLD = 3
 
 # Check whether a :ReasoningChain node exists in Memgraph for a given chain_id.
 _CHECK_CHAIN_EXISTS = """
-MATCH (n:ReasoningChain {id: $chain_id})
+MATCH (n:ReasoningChain {id: $chain_id, silo_id: $silo_id})
 RETURN n.silo_id AS silo_id,
        n.step_count AS step_count,
        n.first_step AS first_step,
@@ -46,8 +46,8 @@ LIMIT 1
 """
 
 _CHECK_DANGLING_BATCH = """
-UNWIND $chain_ids AS cid
-MATCH (n:ReasoningChain {id: cid})
+UNWIND $chain_data AS cd
+MATCH (n:ReasoningChain {id: cd.chain_id, silo_id: cd.silo_id})
 RETURN n.id AS chain_id
 """
 
@@ -189,7 +189,7 @@ async def _reconcile_orphans(
     # --- Phase 2: clean dangling ReasoningChainSteps with no Memgraph node ---
     async with get_session() as session:
         dangling_stmt = (
-            select(ReasoningChainSteps.chain_id)
+            select(ReasoningChainSteps.chain_id, ReasoningChainSteps.silo_id)
             .outerjoin(
                 OrphanedChains,
                 ReasoningChainSteps.chain_id == OrphanedChains.chain_id,
@@ -200,12 +200,15 @@ async def _reconcile_orphans(
         dangling_rows = (await session.execute(dangling_stmt)).all()
 
     if dangling_rows:
-        candidate_ids = [str(r.chain_id) for r in dangling_rows]
+        # Pass both chain_id and silo_id for silo-scoped matching
+        chain_data = [
+            {"chain_id": str(r.chain_id), "silo_id": str(r.silo_id)} for r in dangling_rows
+        ]
         mg_present = await mg_client.execute_query(
-            _CHECK_DANGLING_BATCH, {"chain_ids": candidate_ids}
+            _CHECK_DANGLING_BATCH, {"chain_data": chain_data}
         )
         present_set = {r["chain_id"] for r in mg_present}
-        truly_dangling = [UUID(cid) for cid in candidate_ids if cid not in present_set]
+        truly_dangling = [UUID(cd["chain_id"]) for cd in chain_data if cd["chain_id"] not in present_set]
         if truly_dangling:
             async with get_session() as session:
                 await session.execute(

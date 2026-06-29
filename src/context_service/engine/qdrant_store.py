@@ -55,7 +55,7 @@ class VectorSearchResult:
 
     node_id: str
     score: float
-    silo_id: str | None
+    silo_id: str  # ponytail: required, never None — callers filter by silo
     node_type: str | None
     vector: list[float] | None = None  # Populated only when with_vectors=True on search
 
@@ -392,7 +392,7 @@ class EngineQdrantStore:
             VectorSearchResult(
                 node_id=str(r.id),
                 score=r.score,
-                silo_id=r.payload.get("silo_id") if r.payload else None,
+                silo_id=silo_id,  # ponytail: query filters by silo_id, use input directly
                 node_type=r.payload.get("type") if r.payload else None,
             )
             for r in response.points

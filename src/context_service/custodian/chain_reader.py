@@ -9,7 +9,7 @@ if TYPE_CHECKING:
 
 
 READ_REASONING_CHAINS = """
-MATCH (c:ReasoningChain)-[:CRYSTALLIZED_INTO]->(:Claim)-[:IN_CLUSTER]->(:Cluster {id: $cluster_id})
+MATCH (c:ReasoningChain {silo_id: $silo_id})-[:CRYSTALLIZED_INTO]->(:Claim {silo_id: $silo_id})-[:IN_CLUSTER]->(:Cluster {id: $cluster_id, silo_id: $silo_id})
 WHERE $include_drafts OR c.status IN ['published', 'superseded']
 RETURN c, labels(c) AS labels
 ORDER BY c.heat_score DESC
@@ -17,7 +17,7 @@ LIMIT $limit
 """
 
 READ_COMMITMENTS_IN_CLUSTER = """
-MATCH (c:Claim:Commitment)-[:IN_CLUSTER]->(:Cluster {id: $cluster_id})
+MATCH (c:Claim:Commitment {silo_id: $silo_id})-[:IN_CLUSTER]->(:Cluster {id: $cluster_id, silo_id: $silo_id})
 WHERE $include_drafts OR c.status IN ['published', 'superseded']
 RETURN c, labels(c) AS labels
 ORDER BY c.distinct_agent_count DESC
@@ -29,6 +29,7 @@ async def read_reasoning_chains(
     *,
     memgraph: HyperGraphStore,
     cluster_id: str,
+    silo_id: str,
     include_drafts: bool = False,
     limit: int = 50,
 ) -> list[dict[str, Any]]:
@@ -38,7 +39,7 @@ async def read_reasoning_chains(
     """
     rows = await memgraph.execute_query(
         READ_REASONING_CHAINS,
-        {"cluster_id": cluster_id, "include_drafts": include_drafts, "limit": limit},
+        {"cluster_id": cluster_id, "silo_id": silo_id, "include_drafts": include_drafts, "limit": limit},
     )
     return [dict(r["c"]) for r in rows]
 
@@ -47,13 +48,14 @@ async def read_commitments_in_cluster(
     *,
     memgraph: HyperGraphStore,
     cluster_id: str,
+    silo_id: str,
     include_drafts: bool = False,
     limit: int = 50,
 ) -> list[dict[str, Any]]:
     """Read commitments within a cluster."""
     rows = await memgraph.execute_query(
         READ_COMMITMENTS_IN_CLUSTER,
-        {"cluster_id": cluster_id, "include_drafts": include_drafts, "limit": limit},
+        {"cluster_id": cluster_id, "silo_id": silo_id, "include_drafts": include_drafts, "limit": limit},
     )
     return [dict(r["c"]) for r in rows]
 

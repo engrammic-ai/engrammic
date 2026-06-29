@@ -6,7 +6,7 @@ import pytest
 
 
 def test_rrf_fusion_math() -> None:
-    """Verify RRF formula: score = sum(1/(k+rank)) across channels."""
+    """Verify RRF formula: normalized score = sum(1/(k+rank)) / max_theoretical."""
     from context_service.retrieval.fusion import ChannelResult, FusionRetriever
 
     semantic = ChannelResult(
@@ -26,11 +26,15 @@ def test_rrf_fusion_math() -> None:
 
     # node_b: rank 2 in semantic (1/62) + rank 1 in graph (1/61)
     # node_a: rank 1 in semantic (1/61) + rank 3 in graph (1/63)
-    # node_b score = 1/62 + 1/61 ~ 0.01613 + 0.01639 = 0.03252
-    # node_a score = 1/61 + 1/63 ~ 0.01639 + 0.01587 = 0.03226
+    # Raw: node_b = 1/62 + 1/61, node_a = 1/61 + 1/63
+    # Normalized by max_theoretical = num_channels / (k+1) = 2/61
     assert fused[0].node_id == "node_b"
     assert fused[1].node_id == "node_a"
-    assert abs(fused[0].rrf_score - (1 / 61 + 1 / 62)) < 0.0001
+
+    raw_score = 1 / 61 + 1 / 62
+    max_theoretical = 2 / 61
+    expected_normalized = raw_score / max_theoretical
+    assert abs(fused[0].rrf_score - expected_normalized) < 0.0001
 
 
 @pytest.mark.asyncio

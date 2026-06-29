@@ -952,11 +952,11 @@ class ContextService:
         if agent_id:
             await self._memgraph.execute_write(
                 """
-                MATCH (c {id: $chain_id})
-                MERGE (a:Agent {id: $agent_id})
+                MATCH (c {id: $chain_id, silo_id: $silo_id})
+                MERGE (a:Agent {id: $agent_id, silo_id: $silo_id})
                 MERGE (c)-[:REASONED_BY]->(a)
                 """,
-                {"chain_id": str(chain_id), "agent_id": agent_id},
+                {"chain_id": str(chain_id), "silo_id": silo_id, "agent_id": agent_id},
             )
 
         return ReasoningChainResult(chain_id=chain_id)
@@ -1289,11 +1289,11 @@ class ContextService:
 
         await self._memgraph.execute_write(
             """
-            MATCH (c {id: $commitment_id})
-            MERGE (a:Agent {id: $agent_id})
+            MATCH (c {id: $commitment_id, silo_id: $silo_id})
+            MERGE (a:Agent {id: $agent_id, silo_id: $silo_id})
             MERGE (c)-[:DECLARED_BY]->(a)
             """,
-            {"commitment_id": str(node.id), "agent_id": agent_id},
+            {"commitment_id": str(node.id), "silo_id": str(scope.silo_id), "agent_id": agent_id},
         )
 
         if about:
