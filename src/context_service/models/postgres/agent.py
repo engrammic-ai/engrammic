@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Float, Integer, String, func, text
+from sqlalchemy import DateTime, Float, Integer, String, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from context_service.db.postgres import Base
@@ -23,8 +23,8 @@ class Agent(Base):
     trust_score: Mapped[float] = mapped_column(Float, server_default=text("0.5"))
     beliefs_validated: Mapped[int] = mapped_column(Integer, server_default=text("0"))
     beliefs_contradicted: Mapped[int] = mapped_column(Integer, server_default=text("0"))
-    first_seen: Mapped[datetime] = mapped_column(server_default=func.now())
-    last_seen: Mapped[datetime] = mapped_column(server_default=func.now())
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     def __init__(
         self,

@@ -45,7 +45,7 @@ def find_py_files(src_dir: Path) -> tuple[list[Path], list[Path]]:
     # - Pydantic models with methods break when compiled (methods appear as fields)
     # - api/: FastAPI dependency injection breaks (Header, Depends, etc.)
     skip_files = {"entrypoint.py", "__main__.py"}
-    skip_dirs = {"api", "config", "models", "retention", "schemas", "test"}
+    skip_dirs = {"api", "config", "engine", "models", "retention", "schemas", "test"}
 
     compilable = []
     skipped = []

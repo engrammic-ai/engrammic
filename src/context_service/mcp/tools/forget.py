@@ -39,7 +39,8 @@ async def _forget_impl(
     agent_id = identity.agent_id
 
     ctx_svc = get_context_service()
-    qdrant_store = getattr(ctx_svc, "_qdrant", None)
+    # ponytail: skip inline qdrant delete - retention service handles orphan vectors
+    qdrant_store = None
 
     try:
         result, events = await brain_forget(
