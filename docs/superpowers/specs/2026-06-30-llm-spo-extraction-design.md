@@ -14,130 +14,203 @@ Real conflict detection requires semantic understanding of what entity a claim i
 
 ## Architecture
 
-Two-pass LLM extraction via extended `spo_extractor.py`:
+Single-pass LLM extraction with Instructor + Pydantic for guaranteed structured output:
 
 ```
-Content → Pass 1 (raw extraction) → Pass 2 (normalization) → (entity_id, canonical_predicate, object)
+Content → LLM (Instructor + Pydantic) → list[SPOTriple]
 ```
 
-### Pass 1: Raw Extraction
+### Why Single-Pass
 
-Extract raw triple from content using structured output:
+Two-pass (extract then normalize) adds latency without benefit — the LLM needs the target vocabulary to extract correctly anyway. Provide predicate vocab and entity hints in one prompt.
 
-```json
-{
-  "subject_raw": "the API",
-  "predicate_raw": "uses",
-  "object_raw": "OAuth2 with PKCE"
-}
+### Structured Output with Instructor
+
+Use Instructor library wrapping litellm for reliable structured output:
+
+```python
+import instructor
+from pydantic import BaseModel, Field
+from litellm import completion
+
+class SPOTriple(BaseModel):
+    subject: str = Field(description="Entity being described, lowercase, underscore-separated")
+    predicate: str = Field(description="One of the canonical predicates")
+    object: str = Field(description="Value or target of the predicate")
+    is_negated: bool = Field(default=False, description="True if claim negates the relationship")
+
+class ExtractionResult(BaseModel):
+    triples: list[SPOTriple] = Field(description="All facts in the content, one triple per fact")
+
+client = instructor.from_litellm(completion)
+result = client.chat.completions.create(
+    model="gemini/gemini-2.5-flash-preview-05-20",
+    response_model=ExtractionResult,
+    max_retries=3,  # Auto-retries on ValidationError with error feedback
+    messages=[{"role": "user", "content": prompt}],
+)
 ```
 
-Prompt pattern:
-- Chain-of-thought: "First identify the main entity being discussed, then what is being claimed about it"
-- Few-shot examples showing extraction from conversational text
-- Instruction to use singular lowercase for subjects
+Instructor catches Pydantic validation failures, injects the error into a correction prompt, and retries automatically. Tool mode (default) has lower malformation rates than JSON mode.
 
-### Pass 2: Normalization
+### Multi-Triple Extraction
 
-Normalize against existing graph state:
+A single claim may contain multiple facts:
+- "API uses Redis for caching and Postgres for persistence" → 2 triples
+- Return `list[SPOTriple]`, not single triple
 
-1. **Subject resolution**: 
-   - Query Memgraph for existing entities with fuzzy match on subject_raw
-   - If no match, embed subject_raw and find nearest neighbor in Qdrant entity index
-   - If still no match (similarity < threshold), create new canonical entity
-   - Return entity_id
+### Negation Handling
 
-2. **Predicate normalization**:
-   - Map predicate_raw to canonical vocabulary via LLM
-   - Closed set prevents drift
+Explicit `is_negated` boolean field:
+- "API uses OAuth2" → `is_negated=False`
+- "API does NOT use OAuth2" → `is_negated=True`
 
-3. **Object normalization**:
-   - Lowercase, strip whitespace
-   - Keep as free text for conflict diffing
-
-Output: `(entity_id, canonical_predicate, normalized_object)`
+Conflict detection: same (subject, predicate) with different `is_negated` = contradiction
 
 ## Canonical Predicate Vocabulary
 
-~25 verbs covering common claim types:
+~25 verbs covering common claim types. Pydantic validates against this enum:
 
-| Category | Predicates |
-|----------|------------|
-| Dependency | `uses`, `requires`, `depends_on`, `imports` |
-| Data | `stores`, `returns`, `contains`, `transforms` |
-| Interface | `exposes`, `implements`, `supports`, `inherits_from` |
-| Security | `authenticates`, `authorizes`, `validates` |
-| Lifecycle | `creates`, `deletes`, `enables`, `disables` |
-| Integration | `connects_to`, `triggers`, `processes` |
-| Config | `configures`, `caches`, `logs`, `limits` |
+```python
+from enum import Enum
+
+class Predicate(str, Enum):
+    # Dependency
+    USES = "uses"
+    REQUIRES = "requires"
+    DEPENDS_ON = "depends_on"
+    IMPORTS = "imports"
+    # Data
+    STORES = "stores"
+    RETURNS = "returns"
+    CONTAINS = "contains"
+    TRANSFORMS = "transforms"
+    # Interface
+    EXPOSES = "exposes"
+    IMPLEMENTS = "implements"
+    SUPPORTS = "supports"
+    INHERITS_FROM = "inherits_from"
+    # Security
+    AUTHENTICATES = "authenticates"
+    AUTHORIZES = "authorizes"
+    VALIDATES = "validates"
+    # Lifecycle
+    CREATES = "creates"
+    DELETES = "deletes"
+    ENABLES = "enables"
+    DISABLES = "disables"
+    # Integration
+    CONNECTS_TO = "connects_to"
+    TRIGGERS = "triggers"
+    PROCESSES = "processes"
+    # Config
+    CONFIGURES = "configures"
+    CACHES = "caches"
+    LOGS = "logs"
+    LIMITS = "limits"
+    # Generic fallback
+    RELATES_TO = "relates_to"
+```
 
 ## Conflict Detection
 
 Conflict fires when:
-- Same `entity_id`
-- Same `canonical_predicate`  
-- Different `normalized_object`
+- Same `subject` (string equality after normalization)
+- Same `predicate`
+- Different `object` OR different `is_negated`
 
-Object comparison is string equality, not semantic. Flag as CONTRADICTS and let conflict resolver (human or Custodian) decide winner.
+Examples:
+- "API uses OAuth2" vs "API uses BasicAuth" → CONTRADICTS (different object)
+- "API uses OAuth2" vs "API does NOT use OAuth2" → CONTRADICTS (different negation)
 
 ## Model Selection
 
-- Primary: Gemini 2.5 Flash (`gemini-2.5-flash-preview-05-20` or latest)
+- Primary: Gemini 2.5 Flash (`gemini/gemini-2.5-flash-preview-05-20`)
 - Fallback: Gemini 3.1 Flash
 - Never use: Gemini 2.0 (deprecated, worse quality)
 
-Both passes can use the same model. Second pass is cheaper (shorter prompt, structured output).
+Via litellm with Instructor wrapper.
 
 ## Batch API Integration
 
 Inline extraction during `/api/v1/batch/learn`:
 
 ```python
-async def process_batch_item(item: BatchLearnItem) -> ProcessedItem:
+async def process_batch_item(item: BatchLearnItem) -> list[ProcessedItem]:
     # If SPO provided, use it; otherwise extract
     if item.subject and item.predicate and item.object:
-        spo = (item.subject, item.predicate, item.object)
+        triples = [SPOTriple(
+            subject=item.subject,
+            predicate=item.predicate,
+            object=item.object,
+            is_negated=item.is_negated or False,
+        )]
     else:
-        spo = await extract_and_normalize_spo(item.content)
+        result = await extract_spo(item.content)
+        triples = result.triples
     
-    return ProcessedItem(
-        content=item.content,
-        subject=spo[0],
-        predicate=spo[1],
-        object=spo[2],
-        ...
-    )
+    # One claim may produce multiple triples
+    return [
+        ProcessedItem(
+            content=item.content,
+            subject=t.subject,
+            predicate=t.predicate,
+            object=t.object,
+            is_negated=t.is_negated,
+            ...
+        )
+        for t in triples
+    ]
 ```
 
-This keeps the API simple — callers can provide pre-extracted SPO or let the server extract.
+Note: Multi-triple extraction means one batch item may produce multiple nodes.
 
-## Entity Index
+## Subject Normalization
 
-New Qdrant collection for entity embeddings:
+Subjects normalized at extraction time via prompt engineering:
+- Lowercase, underscore-separated
+- Singular form
+- Known entities injected into prompt when available
 
-- Collection: `entities_{silo_id}`
-- Vectors: embedded canonical entity names
-- Payload: `{entity_id, canonical_name, aliases[]}`
-
-Used for subject resolution in Pass 2. Updated when new entities are created.
+Entity resolution (Qdrant nearest-neighbor lookup) deferred to v2 — start with string matching, add semantic matching if conflicts miss too many.
 
 ## Performance Considerations
 
-- Pass 1 + Pass 2: ~200-400ms total with Gemini Flash
-- Entity lookup: ~50ms (Qdrant nearest neighbor)
-- Batch extraction can parallelize across items
+- Single LLM call: ~150-300ms with Gemini Flash
+- Instructor retries: up to 3x on validation failure (rare with good schema)
+- Batch extraction parallelizes across items with semaphore
 
-For benchmark seeding at 1.5 items/sec current rate, extraction adds ~300ms/item overhead. Acceptable for correctness. Can optimize later with batched LLM calls if needed.
+For benchmark seeding, extraction adds ~200ms/item overhead. Acceptable for correctness.
 
 ## Files to Modify
 
-- `src/context_service/llm/spo_extractor.py` — extend with two-pass logic
-- `src/context_service/engine/entity_index.py` — new file for entity resolution
+- `src/context_service/llm/spo_extractor.py` — rewrite with Instructor + Pydantic, multi-triple output
+- `src/context_service/llm/schemas.py` — new file for Pydantic models (SPOTriple, ExtractionResult, Predicate enum)
 - `src/context_service/api/v1/batch.py` — integrate extraction into batch/learn
 - `src/context_service/config/settings.py` — add Gemini model config
+- `pyproject.toml` — add `instructor` dependency
 
-## Out of Scope
+## Dependencies
 
-- Semantic object comparison (future: embed objects, similarity threshold)
-- Async extraction queue (future: if throughput matters)
-- Entity merging UI (future: manual entity resolution)
+```toml
+# pyproject.toml
+[project.dependencies]
+instructor = ">=1.0.0"
+```
+
+## Error Handling
+
+Instructor handles validation retries automatically. For unrecoverable failures:
+1. Log warning with claim content
+2. Return empty triple list (claim stored without SPO)
+3. SAGE Custodian can backfill later
+
+Never block ingestion on extraction failure.
+
+## Out of Scope (v2)
+
+- Semantic entity resolution (Qdrant nearest-neighbor for subject matching)
+- Semantic object comparison (embed objects, similarity threshold)
+- Async extraction queue (if throughput matters)
+- Eval dataset (50-item labeled set for accuracy measurement)
+- Hot path optimization for single `learn()` calls
