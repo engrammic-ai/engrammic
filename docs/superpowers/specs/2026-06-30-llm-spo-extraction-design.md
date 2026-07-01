@@ -176,11 +176,37 @@ Entity resolution (Qdrant nearest-neighbor lookup) deferred to v2 — start with
 
 ## Performance Considerations
 
-- Single LLM call: ~150-300ms with Gemini Flash
-- Instructor retries: up to 3x on validation failure (rare with good schema)
-- Batch extraction parallelizes across items with semaphore
+### Latency
 
-For benchmark seeding, extraction adds ~200ms/item overhead. Acceptable for correctness.
+- Single Gemini Flash call: ~1.0-1.5s (TTFT ~300-500ms + ~50 token generation)
+- Instructor retries: up to 3x on validation failure (rare with good schema)
+- Sequential extraction would drop throughput from 1.5 → 0.6-1.0 items/sec
+
+### Cost (BEAM 1M scale = 298,820 items)
+
+| Component | Tokens | Rate | Cost |
+|-----------|--------|------|------|
+| Input | 149.4M (~500/item) | $0.15/1M | $22.41 |
+| Output | 14.9M (~50/item) | $0.60/1M | $8.94 |
+| **Total** | | | **~$31** |
+
+### Rate Limits (Gemini paid tier)
+
+- QPM: 2,000 (binding constraint)
+- TPM: 4M (164M needed / 2.5 hours = ~1.1M TPM avg, well under)
+
+### Throughput with Parallelism
+
+Fan out with `asyncio.Semaphore(30)` to stay under 2K QPM:
+- 298,820 items / 33 QPS = ~2.5 hours total
+- This is faster than current sequential embedding (~55 hours)
+
+### Verification Needed
+
+These numbers are estimates. Before full BEAM run:
+1. Test 100 items to measure actual latency
+2. Confirm Gemini rate limits match paid tier
+3. Validate Instructor retry rate on real data
 
 ## Files to Modify
 
