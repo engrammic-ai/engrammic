@@ -118,10 +118,13 @@ Full reference: [`docs/api/mcp-tools-reference.md`](docs/api/mcp-tools-reference
 
 ---
 
-## Related
+## Links
 
-| Repository | Purpose |
-|------------|---------|
+|  |  |
+|--|--|
+| [engrammic.ai](https://engrammic.ai) | Website |
+| [docs.engrammic.ai](https://docs.engrammic.ai) | Documentation |
+| [research](https://github.com/engrammic-ai/research) | Papers and benchmarks |
 | [primitives](https://github.com/engrammic-ai/primitives) | Schema library |
 | [mcp](https://github.com/engrammic-ai/mcp) | MCP proxy client |
 
