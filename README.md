@@ -1,6 +1,18 @@
-# Engrammic Context Service
+<p align="center">
+  <img src="https://engrammic.ai/logo.svg" alt="Engrammic" width="200" />
+</p>
 
-Others store memories. We adjudicate claims.
+<h1 align="center">Engrammic Context Service</h1>
+
+<p align="center">
+  <em>Others store memories. We adjudicate claims.</em>
+</p>
+
+<p align="center">
+  <a href="https://github.com/engrammic-ai/context-service/actions"><img src="https://github.com/engrammic-ai/context-service/actions/workflows/ci.yaml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/engrammic-ai/context-service/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License" /></a>
+  <a href="https://pypi.org/project/engrammic-primitives/"><img src="https://img.shields.io/pypi/v/engrammic-primitives.svg" alt="PyPI" /></a>
+</p>
 
 ---
 
@@ -8,198 +20,118 @@ Others store memories. We adjudicate claims.
 
 Engrammic is a memory backend for AI agents that treats knowledge as something to be earned, not just stored. When an agent writes a fact, the system validates it, tracks where it came from, detects contradictions, and promotes it through epistemic layers only when corroboration warrants it.
 
-The result is a knowledge graph where every node has a trust level, a provenance chain, and a lifecycle — not just a vector embedding.
+The result is a knowledge graph where every node has a trust level, a provenance chain, and a lifecycle.
 
 ## What this is not
 
-- A vector database wrapper. Qdrant is one storage layer; the graph and epistemic machinery are the product.
-- A RAG pipeline. Retrieval is one part of a larger write-time and read-time architecture.
-- A scratchpad. Unverified observations decay. Claims require evidence. Beliefs require corroboration.
-- Drop-in compatible with systems that treat memory as a key-value store.
+- **Not a vector database wrapper.** Qdrant is one storage layer; the graph and epistemic machinery are the product.
+- **Not a RAG pipeline.** Retrieval is one part of a larger write-time and read-time architecture.
+- **Not a scratchpad.** Unverified observations decay. Claims require evidence. Beliefs require corroboration.
+- **Not drop-in compatible** with systems that treat memory as a key-value store.
 
 ---
 
-## Architecture overview
-
-Two surfaces sit on top of a shared service layer:
+## Architecture
 
 ```
 Agents / Clients
-       |
-+------+------+
-|             |
+       │
+┌──────┴──────┐
+│             │
 MCP Server    FastAPI REST
 (primary)     (admin)
-|             |
-+------+------+
-       |
-Service Layer (ContextService, SiloService)
-       |
-+------+------+------+
-|             |      |
-Memgraph   Qdrant   Redis
-(graph)    (vector) (cache)
+│             │
+└──────┬──────┘
+       │
+Service Layer
+       │
+┌──────┼──────┐
+│      │      │
+Memgraph  Qdrant  Redis
+(graph)   (vector) (cache)
 ```
 
-The **MCP server** is the primary agent surface. Tools are intent-based verbs (`remember`, `learn`, `recall`, etc.). Tool names and descriptions are config, not code: `src/context_service/config/mcp_tools.yaml`.
-
-The **FastAPI REST** surface handles admin operations (silo management, health, metrics).
-
-**SAGE** (Synthesis, Aggregation, Graph Evolution) is a background Dagster system:
-
-- `custodian_pipeline` - extracts, validates, and promotes claims to facts (every 15 min)
-- `knowledge_pipeline` - causal transitivity and pattern detection (hourly)
-- `clustering_pipeline` - fact clustering and belief synthesis (daily at 04:00 UTC)
-- `heat_pipeline` - heat scoring and link review (daily at 02:00 UTC)
-- `groundskeeper_nightly` - retention and compaction (daily at 01:00 UTC)
+| Surface | Purpose |
+|---------|---------|
+| **MCP Server** | Primary agent surface. Intent-based verbs (`remember`, `learn`, `recall`). |
+| **FastAPI REST** | Admin operations (silo management, health, metrics). |
+| **SAGE** | Background Dagster pipelines for synthesis, validation, and maintenance. |
 
 Full architecture: [`context/architecture.md`](context/architecture.md)
 
 ---
 
-## Quick evaluation
+## Quick start
 
-Requires Docker Compose.
+Requires Docker Compose and [uv](https://github.com/astral-sh/uv).
 
 ```bash
-# Clone and install
-git clone https://github.com/engrammic-ai/engrammic
+git clone https://github.com/engrammic-ai/context-service
 cd context-service
-uv sync --all-extras          # requires uv: https://github.com/astral-sh/uv
+uv sync --all-extras
 
-# Start local stack (Memgraph, Qdrant, Redis)
-just up
-
-# Run the service
-just dev
+just up   # Start Memgraph, Qdrant, Redis
+just dev  # Start the service
 ```
 
-The MCP server starts at `http://localhost:8000/mcp`. Connect any MCP-compatible client.
+MCP server starts at `http://localhost:8000/mcp`.
 
-Self-hosted deployment docs: [`docs/self-hosted/`](docs/self-hosted/)
+Self-hosted deployment: [`docs/self-hosted/`](docs/self-hosted/)
 
 ---
 
-## Key concepts
+## Epistemic layers
 
-### Epistemic layers
-
-Every node in the graph has a layer that reflects its trust level:
+Every node has a layer reflecting its trust level:
 
 | Layer | Type | How it forms |
-|-------|------|-------------|
-| Memory | Observation | Agent writes via `remember`. Decays over time. |
-| Knowledge | Claim / Fact | Agent writes via `learn` with an evidence URI. Promoted to Fact by custodian after corroboration. |
-| Wisdom | Belief / Commitment | Belief: synthesized by SAGE from corroborated facts. Commitment: deferred (not yet implemented). |
+|-------|------|--------------|
+| **Memory** | Observation | Agent writes via `remember`. Decays over time. |
+| **Knowledge** | Claim | Agent writes via `learn` with evidence URI. |
+| **Knowledge** | Fact | Promoted from Claim after corroboration (3+ sources). |
+| **Wisdom** | Belief | Synthesized by SAGE from clustered Facts. |
+| **Intelligence** | Commitment | Agent-declared or system-derived goals. |
 
 ### Write-gate
 
-Claims (Knowledge layer) require an evidence URI at write time. The custodian validates citations, checks business rules, and either promotes the claim to a Fact or rejects it. This is not optional — the system will reject writes to the knowledge layer without evidence.
+Claims require an evidence URI. The custodian validates citations and either promotes to Fact or rejects. No evidence = no write to knowledge layer.
 
 ### Supersession
 
-Updates create version chains rather than overwrites. The old node stays in the graph with a `valid_to` timestamp; queries return only the chain head. Use `trace(node_id)` to walk provenance.
-
-### SAGE synthesis flow
-
-```
-Agent writes learn()
-       |
-AsyncBatchTrigger (batches writes)
-       |
-custodian_pipeline (every 15 min)
-  - SPO extraction
-  - Citation validation
-  - Business rule check
-  - Claim -> Fact promotion
-       |
-clustering_pipeline (daily)
-  - Fact clustering via semantic corroboration
-  - Cluster -> Belief (Wisdom layer)
-```
-
-### MCP tool surface
-
-| Tool | What it does |
-|------|-------------|
-| `remember` | Store an observation (Memory layer, no evidence required) |
-| `learn` | Record a claim with evidence (Knowledge layer) |
-| `recall` | Retrieve by semantic query, node ID, or fusion mode |
-| `trace` | Provenance: walk backward to sources or forward to dependents |
-| `forget` | Request node deletion with optional cascade |
-| `tick` | Lightweight engagement check without full recall |
-| `update` | Update existing knowledge by superseding with new content |
+Updates create version chains, not overwrites. Old nodes stay with `valid_to` timestamps. Use `trace(node_id)` to walk provenance.
 
 ---
 
-## Repository structure
+## MCP tools
 
-```
-src/context_service/
-├── mcp/           # MCP server + tools (primary agent surface)
-├── api/           # FastAPI admin routes
-├── engine/        # Storage protocols (depend on this, not concrete stores)
-├── stores/        # Memgraph, Qdrant, Redis implementations
-├── services/      # Business logic (ContextService, SiloService, ...)
-├── custodian/     # SAGE pipeline (custodian, synthesizer agents)
-├── pipelines/     # Scheduled jobs (groundskeeper, validator, ...)
-├── config/        # Settings, mcp_tools.yaml, prompt templates
-├── auth/          # WorkOS + OAuth
-├── embeddings/    # Embedding clients (Jina, Vertex, SPLADE)
-└── signals/       # Heat, freshness, priority scoring
-```
+| Tool | Purpose |
+|------|---------|
+| `remember` | Store observation (Memory layer, no evidence required) |
+| `learn` | Record claim with evidence (Knowledge layer) |
+| `recall` | Retrieve by semantic query, node ID, or fusion |
+| `trace` | Walk provenance chain |
+| `forget` | Request deletion with optional cascade |
+| `tick` | Lightweight engagement check |
+| `update` | Supersede existing knowledge |
 
-Key files:
-
-- `src/context_service/config/mcp_tools.yaml` - MCP tool surface (source of truth for names and descriptions)
-- `src/context_service/engine/protocols.py` - storage interfaces (depend on these, not concrete stores)
-- `context/architecture.md` - full service architecture
-- `context/plans/` - active implementation plans
-
----
-
-## Development commands
-
-All Python runs via `uv run`. See `justfile` for the full list.
-
-| Command | What it does |
-|---------|-------------|
-| `just install` | `uv sync --all-extras` |
-| `just check` | Lint + typecheck (must pass before merge) |
-| `just test` | Run pytest (`just test -k name` for filtering) |
-| `just ci` | check + test (pre-push) |
-| `just db-migrate` | Run Alembic migrations |
-| `just dev` | FastAPI with reload |
-| `just up / down` | Local stack (Memgraph, Qdrant, Redis) |
-
----
-
-## Known limitations
-
-- **Evidence validation is best-effort.** The custodian fetches evidence URIs to validate them, but auth-gated or private URLs cannot be verified. Content hash verification is planned but not yet implemented.
-- **SAGE synthesis latency.** Beliefs do not form in real time. A claim written now may not surface as a synthesized belief for 10-40 minutes depending on cluster thresholds and SAGE cadence.
-- **Memgraph clustering requires MAGE.** The Leiden algorithm used for fact clustering requires the `memgraph-mage` image, not the standard Memgraph image.
-- **Multi-silo coordination is deferred.** The current architecture assumes one active silo per session. Cross-silo operations and agent workspace resolution are not yet implemented.
-- **Mypy strict mode has pre-existing errors.** `just check` enforces ruff + mypy strict, but ~76 pre-existing mypy errors remain. New code must pass; the backlog is fixed opportunistically.
+Full reference: [`docs/api/mcp-tools-reference.md`](docs/api/mcp-tools-reference.md)
 
 ---
 
 ## Related
 
-- [primitives](https://github.com/engrammic-ai/primitives) - Schema library (`primitives.schema.*`, `primitives.eag.*`)
-- [mcp client](https://github.com/engrammic-ai/mcp) - Thin MCP proxy client
-- [`../primitives/docs/`](../primitives/docs/) - LeAP paradigm documentation
+| Repository | Purpose |
+|------------|---------|
+| [primitives](https://github.com/engrammic-ai/primitives) | Schema library |
+| [mcp](https://github.com/engrammic-ai/mcp) | MCP proxy client |
 
 ---
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) if it exists, or open an issue.
-
-Rules for contributors:
-1. `just check` must pass before any merge (mypy strict + ruff)
+1. `just check` must pass (mypy strict + ruff)
 2. Depend on `engine/protocols.py`, not concrete stores
-3. New knowledge-layer writes require evidence URIs
+3. Knowledge-layer writes require evidence URIs
 4. No commits directly to `main`
 
 ---
