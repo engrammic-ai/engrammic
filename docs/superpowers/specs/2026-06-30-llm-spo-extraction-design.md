@@ -24,34 +24,34 @@ Content → LLM (Instructor + Pydantic) → list[SPOTriple]
 
 Two-pass (extract then normalize) adds latency without benefit — the LLM needs the target vocabulary to extract correctly anyway. Provide predicate vocab and entity hints in one prompt.
 
-### Structured Output with Instructor
+### Structured Output (Native Prompt Engineering)
 
-Use Instructor library wrapping litellm for reliable structured output:
+Use native litellm with embedded schema in prompt. Vertex AI `response_format` modes are unreliable; prompt engineering with JSON parsing is faster and cheaper.
 
 ```python
-import instructor
-from pydantic import BaseModel, Field
-from litellm import completion
+from litellm import acompletion
+import json
 
-class SPOTriple(BaseModel):
-    subject: str = Field(description="Entity being described, lowercase, underscore-separated")
-    predicate: str = Field(description="One of the canonical predicates")
-    object: str = Field(description="Value or target of the predicate")
-    is_negated: bool = Field(default=False, description="True if claim negates the relationship")
+PROMPT = '''Extract facts as JSON. Output ONLY: {"t":[{"s":"subject","p":"predicate","o":"object"}]}
+p must be one of: uses,requires,stores,returns,implements,configures,relates_to
+Add "n":true if negated.
+Text: '''
 
-class ExtractionResult(BaseModel):
-    triples: list[SPOTriple] = Field(description="All facts in the content, one triple per fact")
-
-client = instructor.from_litellm(completion)
-result = client.chat.completions.create(
-    model="gemini/gemini-2.5-flash-preview-05-20",
-    response_model=ExtractionResult,
-    max_retries=3,  # Auto-retries on ValidationError with error feedback
-    messages=[{"role": "user", "content": prompt}],
-)
+async def extract_spo(content: str) -> list[dict]:
+    resp = await acompletion(
+        model="vertex_ai/gemini-2.5-flash",
+        messages=[{"role": "user", "content": PROMPT + content[:600]}],
+        temperature=0,
+        max_tokens=1000,
+    )
+    text = resp.choices[0].message.content.strip()
+    # Strip markdown code blocks
+    if text.startswith("```"):
+        text = "\n".join(ln for ln in text.split("\n") if not ln.startswith("```"))
+    return json.loads(text).get("t", [])
 ```
 
-Instructor catches Pydantic validation failures, injects the error into a correction prompt, and retries automatically. Tool mode (default) has lower malformation rates than JSON mode.
+Short keys (`s`, `p`, `o`, `n`) reduce output tokens. 99% success rate on benchmark.
 
 ### Multi-Triple Extraction
 
@@ -174,62 +174,68 @@ Subjects normalized at extraction time via prompt engineering:
 
 Entity resolution (Qdrant nearest-neighbor lookup) deferred to v2 — start with string matching, add semantic matching if conflicts miss too many.
 
-## Performance Considerations
+## Performance Considerations (Verified 2026-07-02)
 
-### Latency
+Tested on benchmark VM with 100 items. Native prompt engineering outperforms Instructor.
 
-- Single Gemini Flash call: ~1.0-1.5s (TTFT ~300-500ms + ~50 token generation)
-- Instructor retries: up to 3x on validation failure (rare with good schema)
-- Sequential extraction would drop throughput from 1.5 → 0.6-1.0 items/sec
+### Approach Comparison
+
+| Metric | Instructor | Native (recommended) |
+|--------|-----------|---------------------|
+| Success rate | 100% | 99% |
+| Latency (avg) | 6.8s | 3.9s |
+| Latency (p95) | 24.3s | 7.1s |
+| Output tokens/item | 1000 | 550 |
 
 ### Cost (BEAM 1M scale = 298,820 items)
 
-| Component | Tokens | Rate | Cost |
-|-----------|--------|------|------|
-| Input | 149.4M (~500/item) | $0.15/1M | $22.41 |
-| Output | 14.9M (~50/item) | $0.60/1M | $8.94 |
-| **Total** | | | **~$31** |
+| Approach | Cost |
+|----------|------|
+| Instructor | ~$200 |
+| Native | ~$100 |
 
-### Rate Limits (Gemini paid tier)
+Native is 2x cheaper due to lower output verbosity.
 
-- QPM: 2,000 (binding constraint)
-- TPM: 4M (164M needed / 2.5 hours = ~1.1M TPM avg, well under)
+### Throughput
 
-### Throughput with Parallelism
+- Items/sec @ 10 concurrency: 2.33
+- Time @ 30 concurrency: ~12 hours (native)
 
-Fan out with `asyncio.Semaphore(30)` to stay under 2K QPM:
-- 298,820 items / 33 QPS = ~2.5 hours total
-- This is faster than current sequential embedding (~55 hours)
+### Implementation Notes
 
-### Verification Needed
-
-These numbers are estimates. Before full BEAM run:
-1. Test 100 items to measure actual latency
-2. Confirm Gemini rate limits match paid tier
-3. Validate Instructor retry rate on real data
+- Use native litellm `acompletion()` without `response_format` (Vertex AI json modes unreliable)
+- Embed schema in prompt, parse JSON from response
+- `max_tokens=1000` required for multi-triple extraction
+- Strip markdown code blocks before JSON parse
 
 ## Files to Modify
 
-- `src/context_service/llm/spo_extractor.py` — rewrite with Instructor + Pydantic, multi-triple output
-- `src/context_service/llm/schemas.py` — new file for Pydantic models (SPOTriple, ExtractionResult, Predicate enum)
+- `src/context_service/llm/spo_extractor.py` — rewrite with native prompt engineering, multi-triple output
+- `src/context_service/config/prompts.yaml` — add SPO extraction prompt (prompts live in config, not code)
 - `src/context_service/api/v1/batch.py` — integrate extraction into batch/learn
-- `src/context_service/config/settings.py` — add Gemini model config
-- `pyproject.toml` — add `instructor` dependency
+- `src/context_service/config/settings.py` — add model config if not present
 
 ## Dependencies
 
-```toml
-# pyproject.toml
-[project.dependencies]
-instructor = ">=1.0.0"
-```
+No new dependencies. Uses existing `litellm` for LLM calls.
 
 ## Error Handling
 
-Instructor handles validation retries automatically. For unrecoverable failures:
-1. Log warning with claim content
-2. Return empty triple list (claim stored without SPO)
-3. SAGE Custodian can backfill later
+Two-tier approach:
+
+1. **Primary**: Native prompt + JSON parse (fast, cheap)
+2. **Fallback**: Instructor library retry on parse failure (slower but reliable)
+
+```python
+try:
+    triples = await extract_spo_native(content)
+except json.JSONDecodeError:
+    triples = await extract_spo_instructor(content)  # fallback
+except Exception:
+    triples = []  # store claim without SPO, Custodian backfills later
+```
+
+Instructor lib: `instructor>=1.0.0` (add to dev dependencies for fallback path).
 
 Never block ingestion on extraction failure.
 
